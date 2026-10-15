@@ -1,0 +1,100 @@
+import { state, compareBtn, hashChk, exportBtn, exportHtmlBtn, batchRightBtn, batchLeftBtn, STATUS_ORDER, ROLES } from './core.js'
+import { buildGroups, materialKind, singleKind, mainEntryOf, hasAny } from './utils.js'
+import { renderResult, renderSidebar } from './render.js'
+
+export function computeCounts() {
+  const c = { have: 0, diff: 0, partial: 0, miss: 0, extra: 0 }
+  for (const g of state.result) c[g.kind]++
+  state.counts = c
+}
+
+export async function compare() {
+  if (!state.leftPath || !state.rightPath) return
+  const leftGroups = buildGroups(state.leftEntries)
+  const rightGroups = buildGroups(state.rightEntries)
+  const allKeys = new Set([...leftGroups.keys(), ...rightGroups.keys()])
+  const result = []
+  for (const key of allKeys) {
+    const lg = leftGroups.get(key), rg = rightGroups.get(key)
+    const isMaterial = (lg && (lg.main || lg.normal || lg.specular)) || (rg && (rg.main || rg.normal || rg.specular))
+    const isDir = (lg && lg.dir) || (rg && rg.dir)
+    let g
+    if (isDir) g = { key, isDir: true, left: lg, right: rg, kind: singleKind(lg, rg) }
+    else if (isMaterial) g = { key, isMaterial: true, left: lg, right: rg, kind: materialKind(lg, rg) }
+    else g = { key, isFile: true, left: lg, right: rg, kind: singleKind(lg, rg) }
+    result.push(g)
+  }
+  state.result = result
+  state.selected = null
+  state.expandedKeys.clear()
+  computeCounts()
+  renderResult()
+  renderSidebar()
+
+  if (hashChk.checked) {
+    const pairs = []
+    for (const g of result) {
+      if (g.kind !== 'have') continue
+      if (g.isMaterial) {
+        for (const role of ROLES) {
+          const le = g.left && g.left[role], re = g.right && g.right[role]
+          if (le && re) pairs.push([le, re, g])
+        }
+      } else if (!g.isDir) {
+        const le = g.left && (g.left.file || g.left.dir), re = g.right && (g.right.file || g.right.dir)
+        if (le && re && !le.isDirectory) pairs.push([le, re, g])
+      }
+    }
+    if (pairs.length) {
+      compareBtn.disabled = true
+      compareBtn.textContent = '对比中…'
+      let idx = 0
+      const N = Math.min(navigator.hardwareConcurrency || 4, 8)
+      async function worker() {
+        while (idx < pairs.length) {
+          const [le, re, g] = pairs[idx++]
+          const [h1, h2] = await Promise.all([window.api.hashFile(le.fullPath), window.api.hashFile(re.fullPath)])
+          if (h1 && h2 && h1 !== h2) { g.kind = 'diff'; state.counts.have--; state.counts.diff++ }
+        }
+      }
+      await Promise.all(Array.from({ length: N }, worker))
+      compareBtn.disabled = false
+      compareBtn.textContent = '开始对比'
+      renderResult()
+      if (state.selected) renderSidebar()
+    }
+  }
+  exportBtn.disabled = false
+  exportHtmlBtn.disabled = false
+  batchRightBtn.disabled = false
+  batchLeftBtn.disabled = false
+}
+
+export function sortResult(arr) {
+  const key = state.sortKey
+  const dir = state.sortDir === 'asc' ? 1 : -1
+  const n = arr.length
+  const pairs = new Array(n)
+  for (let i = 0; i < n; i++) {
+    const g = arr[i]
+    let v
+    if (key === 'status') v = STATUS_ORDER[g.kind]
+    else if (key === 'name') v = g.key
+    else if (key === 'type') v = g.isMaterial ? 0 : g.isDir ? 1 : 2
+    else if (key === 'size') v = (mainEntryOf(g)?.size || 0)
+    else if (key === 'mtime') v = (mainEntryOf(g)?.mtime || 0)
+    else if (key === 'left') v = hasAny(g.left) ? 0 : 1
+    else if (key === 'right') v = hasAny(g.right) ? 0 : 1
+    else v = 0
+    pairs[i] = [v, g]
+  }
+  const isStr = key === 'name'
+  pairs.sort((a, b) => {
+    let v
+    if (isStr) v = a[0].localeCompare(b[0], 'zh')
+    else v = a[0] - b[0]
+    if (v === 0) v = a[1].key.localeCompare(b[1].key, 'zh')
+    return v * dir
+  })
+  for (let i = 0; i < n; i++) arr[i] = pairs[i][1]
+}

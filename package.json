@@ -1,0 +1,23 @@
+{
+  "name": "matoga",
+  "version": "1.0.0",
+  "description": "文件夹对比工具 - 对比左右两个文件夹中的内容名称",
+  "main": "main.js",
+  "scripts": {
+    "start": "unset ELECTRON_RUN_AS_NODE && electron .",
+    "dev": "unset ELECTRON_RUN_AS_NODE && electron . --dev"
+  },
+  "keywords": [
+    "folder",
+    "compare",
+    "diff"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^31.7.7"
+  },
+  "dependencies": {
+    "three": "^0.186.1"
+  }
+}

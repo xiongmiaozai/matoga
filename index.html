@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' file: data:; connect-src 'self' file:" />
+  <title>材质贴图对比工具</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="title">
+      <span class="logo">🎨</span>
+      <h1>材质贴图对比工具</h1>
+      <span class="ver">v1.0</span>
+    </div>
+    <div class="header-search">
+      <span class="search-ico">🔍</span>
+      <input type="search" id="searchInput" placeholder="搜索材质/文件名…  ⌘K" />
+    </div>
+    <div class="header-actions">
+      <button id="themeToggle" class="icon-btn" title="切换深色/浅色模式">🌙</button>
+      <button id="settingsBtn" class="icon-btn" title="设置">⚙</button>
+    </div>
+  </header>
+
+  <div class="workspace" id="workspace">
+    <aside class="sidebar-left" id="sidebarLeft" data-region="left">
+
+      <div class="sidebar-inner">
+        <div class="folder-card" id="leftCard">
+          <div class="folder-card-head">
+            <span class="tag tag-left">左侧 · 基准</span>
+            <button id="leftBtn" class="btn btn-primary btn-sm">选择</button>
+          </div>
+          <div id="leftPath" class="path-box">未选择</div>
+          <div id="leftStat" class="stat-box"></div>
+          <div id="leftList" class="entry-list"></div>
+        </div>
+
+        <div class="folder-card" id="rightCard">
+          <div class="folder-card-head">
+            <span class="tag tag-right">右侧 · 对比</span>
+            <button id="rightBtn" class="btn btn-primary btn-sm">选择</button>
+          </div>
+          <div id="rightPath" class="path-box">未选择</div>
+          <div id="rightStat" class="stat-box"></div>
+          <div id="rightList" class="entry-list"></div>
+        </div>
+
+        <div class="panel-card">
+          <div class="panel-card-title">视图模式</div>
+          <label class="opt"><input type="radio" name="viewMode" value="all" checked /><span>全部展示</span></label>
+          <label class="opt"><input type="radio" name="viewMode" value="byFolder" /><span>按文件夹分类</span></label>
+        </div>
+
+        <div class="panel-card">
+          <div class="panel-card-title">对比选项</div>
+          <label class="opt"><input type="checkbox" id="recursiveChk" /><span>递归对比</span></label>
+          <label class="opt"><input type="checkbox" id="onlyMissingChk" /><span>仅显示不一致项</span></label>
+          <label class="opt"><input type="checkbox" id="ignoreChk" checked /><span>忽略系统文件</span></label>
+        </div>
+
+        <div class="panel-card">
+          <div class="panel-card-title">操作</div>
+          <button id="compareBtn" class="btn btn-accent" disabled>开始对比</button>
+          <div class="action-row">
+            <button id="undoBtn" class="btn btn-ghost btn-sm" disabled>↶ 撤回</button>
+            <button id="swapBtn" class="btn btn-ghost btn-sm">⇄ 交换</button>
+          </div>
+          <div class="action-row">
+            <button id="batchRightBtn" class="btn btn-sm" disabled>批量→右</button>
+            <button id="batchLeftBtn" class="btn btn-sm" disabled>批量→左</button>
+          </div>
+        </div>
+      </div>
+    </aside>
+    <button class="collapse-btn" id="collapseLeftBtn" title="折叠/展开左栏">⇤</button>
+
+    <div class="resizer" data-resize="left" title="拖拽调整左栏宽度"></div>
+
+    <main class="center" data-region="center">
+      <div class="center-head">
+        <div class="filter-bar">
+          <button class="filter-btn active" data-filter="all">全部</button>
+          <button class="filter-btn" data-filter="missing">缺失</button>
+          <button class="filter-btn" data-filter="diff">不同</button>
+          <button class="filter-btn" data-filter="extra">多余</button>
+        </div>
+        <div id="summary" class="summary"></div>
+      </div>
+      <div class="result-table-wrap">
+        <table id="resultTable" class="result-table">
+          <thead>
+            <tr>
+              <th class="col-status" data-key="status">状态</th>
+              <th class="col-preview">预览</th>
+              <th class="col-name" data-key="name">名称</th>
+              <th class="col-type" data-key="type">类型</th>
+              <th class="col-size" data-key="size">大小</th>
+              <th class="col-mtime" data-key="mtime">修改时间</th>
+              <th class="col-left" data-key="left">左</th>
+              <th class="col-right" data-key="right">右</th>
+            </tr>
+          </thead>
+          <tbody id="resultBody">
+            <tr class="empty-row"><td colspan="8">拖拽文件夹到左侧卡片，或点击「选择」开始对比</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+
+    <div class="resizer" data-resize="right" title="拖拽调整右栏宽度"></div>
+
+    <aside class="sidebar-right" id="sidebarRight" data-region="right">
+      <div class="panel" id="previewPanelWrap" data-panel="preview">
+        <div class="panel-head">
+          <span class="panel-title">🖼 预览</span>
+          <div class="panel-tools">
+            <button class="panel-tool" data-panel-action="float" title="浮动">⤢</button>
+            <button class="panel-tool" data-panel-action="collapse" title="折叠">▾</button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="pv-toolbar">
+            <div class="m3d-segment" id="pvChannelSeg">
+              <button class="active" data-ch="all">全部</button>
+              <button data-ch="r">R</button>
+              <button data-ch="g">G</button>
+              <button data-ch="b">B</button>
+              <button data-ch="a">A</button>
+            </div>
+            <label class="pv-zoom"><span>缩放</span><input type="range" id="pvZoom" min="50" max="300" step="10" value="100" /><span class="pv-zoom-val" id="pvZoomVal">100%</span></label>
+            <label class="pv-split-toggle"><input type="checkbox" id="pvSplit" /> 对比滑块</label>
+          </div>
+          <div class="preview-panel" id="previewPanel">
+            <div class="pv-hint">点击表格中的材质查看预览</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel" id="material3dPanel" data-panel="3d">
+        <div class="panel-head">
+          <span class="panel-title">🎨 3D 材质预览</span>
+          <div class="panel-tools">
+            <button class="panel-tool" data-panel-action="float" title="浮动">⤢</button>
+            <button class="panel-tool" data-panel-action="collapse" title="折叠">▾</button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="material3d-container" id="material3dContainer">
+            <div class="m3d-resizer" id="m3dResizer" title="拖拽调整 3D 预览高度"></div>
+            <div class="m3d-loading" id="m3dLoading"><div class="m3d-loading-text">处理法线贴图...</div><div class="m3d-loading-bar"><div class="m3d-loading-fill"></div></div></div>
+          </div>
+          <div class="material3d-controls">
+            <div class="m3d-ctrl-group">
+              <div class="m3d-segment" id="m3dGeoSeg">
+                <button class="active" data-geo="sphere">球</button>
+                <button data-geo="cube">方</button>
+                <button data-geo="plane">面</button>
+                <button data-geo="torus">环</button>
+                <button data-geo="cylinder">柱</button>
+                <button data-geo="capsule">囊</button>
+              </div>
+              <div class="m3d-segment" id="m3dSrcSeg">
+                <button data-src="left">左</button>
+                <button class="active" data-src="dual">双</button>
+                <button data-src="right">右</button>
+              </div>
+            </div>
+            <div class="m3d-ctrl-group">
+              <label class="m3d-slider"><span>金属度</span><input type="range" id="m3dMetalness" min="0" max="1" step="0.01" value="0.1" /><span class="m3d-val" id="m3dMetalnessVal">0.10</span></label>
+              <label class="m3d-slider"><span>粗糙度</span><input type="range" id="m3dRoughness" min="0" max="1" step="0.01" value="0.5" /><span class="m3d-val" id="m3dRoughnessVal">0.50</span></label>
+              <label class="m3d-slider"><span>法线</span><input type="range" id="m3dNormal" min="0" max="2" step="0.01" value="1" /><span class="m3d-val" id="m3dNormalVal">1.00</span></label>
+              <label class="m3d-slider"><span>自发光</span><input type="range" id="m3dEmissive" min="0" max="5" step="0.1" value="1" /><span class="m3d-val" id="m3dEmissiveVal">1.0</span></label>
+            </div>
+            <div class="m3d-ctrl-group">
+              <span class="m3d-light-label">透明</span>
+              <div class="m3d-segment" id="m3dOpacityModeSeg">
+                <button class="active" data-mode="auto">自动</button>
+                <button data-mode="cutout">裁剪</button>
+                <button data-mode="blend">半透</button>
+                <button data-mode="glass">玻璃</button>
+              </div>
+              <label class="m3d-slider"><span>不透明</span><input type="range" id="m3dOpacity" min="0" max="1" step="0.01" value="1" /><span class="m3d-val" id="m3dOpacityVal">1.00</span></label>
+              <label class="m3d-slider"><span>透射</span><input type="range" id="m3dTransmission" min="0" max="1" step="0.01" value="0" /><span class="m3d-val" id="m3dTransmissionVal">0.00</span></label>
+              <label class="m3d-slider"><span>折射率</span><input type="range" id="m3dIOR" min="1" max="2.33" step="0.01" value="1.5" /><span class="m3d-val" id="m3dIORVal">1.50</span></label>
+              <label class="m3d-slider"><span>清漆</span><input type="range" id="m3dClearcoat" min="0" max="1" step="0.01" value="0" /><span class="m3d-val" id="m3dClearcoatVal">0.00</span></label>
+            </div>
+            <div class="m3d-ctrl-group">
+              <span class="m3d-light-label">光照</span>
+              <div class="m3d-segment" id="m3dLightSeg">
+                <button class="active" data-light="studio">工作室</button>
+                <button data-light="outdoor">户外</button>
+                <button data-light="soft">柔和</button>
+                <button data-light="warm">暖光</button>
+                <button data-light="cool">冷光</button>
+              </div>
+            </div>
+            <div class="m3d-ctrl-group">
+              <label class="m3d-slider"><span>环境</span><input type="range" id="m3dEnvIntensity" min="0" max="3" step="0.01" value="1" /><span class="m3d-val" id="m3dEnvIntensityVal">1.00</span></label>
+              <label class="m3d-slider"><span>曝光</span><input type="range" id="m3dExposure" min="0" max="3" step="0.01" value="1" /><span class="m3d-val" id="m3dExposureVal">1.00</span></label>
+              <label class="m3d-checkbox"><input type="checkbox" id="m3dGround" checked />地面</label>
+              <label class="m3d-checkbox"><input type="checkbox" id="m3dAutoRotate" checked />自转</label>
+              <label class="m3d-checkbox"><input type="checkbox" id="m3dWireframe" />线框</label>
+              <button class="m3d-action-btn" id="m3dShotBtn" title="截图">📷</button>
+              <button class="m3d-action-btn" id="m3dFullscreenBtn" title="全屏">⛶</button>
+            </div>
+            <div class="m3d-height-status" id="m3dHeightStatus">A通道: 未检测</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel" id="detailPanelWrap" data-panel="detail">
+        <div class="panel-head">
+          <span class="panel-title">📋 详情</span>
+          <div class="panel-tools">
+            <button class="panel-tool" data-panel-action="collapse" title="折叠">▾</button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="detail-panel" id="detailPanel">
+            <div class="detail-hint">未选中</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel" id="actionPanelWrap" data-panel="action">
+        <div class="panel-body">
+          <div class="action-panel" id="actionPanel"></div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <aside class="settings-drawer" id="settingsDrawer">
+    <div class="settings-head">
+      <span class="settings-title">⚙ 设置</span>
+      <button id="settingsClose" class="icon-btn" title="关闭">✕</button>
+    </div>
+    <div class="settings-body">
+      <section class="settings-section">
+        <div class="settings-section-title">对比</div>
+        <label class="opt"><input type="checkbox" id="hashChk" /><span>精确对比内容（哈希校验，较慢）</span></label>
+        <label class="opt-text">自定义忽略（逗号分隔，如 *.tmp,*.bak）<input type="text" id="ignoreInput" class="input-text" placeholder="*.tmp,*.bak" /></label>
+      </section>
+      <section class="settings-section">
+        <div class="settings-section-title">路径</div>
+        <div class="path-setting">
+          <span class="path-setting-label">HDRI 预设地址</span>
+          <div class="path-setting-row">
+            <input type="text" id="hdriPresetPathInput" class="input-text" placeholder="输入或选择文件夹路径" />
+            <button id="hdriPresetPickBtn" class="btn btn-ghost btn-sm">选择</button>
+            <button id="hdriPresetCreateBtn" class="btn btn-ghost btn-sm">新建</button>
+            <button id="hdriPresetOpenBtn" class="btn btn-ghost btn-sm">打开</button>
+          </div>
+        </div>
+        <div class="path-setting">
+          <span class="path-setting-label">MC 材质包地址</span>
+          <div class="path-setting-row">
+            <input type="text" id="mcPacksPathInput" class="input-text" placeholder="输入或选择文件夹路径" />
+            <button id="mcPacksPickBtn" class="btn btn-ghost btn-sm">选择</button>
+            <button id="mcPacksCreateBtn" class="btn btn-ghost btn-sm">新建</button>
+            <button id="mcPacksOpenBtn" class="btn btn-ghost btn-sm">打开</button>
+          </div>
+        </div>
+      </section>
+      <section class="settings-section">
+        <div class="settings-section-title">3D 高级</div>
+        <label class="opt"><span>材质格式</span>
+          <select id="m3dFormat" class="input-select">
+            <option value="auto">自动检测</option>
+            <option value="labpbr">labPBR</option>
+            <option value="old">旧版 PBR</option>
+          </select>
+        </label>
+        <span class="m3d-format-detected" id="m3dFormatDetected"></span>
+        <label class="opt-range">视差强度<input type="range" id="m3dParallax" min="0" max="1" step="0.01" value="0.05" /><span class="opt-range-val" id="m3dParallaxVal">0.05</span></label>
+        <label class="opt-range">视差步数<input type="range" id="m3dParallaxSteps" min="8" max="64" step="1" value="32" /><span class="opt-range-val" id="m3dParallaxStepsVal">32</span></label>
+        <div class="action-row">
+          <button id="m3dHdrBtn" class="btn btn-ghost btn-sm">加载 HDR 环境</button>
+          <button id="m3dHdrClearBtn" class="btn btn-ghost btn-sm">清除 HDR</button>
+        </div>
+      </section>
+      <section class="settings-section">
+        <div class="settings-section-title">数据</div>
+        <div class="action-row">
+          <button id="exportBtn" class="btn btn-ghost btn-sm" disabled>导出 TXT</button>
+          <button id="exportHtmlBtn" class="btn btn-ghost btn-sm" disabled>导出 HTML</button>
+        </div>
+        <button id="clearMemBtn" class="btn btn-ghost btn-sm">清除记忆</button>
+      </section>
+      <section class="settings-section">
+        <div class="settings-section-title">外观</div>
+        <label class="opt"><input type="checkbox" id="settingThemeChk" /><span>深色模式</span></label>
+      </section>
+    </div>
+  </aside>
+
+  <div id="toast" class="toast"></div>
+
+  <div id="previewModal" class="preview-modal">
+    <div class="preview-modal-inner">
+      <button id="previewClose" class="preview-close" title="关闭">×</button>
+      <img id="previewImg" class="preview-img" alt="" />
+      <div id="previewCaption" class="preview-caption"></div>
+    </div>
+  </div>
+
+  <script type="module" src="renderer.js"></script>
+</body>
+</html>
