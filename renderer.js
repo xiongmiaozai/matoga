@@ -194,7 +194,15 @@ $('m3dHdrClearBtn').addEventListener('click', () => {
 
 $('m3dFormat').addEventListener('change', (e) => { setMaterialFormat(e.target.value); $('m3dFormatDetected').textContent = '' })
 setFormatDetectCallback((fmt) => { $('m3dFormatDetected').textContent = fmt === 'labpbr' ? '→ labPBR' : '→ 旧版PBR' })
-setHeightDetectCallback((status) => { const el = $('m3dHeightStatus'); if (!el) return; el.classList.remove('has-height', 'no-height'); if (status === 'alpha') { el.textContent = '视差: ✓ 高度图A通道'; el.classList.add('has-height') } else if (status === 'normal') { el.textContent = '视差: 从法线RGB推算（_n.A为法线强度）'; el.classList.add('has-height') } else { el.textContent = '视差: 仅法线'; el.classList.add('no-height') } })
+setHeightDetectCallback((status) => {
+  const el = $('m3dHeightStatus'); if (!el) return
+  el.classList.remove('has-height', 'no-height')
+  const pg = document.querySelector('.m3d-group[data-group="parallax"]')
+  if (status === 'alpha') { el.textContent = '✓ A通道高度图'; el.classList.add('has-height'); if (pg) pg.classList.remove('collapsed') }
+  else if (status === 'normal') { el.textContent = '✓ 法线推算'; el.classList.add('has-height'); if (pg) pg.classList.remove('collapsed') }
+  else { el.textContent = '仅法线'; el.classList.add('no-height') }
+})
+document.querySelectorAll('.m3d-group-head').forEach(h => h.addEventListener('click', () => h.parentElement.classList.toggle('collapsed')))
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') { closePreview(); return }

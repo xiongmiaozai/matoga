@@ -227,58 +227,85 @@
                 <button data-src="right">右</button>
               </div>
             </div>
-            <div class="m3d-ctrl-group">
-              <label class="m3d-slider"><span>金属度</span><input type="range" id="m3dMetalness" min="0" max="1" step="0.01" value="0.1" /><span class="m3d-val" id="m3dMetalnessVal">0.10</span></label>
-              <label class="m3d-slider"><span>粗糙度</span><input type="range" id="m3dRoughness" min="0" max="1" step="0.01" value="0.5" /><span class="m3d-val" id="m3dRoughnessVal">0.50</span></label>
-              <label class="m3d-slider"><span>法线</span><input type="range" id="m3dNormal" min="0" max="2" step="0.01" value="1" /><span class="m3d-val" id="m3dNormalVal">1.00</span></label>
-              <label class="m3d-slider"><span>自发光</span><input type="range" id="m3dEmissive" min="0" max="5" step="0.1" value="1" /><span class="m3d-val" id="m3dEmissiveVal">1.0</span></label>
-              <label class="m3d-slider"><span>视差强度</span><input type="range" id="m3dParallax" min="0" max="1" step="0.01" value="0.05" /><span class="m3d-val" id="m3dParallaxVal">0.05</span></label>
-              <label class="m3d-slider"><span>视差步数</span><input type="range" id="m3dParallaxSteps" min="8" max="64" step="1" value="32" /><span class="m3d-val" id="m3dParallaxStepsVal">32</span></label>
-            </div>
-            <div class="m3d-ctrl-group">
-              <span class="m3d-light-label">透明</span>
-              <div class="m3d-segment" id="m3dOpacityModeSeg">
-                <button class="active" data-mode="auto">自动</button>
-                <button data-mode="cutout">裁剪</button>
-                <button data-mode="blend">半透</button>
-                <button data-mode="glass">玻璃</button>
-              </div>
-              <label class="m3d-slider"><span>不透明</span><input type="range" id="m3dOpacity" min="0" max="1" step="0.01" value="1" /><span class="m3d-val" id="m3dOpacityVal">1.00</span></label>
-              <label class="m3d-slider"><span>透射</span><input type="range" id="m3dTransmission" min="0" max="1" step="0.01" value="0" /><span class="m3d-val" id="m3dTransmissionVal">0.00</span></label>
-              <label class="m3d-slider"><span>折射率</span><input type="range" id="m3dIOR" min="1" max="2.33" step="0.01" value="1.5" /><span class="m3d-val" id="m3dIORVal">1.50</span></label>
-              <label class="m3d-slider"><span>清漆</span><input type="range" id="m3dClearcoat" min="0" max="1" step="0.01" value="0" /><span class="m3d-val" id="m3dClearcoatVal">0.00</span></label>
-            </div>
-            <div class="m3d-ctrl-group">
-              <span class="m3d-light-label">光照</span>
-              <div class="m3d-segment" id="m3dLightSeg">
-                <button class="active" data-light="studio">工作室</button>
-                <button data-light="outdoor">户外</button>
-                <button data-light="soft">柔和</button>
-                <button data-light="warm">暖光</button>
-                <button data-light="cool">冷光</button>
+            <div class="m3d-group" data-group="material">
+              <div class="m3d-group-head"><svg class="ico ico-sm ico-chev"><use href="#i-chevron-down"/></svg><span>材质</span></div>
+              <div class="m3d-group-body">
+                <div class="m3d-ctrl-group">
+                  <label class="m3d-slider"><span>金属度</span><input type="range" id="m3dMetalness" min="0" max="1" step="0.01" value="0.1" /><span class="m3d-val" id="m3dMetalnessVal">0.10</span></label>
+                  <label class="m3d-slider"><span>粗糙度</span><input type="range" id="m3dRoughness" min="0" max="1" step="0.01" value="0.5" /><span class="m3d-val" id="m3dRoughnessVal">0.50</span></label>
+                  <label class="m3d-slider"><span>法线</span><input type="range" id="m3dNormal" min="0" max="2" step="0.01" value="1" /><span class="m3d-val" id="m3dNormalVal">1.00</span></label>
+                  <label class="m3d-slider"><span>自发光</span><input type="range" id="m3dEmissive" min="0" max="5" step="0.1" value="1" /><span class="m3d-val" id="m3dEmissiveVal">1.0</span></label>
+                </div>
               </div>
             </div>
-            <div class="m3d-ctrl-group">
-              <label class="m3d-slider"><span>环境</span><input type="range" id="m3dEnvIntensity" min="0" max="3" step="0.01" value="1" /><span class="m3d-val" id="m3dEnvIntensityVal">1.00</span></label>
-              <label class="m3d-slider"><span>曝光</span><input type="range" id="m3dExposure" min="0" max="3" step="0.01" value="1" /><span class="m3d-val" id="m3dExposureVal">1.00</span></label>
-              <label class="m3d-checkbox"><input type="checkbox" id="m3dGround" checked />地面</label>
-              <label class="m3d-checkbox"><input type="checkbox" id="m3dAutoRotate" checked />自转</label>
-              <label class="m3d-checkbox"><input type="checkbox" id="m3dWireframe" />线框</label>
-              <button class="m3d-action-btn" id="m3dShotBtn" title="截图"><svg class="ico ico-sm"><use href="#i-camera"/></svg></button>
-              <button class="m3d-action-btn" id="m3dFullscreenBtn" title="全屏"><svg class="ico ico-sm"><use href="#i-maximize"/></svg></button>
+            <div class="m3d-group collapsed" data-group="parallax">
+              <div class="m3d-group-head"><svg class="ico ico-sm ico-chev"><use href="#i-chevron-down"/></svg><span>视差</span><span class="m3d-height-status" id="m3dHeightStatus">未检测</span></div>
+              <div class="m3d-group-body">
+                <div class="m3d-ctrl-group">
+                  <label class="m3d-slider"><span>视差强度</span><input type="range" id="m3dParallax" min="0" max="1" step="0.01" value="0.05" /><span class="m3d-val" id="m3dParallaxVal">0.05</span></label>
+                  <label class="m3d-slider"><span>视差步数</span><input type="range" id="m3dParallaxSteps" min="8" max="64" step="1" value="32" /><span class="m3d-val" id="m3dParallaxStepsVal">32</span></label>
+                </div>
+              </div>
             </div>
-            <div class="m3d-ctrl-group m3d-advanced-row">
-              <span class="m3d-light-label">材质格式</span>
-              <select id="m3dFormat" class="input-select input-select-sm">
-                <option value="auto">自动检测</option>
-                <option value="labpbr">labPBR</option>
-                <option value="old">旧版 PBR</option>
-              </select>
-              <span class="m3d-format-detected" id="m3dFormatDetected"></span>
-              <button id="m3dHdrBtn" class="btn btn-ghost btn-sm"><svg class="ico ico-sm"><use href="#i-globe"/></svg> 加载HDR</button>
-              <button id="m3dHdrClearBtn" class="btn btn-ghost btn-sm">清除HDR</button>
+            <div class="m3d-group collapsed" data-group="opacity">
+              <div class="m3d-group-head"><svg class="ico ico-sm ico-chev"><use href="#i-chevron-down"/></svg><span>透明</span></div>
+              <div class="m3d-group-body">
+                <div class="m3d-ctrl-group">
+                  <div class="m3d-segment" id="m3dOpacityModeSeg">
+                    <button class="active" data-mode="auto">自动</button>
+                    <button data-mode="cutout">裁剪</button>
+                    <button data-mode="blend">半透</button>
+                    <button data-mode="glass">玻璃</button>
+                  </div>
+                  <label class="m3d-slider"><span>不透明</span><input type="range" id="m3dOpacity" min="0" max="1" step="0.01" value="1" /><span class="m3d-val" id="m3dOpacityVal">1.00</span></label>
+                  <label class="m3d-slider"><span>透射</span><input type="range" id="m3dTransmission" min="0" max="1" step="0.01" value="0" /><span class="m3d-val" id="m3dTransmissionVal">0.00</span></label>
+                  <label class="m3d-slider"><span>折射率</span><input type="range" id="m3dIOR" min="1" max="2.33" step="0.01" value="1.5" /><span class="m3d-val" id="m3dIORVal">1.50</span></label>
+                  <label class="m3d-slider"><span>清漆</span><input type="range" id="m3dClearcoat" min="0" max="1" step="0.01" value="0" /><span class="m3d-val" id="m3dClearcoatVal">0.00</span></label>
+                </div>
+              </div>
             </div>
-            <div class="m3d-height-status" id="m3dHeightStatus">A通道: 未检测</div>
+            <div class="m3d-group" data-group="env">
+              <div class="m3d-group-head"><svg class="ico ico-sm ico-chev"><use href="#i-chevron-down"/></svg><span>环境</span></div>
+              <div class="m3d-group-body">
+                <div class="m3d-ctrl-group">
+                  <span class="m3d-light-label">光照</span>
+                  <div class="m3d-segment" id="m3dLightSeg">
+                    <button class="active" data-light="studio">工作室</button>
+                    <button data-light="outdoor">户外</button>
+                    <button data-light="soft">柔和</button>
+                    <button data-light="warm">暖光</button>
+                    <button data-light="cool">冷光</button>
+                  </div>
+                </div>
+                <div class="m3d-ctrl-group">
+                  <label class="m3d-slider"><span>环境</span><input type="range" id="m3dEnvIntensity" min="0" max="3" step="0.01" value="1" /><span class="m3d-val" id="m3dEnvIntensityVal">1.00</span></label>
+                  <label class="m3d-slider"><span>曝光</span><input type="range" id="m3dExposure" min="0" max="3" step="0.01" value="1" /><span class="m3d-val" id="m3dExposureVal">1.00</span></label>
+                  <label class="m3d-checkbox"><input type="checkbox" id="m3dGround" checked />地面</label>
+                  <label class="m3d-checkbox"><input type="checkbox" id="m3dAutoRotate" checked />自转</label>
+                  <label class="m3d-checkbox"><input type="checkbox" id="m3dWireframe" />线框</label>
+                  <button class="m3d-action-btn" id="m3dShotBtn" title="截图"><svg class="ico ico-sm"><use href="#i-camera"/></svg></button>
+                  <button class="m3d-action-btn" id="m3dFullscreenBtn" title="全屏"><svg class="ico ico-sm"><use href="#i-maximize"/></svg></button>
+                </div>
+              </div>
+            </div>
+            <div class="m3d-group collapsed" data-group="advanced">
+              <div class="m3d-group-head"><svg class="ico ico-sm ico-chev"><use href="#i-chevron-down"/></svg><span>高级</span></div>
+              <div class="m3d-group-body">
+                <div class="m3d-ctrl-group m3d-advanced-row">
+                  <span class="m3d-light-label">材质格式</span>
+                  <select id="m3dFormat" class="input-select input-select-sm">
+                    <option value="auto">自动检测</option>
+                    <option value="labpbr">labPBR</option>
+                    <option value="old">旧版 PBR</option>
+                  </select>
+                  <span class="m3d-format-detected" id="m3dFormatDetected"></span>
+                </div>
+                <div class="m3d-ctrl-group">
+                  <button id="m3dHdrBtn" class="btn btn-ghost btn-sm"><svg class="ico ico-sm"><use href="#i-globe"/></svg> 加载HDR环境</button>
+                  <button id="m3dHdrClearBtn" class="btn btn-ghost btn-sm">清除HDR</button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
