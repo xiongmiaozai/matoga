@@ -103,3 +103,7 @@ npm run dev
 MIT License - 详见 [LICENSE](LICENSE)
 
 Copyright (c) 2026 芝世 (xiongmiaozai)
+## 使用声明
+他人使用本项目时，需保留并标明以下信息：
+- **作者**：芝世 (xiongmiaozai)
+- **来源地址**：https://github.com/xiongmiaozai/matoga
