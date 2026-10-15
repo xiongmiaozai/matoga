@@ -178,6 +178,8 @@
               <label class="m3d-slider"><span>粗糙度</span><input type="range" id="m3dRoughness" min="0" max="1" step="0.01" value="0.5" /><span class="m3d-val" id="m3dRoughnessVal">0.50</span></label>
               <label class="m3d-slider"><span>法线</span><input type="range" id="m3dNormal" min="0" max="2" step="0.01" value="1" /><span class="m3d-val" id="m3dNormalVal">1.00</span></label>
               <label class="m3d-slider"><span>自发光</span><input type="range" id="m3dEmissive" min="0" max="5" step="0.1" value="1" /><span class="m3d-val" id="m3dEmissiveVal">1.0</span></label>
+              <label class="m3d-slider"><span>视差强度</span><input type="range" id="m3dParallax" min="0" max="1" step="0.01" value="0.05" /><span class="m3d-val" id="m3dParallaxVal">0.05</span></label>
+              <label class="m3d-slider"><span>视差步数</span><input type="range" id="m3dParallaxSteps" min="8" max="64" step="1" value="32" /><span class="m3d-val" id="m3dParallaxStepsVal">32</span></label>
             </div>
             <div class="m3d-ctrl-group">
               <span class="m3d-light-label">透明</span>
@@ -280,8 +282,7 @@
           </select>
         </label>
         <span class="m3d-format-detected" id="m3dFormatDetected"></span>
-        <label class="opt-range">视差强度<input type="range" id="m3dParallax" min="0" max="1" step="0.01" value="0.05" /><span class="opt-range-val" id="m3dParallaxVal">0.05</span></label>
-        <label class="opt-range">视差步数<input type="range" id="m3dParallaxSteps" min="8" max="64" step="1" value="32" /><span class="opt-range-val" id="m3dParallaxStepsVal">32</span></label>
+
         <div class="action-row">
           <button id="m3dHdrBtn" class="btn btn-ghost btn-sm">加载 HDR 环境</button>
           <button id="m3dHdrClearBtn" class="btn btn-ghost btn-sm">清除 HDR</button>
