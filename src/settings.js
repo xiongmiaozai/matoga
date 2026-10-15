@@ -12,7 +12,7 @@ export function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme)
   document.body.setAttribute('data-theme', theme)
   const toggle = $('themeToggle')
-  if (toggle) toggle.textContent = theme === 'dark' ? '☀️' : '🌙'
+  if (toggle) toggle.innerHTML = theme === 'dark' ? '<svg class="ico"><use href="#i-sun"/></svg>' : '<svg class="ico"><use href="#i-moon"/></svg>'
   const chk = $('settingThemeChk')
   if (chk) chk.checked = theme === 'dark'
   window.api.setConfig({ theme })

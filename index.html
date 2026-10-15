@@ -13,19 +13,44 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+    <symbol id="i-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="12" r="6"/><circle cx="15" cy="12" r="6"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></symbol>
+    <symbol id="i-image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></symbol>
+    <symbol id="i-cube" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96L12 12.01l8.73-5.05M12 22.08V12"/></symbol>
+    <symbol id="i-clipboard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></symbol>
+    <symbol id="i-maximize" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></symbol>
+    <symbol id="i-chevron-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></symbol>
+    <symbol id="i-chevron-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></symbol>
+    <symbol id="i-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-7.7"/></symbol>
+    <symbol id="i-swap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3l4 4-4 4M4 7h16M8 21l-4-4 4-4M20 17H4"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></symbol>
+    <symbol id="i-compare" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M6 8v8a4 4 0 0 0 4 4h4M18 16V8a4 4 0 0 0-4-4h-4"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></symbol>
+    <symbol id="i-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></symbol>
+  </svg>
+
   <header class="app-header">
     <div class="title">
-      <span class="logo">🎨</span>
+      <svg class="ico ico-logo"><use href="#i-logo"/></svg>
       <h1>材质贴图对比工具</h1>
       <span class="ver">v1.0</span>
     </div>
     <div class="header-search">
-      <span class="search-ico">🔍</span>
+      <svg class="ico ico-search"><use href="#i-search"/></svg>
       <input type="search" id="searchInput" placeholder="搜索材质/文件名…  ⌘K" />
     </div>
     <div class="header-actions">
-      <button id="themeToggle" class="icon-btn" title="切换深色/浅色模式">🌙</button>
-      <button id="settingsBtn" class="icon-btn" title="设置">⚙</button>
+      <button id="themeToggle" class="icon-btn" title="切换深色/浅色模式"><svg class="ico"><use href="#i-moon"/></svg></button>
     </div>
   </header>
 
@@ -54,33 +79,62 @@
         </div>
 
         <div class="panel-card">
-          <div class="panel-card-title">视图模式</div>
+          <div class="panel-card-title"><svg class="ico ico-sm"><use href="#i-layers"/></svg>视图模式</div>
           <label class="opt"><input type="radio" name="viewMode" value="all" checked /><span>全部展示</span></label>
           <label class="opt"><input type="radio" name="viewMode" value="byFolder" /><span>按文件夹分类</span></label>
         </div>
 
         <div class="panel-card">
-          <div class="panel-card-title">对比选项</div>
+          <div class="panel-card-title"><svg class="ico ico-sm"><use href="#i-compare"/></svg>对比选项</div>
           <label class="opt"><input type="checkbox" id="recursiveChk" /><span>递归对比</span></label>
           <label class="opt"><input type="checkbox" id="onlyMissingChk" /><span>仅显示不一致项</span></label>
           <label class="opt"><input type="checkbox" id="ignoreChk" checked /><span>忽略系统文件</span></label>
+          <label class="opt"><input type="checkbox" id="hashChk" /><span>精确对比内容（哈希校验）</span></label>
+          <label class="opt-text">自定义忽略（逗号分隔）<input type="text" id="ignoreInput" class="input-text" placeholder="*.tmp,*.bak" /></label>
         </div>
 
         <div class="panel-card">
-          <div class="panel-card-title">操作</div>
+          <div class="panel-card-title"><svg class="ico ico-sm"><use href="#i-folder"/></svg>路径设置</div>
+          <div class="path-setting">
+            <span class="path-setting-label">HDRI 预设地址</span>
+            <div class="path-setting-row">
+              <input type="text" id="hdriPresetPathInput" class="input-text" placeholder="输入或选择路径" />
+              <button id="hdriPresetPickBtn" class="btn btn-ghost btn-sm">选择</button>
+              <button id="hdriPresetCreateBtn" class="btn btn-ghost btn-sm">新建</button>
+              <button id="hdriPresetOpenBtn" class="btn btn-ghost btn-sm">打开</button>
+            </div>
+          </div>
+          <div class="path-setting">
+            <span class="path-setting-label">MC 材质包地址</span>
+            <div class="path-setting-row">
+              <input type="text" id="mcPacksPathInput" class="input-text" placeholder="输入或选择路径" />
+              <button id="mcPacksPickBtn" class="btn btn-ghost btn-sm">选择</button>
+              <button id="mcPacksCreateBtn" class="btn btn-ghost btn-sm">新建</button>
+              <button id="mcPacksOpenBtn" class="btn btn-ghost btn-sm">打开</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel-card">
+          <div class="panel-card-title"><svg class="ico ico-sm"><use href="#i-swap"/></svg>操作</div>
           <button id="compareBtn" class="btn btn-accent" disabled>开始对比</button>
           <div class="action-row">
-            <button id="undoBtn" class="btn btn-ghost btn-sm" disabled>↶ 撤回</button>
-            <button id="swapBtn" class="btn btn-ghost btn-sm">⇄ 交换</button>
+            <button id="undoBtn" class="btn btn-ghost btn-sm" disabled><svg class="ico ico-sm"><use href="#i-undo"/></svg> 撤回</button>
+            <button id="swapBtn" class="btn btn-ghost btn-sm"><svg class="ico ico-sm"><use href="#i-swap"/></svg> 交换</button>
           </div>
           <div class="action-row">
             <button id="batchRightBtn" class="btn btn-sm" disabled>批量→右</button>
             <button id="batchLeftBtn" class="btn btn-sm" disabled>批量→左</button>
           </div>
+          <div class="action-row">
+            <button id="exportBtn" class="btn btn-ghost btn-sm" disabled><svg class="ico ico-sm"><use href="#i-download"/></svg> 导出TXT</button>
+            <button id="exportHtmlBtn" class="btn btn-ghost btn-sm" disabled><svg class="ico ico-sm"><use href="#i-download"/></svg> 导出HTML</button>
+          </div>
+          <button id="clearMemBtn" class="btn btn-ghost btn-sm"><svg class="ico ico-sm"><use href="#i-trash"/></svg> 清除记忆</button>
         </div>
       </div>
     </aside>
-    <button class="collapse-btn" id="collapseLeftBtn" title="折叠/展开左栏">⇤</button>
+    <button class="collapse-btn" id="collapseLeftBtn" title="折叠/展开左栏"><svg class="ico"><use href="#i-chevron-left"/></svg></button>
 
     <div class="resizer" data-resize="left" title="拖拽调整左栏宽度"></div>
 
@@ -120,10 +174,10 @@
     <aside class="sidebar-right" id="sidebarRight" data-region="right">
       <div class="panel" id="previewPanelWrap" data-panel="preview">
         <div class="panel-head">
-          <span class="panel-title">🖼 预览</span>
+          <span class="panel-title"><svg class="ico ico-sm"><use href="#i-image"/></svg> 预览</span>
           <div class="panel-tools">
-            <button class="panel-tool" data-panel-action="float" title="浮动">⤢</button>
-            <button class="panel-tool" data-panel-action="collapse" title="折叠">▾</button>
+            <button class="panel-tool" data-panel-action="float" title="浮动"><svg class="ico ico-sm"><use href="#i-external"/></svg></button>
+            <button class="panel-tool" data-panel-action="collapse" title="折叠"><svg class="ico ico-sm"><use href="#i-chevron-down"/></svg></button>
           </div>
         </div>
         <div class="panel-body">
@@ -146,10 +200,10 @@
 
       <div class="panel" id="material3dPanel" data-panel="3d">
         <div class="panel-head">
-          <span class="panel-title">🎨 3D 材质预览</span>
+          <span class="panel-title"><svg class="ico ico-sm"><use href="#i-cube"/></svg> 3D 材质预览</span>
           <div class="panel-tools">
-            <button class="panel-tool" data-panel-action="float" title="浮动">⤢</button>
-            <button class="panel-tool" data-panel-action="collapse" title="折叠">▾</button>
+            <button class="panel-tool" data-panel-action="float" title="浮动"><svg class="ico ico-sm"><use href="#i-external"/></svg></button>
+            <button class="panel-tool" data-panel-action="collapse" title="折叠"><svg class="ico ico-sm"><use href="#i-chevron-down"/></svg></button>
           </div>
         </div>
         <div class="panel-body">
@@ -210,8 +264,19 @@
               <label class="m3d-checkbox"><input type="checkbox" id="m3dGround" checked />地面</label>
               <label class="m3d-checkbox"><input type="checkbox" id="m3dAutoRotate" checked />自转</label>
               <label class="m3d-checkbox"><input type="checkbox" id="m3dWireframe" />线框</label>
-              <button class="m3d-action-btn" id="m3dShotBtn" title="截图">📷</button>
-              <button class="m3d-action-btn" id="m3dFullscreenBtn" title="全屏">⛶</button>
+              <button class="m3d-action-btn" id="m3dShotBtn" title="截图"><svg class="ico ico-sm"><use href="#i-camera"/></svg></button>
+              <button class="m3d-action-btn" id="m3dFullscreenBtn" title="全屏"><svg class="ico ico-sm"><use href="#i-maximize"/></svg></button>
+            </div>
+            <div class="m3d-ctrl-group m3d-advanced-row">
+              <span class="m3d-light-label">材质格式</span>
+              <select id="m3dFormat" class="input-select input-select-sm">
+                <option value="auto">自动检测</option>
+                <option value="labpbr">labPBR</option>
+                <option value="old">旧版 PBR</option>
+              </select>
+              <span class="m3d-format-detected" id="m3dFormatDetected"></span>
+              <button id="m3dHdrBtn" class="btn btn-ghost btn-sm"><svg class="ico ico-sm"><use href="#i-globe"/></svg> 加载HDR</button>
+              <button id="m3dHdrClearBtn" class="btn btn-ghost btn-sm">清除HDR</button>
             </div>
             <div class="m3d-height-status" id="m3dHeightStatus">A通道: 未检测</div>
           </div>
@@ -220,9 +285,9 @@
 
       <div class="panel" id="detailPanelWrap" data-panel="detail">
         <div class="panel-head">
-          <span class="panel-title">📋 详情</span>
+          <span class="panel-title"><svg class="ico ico-sm"><use href="#i-clipboard"/></svg> 详情</span>
           <div class="panel-tools">
-            <button class="panel-tool" data-panel-action="collapse" title="折叠">▾</button>
+            <button class="panel-tool" data-panel-action="collapse" title="折叠"><svg class="ico ico-sm"><use href="#i-chevron-down"/></svg></button>
           </div>
         </div>
         <div class="panel-body">
@@ -240,74 +305,11 @@
     </aside>
   </div>
 
-  <aside class="settings-drawer" id="settingsDrawer">
-    <div class="settings-head">
-      <span class="settings-title">⚙ 设置</span>
-      <button id="settingsClose" class="icon-btn" title="关闭">✕</button>
-    </div>
-    <div class="settings-body">
-      <section class="settings-section">
-        <div class="settings-section-title">对比</div>
-        <label class="opt"><input type="checkbox" id="hashChk" /><span>精确对比内容（哈希校验，较慢）</span></label>
-        <label class="opt-text">自定义忽略（逗号分隔，如 *.tmp,*.bak）<input type="text" id="ignoreInput" class="input-text" placeholder="*.tmp,*.bak" /></label>
-      </section>
-      <section class="settings-section">
-        <div class="settings-section-title">路径</div>
-        <div class="path-setting">
-          <span class="path-setting-label">HDRI 预设地址</span>
-          <div class="path-setting-row">
-            <input type="text" id="hdriPresetPathInput" class="input-text" placeholder="输入或选择文件夹路径" />
-            <button id="hdriPresetPickBtn" class="btn btn-ghost btn-sm">选择</button>
-            <button id="hdriPresetCreateBtn" class="btn btn-ghost btn-sm">新建</button>
-            <button id="hdriPresetOpenBtn" class="btn btn-ghost btn-sm">打开</button>
-          </div>
-        </div>
-        <div class="path-setting">
-          <span class="path-setting-label">MC 材质包地址</span>
-          <div class="path-setting-row">
-            <input type="text" id="mcPacksPathInput" class="input-text" placeholder="输入或选择文件夹路径" />
-            <button id="mcPacksPickBtn" class="btn btn-ghost btn-sm">选择</button>
-            <button id="mcPacksCreateBtn" class="btn btn-ghost btn-sm">新建</button>
-            <button id="mcPacksOpenBtn" class="btn btn-ghost btn-sm">打开</button>
-          </div>
-        </div>
-      </section>
-      <section class="settings-section">
-        <div class="settings-section-title">3D 高级</div>
-        <label class="opt"><span>材质格式</span>
-          <select id="m3dFormat" class="input-select">
-            <option value="auto">自动检测</option>
-            <option value="labpbr">labPBR</option>
-            <option value="old">旧版 PBR</option>
-          </select>
-        </label>
-        <span class="m3d-format-detected" id="m3dFormatDetected"></span>
-
-        <div class="action-row">
-          <button id="m3dHdrBtn" class="btn btn-ghost btn-sm">加载 HDR 环境</button>
-          <button id="m3dHdrClearBtn" class="btn btn-ghost btn-sm">清除 HDR</button>
-        </div>
-      </section>
-      <section class="settings-section">
-        <div class="settings-section-title">数据</div>
-        <div class="action-row">
-          <button id="exportBtn" class="btn btn-ghost btn-sm" disabled>导出 TXT</button>
-          <button id="exportHtmlBtn" class="btn btn-ghost btn-sm" disabled>导出 HTML</button>
-        </div>
-        <button id="clearMemBtn" class="btn btn-ghost btn-sm">清除记忆</button>
-      </section>
-      <section class="settings-section">
-        <div class="settings-section-title">外观</div>
-        <label class="opt"><input type="checkbox" id="settingThemeChk" /><span>深色模式</span></label>
-      </section>
-    </div>
-  </aside>
-
   <div id="toast" class="toast"></div>
 
   <div id="previewModal" class="preview-modal">
     <div class="preview-modal-inner">
-      <button id="previewClose" class="preview-close" title="关闭">×</button>
+      <button id="previewClose" class="preview-close" title="关闭"><svg class="ico"><use href="#i-x"/></svg></button>
       <img id="previewImg" class="preview-img" alt="" />
       <div id="previewCaption" class="preview-caption"></div>
     </div>

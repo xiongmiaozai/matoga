@@ -6,6 +6,10 @@
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
+.ico { width: 18px; height: 18px; display: inline-flex; flex-shrink: 0; stroke: currentColor; fill: none; vertical-align: middle; }
+.ico-sm { width: 14px; height: 14px; }
+.ico-logo { width: 22px; height: 22px; color: var(--primary); }
+
 :root {
   --bg: #F1F3F4;
   --panel-bg: #FFFFFF;
@@ -120,7 +124,7 @@ body {
 }
 :root[data-theme="dark"] .header-search { background: var(--panel-2); }
 .header-search:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(10,89,247,.12); }
-.header-search .search-ico { position: absolute; left: 12px; font-size: 13px; opacity: .5; pointer-events: none; }
+.header-search .search-ico { position: absolute; left: 10px; width: 15px; height: 15px; opacity: .45; pointer-events: none; color: var(--text-muted); }
 #searchInput {
   padding: 8px 12px 8px 34px; border: none; background: transparent;
   font-size: 13px; width: 100%; outline: none; color: var(--text);
@@ -453,6 +457,12 @@ tr.sub-row td:nth-child(3) { padding-left: 30px; color: var(--text-muted); }
 .m3d-height-status.has-height { color: var(--accent); }
 .m3d-height-status.no-height { color: var(--danger); }
 .m3d-format-detected { color: var(--text-muted); font-size: 11px; }
+.input-select-sm { padding: 4px 8px; font-size: 11px; max-width: 110px; }
+.m3d-advanced-row { gap: 6px; }
+.panel-card-title .ico { width: 14px; height: 14px; color: var(--text-muted); margin-right: 4px; vertical-align: middle; }
+.panel-card .path-setting { margin-top: 6px; }
+.panel-card .opt-text { margin-top: 6px; }
+.panel-title .ico { margin-right: 4px; vertical-align: middle; }
 
 /* ── 详情 / 操作 ── */
 .detail-panel { padding: 12px 14px; font-size: 12px; overflow-y: auto; }
