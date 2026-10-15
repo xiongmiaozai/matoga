@@ -5,7 +5,7 @@
  */
 
 import {
-  state, showToast, undoBtn, compareBtn,
+  state, showToast, undoBtn, compareBtn, compareBtn2, swapBtn2,
   recursiveChk, hashChk, onlyMissingChk, ignoreChk, ignoreInput,
   leftPathEl, rightPathEl, leftStatEl, rightStatEl, leftListEl, rightListEl,
   KIND_TEXT
@@ -77,7 +77,9 @@ export async function loadFolder(side) {
 }
 
 export function updateCompareButton() {
-  compareBtn.disabled = !(state.leftPath && state.rightPath)
+  const enabled = !!(state.leftPath && state.rightPath)
+  compareBtn.disabled = !enabled
+  if (compareBtn2) compareBtn2.disabled = !enabled
 }
 
 export function saveOptions() {

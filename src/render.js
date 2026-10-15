@@ -68,7 +68,9 @@ export function applyEntries(side, folderPath, entries) {
 }
 
 export function statusBadge(kind) {
-  return `<span class="status-badge status-${kind}">${KIND_TEXT[kind]}</span>`
+  const icons = { have: 'i-check', diff: 'i-alert', partial: 'i-minus', miss: 'i-x', extra: 'i-plus' }
+  const labels = { have: '一致', diff: '不同', partial: '部分', miss: '缺失', extra: '多余' }
+  return `<span class="status-badge status-${kind}"><svg class="ico"><use href="#${icons[kind]}"/></svg>${labels[kind]}</span>`
 }
 
 export function renderThumbPair(le, re) {
@@ -99,7 +101,7 @@ export function appendGroupRows(frag, g) {
   const folder = folderOf(g)
   const displayName = state.viewMode === 'byFolder' && folder !== '（根目录）' ? g.key.slice(folder.length + 1) : g.key
   const nameHtml = `${arrow}<span class="cell-name" title="${g.key}">${displayName || g.key}</span>`
-  const typeHtml = g.isMaterial ? '<span class="type-mat">🎨 材质</span>' : g.isDir ? '<span class="type-dir">📁 文件夹</span>' : '<span class="type-file">📄 文件</span>'
+  const typeHtml = g.isMaterial ? '<span class="type-mat"><svg class="ico"><use href="#i-layers"/></svg>材质</span>' : g.isDir ? '<span class="type-dir"><svg class="ico"><use href="#i-folder"/></svg>文件夹</span>' : '<span class="type-file"><svg class="ico"><use href="#i-image"/></svg>文件</span>'
   const me = mainLeft || mainRight
   const sizeHtml = (g.kind === 'diff' && mainLeft && mainRight && mainLeft.size !== mainRight.size)
     ? `<span class="size-diff" title="左 ${formatSize(mainLeft.size)} / 右 ${formatSize(mainRight.size)}">${formatSize(mainLeft.size)} ≠ ${formatSize(mainRight.size)}</span>`

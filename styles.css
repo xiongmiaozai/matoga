@@ -479,6 +479,54 @@ tr.sub-row td:nth-child(3) { padding-left: 30px; color: var(--text-muted); }
 .m3d-presets { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
 .m3d-presets button { border: 1px solid rgba(255,255,255,.15); background: rgba(255,255,255,.06); color: rgba(255,255,255,.75); font-size: 11px; padding: 4px 12px; border-radius: 6px; cursor: pointer; transition: all .15s var(--ease); }
 .m3d-presets button:hover { background: rgba(255,255,255,.15); color: #fff; border-color: rgba(255,255,255,.3); }
+
+/* ── Header search SVG icon ── */
+.header-search .ico { position: absolute; left: 10px; width: 15px; height: 15px; opacity: .45; pointer-events: none; color: var(--text-muted); }
+
+/* ── Icon button variants ── */
+.icon-btn .ico { width: 18px; height: 18px; }
+.icon-btn:disabled { opacity: .4; cursor: not-allowed; }
+.icon-btn:disabled:hover { background: var(--panel-bg); border-color: var(--border); color: var(--text-muted); }
+.icon-btn-accent { background: var(--accent); border-color: var(--accent); color: #fff; }
+.icon-btn-accent:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); color: #fff; }
+.icon-btn-accent:disabled { background: var(--panel-2); border-color: var(--border); color: var(--text-dim); opacity: 1; }
+
+/* ── 2D/3D Preview Tabs ── */
+.pv-tabs { display: flex; gap: 2px; }
+.pv-tabs button { padding: 4px 10px; font-size: 12px; font-weight: 500; border: none; background: transparent; color: var(--text-muted); cursor: pointer; border-radius: 6px; transition: all .15s var(--ease); display: flex; align-items: center; gap: 4px; }
+.pv-tabs button:hover { color: var(--text); background: var(--panel-2); }
+.pv-tabs button.active { color: var(--primary); background: var(--primary-soft); }
+.pv-tabs button .ico { width: 14px; height: 14px; }
+.pv-content { display: none; flex: 1; min-height: 0; flex-direction: column; overflow: hidden; }
+.pv-content.active { display: flex; }
+
+/* ── Option row (horizontal) ── */
+.opt-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.opt-row .opt { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text); cursor: pointer; }
+.opt-row .opt input { margin: 0; accent-color: var(--primary); }
+
+/* ── Collapsible panel card ── */
+.panel-card-collapsible .panel-card-title { cursor: pointer; user-select: none; display: flex; align-items: center; }
+.panel-card-collapsible .panel-card-title .ico-chev-right { margin-left: auto; transition: transform .15s var(--ease); }
+.panel-card-collapsible.collapsed .ico-chev-right { transform: rotate(-90deg); }
+.panel-card-collapsible .panel-card-body { display: flex; flex-direction: column; gap: 8px; }
+.panel-card-collapsible.collapsed .panel-card-body { display: none; }
+
+/* ── Empty state ── */
+.ico-empty { width: 48px; height: 48px; color: var(--text-dim); opacity: .4; }
+.empty-row td { text-align: center; color: var(--text-muted); font-size: 13px; padding: 40px 20px; }
+
+/* ── Status badge SVG ── */
+.status-badge::before { display: none; }
+.status-badge .ico { width: 13px; height: 13px; flex-shrink: 0; }
+.status-have .ico { color: var(--accent); }
+.status-diff .ico { color: var(--warn); }
+.status-partial .ico { color: var(--partial); }
+.status-miss .ico { color: var(--danger); }
+.status-extra .ico { color: var(--extra); }
+
+/* ── Type icons SVG ── */
+.type-mat .ico, .type-dir .ico, .type-file .ico { width: 13px; height: 13px; }
 .input-select-sm { padding: 4px 8px; font-size: 11px; max-width: 110px; }
 .m3d-advanced-row { gap: 6px; }
 .panel-card-title .ico { width: 14px; height: 14px; color: var(--text-muted); margin-right: 4px; vertical-align: middle; }

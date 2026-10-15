@@ -27,6 +27,7 @@ import { initPreview2D } from './src/preview2d.js'
 import {
   leftBtn, rightBtn, compareBtn, exportBtn, exportHtmlBtn, swapBtn,
   clearMemBtn, batchRightBtn, batchLeftBtn, undoBtn,
+  compareBtn2, swapBtn2,
   recursiveChk, onlyMissingChk, hashChk, ignoreChk, ignoreInput,
   searchInput, resultBody, leftCard, rightCard
 } from './src/core.js'
@@ -117,6 +118,25 @@ clearMemBtn.addEventListener('click', async () => {
 batchRightBtn.addEventListener('click', () => batchCopyToSide('right'))
 batchLeftBtn.addEventListener('click', () => batchCopyToSide('left'))
 undoBtn.addEventListener('click', () => { undo().catch(err => showToast('撤回出错：' + err.message)) })
+
+if (compareBtn2) compareBtn2.addEventListener('click', compare)
+if (swapBtn2) swapBtn2.addEventListener('click', swapFolders)
+
+document.querySelectorAll('.pv-tabs button[data-pv-tab]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tab = btn.dataset.pvTab
+    document.querySelectorAll('.pv-tabs button[data-pv-tab]').forEach(b => b.classList.remove('active'))
+    btn.classList.add('active')
+    document.querySelectorAll('.pv-content[data-pv-content]').forEach(c => c.classList.toggle('active', c.dataset.pvContent === tab))
+  })
+})
+
+document.querySelectorAll('[data-toggle-card]').forEach(el => {
+  el.addEventListener('click', () => {
+    const card = el.closest('.panel-card-collapsible')
+    if (card) card.classList.toggle('collapsed')
+  })
+})
 
 function bindSegment(segId, attr, fn) {
   const seg = $(segId)
