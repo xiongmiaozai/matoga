@@ -12,7 +12,7 @@
     "compare",
     "diff"
   ],
-  "author": "",
+  "author": "芝世 (xiongmiaozai)",
   "license": "MIT",
   "devDependencies": {
     "electron": "^31.7.7"

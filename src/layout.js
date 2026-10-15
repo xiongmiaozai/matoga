@@ -1,3 +1,9 @@
+/**
+ * matoga - 材质贴图对比工具
+ * Copyright (c) 2026 芝世 (xiongmiaozai). All rights reserved.
+ * SPDX-License-Identifier: MIT
+ */
+
 import { $ } from './core.js'
 
 const MIN_LEFT = 240, MAX_LEFT = 560

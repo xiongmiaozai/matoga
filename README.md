@@ -96,5 +96,10 @@ npm run dev
 | `_n` | 法线贴图 | RGB 为法线方向，A 通道为法线强度 / 高度图 |
 | `_s` | 高光贴图 | R=粗糙度，G=金属度，B=自发光，A=自发光掩膜（LabPBR） |
 
+## 作者
+芝世 (xiongmiaozai) - 2720596091@qq.com
+
 ## 许可证
-MIT
+MIT License - 详见 [LICENSE](LICENSE)
+
+Copyright (c) 2026 芝世 (xiongmiaozai)

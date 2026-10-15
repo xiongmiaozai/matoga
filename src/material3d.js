@@ -1,3 +1,9 @@
+/**
+ * matoga - 材质贴图对比工具
+ * Copyright (c) 2026 芝世 (xiongmiaozai). All rights reserved.
+ * SPDX-License-Identifier: MIT
+ */
+
 import * as THREE from '../node_modules/three/build/three.module.js'
 import { fileUrl, isImageFile } from './utils.js'
 import { HDRLoader } from './hdr-loader.js'
