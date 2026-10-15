@@ -413,7 +413,7 @@ tr.sub-row td:nth-child(3) { padding-left: 30px; color: var(--text-muted); }
 .pv-diff-info { color: #ccc; font-size: 11px; margin-top: 6px; }
 
 /* ── 3D 面板 ── */
-.material3d-container { width: 100%; height: 320px; position: relative; background: #1a1a2e; }
+.material3d-container { flex: 1; min-height: 220px; position: relative; background: #1a1a2e; overflow: hidden; }
 .material3d-container canvas { display: block; width: 100% !important; height: 100% !important; }
 .material3d-container.fullscreen { position: fixed; inset: 0; z-index: 500; height: 100vh; }
 .m3d-resizer {
@@ -457,6 +457,28 @@ tr.sub-row td:nth-child(3) { padding-left: 30px; color: var(--text-muted); }
 .m3d-height-status.has-height { color: var(--accent); }
 .m3d-height-status.no-height { color: var(--danger); }
 .m3d-format-detected { color: var(--text-muted); font-size: 11px; }
+.m3d-hud-bar { position: absolute; top: 0; left: 0; right: 0; z-index: 15; display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: linear-gradient(to bottom, rgba(0,0,0,.45), transparent); }
+.m3d-hud-spacer { flex: 1; }
+.m3d-hud-btn { width: 30px; height: 30px; border-radius: 8px; border: none; background: rgba(255,255,255,.12); color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all .15s var(--ease); backdrop-filter: blur(8px); }
+.m3d-hud-btn:hover { background: rgba(255,255,255,.22); }
+.m3d-hud-btn.active { background: var(--primary); }
+.m3d-params-overlay { position: absolute; bottom: 8px; left: 8px; right: 8px; z-index: 16; max-height: 70%; overflow-y: auto; background: rgba(20,20,30,.82); backdrop-filter: blur(16px) saturate(150%); border-radius: 12px; border: 1px solid rgba(255,255,255,.1); box-shadow: 0 8px 32px rgba(0,0,0,.4); transform: translateY(calc(100% + 16px)); opacity: 0; transition: transform .25s var(--ease), opacity .25s var(--ease); pointer-events: none; }
+.m3d-params-overlay.show { transform: translateY(0); opacity: 1; pointer-events: auto; }
+.m3d-tabs { display: flex; gap: 2px; padding: 8px 10px 6px; border-bottom: 1px solid rgba(255,255,255,.08); }
+.m3d-tabs button { border: none; background: transparent; color: rgba(255,255,255,.55); font-size: 12px; padding: 5px 12px; border-radius: 7px; cursor: pointer; transition: all .15s var(--ease); }
+.m3d-tabs button:hover { color: #fff; background: rgba(255,255,255,.08); }
+.m3d-tabs button.active { color: #fff; background: rgba(255,255,255,.15); }
+.m3d-tab-panes { padding: 10px 12px; }
+.m3d-tab-pane { display: none; }
+.m3d-tab-pane.active { display: block; }
+.m3d-tab-pane .m3d-slider { color: rgba(255,255,255,.6); }
+.m3d-tab-pane .m3d-slider .m3d-val { color: #fff; }
+.m3d-tab-pane .m3d-light-label { color: rgba(255,255,255,.6); }
+.m3d-tab-pane .m3d-checkbox { color: rgba(255,255,255,.6); }
+.m3d-tab-pane .m3d-height-status { display: block; margin-bottom: 6px; }
+.m3d-presets { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+.m3d-presets button { border: 1px solid rgba(255,255,255,.15); background: rgba(255,255,255,.06); color: rgba(255,255,255,.75); font-size: 11px; padding: 4px 12px; border-radius: 6px; cursor: pointer; transition: all .15s var(--ease); }
+.m3d-presets button:hover { background: rgba(255,255,255,.15); color: #fff; border-color: rgba(255,255,255,.3); }
 .input-select-sm { padding: 4px 8px; font-size: 11px; max-width: 110px; }
 .m3d-advanced-row { gap: 6px; }
 .panel-card-title .ico { width: 14px; height: 14px; color: var(--text-muted); margin-right: 4px; vertical-align: middle; }
@@ -549,5 +571,5 @@ tr.sub-row td:nth-child(3) { padding-left: 30px; color: var(--text-muted); }
   .sidebar-right { width: 360px; }
   .col-size, .col-mtime { display: none; }
   .header-search { max-width: 240px; }
-  .material3d-container { height: 260px; }
+
 }

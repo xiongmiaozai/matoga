@@ -197,12 +197,30 @@ setFormatDetectCallback((fmt) => { $('m3dFormatDetected').textContent = fmt === 
 setHeightDetectCallback((status) => {
   const el = $('m3dHeightStatus'); if (!el) return
   el.classList.remove('has-height', 'no-height')
-  const pg = document.querySelector('.m3d-group[data-group="parallax"]')
-  if (status === 'alpha') { el.textContent = '✓ A通道高度图'; el.classList.add('has-height'); if (pg) pg.classList.remove('collapsed') }
-  else if (status === 'normal') { el.textContent = '✓ 法线推算'; el.classList.add('has-height'); if (pg) pg.classList.remove('collapsed') }
+  if (status === 'alpha') { el.textContent = '✓ A通道高度图'; el.classList.add('has-height') }
+  else if (status === 'normal') { el.textContent = '✓ 法线推算'; el.classList.add('has-height') }
   else { el.textContent = '仅法线'; el.classList.add('no-height') }
+  if (status === 'alpha' || status === 'normal') {
+    const ov = $('m3dParamsOverlay')
+    if (ov && !ov.classList.contains('show')) { ov.classList.add('show'); const t = document.querySelector('.m3d-tabs button[data-tab="parallax"]'); if (t) t.click() }
+  }
 })
-document.querySelectorAll('.m3d-group-head').forEach(h => h.addEventListener('click', () => h.parentElement.classList.toggle('collapsed')))
+$('m3dParamsBtn').addEventListener('click', () => $('m3dParamsOverlay').classList.toggle('show'))
+document.querySelectorAll('.m3d-tabs button').forEach(btn => btn.addEventListener('click', () => {
+  const tab = btn.dataset.tab
+  document.querySelectorAll('.m3d-tabs button').forEach(b => b.classList.remove('active'))
+  btn.classList.add('active')
+  document.querySelectorAll('.m3d-tab-pane').forEach(p => p.classList.toggle('active', p.dataset.pane === tab))
+}))
+document.querySelectorAll('.m3d-presets button').forEach(btn => btn.addEventListener('click', () => {
+  const p = btn.dataset.preset
+  const set = (id, val) => { const el = $(id); if (el) { el.value = val; el.dispatchEvent(new Event('input', { bubbles: true })) } }
+  if (p === 'metal') { set('m3dMetalness', 1); set('m3dRoughness', 0.3); set('m3dEmissive', 1); set('m3dOpacity', 1); set('m3dTransmission', 0) }
+  else if (p === 'plastic') { set('m3dMetalness', 0); set('m3dRoughness', 0.5); set('m3dEmissive', 1); set('m3dOpacity', 1); set('m3dTransmission', 0) }
+  else if (p === 'glass') { set('m3dMetalness', 0); set('m3dRoughness', 0); set('m3dEmissive', 1); set('m3dOpacity', 1); set('m3dTransmission', 1); set('m3dIOR', 1.5) }
+  else if (p === 'fabric') { set('m3dMetalness', 0); set('m3dRoughness', 0.8); set('m3dEmissive', 1); set('m3dOpacity', 1); set('m3dTransmission', 0) }
+  else if (p === 'emissive') { set('m3dMetalness', 0); set('m3dRoughness', 0.5); set('m3dEmissive', 3); set('m3dOpacity', 1); set('m3dTransmission', 0) }
+}))
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') { closePreview(); return }

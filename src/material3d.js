@@ -8,7 +8,7 @@ import * as THREE from '../node_modules/three/build/three.module.js'
 import { fileUrl, isImageFile } from './utils.js'
 import { HDRLoader } from './hdr-loader.js'
 
-let scene, camera, renderer, animationId, pmrem, envTexture
+let scene, camera, renderer, animationId, pmrem, envTexture, pmremTexture
 
 function showLoading(text) { const el = document.getElementById('m3dLoading'); if (!el) return; const t = el.querySelector('.m3d-loading-text'); if (t && text) t.textContent = text; el.classList.add('show') }
 function hideLoading() { const el = document.getElementById('m3dLoading'); if (el) el.classList.remove('show') }
@@ -120,13 +120,34 @@ const geometries = {
 function createEnvTexture(presetKey) {
   const preset = LIGHT_PRESETS[presetKey] || LIGHT_PRESETS.studio
   const env = preset.env
+  const w = 512, h = 256
   const canvas = document.createElement('canvas')
-  canvas.width = 256; canvas.height = 256
+  canvas.width = w; canvas.height = h
   const ctx = canvas.getContext('2d', { willReadFrequently: true })
-  const grad = ctx.createLinearGradient(0, 0, 0, 256)
+  const grad = ctx.createLinearGradient(0, 0, 0, h)
   grad.addColorStop(0, env.colors[0]); grad.addColorStop(0.5, env.colors[1]); grad.addColorStop(1, env.colors[2])
-  ctx.fillStyle = grad; ctx.fillRect(0, 0, 256, 256)
-  if (env.light) { ctx.fillStyle = env.light.color; ctx.beginPath(); ctx.arc(env.light.x, env.light.y, env.light.r, 0, Math.PI * 2); ctx.fill() }
+  ctx.fillStyle = grad; ctx.fillRect(0, 0, w, h)
+  const bandY = h * 0.22, bandH = h * 0.18
+  for (let i = 0; i < 4; i++) {
+    const cx = w * (0.125 + i * 0.25), halfW = w * 0.05
+    const lg = ctx.createLinearGradient(cx - halfW, 0, cx + halfW, 0)
+    lg.addColorStop(0, 'rgba(255,255,255,0)'); lg.addColorStop(0.5, 'rgba(255,255,255,0.55)'); lg.addColorStop(1, 'rgba(255,255,255,0)')
+    ctx.fillStyle = lg; ctx.fillRect(cx - halfW, bandY, halfW * 2, bandH)
+  }
+  const bandY2 = h * 0.72, bandH2 = h * 0.1
+  for (let i = 0; i < 3; i++) {
+    const cx = w * (0.17 + i * 0.33), halfW = w * 0.04
+    const lg = ctx.createLinearGradient(cx - halfW, 0, cx + halfW, 0)
+    lg.addColorStop(0, 'rgba(255,255,255,0)'); lg.addColorStop(0.5, 'rgba(255,255,255,0.25)'); lg.addColorStop(1, 'rgba(255,255,255,0)')
+    ctx.fillStyle = lg; ctx.fillRect(cx - halfW, bandY2, halfW * 2, bandH2)
+  }
+  if (env.light) {
+    const sx = w / 256, sy = h / 256
+    const lx = env.light.x * sx, ly = env.light.y * sy, lr = env.light.r * sx
+    const rg = ctx.createRadialGradient(lx, ly, 0, lx, ly, lr)
+    rg.addColorStop(0, env.light.color); rg.addColorStop(0.6, env.light.color); rg.addColorStop(1, 'rgba(0,0,0,0)')
+    ctx.fillStyle = rg; ctx.fillRect(0, 0, w, h)
+  }
   const tex = new THREE.CanvasTexture(canvas)
   tex.mapping = THREE.EquirectangularReflectionMapping
   tex.colorSpace = THREE.SRGBColorSpace
@@ -151,11 +172,14 @@ function applyLightPreset(presetKey) {
     lightGroup.add(dir)
   }
   if (hdrTexture) {
+    if (pmremTexture) { pmremTexture.dispose(); pmremTexture = null }
     scene.environment = hdrTexture
   } else {
     if (envTexture) envTexture.dispose()
     envTexture = createEnvTexture(presetKey)
-    scene.environment = pmrem.fromEquirectangular(envTexture).texture
+    if (pmremTexture) pmremTexture.dispose()
+    pmremTexture = pmrem.fromEquirectangular(envTexture)
+    scene.environment = pmremTexture.texture
   }
   scene.background = new THREE.Color(preset.bg)
   for (const m of [meshLeft, meshRight]) { if (m) m.material.envMapIntensity = envIntensity }
@@ -631,6 +655,7 @@ export function disposeMaterial3D() {
   if (groundMesh) { groundMesh.geometry.dispose(); groundMesh.material.dispose() }
   if (gridHelper) { gridHelper.geometry.dispose(); gridHelper.material.dispose() }
   if (envTexture) envTexture.dispose()
+  if (pmremTexture) pmremTexture.dispose()
   if (hdrTexture) hdrTexture.dispose()
   if (pmrem) pmrem.dispose(); if (renderer) renderer.dispose()
   initialized = false
