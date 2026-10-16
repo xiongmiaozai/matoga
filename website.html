@@ -431,7 +431,7 @@
   <section id="download" class="py-20 md:py-28 relative z-10">
     <div class="max-w-5xl mx-auto px-4">
       <h2 class="mc-title text-xl md:text-2xl text-center text-mcGrass mb-4">下载安装</h2>
-      <p class="text-center text-gray-500 mb-12 text-sm">选择你的平台，开箱即用 · 当前版本 <span class="text-mcGrass font-bold">v1.0.2</span></p>
+      <p class="text-center text-gray-500 mb-12 text-sm">选择你的平台，开箱即用 · 当前版本 <span class="text-mcGrass font-bold" id="dlVersion">v1.0.2</span></p>
 
       <!-- 版本选择标签 -->
       <div class="flex items-center justify-center gap-3 mb-10">
@@ -453,9 +453,9 @@
           </svg>
           <h3 class="mc-title text-sm text-mcDiamond mb-2">macOS</h3>
           <p class="text-xs text-gray-500 mb-1">Apple Silicon (arm64) · 未签名</p>
-          <p class="text-xs text-gray-500 mb-4">106 MB · macOS 11+</p>
-          <a href="https://github.com/xiongmiaozai/matoga/releases/download/v1.0.2/matoga-1.0.2-arm64.dmg" class="mc-btn mc-btn-grass text-xs w-full justify-center mb-2">下载 .dmg</a>
-          <a href="https://github.com/xiongmiaozai/matoga/releases/download/v1.0.2/matoga-1.0.2-arm64-mac.zip" class="text-[11px] text-gray-500 hover:text-mcGrass transition-colors">免安装 .zip</a>
+          <p class="text-xs text-gray-500 mb-4" id="sizeMac">106 MB · macOS 11+</p>
+          <a id="dlMacDmg" href="https://github.com/xiongmiaozai/matoga/releases/download/v1.0.2/matoga-1.0.2-arm64.dmg" class="mc-btn mc-btn-grass text-xs w-full justify-center mb-2">下载 .dmg</a>
+          <a id="dlMacZip" href="https://github.com/xiongmiaozai/matoga/releases/download/v1.0.2/matoga-1.0.2-arm64-mac.zip" class="text-[11px] text-gray-500 hover:text-mcGrass transition-colors">免安装 .zip</a>
         </div>
 
         <!-- Windows -->
@@ -468,9 +468,9 @@
           </svg>
           <h3 class="mc-title text-sm text-mcDiamond mb-2">Windows</h3>
           <p class="text-xs text-gray-500 mb-1">x64 安装程序 · 便携版 · 未签名</p>
-          <p class="text-xs text-gray-500 mb-4">86 MB · Win 10+</p>
-          <a href="https://github.com/xiongmiaozai/matoga/releases/download/v1.0.2/matoga.Setup.1.0.2.exe" class="mc-btn mc-btn-grass text-xs w-full justify-center mb-2">下载 .exe</a>
-          <a href="https://github.com/xiongmiaozai/matoga/releases/download/v1.0.2/matoga.1.0.2.exe" class="text-[11px] text-gray-500 hover:text-mcGrass transition-colors">便携版 .exe</a>
+          <p class="text-xs text-gray-500 mb-4" id="sizeWin">86 MB · Win 10+</p>
+          <a id="dlWinSetup" href="https://github.com/xiongmiaozai/matoga/releases/download/v1.0.2/matoga.Setup.1.0.2.exe" class="mc-btn mc-btn-grass text-xs w-full justify-center mb-2">下载 .exe</a>
+          <a id="dlWinPortable" href="https://github.com/xiongmiaozai/matoga/releases/download/v1.0.2/matoga.1.0.2.exe" class="text-[11px] text-gray-500 hover:text-mcGrass transition-colors">便携版 .exe</a>
         </div>
 
         <!-- Linux -->
@@ -482,12 +482,12 @@
           </svg>
           <h3 class="mc-title text-sm text-mcDiamond mb-2">Linux</h3>
           <p class="text-xs text-gray-500 mb-1">AppImage · deb · 未签名</p>
-          <p class="text-xs text-gray-500 mb-4">117 MB · Ubuntu 20.04+</p>
-          <a href="https://github.com/xiongmiaozai/matoga/releases/download/v1.0.2/matoga-1.0.2.AppImage" class="mc-btn mc-btn-grass text-xs w-full justify-center mb-2">下载 .AppImage</a>
+          <p class="text-xs text-gray-500 mb-4" id="sizeLinux">117 MB · Ubuntu 20.04+</p>
+          <a id="dlLinuxAppimage" href="https://github.com/xiongmiaozai/matoga/releases/download/v1.0.2/matoga-1.0.2.AppImage" class="mc-btn mc-btn-grass text-xs w-full justify-center mb-2">下载 .AppImage</a>
           <div class="flex gap-2 justify-center">
-            <a href="https://github.com/xiongmiaozai/matoga/releases/download/v1.0.2/matoga_1.0.2_amd64.deb" class="text-[11px] text-gray-500 hover:text-mcGrass transition-colors">.deb</a>
+            <a id="dlLinuxDeb" href="https://github.com/xiongmiaozai/matoga/releases/download/v1.0.2/matoga_1.0.2_amd64.deb" class="text-[11px] text-gray-500 hover:text-mcGrass transition-colors">.deb</a>
             <span class="text-gray-700">·</span>
-            <a href="https://github.com/xiongmiaozai/matoga/releases/tag/v1.0.2" class="text-[11px] text-gray-500 hover:text-mcGrass transition-colors">Release</a>
+            <a id="dlReleaseTag" href="https://github.com/xiongmiaozai/matoga/releases/tag/v1.0.2" class="text-[11px] text-gray-500 hover:text-mcGrass transition-colors">Release</a>
           </div>
         </div>
       </div>
@@ -964,6 +964,41 @@
         dlStable.classList.add('opacity-60'); dlStable.classList.add('mc-btn-stone'); dlStable.classList.remove('mc-btn-grass')
       })
     }
+  </script>
+
+  <!-- 动态拉取最新 GitHub Release，自动更新下载地址/版本号/文件大小 -->
+  <script>
+  (async () => {
+    try {
+      const res = await fetch('https://api.github.com/repos/xiongmiaozai/matoga/releases/latest', {
+        headers: { 'Accept': 'application/vnd.github+json' }
+      })
+      if (!res.ok) return
+      const rel = await res.json()
+      const tag = rel.tag_name || 'v1.0.2'
+      const set = (id, url) => { const el = document.getElementById(id); if (el && url) el.href = url }
+      const fmtSize = (b) => b ? (b >= 1048576 ? (b / 1048576).toFixed(0) + ' MB' : (b / 1024).toFixed(0) + ' KB') : ''
+      const find = (pred) => (rel.assets || []).find(pred)
+      const vEl = document.getElementById('dlVersion'); if (vEl) vEl.textContent = tag
+      const sb = document.getElementById('dlStable'); if (sb) sb.textContent = '稳定版 ' + tag
+      set('dlReleaseTag', rel.html_url)
+      const dmg = find(a => a.name.endsWith('.dmg'))
+      const macZip = find(a => a.name.endsWith('-mac.zip'))
+      set('dlMacDmg', dmg && dmg.browser_download_url)
+      set('dlMacZip', macZip && macZip.browser_download_url)
+      if (dmg) { const p = document.getElementById('sizeMac'); if (p) p.textContent = fmtSize(dmg.size) + ' · macOS 11+' }
+      const setup = find(a => a.name.includes('Setup') && a.name.endsWith('.exe'))
+      const portable = find(a => !a.name.includes('Setup') && a.name.endsWith('.exe'))
+      set('dlWinSetup', setup && setup.browser_download_url)
+      set('dlWinPortable', portable && portable.browser_download_url)
+      if (setup) { const p = document.getElementById('sizeWin'); if (p) p.textContent = fmtSize(setup.size) + ' · Win 10+' }
+      const appimg = find(a => a.name.endsWith('.AppImage'))
+      const deb = find(a => a.name.endsWith('.deb'))
+      set('dlLinuxAppimage', appimg && appimg.browser_download_url)
+      set('dlLinuxDeb', deb && deb.browser_download_url)
+      if (appimg) { const p = document.getElementById('sizeLinux'); if (p) p.textContent = fmtSize(appimg.size) + ' · Ubuntu 20.04+' }
+    } catch (e) { /* 拉取失败时保留 HTML 默认 v1.0.2 链接 */ }
+  })()
   </script>
 </body>
 </html>
