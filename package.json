@@ -40,7 +40,7 @@
       "!releases/**",
       "!docs/**",
       "!.github/**",
-      "!website.html",
+      "!index.html",
       "!README.md",
       "!AGENTS.md"
     ],

@@ -72,7 +72,7 @@ function createWindow() {
   mainWindow.webContents.on('console-message', (e, level, message, line, sourceId) => {
     console.log(`[renderer] ${message} (${sourceId}:${line})`)
   })
-  mainWindow.loadFile('index.html')
+  mainWindow.loadFile('electron.html')
   if (process.argv.includes('--dev')) mainWindow.webContents.openDevTools()
   mainWindow.on('closed', () => { mainWindow = null })
 }

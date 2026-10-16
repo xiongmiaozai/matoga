@@ -1,525 +1,1017 @@
-<!--
-  matoga - 材质贴图对比工具
-  Copyright (c) 2026 芝世 (xiongmiaozai). All rights reserved.
-  SPDX-License-Identifier: MIT
--->
-
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self'; img-src 'self' file: data:; connect-src 'self' file:; font-src 'self' https://fonts.gstatic.com" />
-  <title>材质贴图对比工具</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>matoga — 材质贴图对比工具</title>
+  <meta name="description" content="matoga 是一款专为 Minecraft 材质开发者设计的高效贴图对比工具，支持双文件夹差异比对、3D PBR 预览、HDRI 环境光、批量操作与多语言界面。" />
+
+  <!-- ═══════════════════════════════════════════════
+       字体 — Minecraftia 像素字体替代 + Inter 正文
+       Minecraftia 为 MC 原版字体（版权归 Mojang），此处使用
+       开源替代 "Press Start 2P" (OFL 1.1, Google Fonts)
+       如需原版 Minecraftia，可本地 @font-face 引入替换
+       ═══════════════════════════════════════════════ -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Press+Start+2P&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css" />
-  <link rel="stylesheet" href="mc-theme.css" />
-</head>
-<body>
-  <!-- MC 边角装饰 — 独立 SVG, CC0 (github.com/minecraft-svg-icons) -->
-  <img src="assets/svg/corner-tl.svg" alt="" class="mc-corner tl" />
-  <img src="assets/svg/corner-tr.svg" alt="" class="mc-corner tr" />
-  <img src="assets/svg/corner-bl.svg" alt="" class="mc-corner bl" />
-  <img src="assets/svg/corner-br.svg" alt="" class="mc-corner br" />
-  <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
-    <symbol id="i-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="12" r="6"/><circle cx="15" cy="12" r="6"/></symbol>
-    <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></symbol>
-    <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></symbol>
-    <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></symbol>
-    <symbol id="i-image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></symbol>
-    <symbol id="i-cube" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96L12 12.01l8.73-5.05M12 22.08V12"/></symbol>
-    <symbol id="i-clipboard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></symbol>
-    <symbol id="i-camera" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></symbol>
-    <symbol id="i-maximize" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></symbol>
-    <symbol id="i-chevron-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></symbol>
-    <symbol id="i-chevron-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></symbol>
-    <symbol id="i-chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></symbol>
-    <symbol id="i-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
-    <symbol id="i-undo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-7.7"/></symbol>
-    <symbol id="i-swap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3l4 4-4 4M4 7h16M8 21l-4-4 4-4M20 17H4"/></symbol>
-    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></symbol>
-    <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></symbol>
-    <symbol id="i-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></symbol>
-    <symbol id="i-compare" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M6 8v8a4 4 0 0 0 4 4h4M18 16V8a4 4 0 0 0-4-4h-4"/></symbol>
-    <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></symbol>
-    <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></symbol>
-    <symbol id="i-sliders" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></symbol>
-    <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></symbol>
-    <symbol id="i-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></symbol>
-    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></symbol>
-    <symbol id="i-minus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></symbol>
-    <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></symbol>
-    <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></symbol>
-    <symbol id="i-pie" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.21A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></symbol>
-    <symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor" stroke="none"/></symbol>
-    <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
-    <symbol id="i-depth" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20l6-8 4 5 3-4 7 7"/><path d="M2 20h20"/><circle cx="17" cy="6" r="2"/></symbol>
-    <symbol id="i-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none"/></symbol>
-    <symbol id="i-metal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12l3 6-9 12L3 9z"/><path d="M3 9h18M9 3l3 18M15 3l-3 18"/></symbol>
-    <symbol id="i-plastic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C8 8 6 11 6 14a6 6 0 0 0 12 0c0-3-2-6-6-12z"/></symbol>
-    <symbol id="i-glass" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2h8l-1 8a3 3 0 0 1-6 0z"/><path d="M12 13v8M8 21h8"/></symbol>
-    <symbol id="i-fabric" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h18v18H3z"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></symbol>
-    <symbol id="i-sphere" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="9" ry="3.5"/></symbol>
-    <symbol id="i-plane" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l9-9 9 9-9 4z"/></symbol>
-    <symbol id="i-torus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="9" ry="5"/><ellipse cx="12" cy="12" rx="4" ry="2"/></symbol>
-    <symbol id="i-cylinder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="7" ry="2.5"/><path d="M5 5v14M19 5v14"/><ellipse cx="12" cy="19" rx="7" ry="2.5"/></symbol>
-    <symbol id="i-capsule" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="7"/></symbol>
-    <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></symbol>
-  </svg>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Press+Start+2P&display=swap" rel="stylesheet" />
 
-  <header class="app-header">
-    <div class="title">
-      <img src="assets/svg/logo.svg" alt="" class="ico-logo" style="width:22px;height:22px;image-rendering:pixelated;vertical-align:middle" />
-      <h1 data-i18n="app.title">材质贴图对比工具</h1>
-      <span class="ver" data-i18n="app.version">v1.0</span>
-    </div>
-    <div class="header-search">
-      <svg class="ico ico-search"><use href="#i-search"/></svg>
-      <input type="search" id="searchInput" data-i18n-placeholder="header.search" placeholder="搜索…  ⌘K" />
-    </div>
-    <div class="header-actions">
-      <button id="swapBtn" class="icon-btn" data-i18n-title="header.swap" title="交换左右"><svg class="ico"><use href="#i-swap"/></svg></button>
-      <button id="langBtn" class="icon-btn" data-i18n-title="header.language" title="语言"><svg class="ico"><use href="#i-globe"/></svg></button>
-      <button id="themeToggle" class="icon-btn" data-i18n-title="header.theme" title="切换深色/浅色模式"><svg class="ico"><use href="#i-moon"/></svg></button>
-      <button id="settingsBtn" class="icon-btn" data-i18n-title="header.settings" title="设置"><svg class="ico"><use href="#i-settings"/></svg></button>
+  <!-- Tailwind CSS — Play CDN（生产环境建议改为本地构建） -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            mcGrass:     '#7cbd56',
+            mcGrassDark: '#5a9a3e',
+            mcStone:     '#828282',
+            mcStoneDark: '#6a6a6a',
+            mcDirt:      '#8b6f47',
+            mcDirtDark:  '#6b5437',
+            mcDiamond:   '#5bcefa',
+            mcDiamondDk: '#4ab0d8',
+            mcDark:      '#1a1a1e',
+            mcDarker:    '#121214',
+          },
+          fontFamily: {
+            pixel: ['"Press Start 2P"', '"Courier New"', 'monospace'],
+            sans:  ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+          },
+        }
+      }
+    }
+  </script>
+
+  <!-- ═══════════════════════════════════════════════
+       MC 主题自定义样式
+       ═══════════════════════════════════════════════ -->
+  <style>
+    /* ── MC 全局配色变量 ── */
+    :root {
+      --mc-grass:     #7cbd56;
+      --mc-grass-dk:  #5a9a3e;
+      --mc-stone:     #828282;
+      --mc-stone-dk:  #6a6a6a;
+      --mc-dirt:      #8b6f47;
+      --mc-dirt-dk:   #6b5437;
+      --mc-diamond:   #5bcefa;
+      --mc-diamond-dk:#4ab0d8;
+      --mc-dark:      #1a1a1e;
+      --mc-darker:    #121214;
+      --mc-border-l:  rgba(255,255,255,.18);
+      --mc-border-d:  rgba(0,0,0,.55);
+    }
+
+    /* ── 全局：石头纹理背景 + 像素渲染 ── */
+    body {
+      background-color: var(--mc-dark);
+      /* 16×16 石头无缝纹理 — SVG data URI，低透明度不抢文字 */
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16'><rect width='16' height='16' fill='%231e1e22'/><rect x='0' y='0' width='8' height='8' fill='%23242428'/><rect x='8' y='8' width='8' height='8' fill='%23242428'/><rect x='4' y='4' width='4' height='4' fill='%231a1a1e'/><rect x='12' y='0' width='4' height='4' fill='%231a1a1e'/><rect x='0' y='12' width='4' height='4' fill='%231a1a1e'/><rect x='10' y='2' width='2' height='2' fill='%232a2a2e'/><rect x='2' y='10' width='2' height='2' fill='%232a2a2e'/></svg>");
+      background-size: 16px 16px;
+    }
+    img, canvas, .pixelated { image-rendering: pixelated; image-rendering: crisp-edges; }
+
+    /* ── MC 物品槽卡片：黑色粗边框 + 双向内阴影 ── */
+    .mc-slot {
+      border: 2px solid #000;
+      box-shadow: inset 2px 2px 0 0 var(--mc-border-d), inset -1px -1px 0 0 var(--mc-border-l);
+      background: #2a2a2e;
+    }
+    .mc-slot-hover { transition: box-shadow .08s steps(2); }
+    .mc-slot-hover:hover {
+      box-shadow: inset 2px 2px 0 0 var(--mc-border-d), inset -1px -1px 0 0 rgba(255,255,255,.25), 0 0 0 1px var(--mc-grass);
+    }
+
+    /* ── MC 方块按钮：经典双向内阴影凹凸 ── */
+    .mc-btn {
+      border: 2px solid #000;
+      padding: 10px 20px;
+      font-weight: 600;
+      text-shadow: 1px 1px 0 rgba(0,0,0,.45);
+      box-shadow: inset 2px 2px 0 0 var(--mc-border-l), inset -2px -2px 0 0 var(--mc-border-d);
+      transition: all .08s steps(2);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .mc-btn-stone    { background: var(--mc-stone);    color: #fff; }
+    .mc-btn-grass    { background: var(--mc-grass);    color: #fff; }
+    .mc-btn-diamond  { background: var(--mc-diamond);  color: #1a1a1a; text-shadow: 1px 1px 0 rgba(255,255,255,.3); }
+    .mc-btn-dirt     { background: var(--mc-dirt);     color: #fff; }
+
+    /* hover — 方块轻微抖动 */
+    .mc-btn:hover { animation: mc-shake .15s steps(2); }
+    .mc-btn-stone:hover   { background: var(--mc-stone-dk); }
+    .mc-btn-grass:hover   { background: var(--mc-grass-dk); }
+    .mc-btn-diamond:hover { background: var(--mc-diamond-dk); }
+    .mc-btn-dirt:hover    { background: var(--mc-dirt-dk); }
+
+    /* :active — 阴影翻转模拟按下凹陷 */
+    .mc-btn:active {
+      box-shadow: inset -2px -2px 0 0 var(--mc-border-l), inset 2px 2px 0 0 var(--mc-border-d);
+      transform: translateY(1px);
+    }
+
+    /* ── MC 像素标题文字 ── */
+    .mc-title {
+      font-family: 'Press Start 2P', 'Courier New', monospace;
+      text-shadow: 3px 3px 0 rgba(0,0,0,.5);
+      letter-spacing: 1px;
+      line-height: 1.4;
+    }
+
+    /* ── MC 分割条：方块交替条纹 ── */
+    .mc-divider {
+      height: 8px;
+      background: repeating-linear-gradient(90deg,
+        var(--mc-dirt-dk) 0 16px, var(--mc-dirt) 16px 32px);
+      border-top: 2px solid #000;
+      border-bottom: 2px solid #000;
+    }
+
+    /* ── MC 像素粒子背景装饰 ── */
+    .mc-particles {
+      position: fixed; inset: 0; pointer-events: none; z-index: 0;
+      background-image:
+        radial-gradient(1px 1px at 15% 25%, var(--mc-grass) 50%, transparent 50%),
+        radial-gradient(1px 1px at 85% 15%, var(--mc-diamond) 50%, transparent 50%),
+        radial-gradient(1px 1px at 45% 75%, var(--mc-stone) 50%, transparent 50%),
+        radial-gradient(1px 1px at 70% 55%, var(--mc-dirt) 50%, transparent 50%);
+      background-size: 250px 250px;
+      opacity: .12;
+      animation: mc-particle-drift 25s linear infinite;
+    }
+
+    /* ── 动画 ── */
+    @keyframes mc-shake {
+      0%   { transform: translate(0, 0); }
+      25%  { transform: translate(-1px, 1px); }
+      50%  { transform: translate(1px, -1px); }
+      75%  { transform: translate(-1px, 0); }
+      100% { transform: translate(0, 0); }
+    }
+    @keyframes mc-particle-drift {
+      0%   { background-position: 0 0, 0 0, 0 0, 0 0; }
+      100% { background-position: 250px 250px, -250px 250px, 250px -250px, -250px -250px; }
+    }
+    @keyframes mc-float {
+      0%, 100% { transform: translateY(0); }
+      50%      { transform: translateY(-8px); }
+    }
+    @keyframes mc-fade-up {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .mc-float    { animation: mc-float 3s ease-in-out infinite; }
+    .mc-fade-up  { animation: mc-fade-up .3s steps(3) backwards; }
+
+    /* ── MC 代码块 ── */
+    .mc-code {
+      background: var(--mc-darker);
+      border: 2px solid #000;
+      box-shadow: inset 2px 2px 0 0 rgba(0,0,0,.5);
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      color: var(--mc-diamond);
+      padding: 12px 16px;
+      overflow-x: auto;
+    }
+    .mc-code .cmt { color: var(--mc-stone); }
+    .mc-code .kw  { color: var(--mc-grass); }
+    .mc-code .str { color: #f5cd4d; }
+
+    /* ── 滚动条 MC 像素风格 ── */
+    ::-webkit-scrollbar       { width: 12px; }
+    ::-webkit-scrollbar-track { background: var(--mc-darker); border: 1px solid #000; }
+    ::-webkit-scrollbar-thumb { background: var(--mc-stone); border: 2px solid #000; box-shadow: inset 1px 1px 0 0 var(--mc-border-l); }
+    ::-webkit-scrollbar-thumb:hover { background: var(--mc-grass); }
+
+    /* ── MC 徽章标签 ── */
+    .mc-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 8px; font-size: 11px; font-weight: 700;
+      border: 2px solid #000; text-shadow: 1px 1px 0 rgba(0,0,0,.4);
+      box-shadow: inset 1px 1px 0 0 var(--mc-border-l);
+    }
+  </style>
+</head>
+
+<body class="font-sans text-gray-200 antialiased">
+
+  <!-- ═══════════════════════════════════════════════
+       MC 像素粒子背景装饰
+       纯 CSS 实现，不阻塞渲染
+       ═══════════════════════════════════════════════ -->
+  <div class="mc-particles"></div>
+
+  <!-- ═══════════════════════════════════════════════
+       导航栏 — MC 工具条风格
+       ═══════════════════════════════════════════════ -->
+  <header class="sticky top-0 z-50 bg-mcDarker border-b-[3px] border-black" style="box-shadow: 0 3px 0 0 rgba(0,0,0,.4);">
+    <nav class="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
+      <!-- Logo -->
+      <a href="#top" class="flex items-center gap-3">
+        <!-- MC 方块 Logo — 独立 SVG，CC0 开源素材 -->
+        <!-- Source: github.com/minecraft-svg-icons (CC0) -->
+        <svg width="28" height="28" viewBox="0 0 16 16" shape-rendering="crispEdges" class="flex-shrink-0">
+          <rect width="16" height="16" fill="#5a9a3e"/>
+          <rect x="0" y="0" width="16" height="4" fill="#7cbd56"/>
+          <rect x="0" y="4" width="16" height="12" fill="#8b6f47"/>
+          <rect x="2" y="0" width="2" height="5" fill="#5a9a3e"/>
+          <rect x="7" y="0" width="2" height="4" fill="#5a9a3e"/>
+          <rect x="12" y="0" width="2" height="5" fill="#5a9a3e"/>
+          <rect x="0" y="4" width="16" height="1" fill="#6b5437"/>
+        </svg>
+        <span class="mc-title text-base text-mcGrass">matoga</span>
+      </a>
+
+      <!-- 导航链接 — PC 端 -->
+      <div class="hidden md:flex items-center gap-1">
+        <a href="#features"   class="mc-btn mc-btn-stone text-xs px-3 py-2">特性</a>
+        <a href="#download"   class="mc-btn mc-btn-stone text-xs px-3 py-2">下载</a>
+        <a href="#docs"       class="mc-btn mc-btn-stone text-xs px-3 py-2">文档</a>
+        <a href="#api"        class="mc-btn mc-btn-stone text-xs px-3 py-2">API</a>
+        <a href="#changelog"  class="mc-btn mc-btn-stone text-xs px-3 py-2">更新日志</a>
+        <a href="https://github.com/xiongmiaozai/matoga" target="_blank" class="mc-btn mc-btn-diamond text-xs px-3 py-2 ml-2">
+          <!-- GitHub 图标 SVG -->
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58v-2.03c-3.33.72-4.03-1.61-4.03-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.21.09 1.84 1.24 1.84 1.24 1.08 1.83 2.81 1.3 3.5 1 .11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.29-1.55 3.3-1.23 3.3-1.23.66 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.63-5.49 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.22.7.83.58A12 12 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+          GitHub
+        </a>
+      </div>
+
+      <!-- 移动端菜单按钮 -->
+      <button id="mobileMenuBtn" class="md:hidden mc-btn mc-btn-stone px-3 py-2">
+        <svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges" fill="currentColor"><rect x="1" y="2" width="14" height="2"/><rect x="1" y="7" width="14" height="2"/><rect x="1" y="12" width="14" height="2"/></svg>
+      </button>
+    </nav>
+    <!-- 移动端展开菜单 -->
+    <div id="mobileMenu" class="hidden md:hidden bg-mcDarker border-b-2 border-black px-4 py-3 flex flex-col gap-2">
+      <a href="#features"   class="mc-btn mc-btn-stone text-xs">特性</a>
+      <a href="#download"   class="mc-btn mc-btn-stone text-xs">下载</a>
+      <a href="#docs"       class="mc-btn mc-btn-stone text-xs">文档</a>
+      <a href="#api"        class="mc-btn mc-btn-stone text-xs">API</a>
+      <a href="#changelog"  class="mc-btn mc-btn-stone text-xs">更新日志</a>
+      <a href="https://github.com/xiongmiaozai/matoga" target="_blank" class="mc-btn mc-btn-diamond text-xs">GitHub</a>
     </div>
   </header>
 
-  <div class="workspace" id="workspace">
-    <aside class="sidebar-left" id="sidebarLeft" data-region="left">
-      <div class="sidebar-inner">
-        <div class="folder-card" id="leftCard">
-          <div class="folder-card-head">
-            <span class="tag tag-left" data-i18n="sidebar.leftTag">左侧 · 基准</span>
-            <button id="leftBtn" class="btn btn-primary btn-sm" data-i18n="common.select">选择</button>
-          </div>
-          <div id="leftPath" class="path-box" data-i18n="common.empty">未选择</div>
-          <div id="leftStat" class="stat-box"></div>
-          <div id="leftList" class="entry-list"></div>
+  <!-- ═══════════════════════════════════════════════
+       Hero — 软件简介
+       含 MC 方块云朵装饰（CC0 开源矢量素材）
+       ═══════════════════════════════════════════════ -->
+  <section id="top" class="relative overflow-hidden">
+    <!-- MC 边角装饰 — 独立 SVG, CC0 (github.com/minecraft-svg-icons) -->
+    <img src="assets/svg/corner-tl.svg" width="48" height="48" alt="" class="absolute top-3 left-3 opacity-30 pointer-events-none pixelated z-0" />
+    <img src="assets/svg/corner-tr.svg" width="48" height="48" alt="" class="absolute top-3 right-3 opacity-30 pointer-events-none pixelated z-0" />
+    <img src="assets/svg/corner-bl.svg" width="48" height="48" alt="" class="absolute bottom-3 left-3 opacity-20 pointer-events-none pixelated z-0" />
+    <img src="assets/svg/corner-br.svg" width="48" height="48" alt="" class="absolute bottom-3 right-3 opacity-20 pointer-events-none pixelated z-0" />
+    <div class="max-w-6xl mx-auto px-4 pt-20 pb-24 md:pt-28 md:pb-32 relative z-10">
+
+      <!-- MC 方块云朵装饰 — 独立 SVG, CC0 -->
+      <!-- Source: github.com/minecraft-svg-icons (CC0) — 可单独下载使用 -->
+      <svg class="absolute top-8 right-4 md:right-12 mc-float opacity-40" width="80" height="40" viewBox="0 0 32 16" shape-rendering="crispEdges">
+        <rect x="6" y="4" width="20" height="8" fill="#e8e8e8"/>
+        <rect x="10" y="0" width="12" height="4" fill="#e8e8e8"/>
+        <rect x="2" y="8" width="28" height="4" fill="#d0d0d0"/>
+        <rect x="8" y="2" width="2" height="2" fill="#f8f8f8"/>
+        <rect x="22" y="6" width="2" height="2" fill="#f8f8f8"/>
+      </svg>
+      <svg class="absolute top-20 left-2 md:left-20 mc-float opacity-25" style="animation-delay:1.5s" width="64" height="32" viewBox="0 0 32 16" shape-rendering="crispEdges">
+        <rect x="4" y="4" width="24" height="8" fill="#e8e8e8"/>
+        <rect x="8" y="0" width="16" height="4" fill="#e8e8e8"/>
+        <rect x="0" y="8" width="32" height="4" fill="#d0d0d0"/>
+      </svg>
+
+      <!-- 标题区 -->
+      <div class="text-center max-w-3xl mx-auto">
+        <!-- MC 边角装饰 — 左上方块簇 (CC0) -->
+        <div class="flex items-center justify-center gap-2 mb-6">
+          <span class="mc-badge bg-mcGrass text-white">v1.0</span>
+          <span class="mc-badge bg-mcDiamond text-black" style="text-shadow:none">MIT</span>
+          <span class="mc-badge bg-mcDirt text-white">Electron</span>
         </div>
 
-        <div class="folder-card" id="rightCard">
-          <div class="folder-card-head">
-            <span class="tag tag-right" data-i18n="sidebar.rightTag">右侧 · 对比</span>
-            <button id="rightBtn" class="btn btn-primary btn-sm" data-i18n="common.select">选择</button>
-          </div>
-          <div id="rightPath" class="path-box" data-i18n="common.empty">未选择</div>
-          <div id="rightStat" class="stat-box"></div>
-          <div id="rightList" class="entry-list"></div>
-        </div>
+        <h1 class="mc-title text-3xl md:text-5xl text-mcGrass mb-4">matoga</h1>
+        <p class="mc-title text-sm md:text-base text-mcDiamond mb-8">材质贴图对比工具</p>
 
-        <div class="panel-card">
-          <div class="panel-card-title"><svg class="ico ico-sm"><use href="#i-compare"/></svg><span data-i18n="sidebar.compareSettings">对比设置</span></div>
-          <div class="opt-row">
-            <label class="opt"><input type="radio" name="viewMode" value="all" checked /><span data-i18n="common.all">全部</span></label>
-            <label class="opt"><input type="radio" name="viewMode" value="byFolder" /><span data-i18n="sidebar.byFolder">分类</span></label>
-          </div>
-          <div class="opt-row">
-            <label class="opt"><input type="checkbox" id="recursiveChk" /><span data-i18n="sidebar.recursive">递归</span></label>
-            <label class="opt"><input type="checkbox" id="onlyMissingChk" /><span data-i18n="sidebar.onlyMissing">仅不一致</span></label>
-          </div>
-          <div class="opt-row">
-            <label class="opt"><input type="checkbox" id="ignoreChk" checked /><span data-i18n="sidebar.ignoreSys">忽略系统</span></label>
-            <label class="opt"><input type="checkbox" id="hashChk" /><span data-i18n="sidebar.hashCheck">哈希校验</span></label>
-          </div>
-          <label class="opt-text"><span data-i18n="sidebar.customIgnore">自定义忽略</span><input type="text" id="ignoreInput" class="input-text" data-i18n-placeholder="sidebar.customIgnorePh" placeholder="*.tmp,*.bak" /></label>
-        </div>
+        <p class="text-base md:text-lg text-gray-400 leading-relaxed mb-10 max-w-2xl mx-auto">
+          专为 Minecraft 材质开发者设计的高效贴图对比工具。支持双文件夹差异比对、
+          3D PBR 实时预览、HDRI 环境光渲染、批量操作与多语言界面。
+        </p>
 
-
-        <div class="panel-card">
-          <div class="panel-card-title"><svg class="ico ico-sm"><use href="#i-swap"/></svg><span data-i18n="sidebar.actions">操作</span></div>
-          <button id="compareBtn2" class="btn btn-accent" disabled data-i18n="sidebar.startCompare">开始对比</button>
-          <div class="action-row">
-            <button id="undoBtn" class="btn btn-ghost btn-sm" disabled><svg class="ico ico-sm"><use href="#i-undo"/></svg> <span data-i18n="sidebar.undo">撤回</span></button>
-            <button id="swapBtn2" class="btn btn-ghost btn-sm"><svg class="ico ico-sm"><use href="#i-swap"/></svg> <span data-i18n="sidebar.swap">交换</span></button>
-          </div>
-          <div class="action-row">
-            <button id="batchRightBtn" class="btn btn-sm" disabled data-i18n="sidebar.batchRight">批量→右</button>
-            <button id="batchLeftBtn" class="btn btn-sm" disabled data-i18n="sidebar.batchLeft">批量→左</button>
-          </div>
-          <div class="action-row">
-            <button id="exportBtn" class="btn btn-ghost btn-sm" disabled><svg class="ico ico-sm"><use href="#i-download"/></svg> <span>TXT</span></button>
-            <button id="exportHtmlBtn" class="btn btn-ghost btn-sm" disabled><svg class="ico ico-sm"><use href="#i-download"/></svg> <span>HTML</span></button>
-            <button id="clearMemBtn" class="btn btn-ghost btn-sm" disabled><svg class="ico ico-sm"><use href="#i-trash"/></svg></button>
-          </div>
+        <!-- CTA 按钮 -->
+        <div class="flex flex-wrap items-center justify-center gap-4">
+          <a href="#download" class="mc-btn mc-btn-grass text-sm md:text-base">
+            <!-- 下载图标 — MC 像素箭头 (CC0) -->
+            <svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges" fill="currentColor"><rect x="6" y="0" width="4" height="8"/><rect x="4" y="6" width="8" height="2"/><rect x="2" y="8" width="12" height="2"/><rect x="4" y="10" width="8" height="2"/><rect x="6" y="12" width="4" height="2"/></svg>
+            立即下载
+          </a>
+          <a href="https://github.com/xiongmiaozai/matoga" target="_blank" class="mc-btn mc-btn-diamond text-sm md:text-base">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58v-2.03c-3.33.72-4.03-1.61-4.03-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.21.09 1.84 1.24 1.84 1.24 1.08 1.83 2.81 1.3 3.5 1 .11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.29-1.55 3.3-1.23 3.3-1.23.66 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.63-5.49 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.22.7.83.58A12 12 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+            查看源码
+          </a>
         </div>
-      </div>
-    </aside>
-    <button class="collapse-btn" id="collapseLeftBtn" data-i18n-title="sidebar.collapseLeft" title="折叠/展开左栏"><svg class="ico"><use href="#i-chevron-left"/></svg></button>
-
-    <div class="resizer" data-resize="left" data-i18n-title="sidebar.resizeLeft" title="拖拽调整左栏宽度"></div>
-
-    <main class="center" data-region="center">
-      <div class="center-head">
-        <div class="center-title-bar">
-          <span class="center-title"><svg class="ico ico-sm"><use href="#i-compare"/></svg> <span data-i18n="center.compareResult">对比结果</span></span>
-          <div class="view-tabs">
-            <button class="view-tab active" data-view="table" data-i18n-title="center.tableView" title="表格视图 (Ctrl+1)"><svg class="ico ico-sm"><use href="#i-layers"/></svg> <span data-i18n="center.table">表格</span></button>
-            <button class="view-tab" data-view="chart" data-i18n-title="center.chartView" title="可视化视图 (Ctrl+2)"><svg class="ico ico-sm"><use href="#i-pie"/></svg> <span data-i18n="center.chart">可视化</span></button>
-          </div>
-        </div>
-        <div id="statsDashboard" class="stats-dashboard"></div>
-        <div id="tableToolbar" class="table-toolbar">
-          <div class="filter-bar">
-            <button class="filter-btn active" data-filter="all" data-i18n="center.filterAll">全部</button>
-            <button class="filter-btn" data-filter="missing" data-i18n="center.filterMissing">缺失</button>
-            <button class="filter-btn" data-filter="diff" data-i18n="center.filterDiff">不同</button>
-            <button class="filter-btn" data-filter="extra" data-i18n="center.filterExtra">多余</button>
-          </div>
-          <div id="summary" class="summary"></div>
-        </div>
-      </div>
-      <div id="tableView" class="view-pane active">
-        <div class="result-table-wrap">
-          <table id="resultTable" class="result-table">
-            <thead>
-              <tr>
-                <th class="col-status" data-key="status" data-i18n="common.status">状态</th>
-                <th class="col-preview" data-i18n="center.colPreview">预览</th>
-                <th class="col-name" data-key="name" data-i18n="common.name">名称</th>
-                <th class="col-type" data-key="type" data-i18n="common.type">类型</th>
-                <th class="col-size" data-key="size" data-i18n="common.size">大小</th>
-                <th class="col-mtime" data-key="mtime" data-i18n="center.colMtime">修改时间</th>
-                <th class="col-left" data-key="left" data-i18n="center.colLeft">左</th>
-                <th class="col-right" data-key="right" data-i18n="center.colRight">右</th>
-              </tr>
-            </thead>
-            <tbody id="resultBody">
-              <tr class="empty-row"><td colspan="8"><svg class="ico ico-empty"><use href="#i-folder"/></svg><br><span data-i18n="center.emptyHint">拖拽文件夹到左侧卡片开始对比</span></td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-      <div id="chartView" class="view-pane">
-        <div id="chartContent" class="chart-content"></div>
-      </div>
-    </main>
-
-    <div class="resizer" data-resize="right" data-i18n-title="sidebar.resizeRight" title="拖拽调整右栏宽度"></div>
-
-    <aside class="sidebar-right" id="sidebarRight" data-region="right">
-      <div class="panel" id="previewPanelWrap" data-panel="preview">
-        <div class="panel-head">
-          <div class="pv-tabs">
-            <button class="active" data-pv-tab="2d"><svg class="ico ico-sm"><use href="#i-image"/></svg> <span data-i18n="preview.2d">2D</span></button>
-            <button data-pv-tab="3d"><svg class="ico ico-sm"><use href="#i-cube"/></svg> <span data-i18n="preview.3d">3D</span></button>
-          </div>
-          <div class="panel-tools">
-            <button class="panel-tool" data-panel-action="float" data-i18n-title="preview.float" title="浮动"><svg class="ico ico-sm"><use href="#i-external"/></svg></button>
-            <button class="panel-tool" data-panel-action="collapse" data-i18n-title="preview.collapse" title="折叠"><svg class="ico ico-sm"><use href="#i-chevron-down"/></svg></button>
-          </div>
-        </div>
-        <div class="panel-body">
-          <div class="pv-content active" data-pv-content="2d">
-            <div class="pv-toolbar">
-              <div class="m3d-segment" id="pvChannelSeg">
-                <button class="active" data-ch="all" data-i18n="common.all">全部</button>
-                <button data-ch="r">R</button>
-                <button data-ch="g">G</button>
-                <button data-ch="b">B</button>
-                <button data-ch="a">A</button>
-              </div>
-              <label class="pv-zoom"><span data-i18n="preview.zoom">缩放</span><input type="range" id="pvZoom" min="50" max="300" step="10" value="100" /><span class="pv-zoom-val" id="pvZoomVal">100%</span></label>
-              <label class="pv-split-toggle"><input type="checkbox" id="pvSplit" /> <span data-i18n="preview.splitToggle">对比滑块</span></label>
-              <div class="m3d-segment" id="pvFilterSeg">
-                <button data-pvf="nearest" data-i18n="preview.filterNearest">邻近</button>
-                <button class="active" data-pvf="bilinear" data-i18n="preview.filterBilinear">双线性</button>
-                <button data-pvf="trilinear" data-i18n="preview.filterTrilinear">三线性</button>
-                <button data-pvf="anisotropic" data-i18n="preview.filterAniso">各向异性</button>
-              </div>
-            </div>
-            <div class="preview-panel" id="previewPanel">
-              <div class="pv-hint" data-i18n="preview.hint">点击表格中的材质查看预览</div>
-            </div>
-          </div>
-          <div class="pv-content" data-pv-content="3d">
-            <div class="material3d-container" id="material3dContainer">
-              <div class="m3d-loading" id="m3dLoading"><div class="m3d-loading-text" data-i18n="m3d.loading">处理法线贴图...</div><div class="m3d-loading-bar"><div class="m3d-loading-fill"></div></div></div>
-              <div class="m3d-hud-bar">
-                <div class="m3d-segment" id="m3dGeoSeg">
-                  <button class="active" data-geo="sphere" data-i18n-title="m3d.geoSphere" title="球"><svg class="ico ico-sm"><use href="#i-sphere"/></svg></button>
-                  <button data-geo="cube" data-i18n-title="m3d.geoCube" title="方"><svg class="ico ico-sm"><use href="#i-cube"/></svg></button>
-                  <button data-geo="plane" data-i18n-title="m3d.geoPlane" title="面"><svg class="ico ico-sm"><use href="#i-plane"/></svg></button>
-                  <button data-geo="torus" data-i18n-title="m3d.geoTorus" title="环"><svg class="ico ico-sm"><use href="#i-torus"/></svg></button>
-                  <button data-geo="cylinder" data-i18n-title="m3d.geoCylinder" title="柱"><svg class="ico ico-sm"><use href="#i-cylinder"/></svg></button>
-                  <button data-geo="capsule" data-i18n-title="m3d.geoCapsule" title="囊"><svg class="ico ico-sm"><use href="#i-capsule"/></svg></button>
-                </div>
-                <div class="m3d-segment" id="m3dSrcSeg">
-                  <button data-src="left" data-i18n="common.left">左</button>
-                  <button class="active" data-src="dual" data-i18n="m3d.srcDual">双</button>
-                  <button data-src="right" data-i18n="common.right">右</button>
-                </div>
-                <div class="m3d-hud-spacer"></div>
-                <button class="m3d-hud-btn" id="m3dShotBtn" data-i18n-title="m3d.shot" title="截图"><svg class="ico ico-sm"><use href="#i-camera"/></svg></button>
-                <button class="m3d-hud-btn" id="m3dFullscreenBtn" data-i18n-title="m3d.fullscreen" title="全屏"><svg class="ico ico-sm"><use href="#i-maximize"/></svg></button>
-                <button class="m3d-hud-btn" id="m3dParamsBtn" data-i18n-title="m3d.params" title="参数"><svg class="ico ico-sm"><use href="#i-sliders"/></svg></button>
-              </div>
-              <div class="m3d-params-overlay" id="m3dParamsOverlay">
-                <button class="m3d-params-close" id="m3dParamsClose" data-i18n-title="common.close" title="关闭"><svg class="ico ico-sm"><use href="#i-x"/></svg></button>
-                <div class="m3d-tabs">
-                  <button class="active" data-tab="material" data-i18n-title="m3d.tabMaterial" title="材质"><svg class="ico ico-sm"><use href="#i-layers"/></svg></button>
-                  <button data-tab="parallax" data-i18n-title="m3d.tabParallax" title="视差"><svg class="ico ico-sm"><use href="#i-depth"/></svg></button>
-                  <button data-tab="opacity" data-i18n-title="m3d.tabOpacity" title="透明"><svg class="ico ico-sm"><use href="#i-opacity"/></svg></button>
-                  <button data-tab="env" data-i18n-title="m3d.tabEnv" title="环境"><svg class="ico ico-sm"><use href="#i-globe"/></svg></button>
-                  <button data-tab="advanced" data-i18n-title="m3d.tabAdvanced" title="高级"><svg class="ico ico-sm"><use href="#i-sliders"/></svg></button>
-                </div>
-                <div class="m3d-tab-panes">
-                  <div class="m3d-tab-pane active" data-pane="material">
-                    <div class="m3d-presets">
-                      <button data-preset="metal" data-i18n-title="m3d.presetMetal" title="金属"><svg class="ico ico-sm"><use href="#i-metal"/></svg></button>
-                      <button data-preset="plastic" data-i18n-title="m3d.presetPlastic" title="塑料"><svg class="ico ico-sm"><use href="#i-plastic"/></svg></button>
-                      <button data-preset="glass" data-i18n-title="m3d.presetGlass" title="玻璃"><svg class="ico ico-sm"><use href="#i-glass"/></svg></button>
-                      <button data-preset="fabric" data-i18n-title="m3d.presetFabric" title="织物"><svg class="ico ico-sm"><use href="#i-fabric"/></svg></button>
-                      <button data-preset="emissive" data-i18n-title="m3d.presetEmissive" title="自发光"><svg class="ico ico-sm"><use href="#i-sun"/></svg></button>
-                    </div>
-                    <div class="m3d-ctrl-group">
-                      <label class="m3d-slider"><span data-i18n="m3d.metalness">金属度</span><input type="range" id="m3dMetalness" min="0" max="1" step="0.01" value="0.1" /><span class="m3d-val" id="m3dMetalnessVal">0.10</span></label>
-                      <label class="m3d-slider"><span data-i18n="m3d.roughness">粗糙度</span><input type="range" id="m3dRoughness" min="0" max="1" step="0.01" value="0.5" /><span class="m3d-val" id="m3dRoughnessVal">0.50</span></label>
-                      <label class="m3d-slider"><span data-i18n="m3d.normal">法线</span><input type="range" id="m3dNormal" min="0" max="2" step="0.01" value="1" /><span class="m3d-val" id="m3dNormalVal">1.00</span></label>
-                      <label class="m3d-slider"><span data-i18n="m3d.emissive">自发光</span><input type="range" id="m3dEmissive" min="0" max="5" step="0.1" value="1" /><span class="m3d-val" id="m3dEmissiveVal">1.0</span></label>
-                    </div>
-                  </div>
-                  <div class="m3d-tab-pane" data-pane="parallax">
-                    <div class="m3d-parallax-status">
-                      <div class="m3d-parallax-status-bar"><div class="m3d-parallax-status-fill" id="m3dParallaxStatusFill"></div></div>
-                      <div class="m3d-height-status" id="m3dHeightStatus" data-i18n="m3d.heightNotDetected">未检测</div>
-                    </div>
-                    <div class="m3d-ctrl-group">
-                      <label class="m3d-checkbox"><input type="checkbox" id="m3dParallaxEnable" checked /> <span data-i18n="m3d.parallaxEnable">启用视差</span></label>
-                    </div>
-                    <div class="m3d-ctrl-group">
-                      <span class="m3d-light-label" data-i18n="m3d.algorithm">算法</span>
-                      <div class="m3d-segment" id="m3dParallaxModeSeg">
-                        <button data-mode="0" data-i18n="m3d.parallaxBasic">基础</button>
-                        <button data-mode="1" data-i18n="m3d.parallaxSteep">陡峭</button>
-                        <button class="active" data-mode="2">POM</button>
-                        <button data-mode="3">Relief</button>
-                      </div>
-                    </div>
-                    <div class="m3d-ctrl-group">
-                      <label class="m3d-slider"><span data-i18n="m3d.parallaxScale">视差强度</span><input type="range" id="m3dParallax" min="-1" max="1" step="0.01" value="0.05" /><span class="m3d-val" id="m3dParallaxVal">0.05</span></label>
-                      <label class="m3d-slider"><span data-i18n="m3d.parallaxSteps">视差步数</span><input type="range" id="m3dParallaxSteps" min="8" max="64" step="1" value="32" /><span class="m3d-val" id="m3dParallaxStepsVal">32</span></label>
-                      <label class="m3d-checkbox"><input type="checkbox" id="m3dParallaxAdaptive" checked /><span data-i18n="m3d.parallaxAdaptive">自适应层数</span></label>
-                      <label class="m3d-checkbox"><input type="checkbox" id="m3dParallaxShadow" /><span data-i18n="m3d.parallaxShadow">自阴影</span></label>
-                      <label class="m3d-slider"><span data-i18n="m3d.parallaxShadowStr">阴影强度</span><input type="range" id="m3dParallaxShadowStr" min="0" max="1" step="0.05" value="0.5" disabled /><span class="m3d-val" id="m3dParallaxShadowStrVal">0.5</span></label>
-                    </div>
-                  </div>
-                  <div class="m3d-tab-pane" data-pane="opacity">
-                    <div class="m3d-ctrl-group">
-                      <div class="m3d-segment" id="m3dOpacityModeSeg">
-                        <button class="active" data-mode="auto" data-i18n="m3d.opaAuto">自动</button>
-                        <button data-mode="cutout" data-i18n="m3d.opaCutout">裁剪</button>
-                        <button data-mode="blend" data-i18n="m3d.opaBlend">半透</button>
-                        <button data-mode="glass" data-i18n="m3d.opaGlass">玻璃</button>
-                      </div>
-                    </div>
-                    <div class="m3d-ctrl-group">
-                      <label class="m3d-slider"><span data-i18n="m3d.opacity">不透明</span><input type="range" id="m3dOpacity" min="0" max="1" step="0.01" value="1" /><span class="m3d-val" id="m3dOpacityVal">1.00</span></label>
-                      <label class="m3d-slider"><span data-i18n="m3d.transmission">透射</span><input type="range" id="m3dTransmission" min="0" max="1" step="0.01" value="0" /><span class="m3d-val" id="m3dTransmissionVal">0.00</span></label>
-                      <label class="m3d-slider"><span data-i18n="m3d.ior">折射率</span><input type="range" id="m3dIOR" min="1" max="2.33" step="0.01" value="1.5" /><span class="m3d-val" id="m3dIORVal">1.50</span></label>
-                      <label class="m3d-slider"><span data-i18n="m3d.clearcoat">清漆</span><input type="range" id="m3dClearcoat" min="0" max="1" step="0.01" value="0" /><span class="m3d-val" id="m3dClearcoatVal">0.00</span></label>
-                    </div>
-                  </div>
-                  <div class="m3d-tab-pane" data-pane="env">
-                    <div class="m3d-ctrl-group">
-                      <span class="m3d-light-label" data-i18n="m3d.env">环境</span>
-                      <div class="m3d-segment" id="m3dEnvModeSeg">
-                        <button class="active" data-envmode="custom" data-i18n="m3d.envCustom">自定义灯光</button>
-                        <button data-envmode="sky" data-i18n="m3d.envSky">程序化天空</button>
-                        <button data-envmode="hdri" data-i18n="m3d.envHdri">HDRI</button>
-                      </div>
-                    </div>
-                    <div class="m3d-env-subpane active" data-envpane="custom">
-                      <div class="m3d-ctrl-group">
-                        <span class="m3d-light-label" data-i18n="m3d.light">光照</span>
-                        <div class="m3d-segment" id="m3dLightSeg">
-                          <button class="active" data-light="studio" data-i18n="m3d.lightStudio">工作室</button>
-                          <button data-light="outdoor" data-i18n="m3d.lightOutdoor">户外</button>
-                          <button data-light="soft" data-i18n="m3d.lightSoft">柔和</button>
-                          <button data-light="warm" data-i18n="m3d.lightWarm">暖光</button>
-                          <button data-light="cool" data-i18n="m3d.lightCool">冷光</button>
-                        </div>
-                      </div>
-                    </div>
-                     <div class="m3d-env-subpane" data-envpane="sky">
-                      <div class="m3d-ctrl-group">
-                        <div class="m3d-segment" id="m3dSkyPresetSeg">
-                          <button data-preset="noon" data-i18n="m3d.skyNoon">正午</button>
-                          <button data-preset="sunset" data-i18n="m3d.skySunset">日落</button>
-                          <button data-preset="overcast" data-i18n="m3d.skyOvercast">阴天</button>
-                          <button data-preset="night" data-i18n="m3d.skyNight">夜晚</button>
-                        </div>
-                      </div>
-                      <div class="m3d-ctrl-group m3d-sky-save-row">
-                        <input type="text" id="m3dSkyPresetName" class="m3d-sky-name-input" placeholder="预设名称" data-i18n-placeholder="m3d.skyPresetNamePh" maxlength="20" />
-                        <button class="m3d-sky-save-btn" id="m3dSkySaveBtn" data-i18n="m3d.skySavePreset">保存</button>
-                      </div>
-                      <div class="m3d-ctrl-group m3d-sky-custom-list" id="m3dSkyCustomList"></div>
-                      <div class="m3d-ctrl-group">
-                        <label class="m3d-slider"><span data-i18n="m3d.skyElevation">太阳高度</span><input type="range" id="m3dSkyElevation" min="-10" max="89" step="1" value="15" /><span class="m3d-val" id="m3dSkyElevationVal">15°</span></label>
-                        <label class="m3d-slider"><span data-i18n="m3d.skyAzimuth">方位角</span><input type="range" id="m3dSkyAzimuth" min="0" max="360" step="1" value="180" /><span class="m3d-val" id="m3dSkyAzimuthVal">180°</span></label>
-                      </div>
-                      <div class="m3d-ctrl-group">
-                        <label class="m3d-slider"><span data-i18n="m3d.skyTurbidity">浑浊度</span><input type="range" id="m3dSkyTurbidity" min="0" max="20" step="0.1" value="3" /><span class="m3d-val" id="m3dSkyTurbidityVal">3.0</span></label>
-                        <label class="m3d-slider"><span data-i18n="m3d.skyRayleigh">瑞利</span><input type="range" id="m3dSkyRayleigh" min="0" max="4" step="0.01" value="2.5" /><span class="m3d-val" id="m3dSkyRayleighVal">2.50</span></label>
-                      </div>
-                      <div class="m3d-ctrl-group">
-                        <label class="m3d-slider"><span data-i18n="m3d.skyMie">Mie系数</span><input type="range" id="m3dSkyMie" min="0" max="0.1" step="0.001" value="0.005" /><span class="m3d-val" id="m3dSkyMieVal">0.005</span></label>
-                        <label class="m3d-slider"><span data-i18n="m3d.skyMieG">Mie方向</span><input type="range" id="m3dSkyMieG" min="0" max="0.999" step="0.001" value="0.8" /><span class="m3d-val" id="m3dSkyMieGVal">0.800</span></label>
-                      </div>
-                      <div class="m3d-ctrl-group">
-                        <label class="m3d-slider"><span data-i18n="m3d.skyCloudCov">云量</span><input type="range" id="m3dSkyCloudCov" min="0" max="1" step="0.01" value="0.4" /><span class="m3d-val" id="m3dSkyCloudCovVal">0.40</span></label>
-                        <label class="m3d-slider"><span data-i18n="m3d.skyCloudDen">云密度</span><input type="range" id="m3dSkyCloudDen" min="0" max="1" step="0.01" value="0.4" /><span class="m3d-val" id="m3dSkyCloudDenVal">0.40</span></label>
-                      </div>
-                      <div class="m3d-ctrl-group">
-                        <label class="m3d-slider"><span data-i18n="m3d.skyCloudScale">云尺度</span><input type="range" id="m3dSkyCloudScale" min="0.00005" max="0.001" step="0.00001" value="0.0002" /><span class="m3d-val" id="m3dSkyCloudScaleVal">0.00020</span></label>
-                        <label class="m3d-slider"><span data-i18n="m3d.skyCloudSpeed">云速度</span><input type="range" id="m3dSkyCloudSpeed" min="0" max="0.0002" step="0.000002" value="0.00002" /><span class="m3d-val" id="m3dSkyCloudSpeedVal">0.000020</span></label>
-                      </div>
-                      <div class="m3d-ctrl-group">
-                        <label class="m3d-slider"><span data-i18n="m3d.skyCloudElev">云高度</span><input type="range" id="m3dSkyCloudElev" min="0" max="1" step="0.01" value="0.5" /><span class="m3d-val" id="m3dSkyCloudElevVal">0.50</span></label>
-                      </div>
-                      <div class="m3d-ctrl-group">
-                        <span class="m3d-light-label" data-i18n="m3d.skyTint">天空色调</span>
-                        <input type="color" id="m3dSkyTint" value="#a0c0ff" data-i18n-title="m3d.skyTintTitle" title="天空整体色调，白色=物理结果" />
-                      </div>
-                    </div>
-                    <div class="m3d-env-subpane" data-envpane="hdri">
-                      <div class="m3d-ctrl-group">
-                        <button id="m3dHdrBtn" class="btn btn-ghost btn-sm"><svg class="ico ico-sm"><use href="#i-globe"/></svg> <span data-i18n="m3d.loadHdr">加载HDR</span></button>
-                        <button id="m3dHdrClearBtn" class="btn btn-ghost btn-sm" data-i18n="m3d.clearHdr">清除HDR</button>
-                        <button id="m3dHdrRefreshBtn" class="btn btn-ghost btn-sm"><svg class="ico ico-sm"><use href="#i-refresh"/></svg> <span data-i18n="m3d.refresh">刷新</span></button>
-                      </div>
-                      <div class="hdri-preset-grid" id="m3dHdrPresetGrid"></div>
-                    </div>
-                    <div class="m3d-ctrl-group">
-                      <label class="m3d-slider"><span data-i18n="m3d.envIntensity">环境</span><input type="range" id="m3dEnvIntensity" min="0" max="3" step="0.01" value="0.5" /><span class="m3d-val" id="m3dEnvIntensityVal">0.50</span></label>
-                      <label class="m3d-slider"><span data-i18n="m3d.exposure">曝光</span><input type="range" id="m3dExposure" min="0" max="3" step="0.01" value="0.3" /><span class="m3d-val" id="m3dExposureVal">0.30</span></label>
-                      <label class="m3d-checkbox"><input type="checkbox" id="m3dGround" checked /> <span data-i18n="m3d.ground">地面</span></label>
-                      <label class="m3d-checkbox"><input type="checkbox" id="m3dAutoRotate" checked /> <span data-i18n="m3d.autoRotate">自转</span></label>
-                      <label class="m3d-checkbox"><input type="checkbox" id="m3dWireframe" /><span data-i18n="m3d.wireframe">线框</span></label>
-                    </div>
-                  </div>
-                  <div class="m3d-tab-pane" data-pane="advanced">
-                    <div class="m3d-ctrl-group m3d-advanced-row">
-                      <span class="m3d-light-label" data-i18n="m3d.format">材质格式</span>
-                      <select id="m3dFormat" class="input-select input-select-sm">
-                        <option value="auto" data-i18n="m3d.formatAuto">自动检测</option>
-                        <option value="labpbr">labPBR</option>
-                        <option value="old" data-i18n="m3d.formatOld">旧版 PBR</option>
-                      </select>
-                      <span class="m3d-format-detected" id="m3dFormatDetected"></span>
-                    </div>
-                    <div class="m3d-ctrl-group">
-
-                      <span class="m3d-light-label" data-i18n="m3d.texFilter">纹理过滤</span>
-                      <div class="m3d-segment" id="m3dFilterSeg">
-                        <button data-filter="nearest" data-i18n="preview.filterNearest">邻近</button>
-                        <button data-filter="bilinear" data-i18n="preview.filterBilinear">双线性</button>
-                        <button class="active" data-filter="trilinear" data-i18n="preview.filterTrilinear">三线性</button>
-                        <button data-filter="anisotropic" data-i18n="preview.filterAniso">各向异性</button>
-                      </div>
-                    </div>
-                    <div class="m3d-ctrl-group">
-                      <label class="m3d-slider"><span data-i18n="m3d.anisoLevel">各向异性</span><input type="range" id="m3dAniso" min="1" max="16" step="1" value="4" /><span class="m3d-val" id="m3dAnisoVal">4</span></label>
-                      <label class="m3d-checkbox"><input type="checkbox" id="m3dMipmaps" checked /> Mipmap</label>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div class="m3d-resizer" id="m3dResizer" data-i18n-title="m3d.resizer" title="上下拖拽调整大小 · 双击重置"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="panel" id="detailPanelWrap" data-panel="detail">
-        <div class="panel-head">
-          <span class="panel-title"><svg class="ico ico-sm"><use href="#i-clipboard"/></svg> <span data-i18n="detail.title">详情</span></span>
-          <div class="panel-tools">
-            <button class="panel-tool" data-panel-action="collapse" data-i18n-title="preview.collapse" title="折叠"><svg class="ico ico-sm"><use href="#i-chevron-down"/></svg></button>
-          </div>
-        </div>
-        <div class="panel-body">
-          <div class="detail-panel" id="detailPanel">
-            <div class="detail-hint" data-i18n="preview.notSelected">未选中</div>
-          </div>
-
-          <div class="action-panel" id="actionPanel"></div>
-        </div>
-      </div>
-    </aside>
-  </div>
-
-  <div id="settingsDrawer" class="settings-drawer">
-    <div class="settings-head">
-      <span class="settings-title" data-i18n="settings.title">设置</span>
-      <button id="settingsClose" class="icon-btn" data-i18n-title="common.close" title="关闭"><svg class="ico"><use href="#i-x"/></svg></button>
-    </div>
-    <div class="settings-body">
-      <div class="settings-section">
-        <div class="settings-section-title" data-i18n="settings.appearance">外观</div>
-        <label class="opt"><input type="checkbox" id="settingThemeChk" /><span data-i18n="settings.darkMode">深色模式</span></label>
-      </div>
-      <div class="settings-section">
-        <div class="settings-section-title" data-i18n="settings.language">语言</div>
-        <div class="m3d-segment" id="langSeg">
-          <button class="active" data-lang="zh" data-i18n="lang.zh">中文</button>
-          <button data-lang="en" data-i18n="lang.en">English</button>
-        </div>
-      </div>
-      <div class="settings-section">
-        <div class="settings-section-title" data-i18n="settings.paths">路径</div>
-        <div class="path-setting">
-          <span class="path-setting-label" data-i18n="settings.hdriPreset">HDRI 预设</span>
-          <div class="path-setting-row">
-            <input type="text" id="hdriPresetPathInput" class="input-text" data-i18n-placeholder="common.path" placeholder="路径" />
-            <button id="hdriPresetPickBtn" class="btn btn-ghost btn-sm" data-i18n="settings.pick">选</button>
-            <button id="hdriPresetCreateBtn" class="btn btn-ghost btn-sm" data-i18n="settings.create">建</button>
-            <button id="hdriPresetOpenBtn" class="btn btn-ghost btn-sm" data-i18n="settings.open">开</button>
-          </div>
-        </div>
-        <div class="path-setting">
-          <span class="path-setting-label" data-i18n="settings.mcPacks">MC 材质包</span>
-          <div class="path-setting-row">
-            <input type="text" id="mcPacksPathInput" class="input-text" data-i18n-placeholder="common.path" placeholder="路径" />
-            <button id="mcPacksPickBtn" class="btn btn-ghost btn-sm" data-i18n="settings.pick">选</button>
-            <button id="mcPacksCreateBtn" class="btn btn-ghost btn-sm" data-i18n="settings.create">建</button>
-            <button id="mcPacksOpenBtn" class="btn btn-ghost btn-sm" data-i18n="settings.open">开</button>
-          </div>
-        </div>
-      </div>
-      <div class="settings-section">
-        <div class="settings-section-title" data-i18n="settings.about">关于</div>
-        <div class="detail-row"><span class="detail-label" data-i18n="settings.version">版本</span><span data-i18n="app.version">v1.0</span></div>
-        <div class="detail-row"><span class="detail-label" data-i18n="app.title">材质贴图对比工具</span></div>
       </div>
     </div>
-  </div>
 
-  <div id="toast" class="toast"></div>
+    <!-- MC 方块分割条 -->
+    <div class="mc-divider"></div>
+  </section>
 
-  <div id="ctxMenu" class="ctx-menu" style="display:none">
-    <button class="ctx-item" data-act="open-left"><svg class="ico ico-sm"><use href="#i-folder"/></svg> <span data-i18n="ctx.openLeft">打开左侧</span></button>
-    <button class="ctx-item" data-act="loc-left"><svg class="ico ico-sm"><use href="#i-folder"/></svg> <span data-i18n="ctx.locLeft">定位左侧</span></button>
-    <div class="ctx-sep"></div>
-    <button class="ctx-item" data-act="open-right"><svg class="ico ico-sm"><use href="#i-folder"/></svg> <span data-i18n="ctx.openRight">打开右侧</span></button>
-    <button class="ctx-item" data-act="loc-right"><svg class="ico ico-sm"><use href="#i-folder"/></svg> <span data-i18n="ctx.locRight">定位右侧</span></button>
-    <div class="ctx-sep"></div>
-    <button class="ctx-item" data-act="copy-to-right"><svg class="ico ico-sm"><use href="#i-compare"/></svg> <span data-i18n="ctx.copyRight">复制到右侧</span></button>
-    <button class="ctx-item" data-act="copy-to-left"><svg class="ico ico-sm"><use href="#i-compare"/></svg> <span data-i18n="ctx.copyLeft">复制到左侧</span></button>
-    <div class="ctx-sep"></div>
-    <button class="ctx-item" data-act="copy"><svg class="ico ico-sm"><use href="#i-clipboard"/></svg> <span data-i18n="ctx.copyName">复制名称</span></button>
-  </div>
+  <!-- ═══════════════════════════════════════════════
+       功能特性 — MC 物品槽卡片网格
+       矿石图标作为特性图标 (CC0 开源矢量素材)
+       ═══════════════════════════════════════════════ -->
+  <section id="features" class="py-20 md:py-28 relative z-10">
+    <div class="max-w-6xl mx-auto px-4">
+      <h2 class="mc-title text-xl md:text-2xl text-center text-mcGrass mb-4">功能特性</h2>
+      <p class="text-center text-gray-500 mb-12 text-sm">为材质开发者打造的全方位工具链</p>
 
-  <div id="previewModal" class="preview-modal">
-    <div class="preview-modal-inner">
-      <button id="previewClose" class="preview-close" data-i18n-title="common.close" title="关闭"><svg class="ico"><use href="#i-x"/></svg></button>
-      <img id="previewImg" class="preview-img" alt="" />
-      <div id="previewCaption" class="preview-caption"></div>
+      <!-- 特性卡片网格 — MC 物品槽样式 -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+
+        <!-- 特性 1: 双文件夹对比 — 钻石矿石图标 -->
+        <div class="mc-slot mc-slot-hover p-6 mc-fade-up" style="animation-delay:0s">
+          <!-- 钻石矿石图标 — CC0, github.com/minecraft-svg-icons -->
+          <svg width="32" height="32" viewBox="0 0 16 16" shape-rendering="crispEdges" class="mb-4">
+            <rect width="16" height="16" fill="#6a6a6a"/>
+            <rect x="0" y="0" width="16" height="16" fill="#828282" opacity=".5"/>
+            <rect x="4" y="2" width="4" height="4" fill="#5bcefa"/>
+            <rect x="5" y="1" width="2" height="2" fill="#7ddfff"/>
+            <rect x="10" y="8" width="4" height="4" fill="#5bcefa"/>
+            <rect x="11" y="7" width="2" height="2" fill="#7ddfff"/>
+            <rect x="2" y="10" width="3" height="3" fill="#4ab0d8"/>
+          </svg>
+          <h3 class="mc-title text-sm text-mcDiamond mb-3">双文件夹对比</h3>
+          <p class="text-sm text-gray-400 leading-relaxed">同时加载两个材质包文件夹，自动匹配对应贴图，一目了然查看差异与缺失文件。</p>
+        </div>
+
+        <!-- 特性 2: 差异可视化 — 红石矿石图标 -->
+        <div class="mc-slot mc-slot-hover p-6 mc-fade-up" style="animation-delay:.06s">
+          <svg width="32" height="32" viewBox="0 0 16 16" shape-rendering="crispEdges" class="mb-4">
+            <rect width="16" height="16" fill="#6a6a6a"/>
+            <rect x="0" y="0" width="16" height="16" fill="#828282" opacity=".5"/>
+            <rect x="3" y="3" width="4" height="4" fill="#c63a3a"/>
+            <rect x="4" y="2" width="2" height="2" fill="#e85555"/>
+            <rect x="9" y="9" width="4" height="4" fill="#c63a3a"/>
+            <rect x="10" y="8" width="2" height="2" fill="#e85555"/>
+          </svg>
+          <h3 class="mc-title text-sm text-mcDiamond mb-3">差异可视化</h3>
+          <p class="text-sm text-gray-400 leading-relaxed">像素级差异对比、覆盖率统计、一致性评分、漏斗图与热力图，数据驱动决策。</p>
+        </div>
+
+        <!-- 特性 3: 3D PBR 预览 — 铁矿石图标 -->
+        <div class="mc-slot mc-slot-hover p-6 mc-fade-up" style="animation-delay:.12s">
+          <svg width="32" height="32" viewBox="0 0 16 16" shape-rendering="crispEdges" class="mb-4">
+            <rect width="16" height="16" fill="#6a6a6a"/>
+            <rect x="0" y="0" width="16" height="16" fill="#828282" opacity=".5"/>
+            <rect x="4" y="3" width="4" height="4" fill="#d4a76a"/>
+            <rect x="5" y="2" width="2" height="2" fill="#e8c08a"/>
+            <rect x="9" y="9" width="4" height="4" fill="#d4a76a"/>
+            <rect x="10" y="8" width="2" height="2" fill="#e8c08a"/>
+          </svg>
+          <h3 class="mc-title text-sm text-mcDiamond mb-3">3D PBR 实时预览</h3>
+          <p class="text-sm text-gray-400 leading-relaxed">基于 Three.js 的实时光栅化渲染，支持金属度、粗糙度、法线、视差遮蔽等完整 PBR 工作流。</p>
+        </div>
+
+        <!-- 特性 4: HDRI 环境光 — 青金石矿石图标 -->
+        <div class="mc-slot mc-slot-hover p-6 mc-fade-up" style="animation-delay:.18s">
+          <svg width="32" height="32" viewBox="0 0 16 16" shape-rendering="crispEdges" class="mb-4">
+            <rect width="16" height="16" fill="#6a6a6a"/>
+            <rect x="0" y="0" width="16" height="16" fill="#828282" opacity=".5"/>
+            <rect x="3" y="3" width="5" height="5" fill="#3a5aaa"/>
+            <rect x="4" y="2" width="3" height="2" fill="#5a7acc"/>
+            <rect x="9" y="8" width="5" height="5" fill="#3a5aaa"/>
+            <rect x="10" y="7" width="3" height="2" fill="#5a7acc"/>
+          </svg>
+          <h3 class="mc-title text-sm text-mcDiamond mb-3">HDRI 环境光照</h3>
+          <p class="text-sm text-gray-400 leading-relaxed">内置 HDRI 预设库与程序化天空盒，支持太阳角度、云层、瑞利散射等参数实时调节。</p>
+        </div>
+
+        <!-- 特性 5: 批量操作 — 金矿石图标 -->
+        <div class="mc-slot mc-slot-hover p-6 mc-fade-up" style="animation-delay:.24s">
+          <svg width="32" height="32" viewBox="0 0 16 16" shape-rendering="crispEdges" class="mb-4">
+            <rect width="16" height="16" fill="#6a6a6a"/>
+            <rect x="0" y="0" width="16" height="16" fill="#828282" opacity=".5"/>
+            <rect x="4" y="2" width="4" height="4" fill="#f5cd4d"/>
+            <rect x="5" y="1" width="2" height="2" fill="#ffe87a"/>
+            <rect x="10" y="8" width="4" height="4" fill="#f5cd4d"/>
+            <rect x="11" y="7" width="2" height="2" fill="#ffe87a"/>
+          </svg>
+          <h3 class="mc-title text-sm text-mcDiamond mb-3">批量操作</h3>
+          <p class="text-sm text-gray-400 leading-relaxed">批量复制、替换、删除贴图，一键撤回操作历史，大幅提升材质包整理效率。</p>
+        </div>
+
+        <!-- 特性 6: 多语言 + 导出 — 绿宝石矿石图标 -->
+        <div class="mc-slot mc-slot-hover p-6 mc-fade-up" style="animation-delay:.30s">
+          <svg width="32" height="32" viewBox="0 0 16 16" shape-rendering="crispEdges" class="mb-4">
+            <rect width="16" height="16" fill="#6a6a6a"/>
+            <rect x="0" y="0" width="16" height="16" fill="#828282" opacity=".5"/>
+            <rect x="4" y="3" width="4" height="4" fill="#7cbd56"/>
+            <rect x="5" y="2" width="2" height="2" fill="#9ade78"/>
+            <rect x="9" y="9" width="4" height="4" fill="#7cbd56"/>
+            <rect x="10" y="8" width="2" height="2" fill="#9ade78"/>
+          </svg>
+          <h3 class="mc-title text-sm text-mcDiamond mb-3">多语言 & 导出</h3>
+          <p class="text-sm text-gray-400 leading-relaxed">中英文双语界面一键切换，对比结果可导出为 HTML 报告，方便分享与存档。</p>
+        </div>
+
+      </div>
     </div>
-  </div>
+  </section>
 
-  <script type="module" src="renderer.js"></script>
+  <!-- MC 方块分割条 -->
+  <div class="mc-divider"></div>
+
+  <!-- ═══════════════════════════════════════════════
+       下载 — 多平台支持 + 系统要求 + 安装指南
+       ═══════════════════════════════════════════════ -->
+  <section id="download" class="py-20 md:py-28 relative z-10">
+    <div class="max-w-5xl mx-auto px-4">
+      <h2 class="mc-title text-xl md:text-2xl text-center text-mcGrass mb-4">下载安装</h2>
+      <p class="text-center text-gray-500 mb-12 text-sm">选择你的平台，开箱即用 · 当前版本 <span class="text-mcGrass font-bold" id="dlVersion">v1.0.2</span></p>
+
+      <!-- 版本选择标签 -->
+      <div class="flex items-center justify-center gap-3 mb-10">
+        <button class="mc-btn mc-btn-grass text-xs px-4 py-2" id="dlStable">稳定版 v1.0</button>
+        <button class="mc-btn mc-btn-stone text-xs px-4 py-2 opacity-60" id="dlPreview">预览版 v1.1-β</button>
+      </div>
+
+      <!-- 平台下载卡片 -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+        <!-- macOS -->
+        <div class="mc-slot mc-slot-hover p-6 text-center relative">
+          <span class="absolute top-3 right-3 mc-badge bg-mcGrass text-white text-[10px]" style="padding:1px 6px">推荐</span>
+          <svg width="40" height="40" viewBox="0 0 16 16" shape-rendering="crispEdges" class="mx-auto mb-4">
+            <rect x="2" y="2" width="12" height="12" fill="#828282"/>
+            <rect x="2" y="2" width="12" height="1" fill="#a0a0a0"/>
+            <rect x="5" y="5" width="6" height="6" fill="#5bcefa" opacity=".8"/>
+            <rect x="6" y="6" width="4" height="4" fill="#7ddfff" opacity=".6"/>
+          </svg>
+          <h3 class="mc-title text-sm text-mcDiamond mb-2">macOS</h3>
+          <p class="text-xs text-gray-500 mb-1">Apple Silicon (arm64) · 未签名</p>
+          <p class="text-xs text-gray-500 mb-4" id="sizeMac">106 MB · macOS 11+</p>
+          <a id="dlMacDmg" href="https://github.com/xiongmiaozai/matoga/releases/download/v1.0.2/matoga-1.0.2-arm64.dmg" class="mc-btn mc-btn-grass text-xs w-full justify-center mb-2">下载 .dmg</a>
+          <a id="dlMacZip" href="https://github.com/xiongmiaozai/matoga/releases/download/v1.0.2/matoga-1.0.2-arm64-mac.zip" class="text-[11px] text-gray-500 hover:text-mcGrass transition-colors">免安装 .zip</a>
+        </div>
+
+        <!-- Windows -->
+        <div class="mc-slot mc-slot-hover p-6 text-center">
+          <svg width="40" height="40" viewBox="0 0 16 16" shape-rendering="crispEdges" class="mx-auto mb-4">
+            <rect x="1" y="1" width="6" height="6" fill="#5bcefa"/>
+            <rect x="9" y="1" width="6" height="6" fill="#5bcefa"/>
+            <rect x="1" y="9" width="6" height="6" fill="#5bcefa"/>
+            <rect x="9" y="9" width="6" height="6" fill="#5bcefa"/>
+          </svg>
+          <h3 class="mc-title text-sm text-mcDiamond mb-2">Windows</h3>
+          <p class="text-xs text-gray-500 mb-1">x64 安装程序 · 便携版 · 未签名</p>
+          <p class="text-xs text-gray-500 mb-4" id="sizeWin">86 MB · Win 10+</p>
+          <a id="dlWinSetup" href="https://github.com/xiongmiaozai/matoga/releases/download/v1.0.2/matoga.Setup.1.0.2.exe" class="mc-btn mc-btn-grass text-xs w-full justify-center mb-2">下载 .exe</a>
+          <a id="dlWinPortable" href="https://github.com/xiongmiaozai/matoga/releases/download/v1.0.2/matoga.1.0.2.exe" class="text-[11px] text-gray-500 hover:text-mcGrass transition-colors">便携版 .exe</a>
+        </div>
+
+        <!-- Linux -->
+        <div class="mc-slot mc-slot-hover p-6 text-center">
+          <svg width="40" height="40" viewBox="0 0 16 16" shape-rendering="crispEdges" class="mx-auto mb-4">
+            <rect x="3" y="2" width="10" height="12" fill="#8b6f47"/>
+            <rect x="3" y="2" width="10" height="2" fill="#a8865a"/>
+            <rect x="5" y="6" width="6" height="6" fill="#7cbd56" opacity=".7"/>
+          </svg>
+          <h3 class="mc-title text-sm text-mcDiamond mb-2">Linux</h3>
+          <p class="text-xs text-gray-500 mb-1">AppImage · deb · 未签名</p>
+          <p class="text-xs text-gray-500 mb-4" id="sizeLinux">117 MB · Ubuntu 20.04+</p>
+          <a id="dlLinuxAppimage" href="https://github.com/xiongmiaozai/matoga/releases/download/v1.0.2/matoga-1.0.2.AppImage" class="mc-btn mc-btn-grass text-xs w-full justify-center mb-2">下载 .AppImage</a>
+          <div class="flex gap-2 justify-center">
+            <a id="dlLinuxDeb" href="https://github.com/xiongmiaozai/matoga/releases/download/v1.0.2/matoga_1.0.2_amd64.deb" class="text-[11px] text-gray-500 hover:text-mcGrass transition-colors">.deb</a>
+            <span class="text-gray-700">·</span>
+            <a id="dlReleaseTag" href="https://github.com/xiongmiaozai/matoga/releases/tag/v1.0.2" class="text-[11px] text-gray-500 hover:text-mcGrass transition-colors">Release</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- 系统要求 -->
+      <div class="mt-10 mc-slot p-6">
+        <h3 class="mc-title text-sm text-mcDiamond mb-4 flex items-center gap-2">
+          <svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges"><rect x="2" y="2" width="12" height="12" fill="#5bcefa" opacity=".3"/><rect x="3" y="3" width="10" height="10" fill="none" stroke="#5bcefa" stroke-width="1"/></svg>
+          系统要求
+        </h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+          <div>
+            <p class="text-mcGrass font-bold mb-2">最低配置</p>
+            <ul class="space-y-1 text-gray-400 text-xs">
+              <li>· 4 GB 内存</li>
+              <li>· 500 MB 磁盘空间</li>
+              <li>· WebGL 2.0 支持的显卡</li>
+              <li>· 1280×720 分辨率</li>
+            </ul>
+          </div>
+          <div>
+            <p class="text-mcGrass font-bold mb-2">推荐配置</p>
+            <ul class="space-y-1 text-gray-400 text-xs">
+              <li>· 8 GB+ 内存</li>
+              <li>· 独立显卡 (VRAM 2GB+)</li>
+              <li>· SSD 存储</li>
+              <li>· 1920×1080+ 分辨率</li>
+            </ul>
+          </div>
+          <div>
+            <p class="text-mcGrass font-bold mb-2">运行依赖</p>
+            <ul class="space-y-1 text-gray-400 text-xs">
+              <li>· Electron 28+ (已内置)</li>
+              <li>· 无需额外运行时</li>
+              <li>· 首次启动自动初始化</li>
+              <li>· 在线功能需网络连接</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- 安装指南 — 折叠面板 -->
+      <div class="mt-6 space-y-3">
+        <h3 class="mc-title text-sm text-mcDiamond text-center mb-4">安装指南</h3>
+
+        <!-- macOS 安装 -->
+        <details class="mc-slot group">
+          <summary class="cursor-pointer p-4 flex items-center justify-between list-none">
+            <span class="flex items-center gap-3">
+              <span class="mc-badge bg-mcStone text-white text-xs">macOS</span>
+              <span class="text-sm text-gray-300">.dmg 安装步骤 & Gatekeeper 说明</span>
+            </span>
+            <svg class="w-4 h-4 text-gray-500 transition-transform group-open:rotate-180" fill="currentColor" viewBox="0 0 16 16"><path d="M8 12L2 6h12z"/></svg>
+          </summary>
+          <div class="px-4 pb-4 space-y-3 text-sm text-gray-400">
+            <div class="flex gap-3">
+              <span class="mc-badge bg-mcGrass text-white text-[10px] flex-shrink-0" style="padding:1px 6px">1</span>
+              <p>下载 <code class="text-mcDiamond">.dmg</code> 文件，双击挂载磁盘镜像</p>
+            </div>
+            <div class="flex gap-3">
+              <span class="mc-badge bg-mcGrass text-white text-[10px] flex-shrink-0" style="padding:1px 6px">2</span>
+              <p>将 <code class="text-mcDiamond">matoga.app</code> 拖入 <code class="text-mcDiamond">Applications</code> 文件夹</p>
+            </div>
+            <div class="flex gap-3">
+              <span class="mc-badge bg-mcGrass text-white text-[10px] flex-shrink-0" style="padding:1px 6px">3</span>
+              <p>首次打开时 macOS Gatekeeper 可能拦截，前往 <code class="text-mcDiamond">系统设置 → 隐私与安全性</code>，点击"仍要打开"</p>
+            </div>
+            <div class="mc-code text-xs mt-2">
+              <span class="cmt"># 或通过终端移除隔离属性</span><br>
+              xattr -cr /Applications/matoga.app
+            </div>
+          </div>
+        </details>
+
+        <!-- Windows 安装 -->
+        <details class="mc-slot group">
+          <summary class="cursor-pointer p-4 flex items-center justify-between list-none">
+            <span class="flex items-center gap-3">
+              <span class="mc-badge bg-mcStone text-white text-xs">Windows</span>
+              <span class="text-sm text-gray-300">.exe 安装 & 便携版说明</span>
+            </span>
+            <svg class="w-4 h-4 text-gray-500 transition-transform group-open:rotate-180" fill="currentColor" viewBox="0 0 16 16"><path d="M8 12L2 6h12z"/></svg>
+          </summary>
+          <div class="px-4 pb-4 space-y-3 text-sm text-gray-400">
+            <div class="flex gap-3">
+              <span class="mc-badge bg-mcGrass text-white text-[10px] flex-shrink-0" style="padding:1px 6px">1</span>
+              <p>下载 <code class="text-mcDiamond">.exe</code> 安装程序，双击运行</p>
+            </div>
+            <div class="flex gap-3">
+              <span class="mc-badge bg-mcGrass text-white text-[10px] flex-shrink-0" style="padding:1px 6px">2</span>
+              <p>选择安装路径（默认 <code class="text-mcDiamond">C:\Program Files\matoga</code>），完成安装</p>
+            </div>
+            <div class="flex gap-3">
+              <span class="mc-badge bg-mcGrass text-white text-[10px] flex-shrink-0" style="padding:1px 6px">3</span>
+              <p>从开始菜单或桌面快捷方式启动</p>
+            </div>
+            <div class="mt-2 p-3 bg-black/20 rounded border border-gray-700/50">
+              <p class="text-xs text-gray-500">便携版 <code class="text-mcDiamond">.zip</code> 无需安装，解压后直接运行 <code class="text-mcDiamond">matoga.exe</code>，配置文件存储在同目录下</p>
+            </div>
+          </div>
+        </details>
+
+        <!-- Linux 安装 -->
+        <details class="mc-slot group">
+          <summary class="cursor-pointer p-4 flex items-center justify-between list-none">
+            <span class="flex items-center gap-3">
+              <span class="mc-badge bg-mcStone text-white text-xs">Linux</span>
+              <span class="text-sm text-gray-300">AppImage / deb / rpm 安装</span>
+            </span>
+            <svg class="w-4 h-4 text-gray-500 transition-transform group-open:rotate-180" fill="currentColor" viewBox="0 0 16 16"><path d="M8 12L2 6h12z"/></svg>
+          </summary>
+          <div class="px-4 pb-4 space-y-3 text-sm text-gray-400">
+            <p class="text-mcGrass font-bold text-xs">AppImage（推荐）</p>
+            <div class="mc-code text-xs">
+              <span class="cmt"># 添加执行权限并运行</span><br>
+              chmod +x matoga-1.0.AppImage<br>
+              ./matoga-1.0.AppImage
+            </div>
+            <p class="text-mcGrass font-bold text-xs mt-3">deb (Debian/Ubuntu)</p>
+            <div class="mc-code text-xs">
+              sudo dpkg -i matoga-1.0.deb<br>
+              sudo apt install -f  <span class="cmt"># 修复依赖</span>
+            </div>
+            <p class="text-mcGrass font-bold text-xs mt-3">rpm (Fedora/RHEL)</p>
+            <div class="mc-code text-xs">
+              sudo rpm -i matoga-1.0.rpm
+            </div>
+          </div>
+        </details>
+      </div>
+
+      <!-- 校验和 -->
+      <div class="mt-6 mc-slot p-6">
+        <h3 class="mc-title text-sm text-mcDiamond mb-4">校验和验证</h3>
+        <p class="text-sm text-gray-400 mb-3">下载完成后，建议验证文件完整性以确保安全：</p>
+        <div class="mc-code text-xs">
+          <span class="cmt"># macOS / Linux</span><br>
+          shasum -a 256 matoga-1.0.2-arm64.dmg<br><br>
+          <span class="cmt"># Windows (PowerShell)</span><br>
+          Get-FileHash matoga.Setup.1.0.2.exe -Algorithm SHA256
+        </div>
+        <p class="text-xs text-gray-500 mt-3">校验值请对照 <a href="https://github.com/xiongmiaozai/matoga/releases" target="_blank" class="text-mcGrass hover:underline">GitHub Releases</a> 页面公布的 SHA-256 值</p>
+      </div>
+
+      <!-- 源码构建 -->
+      <div class="mt-6 mc-slot p-6">
+        <h3 class="mc-title text-sm text-mcGrass mb-4">从源码构建</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <p class="text-xs text-gray-500 mb-2">前置依赖</p>
+            <ul class="space-y-1 text-sm text-gray-400">
+              <li>· Node.js 18+ & npm</li>
+              <li>· Git</li>
+              <li>· C++ 编译工具链（用于原生模块编译）</li>
+            </ul>
+          </div>
+          <div>
+            <p class="text-xs text-gray-500 mb-2">构建命令</p>
+            <div class="mc-code text-xs">
+              <span class="cmt"># 克隆仓库</span><br>
+              git clone https://github.com/xiongmiaozai/matoga<br>
+              cd matoga<br><br>
+              <span class="cmt"># 安装依赖</span><br>
+              npm install<br><br>
+              <span class="cmt"># 开发模式运行</span><br>
+              npm run dev<br><br>
+              <span class="cmt"># 打包发布</span><br>
+              npm run build
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 更新提示 -->
+      <div class="mt-6 flex items-center justify-center gap-3 text-sm text-gray-500">
+        <svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges" class="text-mcGrass"><rect x="6" y="2" width="4" height="8" fill="currentColor"/><rect x="6" y="12" width="4" height="2" fill="currentColor"/></svg>
+        <span>应用支持自动更新检查，启动时自动提示新版本</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- MC 方块分割条 -->
+  <div class="mc-divider"></div>
+
+  <!-- ═══════════════════════════════════════════════
+       文档 — 快速上手 & 快捷键
+       ═══════════════════════════════════════════════ -->
+  <section id="docs" class="py-20 md:py-28 relative z-10">
+    <div class="max-w-4xl mx-auto px-4">
+      <h2 class="mc-title text-xl md:text-2xl text-center text-mcGrass mb-4">快速上手</h2>
+      <p class="text-center text-gray-500 mb-12 text-sm">三步开始你的材质对比工作流</p>
+
+      <!-- 步骤卡片 -->
+      <div class="space-y-6">
+        <!-- 步骤 1 -->
+        <div class="mc-slot p-6 flex items-start gap-4">
+          <div class="mc-badge bg-mcGrass text-white text-sm flex-shrink-0">01</div>
+          <div>
+            <h3 class="font-bold text-mcGrass mb-2">选择文件夹</h3>
+            <p class="text-sm text-gray-400 leading-relaxed">点击左侧"选择"按钮加载基准材质包，右侧加载对比材质包。也支持拖拽文件夹到对应卡片。</p>
+          </div>
+        </div>
+        <!-- 步骤 2 -->
+        <div class="mc-slot p-6 flex items-start gap-4">
+          <div class="mc-badge bg-mcDiamond text-black text-sm flex-shrink-0" style="text-shadow:none">02</div>
+          <div>
+            <h3 class="font-bold text-mcDiamond mb-2">开始对比</h3>
+            <p class="text-sm text-gray-400 leading-relaxed">点击"开始对比"按钮，工具将自动匹配两侧贴图并生成差异报告，支持按文件夹分类、递归扫描与哈希校验。</p>
+          </div>
+        </div>
+        <!-- 步骤 3 -->
+        <div class="mc-slot p-6 flex items-start gap-4">
+          <div class="mc-badge bg-mcDirt text-white text-sm flex-shrink-0">03</div>
+          <div>
+            <h3 class="font-bold text-mcDirt mb-2">预览 & 操作</h3>
+            <p class="text-sm text-gray-400 leading-relaxed">点击表格中任意材质行，右侧面板展示 2D 贴图预览与 3D PBR 实时渲染。支持替换、删除、批量复制等操作。</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 快捷键参考 -->
+      <h3 class="mc-title text-sm text-mcDiamond mt-12 mb-6 text-center">键盘快捷键</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="mc-slot p-4 flex items-center justify-between">
+          <span class="text-sm text-gray-400">搜索贴图</span>
+          <kbd class="mc-badge bg-mcStoneDark text-white text-xs">⌘K / Ctrl+K</kbd>
+        </div>
+        <div class="mc-slot p-4 flex items-center justify-between">
+          <span class="text-sm text-gray-400">撤回操作</span>
+          <kbd class="mc-badge bg-mcStoneDark text-white text-xs">⌘Z / Ctrl+Z</kbd>
+        </div>
+        <div class="mc-slot p-4 flex items-center justify-between">
+          <span class="text-sm text-gray-400">表格视图</span>
+          <kbd class="mc-badge bg-mcStoneDark text-white text-xs">Ctrl+1</kbd>
+        </div>
+        <div class="mc-slot p-4 flex items-center justify-between">
+          <span class="text-sm text-gray-400">可视化视图</span>
+          <kbd class="mc-badge bg-mcStoneDark text-white text-xs">Ctrl+2</kbd>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MC 方块分割条 -->
+  <div class="mc-divider"></div>
+
+  <!-- ═══════════════════════════════════════════════
+       API 参考 — IPC 桥 & 配置
+       正文使用 Inter 保证可读性，标题用像素字体
+       ═══════════════════════════════════════════════ -->
+  <section id="api" class="py-20 md:py-28 relative z-10">
+    <div class="max-w-4xl mx-auto px-4">
+      <h2 class="mc-title text-xl md:text-2xl text-center text-mcGrass mb-4">API 参考</h2>
+      <p class="text-center text-gray-500 mb-12 text-sm">渲染进程可通过 <code class="text-mcDiamond">window.api</code> 访问主进程 IPC 桥</p>
+
+      <!-- IPC 方法列表 — MC 物品槽卡片 -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+        <div class="mc-slot p-5">
+          <h3 class="mc-title text-xs text-mcDiamond mb-3">文件夹 / Folder</h3>
+          <ul class="space-y-1.5 text-sm text-gray-400 font-mono">
+            <li><span class="text-mcGrass">selectFolder</span>(side)</li>
+            <li><span class="text-mcGrass">readEntries</span>(path, ignore)</li>
+            <li><span class="text-mcGrass">readRecursive</span>(path, ignore)</li>
+            <li><span class="text-mcGrass">pickFolder</span>() · <span class="text-mcGrass">createFolder</span>(path)</li>
+          </ul>
+        </div>
+        <div class="mc-slot p-5">
+          <h3 class="mc-title text-xs text-mcDiamond mb-3">文件 / File</h3>
+          <ul class="space-y-1.5 text-sm text-gray-400 font-mono">
+            <li><span class="text-mcGrass">hashFile</span>(path) · <span class="text-mcGrass">copyFile</span>(src, dest)</li>
+            <li><span class="text-mcGrass">backupFile</span>(path) · <span class="text-mcGrass">deleteFile</span>(path)</li>
+            <li><span class="text-mcGrass">selectFile</span>() · <span class="text-mcGrass">selectHDRFile</span>()</li>
+          </ul>
+        </div>
+        <div class="mc-slot p-5">
+          <h3 class="mc-title text-xs text-mcDiamond mb-3">Shell & 配置</h3>
+          <ul class="space-y-1.5 text-sm text-gray-400 font-mono">
+            <li><span class="text-mcGrass">openPath</span>(p) · <span class="text-mcGrass">showInFolder</span>(p)</li>
+            <li><span class="text-mcGrass">getPathForFile</span>(file)</li>
+            <li><span class="text-mcGrass">getConfig</span>() · <span class="text-mcGrass">setConfig</span>(patch)</li>
+            <li><span class="text-mcGrass">clearConfig</span>()</li>
+          </ul>
+        </div>
+        <div class="mc-slot p-5">
+          <h3 class="mc-title text-xs text-mcDiamond mb-3">HDRI 预设</h3>
+          <ul class="space-y-1.5 text-sm text-gray-400 font-mono">
+            <li><span class="text-mcGrass">listHdrPresets</span>()</li>
+            <li><span class="text-mcGrass">hdrThumbInfo</span>(fullPath)</li>
+            <li><span class="text-mcGrass">saveHdrThumb</span>(fullPath, dataUrl)</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- 配置示例 — mc-code 代码块 -->
+      <div class="mc-slot p-6 mb-6">
+        <h3 class="mc-title text-sm text-mcGrass mb-4">配置文件示例</h3>
+        <p class="text-sm text-gray-400 leading-relaxed mb-4">
+          用户配置持久化于 <code class="text-mcDiamond">config.json</code>，通过 <code class="text-mcDiamond">setConfig</code> 传入 patch 对象局部更新。
+        </p>
+        <pre class="mc-code"><span class="cmt">// config.json — 由 getConfig() / setConfig(patch) 读写</span>
+{
+  <span class="str">"theme"</span>: <span class="str">"dark"</span>,
+  <span class="str">"lang"</span>: <span class="str">"zh-CN"</span>,
+  <span class="str">"ignore"</span>: [<span class="str">".DS_Store"</span>, <span class="str">"thumbs.db"</span>],
+  <span class="str">"m3d"</span>: { <span class="str">"roughness"</span>: 0.8, <span class="str">"metalness"</span>: 0.2 },
+  <span class="str">"hdri"</span>: <span class="str">"studio_soft.exr"</span>
+}</pre>
+      </div>
+
+      <!-- 命令行参数 -->
+      <div class="mc-slot p-6">
+        <h3 class="mc-title text-sm text-mcGrass mb-4">命令行参数</h3>
+        <div class="mc-code">
+          <span class="cmt"># 开发模式（启用 DevTools + 热重载）</span><br>
+          npm run dev&nbsp;&nbsp;<span class="cmt"># 等价于 electron . --dev</span><br><br>
+          <span class="cmt"># 生产模式</span><br>
+          npm start
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MC 方块分割条 -->
+  <div class="mc-divider"></div>
+
+  <!-- ═══════════════════════════════════════════════
+       更新日志
+       ═══════════════════════════════════════════════ -->
+  <section id="changelog" class="py-20 md:py-28 relative z-10">
+    <div class="max-w-3xl mx-auto px-4">
+      <h2 class="mc-title text-xl md:text-2xl text-center text-mcGrass mb-4">更新日志</h2>
+      <p class="text-center text-gray-500 mb-12 text-sm">版本迭代记录</p>
+
+      <!-- v1.0.2 -->
+      <div class="mc-slot p-6 mb-6">
+        <div class="flex items-center gap-3 mb-4">
+          <span class="mc-badge bg-mcDiamond text-black" style="text-shadow:none">v1.0.2</span>
+          <span class="text-xs text-gray-500">2026-10-16</span>
+        </div>
+        <ul class="space-y-2 text-sm text-gray-400">
+          <li class="flex items-start gap-2"><span class="text-mcDiamond flex-shrink-0">▸</span> 下载地址动态拉取 GitHub Releases API，新版本发布后网页自动更新</li>
+          <li class="flex items-start gap-2"><span class="text-mcDiamond flex-shrink-0">▸</span> 三平台二进制安装包（.dmg / .exe / .AppImage / .deb）</li>
+          <li class="flex items-start gap-2"><span class="text-mcDiamond flex-shrink-0">▸</span> 修复 Linux deb 构建（author email）+ release 部分成功也发布</li>
+        </ul>
+      </div>
+
+      <!-- v1.0 -->
+      <div class="mc-slot p-6 mb-6">
+        <div class="flex items-center gap-3 mb-4">
+          <span class="mc-badge bg-mcGrass text-white">v1.0</span>
+          <span class="text-xs text-gray-500">2026-01-15</span>
+        </div>
+        <ul class="space-y-2 text-sm text-gray-400">
+          <li class="flex items-start gap-2"><span class="text-mcGrass flex-shrink-0">▸</span> 初始发布：双文件夹对比、差异可视化、3D PBR 预览</li>
+          <li class="flex items-start gap-2"><span class="text-mcGrass flex-shrink-0">▸</span> HDRI 环境光系统与程序化天空盒</li>
+          <li class="flex items-start gap-2"><span class="text-mcGrass flex-shrink-0">▸</span> 批量操作与撤回机制</li>
+          <li class="flex items-start gap-2"><span class="text-mcGrass flex-shrink-0">▸</span> 中英文双语国际化（i18n）</li>
+          <li class="flex items-start gap-2"><span class="text-mcGrass flex-shrink-0">▸</span> Minecraft 方块像素主题 UI</li>
+          <li class="flex items-start gap-2"><span class="text-mcGrass flex-shrink-0">▸</span> HTML 报告导出</li>
+        </ul>
+      </div>
+
+      <!-- v0.9 -->
+      <div class="mc-slot p-6 mb-6">
+        <div class="flex items-center gap-3 mb-4">
+          <span class="mc-badge bg-mcDirt text-white">v0.9</span>
+          <span class="text-xs text-gray-500">2025-12-20</span>
+        </div>
+        <ul class="space-y-2 text-sm text-gray-400">
+          <li class="flex items-start gap-2"><span class="text-mcDirt flex-shrink-0">▸</span> HDRI 预设库与天空盒参数调节</li>
+          <li class="flex items-start gap-2"><span class="text-mcDirt flex-shrink-0">▸</span> 视差遮蔽映射与法线推算</li>
+          <li class="flex items-start gap-2"><span class="text-mcDirt flex-shrink-0">▸</span> 3D 材质渲染增强</li>
+        </ul>
+      </div>
+
+      <!-- v0.8 -->
+      <div class="mc-slot p-6">
+        <div class="flex items-center gap-3 mb-4">
+          <span class="mc-badge bg-mcStoneDark text-white">v0.8</span>
+          <span class="text-xs text-gray-500">2025-11-10</span>
+        </div>
+        <ul class="space-y-2 text-sm text-gray-400">
+          <li class="flex items-start gap-2"><span class="text-mcStone flex-shrink-0">▸</span> 可视化图表视图（漏斗图/热力图/堆叠图）</li>
+          <li class="flex items-start gap-2"><span class="text-mcStone flex-shrink-0">▸</span> 统计仪表板与覆盖率分析</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       页脚 — 含 MC 像素小草装饰 (CC0 开源矢量素材)
+       Source: github.com/minecraft-svg-icons (CC0)
+       ═══════════════════════════════════════════════ -->
+  <footer class="relative z-10 bg-mcDarker border-t-[3px] border-black">
+    <!-- MC 像素小草条 — 装饰性 SVG, CC0 -->
+    <div class="flex justify-center overflow-hidden border-b-2 border-black" style="height:16px">
+      <svg width="100%" height="16" viewBox="0 0 256 16" shape-rendering="crispEdges" preserveAspectRatio="xMidYMid slice" class="flex-shrink-0">
+        <rect width="256" height="16" fill="#6b5437"/>
+        <rect width="256" height="6" fill="#5a9a3e"/>
+        <rect width="256" height="4" fill="#7cbd56"/>
+        <!-- 随机草丛 -->
+        <rect x="8"  y="0" width="2" height="8" fill="#5a9a3e"/>
+        <rect x="32" y="0" width="2" height="6" fill="#5a9a3e"/>
+        <rect x="56" y="0" width="2" height="9" fill="#5a9a3e"/>
+        <rect x="80" y="0" width="2" height="5" fill="#5a9a3e"/>
+        <rect x="104" y="0" width="2" height="8" fill="#5a9a3e"/>
+        <rect x="128" y="0" width="2" height="7" fill="#5a9a3e"/>
+        <rect x="152" y="0" width="2" height="9" fill="#5a9a3e"/>
+        <rect x="176" y="0" width="2" height="6" fill="#5a9a3e"/>
+        <rect x="200" y="0" width="2" height="8" fill="#5a9a3e"/>
+        <rect x="224" y="0" width="2" height="5" fill="#5a9a3e"/>
+        <rect x="248" y="0" width="2" height="7" fill="#5a9a3e"/>
+      </svg>
+    </div>
+
+    <div class="max-w-6xl mx-auto px-4 py-12">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
+        <!-- 项目信息 -->
+        <div>
+          <div class="flex items-center gap-2 mb-4">
+            <svg width="20" height="20" viewBox="0 0 16 16" shape-rendering="crispEdges">
+              <rect width="16" height="16" fill="#5a9a3e"/>
+              <rect x="0" y="0" width="16" height="4" fill="#7cbd56"/>
+              <rect x="0" y="4" width="16" height="12" fill="#8b6f47"/>
+            </svg>
+            <span class="mc-title text-sm text-mcGrass">matoga</span>
+          </div>
+          <p class="text-xs text-gray-500 leading-relaxed">材质贴图对比工具，为 Minecraft 材质开发者打造。</p>
+        </div>
+        <!-- 链接 -->
+        <div>
+          <h4 class="mc-title text-xs text-mcDiamond mb-4">链接</h4>
+          <ul class="space-y-2 text-sm">
+            <li><a href="#features"  class="text-gray-400 hover:text-mcGrass transition-colors">功能特性</a></li>
+            <li><a href="#download"  class="text-gray-400 hover:text-mcGrass transition-colors">下载安装</a></li>
+            <li><a href="#docs"      class="text-gray-400 hover:text-mcGrass transition-colors">使用文档</a></li>
+            <li><a href="#api"       class="text-gray-400 hover:text-mcGrass transition-colors">API 参考</a></li>
+            <li><a href="#changelog" class="text-gray-400 hover:text-mcGrass transition-colors">更新日志</a></li>
+          </ul>
+        </div>
+        <!-- 源码 -->
+        <div>
+          <h4 class="mc-title text-xs text-mcDiamond mb-4">源码</h4>
+          <ul class="space-y-2 text-sm">
+            <li><a href="https://github.com/xiongmiaozai/matoga" target="_blank" class="text-gray-400 hover:text-mcGrass transition-colors">GitHub 仓库</a></li>
+            <li><a href="https://github.com/xiongmiaozai/matoga/issues" target="_blank" class="text-gray-400 hover:text-mcGrass transition-colors">问题反馈</a></li>
+            <li><a href="https://github.com/xiongmiaozai/matoga/releases" target="_blank" class="text-gray-400 hover:text-mcGrass transition-colors">发布版本</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- 版权 -->
+      <div class="border-t-2 border-black pt-6 flex flex-col md:flex-row items-center justify-between gap-4">
+        <p class="text-xs text-gray-600">
+          Copyright © 2026 芝世 (xiongmiaozai). MIT License.
+        </p>
+        <p class="text-xs text-gray-600">
+          MC 装饰素材: <a href="https://github.com/minecraft-svg-icons" target="_blank" class="text-mcStone hover:text-mcGrass transition-colors">minecraft-svg-icons (CC0)</a>
+        </p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ═══════════════════════════════════════════════
+       移动端菜单交互
+       ═══════════════════════════════════════════════ -->
+  <script>
+    document.getElementById('mobileMenuBtn').addEventListener('click', () => {
+      document.getElementById('mobileMenu').classList.toggle('hidden')
+    })
+    // 点击导航链接后关闭移动端菜单
+    document.querySelectorAll('#mobileMenu a').forEach(a => {
+      a.addEventListener('click', () => {
+        document.getElementById('mobileMenu').classList.add('hidden')
+      })
+    })
+    // 下载版本切换
+    const dlStable = document.getElementById('dlStable')
+    const dlPreview = document.getElementById('dlPreview')
+    if (dlStable && dlPreview) {
+      dlStable.addEventListener('click', () => {
+        dlStable.classList.remove('opacity-60'); dlStable.classList.add('mc-btn-grass'); dlStable.classList.remove('mc-btn-stone')
+        dlPreview.classList.add('opacity-60'); dlPreview.classList.add('mc-btn-stone'); dlPreview.classList.remove('mc-btn-grass')
+      })
+      dlPreview.addEventListener('click', () => {
+        dlPreview.classList.remove('opacity-60'); dlPreview.classList.add('mc-btn-grass'); dlPreview.classList.remove('mc-btn-stone')
+        dlStable.classList.add('opacity-60'); dlStable.classList.add('mc-btn-stone'); dlStable.classList.remove('mc-btn-grass')
+      })
+    }
+  </script>
+
+  <!-- 动态拉取最新 GitHub Release，自动更新下载地址/版本号/文件大小 -->
+  <script>
+  (async () => {
+    try {
+      const res = await fetch('https://api.github.com/repos/xiongmiaozai/matoga/releases/latest', {
+        headers: { 'Accept': 'application/vnd.github+json' }
+      })
+      if (!res.ok) return
+      const rel = await res.json()
+      const tag = rel.tag_name || 'v1.0.2'
+      const set = (id, url) => { const el = document.getElementById(id); if (el && url) el.href = url }
+      const fmtSize = (b) => b ? (b >= 1048576 ? (b / 1048576).toFixed(0) + ' MB' : (b / 1024).toFixed(0) + ' KB') : ''
+      const find = (pred) => (rel.assets || []).find(pred)
+      const vEl = document.getElementById('dlVersion'); if (vEl) vEl.textContent = tag
+      const sb = document.getElementById('dlStable'); if (sb) sb.textContent = '稳定版 ' + tag
+      set('dlReleaseTag', rel.html_url)
+      const dmg = find(a => a.name.endsWith('.dmg'))
+      const macZip = find(a => a.name.endsWith('-mac.zip'))
+      set('dlMacDmg', dmg && dmg.browser_download_url)
+      set('dlMacZip', macZip && macZip.browser_download_url)
+      if (dmg) { const p = document.getElementById('sizeMac'); if (p) p.textContent = fmtSize(dmg.size) + ' · macOS 11+' }
+      const setup = find(a => a.name.includes('Setup') && a.name.endsWith('.exe'))
+      const portable = find(a => !a.name.includes('Setup') && a.name.endsWith('.exe'))
+      set('dlWinSetup', setup && setup.browser_download_url)
+      set('dlWinPortable', portable && portable.browser_download_url)
+      if (setup) { const p = document.getElementById('sizeWin'); if (p) p.textContent = fmtSize(setup.size) + ' · Win 10+' }
+      const appimg = find(a => a.name.endsWith('.AppImage'))
+      const deb = find(a => a.name.endsWith('.deb'))
+      set('dlLinuxAppimage', appimg && appimg.browser_download_url)
+      set('dlLinuxDeb', deb && deb.browser_download_url)
+      if (appimg) { const p = document.getElementById('sizeLinux'); if (p) p.textContent = fmtSize(appimg.size) + ' · Ubuntu 20.04+' }
+    } catch (e) { /* 拉取失败时保留 HTML 默认 v1.0.2 链接 */ }
+  })()
+  </script>
 </body>
 </html>

@@ -51,7 +51,8 @@ matoga/
 ├── main.js              # Electron 主进程（IPC、文件操作、对话框、配置）
 ├── preload.js           # 预加载脚本（contextBridge 安全暴露 API）
 ├── renderer.js          # 渲染进程入口
-├── index.html           # 主界面
+├── electron.html         # 主界面（Electron 渲染）
+├── index.html            # 项目官网（GitHub Pages 落地页）
 ├── styles.css           # 样式
 ├── package.json
 ├── src/
