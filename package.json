@@ -1,6 +1,6 @@
 {
   "name": "matoga",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "文件夹对比工具 - 对比左右两个文件夹中的内容",
   "main": "main.js",
   "scripts": {
@@ -16,7 +16,10 @@
     "compare",
     "diff"
   ],
-  "author": "芝世 (xiongmiaozai)",
+  "author": {
+    "name": "芝世 (xiongmiaozai)",
+    "email": "2720596091@qq.com"
+  },
   "license": "MIT",
   "devDependencies": {
     "electron": "^31.7.7",
