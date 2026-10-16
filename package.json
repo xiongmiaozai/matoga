@@ -1,11 +1,15 @@
 {
   "name": "matoga",
-  "version": "1.0.0",
-  "description": "文件夹对比工具 - 对比左右两个文件夹中的内容名称",
+  "version": "1.0.1",
+  "description": "文件夹对比工具 - 对比左右两个文件夹中的内容",
   "main": "main.js",
   "scripts": {
     "start": "unset ELECTRON_RUN_AS_NODE && electron .",
-    "dev": "unset ELECTRON_RUN_AS_NODE && electron . --dev"
+    "dev": "unset ELECTRON_RUN_AS_NODE && electron . --dev",
+    "dist": "electron-builder",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win",
+    "dist:linux": "electron-builder --linux"
   },
   "keywords": [
     "folder",
@@ -15,9 +19,48 @@
   "author": "芝世 (xiongmiaozai)",
   "license": "MIT",
   "devDependencies": {
-    "electron": "^31.7.7"
+    "electron": "^31.7.7",
+    "electron-builder": "^25.1.8"
   },
   "dependencies": {
     "three": "^0.186.1"
+  },
+  "build": {
+    "appId": "com.xiongmiaozai.matoga",
+    "productName": "matoga",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "!dist/**",
+      "!releases/**",
+      "!docs/**",
+      "!.github/**",
+      "!website.html",
+      "!README.md",
+      "!AGENTS.md"
+    ],
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.developer-tools",
+      "identity": null
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Development"
+    }
   }
 }
