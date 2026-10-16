@@ -85,19 +85,30 @@ function applySplitToRow(row) {
     handle.style.left = '50%'
     row.appendChild(handle)
     let dragging = false
-    const onMove = (e) => {
+    const onMove = (clientX) => {
       if (!dragging) return
       const rect = row.getBoundingClientRect()
-      const x = Math.max(0, Math.min(rect.width, (e.clientX - rect.left)))
+      const x = Math.max(0, Math.min(rect.width, (clientX - rect.left)))
       const pct = (x / rect.width * 100)
       cells[1].style.clipPath = `inset(0 0 0 ${pct}%)`
       handle.style.left = pct + '%'
     }
+    const onMouseMove = (e) => onMove(e.clientX)
+    const onTouchMove = (e) => { if (dragging) e.preventDefault(); onMove(e.touches[0].clientX) }
     const onUp = () => { dragging = false; document.body.style.userSelect = '' }
-    handle.addEventListener('mousedown', () => { dragging = true; document.body.style.userSelect = 'none' })
-    window.addEventListener('mousemove', onMove)
+    const onDown = () => { dragging = true; document.body.style.userSelect = 'none' }
+    handle.addEventListener('mousedown', onDown)
+    handle.addEventListener('touchstart', onDown, { passive: true })
+    window.addEventListener('mousemove', onMouseMove)
     window.addEventListener('mouseup', onUp)
-    row._splitCleanup = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
+    window.addEventListener('touchmove', onTouchMove, { passive: false })
+    window.addEventListener('touchend', onUp)
+    row._splitCleanup = () => {
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onUp)
+      window.removeEventListener('touchmove', onTouchMove)
+      window.removeEventListener('touchend', onUp)
+    }
   } else {
     if (!row.dataset.splitApplied) return
     delete row.dataset.splitApplied

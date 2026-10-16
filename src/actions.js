@@ -16,6 +16,7 @@ import {
 } from './utils.js'
 import { compare } from './compare.js'
 import { applyEntries, setLoading, renderResult, renderSidebar, renderStat, renderEntryList } from './render.js'
+import { t, getLocale } from './i18n.js'
 
 const ROLES = ['main', 'normal', 'specular']
 
@@ -30,17 +31,17 @@ export function updateUndoBtn() {
 }
 
 export async function undo() {
-  if (state.history.length === 0) { showToast('无可撤回操作'); return }
+  if (state.history.length === 0) { showToast(t('toast.noUndo')); return }
   const last = state.history[state.history.length - 1]
   let ok = 0, fail = 0
   const errors = []
   for (const e of last.entries) {
     if (e.backupPath) {
       const r = await window.api.copyFile(e.backupPath, e.destPath)
-      if (r.success) ok++; else { fail++; errors.push(r.error || '恢复失败') }
+      if (r.success) ok++; else { fail++; errors.push(r.error || t('toast.restoreFail')) }
     } else {
       const r = await window.api.deleteFile(e.destPath)
-      if (r.success) ok++; else { fail++; errors.push(r.error || '删除失败') }
+      if (r.success) ok++; else { fail++; errors.push(r.error || t('toast.deleteFail')) }
     }
   }
   if (ok > 0) {
@@ -52,9 +53,9 @@ export async function undo() {
       const g = state.result.find(r => r.key === savedKey)
       if (g) { state.selected = g; renderResult(); renderSidebar() }
     }
-    showToast(`已撤回 ${ok} 个操作${fail ? '，失败 ' + fail : ''}`)
+    showToast(fail ? t('toast.undoneWithFail', { n: ok, fail }) : t('toast.undone', { n: ok }))
   } else {
-    showToast('撤回失败：' + (errors[0] || '未知错误'))
+    showToast(t('toast.undoFail', { msg: errors[0] || t('toast.unknownError') }))
   }
 }
 
@@ -64,7 +65,7 @@ export async function loadFromPath(side, folderPath) {
   const ignore = getIgnorePatterns()
   const res = recursive ? await window.api.readRecursive(folderPath, ignore) : await window.api.readEntries(folderPath, ignore)
   setLoading(side, false)
-  if (!res.success) { showToast('读取失败：' + res.error); return }
+  if (!res.success) { showToast(t('toast.readFail', { msg: res.error })); return }
   applyEntries(side, folderPath, res.entries)
   updateCompareButton()
   window.api.setConfig({ [side + 'Path']: folderPath })
@@ -105,7 +106,7 @@ export function handleAction(act, g) {
   else if (act === 'loc-left' && lt) window.api.showInFolder(lt.fullPath)
   else if (act === 'loc-right' && rt) window.api.showInFolder(rt.fullPath)
   else if (act === 'copy') {
-    navigator.clipboard.writeText(g.key).then(() => showToast('已复制名称')).catch(() => showToast('复制失败'))
+    navigator.clipboard.writeText(g.key).then(() => showToast(t('toast.copiedName'))).catch(() => showToast(t('toast.copyFail')))
   }
   else if (act === 'copy-to-right') copyToSide(g, 'right')
   else if (act === 'copy-to-left') copyToSide(g, 'left')
@@ -115,14 +116,15 @@ export async function copyToSide(g, destSide) {
   const srcSide = destSide === 'right' ? 'left' : 'right'
   const destBase = destSide === 'right' ? state.rightPath : state.leftPath
   const srcBase = destSide === 'right' ? state.leftPath : state.rightPath
-  if (!destBase) { showToast('目标文件夹未选择'); return }
+  if (!destBase) { showToast(t('toast.destNotSelected')); return }
   const pairs = collectCopyPairs(g, srcSide, destSide, srcBase, destBase)
-  if (!pairs.length) { showToast('无可复制的文件'); return }
+  if (!pairs.length) { showToast(t('toast.noCopyFiles')); return }
   const willBackup = pairs.filter(p => p.backup).length
-  const msg = `确认将 ${pairs.length} 个贴图从${srcSide === 'left' ? '左' : '右'}侧替换到${destSide === 'left' ? '左' : '右'}侧？\n${willBackup ? `其中 ${willBackup} 个已有文件将自动备份` : '目标侧无同名文件'}`
+  const backupMsg = willBackup ? t('confirm.hasBackup', { n: willBackup }) : t('confirm.noBackup')
+  const msg = t('confirm.replaceSingle', { n: pairs.length, src: t('common.' + srcSide), dest: t('common.' + destSide), backup: backupMsg })
   if (!window.confirm(msg)) return
   const r = await executeCopy(pairs)
-  showToast(`已替换 ${r.ok} 个贴图${r.fail ? '，失败 ' + r.fail : ''}`)
+  showToast(r.fail ? t('toast.replacedWithFail', { n: r.ok, fail: r.fail }) : t('toast.replaced', { n: r.ok }))
   await reloadAndCompare()
 }
 
@@ -164,65 +166,66 @@ export async function copySingleFile(srcPath, destPath, backupPath) {
   let bkPath = null
   if (backupPath) {
     const bk = await window.api.backupFile(backupPath)
-    if (!bk.success) { showToast('备份失败，已取消替换'); return }
+    if (!bk.success) { showToast(t('toast.backupFailCancel')); return }
     bkPath = bk.backupPath
   }
   const r = await window.api.copyFile(srcPath, destPath)
-  if (r.success) { pushHistory([{ destPath, backupPath: bkPath }]); showToast('已替换贴图'); await reloadAndCompare() }
-  else showToast('替换失败：' + r.error)
+  if (r.success) { pushHistory([{ destPath, backupPath: bkPath }]); showToast(t('toast.replacedTex')); await reloadAndCompare() }
+  else showToast(t('toast.replaceFail', { msg: r.error }))
 }
 
 export async function replaceWithExternalFile(currentPath) {
   const newFile = await window.api.selectFile()
   if (!newFile) return
   const bk = await window.api.backupFile(currentPath)
-  if (!bk.success) { showToast('备份失败，已取消'); return }
+  if (!bk.success) { showToast(t('toast.backupFailCancel2')); return }
   const r = await window.api.copyFile(newFile, currentPath)
-  if (r.success) { pushHistory([{ destPath: currentPath, backupPath: bk.backupPath }]); showToast('已替换贴图'); await reloadAndCompare() }
-  else showToast('替换失败：' + r.error)
+  if (r.success) { pushHistory([{ destPath: currentPath, backupPath: bk.backupPath }]); showToast(t('toast.replacedTex')); await reloadAndCompare() }
+  else showToast(t('toast.replaceFail', { msg: r.error }))
 }
 
 export async function deleteTexture(filePath) {
-  if (!window.confirm('确认删除此贴图？\n删除后可通过撤回恢复')) return
+  if (!window.confirm(t('confirm.deleteTex'))) return
   const bk = await window.api.backupFile(filePath)
-  if (!bk.success) { showToast('备份失败，已取消'); return }
+  if (!bk.success) { showToast(t('toast.backupFailCancel2')); return }
   const r = await window.api.deleteFile(filePath)
-  if (r.success) { pushHistory([{ destPath: filePath, backupPath: bk.backupPath }]); showToast('已删除贴图'); await reloadAndCompare() }
-  else showToast('删除失败：' + r.error)
+  if (r.success) { pushHistory([{ destPath: filePath, backupPath: bk.backupPath }]); showToast(t('toast.deletedTex')); await reloadAndCompare() }
+  else showToast(t('toast.deleteFailMsg', { msg: r.error }))
 }
 
 export async function batchCopyToSide(destSide) {
   const srcSide = destSide === 'right' ? 'left' : 'right'
   const destBase = destSide === 'right' ? state.rightPath : state.leftPath
   const srcBase = destSide === 'right' ? state.leftPath : state.rightPath
-  if (!destBase) { showToast('目标文件夹未选择'); return }
+  if (!destBase) { showToast(t('toast.destNotSelected')); return }
   const allPairs = []
   for (const g of state.result) {
     if (g.kind === 'have') continue
     const pairs = collectCopyPairs(g, srcSide, destSide, srcBase, destBase)
     allPairs.push(...pairs)
   }
-  if (!allPairs.length) { showToast('无需替换的贴图'); return }
+  if (!allPairs.length) { showToast(t('toast.noNeedReplace')); return }
   const willBackup = allPairs.filter(p => p.backup).length
-  const msg = `批量替换：共 ${allPairs.length} 个贴图将从${srcSide === 'left' ? '左' : '右'}侧复制到${destSide === 'left' ? '左' : '右'}侧\n${willBackup ? `其中 ${willBackup} 个已有文件将自动备份` : '目标侧无同名文件'}\n确定继续？`
+  const backupMsg = willBackup ? t('confirm.hasBackup', { n: willBackup }) : t('confirm.noBackup')
+  const msg = t('confirm.batchReplace', { n: allPairs.length, src: t('common.' + srcSide), dest: t('common.' + destSide), backup: backupMsg })
   if (!window.confirm(msg)) return
   const r = await executeCopy(allPairs)
-  showToast(`批量替换 ${r.ok} 个贴图${r.fail ? '，失败 ' + r.fail : ''}`)
+  showToast(r.fail ? t('toast.batchReplacedWithFail', { n: r.ok, fail: r.fail }) : t('toast.batchReplaced', { n: r.ok }))
   await reloadAndCompare()
 }
 
 export function exportResult() {
-  if (state.result.length === 0) { showToast('没有可导出的结果'); return }
+  if (state.result.length === 0) { showToast(t('toast.noExportData')); return }
   const lines = []
-  lines.push('材质贴图对比结果')
-  lines.push(`导出时间：${new Date().toLocaleString('zh-CN')}`)
-  lines.push(`左侧：${state.leftPath}`)
-  lines.push(`右侧：${state.rightPath}`)
+  lines.push(t('export.title'))
+  lines.push(t('export.time', { time: new Date().toLocaleString(getLocale() === 'zh' ? 'zh-CN' : 'en-US') }))
+  lines.push(t('export.left', { path: state.leftPath }))
+  lines.push(t('export.right', { path: state.rightPath }))
   lines.push('')
-  lines.push('状态\t类型\t名称\t左贴图数\t右贴图数')
+  lines.push(t('export.header'))
   lines.push('-'.repeat(70))
   for (const g of state.result) {
-    const type = g.isMaterial ? '材质' : g.isDir ? '文件夹' : '文件'
+    const type = g.isMaterial ? t('type.material') : g.isDir ? t('type.folder') : t('type.file')
     const lc = g.isMaterial ? leftRoles(g).length : (hasAny(g.left) ? 1 : 0)
     const rc = g.isMaterial ? rightRoles(g).length : (hasAny(g.right) ? 1 : 0)
     lines.push([KIND_TEXT[g.kind], type, g.key, lc, rc].join('\t'))
@@ -231,20 +234,20 @@ export function exportResult() {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `材质对比结果_${Date.now()}.txt`
+  a.download = t('export.fileName', { ts: Date.now() })
   document.body.appendChild(a); a.click(); document.body.removeChild(a)
   URL.revokeObjectURL(url)
-  showToast('已导出结果')
+  showToast(t('toast.exported'))
 }
 
 export function exportHtml() {
-  if (state.result.length === 0) { showToast('没有可导出的结果'); return }
+  if (state.result.length === 0) { showToast(t('toast.noExportData')); return }
   const c = state.counts || {}
   const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   const statusColor = { have: '#14ae67', diff: '#f7a600', partial: '#b8860b', miss: '#e5484d', extra: '#d97706' }
   let rows = ''
   for (const g of state.result) {
-    const type = g.isMaterial ? '材质' : g.isDir ? '文件夹' : '文件'
+    const type = g.isMaterial ? t('type.material') : g.isDir ? t('type.folder') : t('type.file')
     const color = statusColor[g.kind] || '#999'
     let leftThumb = '—', rightThumb = '—'
     const ml = g.isMaterial ? (g.left && g.left.main) : (g.left && (g.left.file || g.left.dir))
@@ -253,15 +256,16 @@ export function exportHtml() {
     if (mr && !mr.isDirectory && isImageFile(mr.name)) rightThumb = `<img src="${fileUrl(mr.fullPath)}" style="width:48px;height:48px;object-fit:cover;border-radius:4px;" />`
     rows += `<tr><td style="color:${color};font-weight:600;">${esc(KIND_TEXT[g.kind])}</td><td>${leftThumb}</td><td>${rightThumb}</td><td>${esc(g.key)}</td><td>${type}</td><td>${formatSize((ml || mr)?.size)}</td></tr>`
   }
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>材质对比报告</title><style>body{font-family:system-serif;padding:20px;}h1{font-size:18px;}table{width:100%;border-collapse:collapse;font-size:13px;}th,td{padding:6px 10px;border-bottom:1px solid #eee;text-align:left;}th{background:#f5f7fa;}.sum{margin:10px 0;padding:10px;background:#f5f7fa;border-radius:8px;}</style></head><body><h1>材质贴图对比报告</h1><div class="sum">左侧：${esc(state.leftPath)}<br>右侧：${esc(state.rightPath)}<br>一致 ${c.have||0} · 不同 ${c.diff||0} · 部分缺失 ${c.partial||0} · 缺失 ${c.miss||0} · 多余 ${c.extra||0}</div><table><thead><tr><th>状态</th><th>左预览</th><th>右预览</th><th>名称</th><th>类型</th><th>大小</th></tr></thead><tbody>${rows}</tbody></table></body></html>`
+  const summary = t('export.htmlSummary', { left: esc(state.leftPath), right: esc(state.rightPath), have: c.have||0, diff: c.diff||0, partial: c.partial||0, miss: c.miss||0, extra: c.extra||0 })
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${t('export.htmlTitle')}</title><style>body{font-family:system-serif;padding:20px;}h1{font-size:18px;}table{width:100%;border-collapse:collapse;font-size:13px;}th,td{padding:6px 10px;border-bottom:1px solid #eee;text-align:left;}th{background:#f5f7fa;}.sum{margin:10px 0;padding:10px;background:#f5f7fa;border-radius:8px;}</style></head><body><h1>${t('export.htmlH1')}</h1><div class="sum">${summary}</div><table><thead><tr>${t('export.htmlHeader')}</tr></thead><tbody>${rows}</tbody></table></body></html>`
   const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `材质对比报告_${Date.now()}.html`
+  a.download = t('export.htmlFileName', { ts: Date.now() })
   document.body.appendChild(a); a.click(); document.body.removeChild(a)
   URL.revokeObjectURL(url)
-  showToast('已导出 HTML 报告')
+  showToast(t('toast.exportedHtml'))
 }
 
 export function showPixelDiff(pairs, panel) {
@@ -271,7 +275,7 @@ export function showPixelDiff(pairs, panel) {
   if (existing) existing.remove()
   const container = document.createElement('div')
   container.className = 'pv-diff-result'
-  container.innerHTML = '<div style="color:#ccc;font-size:12px;">计算中…</div>'
+  container.innerHTML = `<div style="color:#ccc;font-size:12px;">${t('toast.computing')}</div>`
   panel.appendChild(container)
 
   Promise.all(pairs.map(([le, re, label]) => new Promise((resolve) => {
@@ -284,11 +288,11 @@ export function showPixelDiff(pairs, panel) {
   }))).then(results => {
     container.innerHTML = ''
     const valid = results.filter(r => r)
-    if (!valid.length) { container.innerHTML = '<div style="color:#ccc;font-size:12px;">无法计算差异</div>'; if (btn) btn.disabled = false; return }
+    if (!valid.length) { container.innerHTML = `<div style="color:#ccc;font-size:12px;">${t('toast.cannotCompute')}</div>`; if (btn) btn.disabled = false; return }
 
     const toolbar = document.createElement('div')
     toolbar.style.cssText = 'display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap;'
-    const modes = [['diff', '差异图'], ['heat', '热力图'], ['channel', '通道'], ['hist', '直方图']]
+    const modes = [['diff', t('diff.modeDiff')], ['heat', t('diff.modeHeat')], ['channel', t('diff.modeChannel')], ['hist', t('diff.modeHist')]]
     let currentMode = 'diff'
     modes.forEach(([key, label]) => {
       const mb = document.createElement('button')
@@ -327,17 +331,17 @@ export function showPixelDiff(pairs, panel) {
           histData[Math.min(255, Math.round(d))]++
           if (currentMode === 'diff') { dD.data[i] = d; dD.data[i + 1] = d; dD.data[i + 2] = d; dD.data[i + 3] = 255 }
           else if (currentMode === 'heat') {
-            const t = d / 255
-            dD.data[i] = t < 0.5 ? 0 : Math.round((t - 0.5) * 510)
-            dD.data[i + 1] = t < 0.5 ? Math.round(t * 510) : Math.round((1 - t) * 510)
-            dD.data[i + 2] = t < 0.5 ? Math.round((0.5 - t) * 510) : 0
+            const tt = d / 255
+            dD.data[i] = tt < 0.5 ? 0 : Math.round((tt - 0.5) * 510)
+            dD.data[i + 1] = tt < 0.5 ? Math.round(tt * 510) : Math.round((1 - tt) * 510)
+            dD.data[i + 2] = tt < 0.5 ? Math.round((0.5 - tt) * 510) : 0
             dD.data[i + 3] = 255
           }
         }
         const pct = (totalDiff / (w * h * 255) * 100).toFixed(2)
         const row = document.createElement('div')
         row.style.cssText = 'margin-bottom:12px;'
-        row.innerHTML = `<div style="color:#fff;font-size:11px;margin-bottom:4px;">${label} · 差异 ${pct}% · R:${(channelDiff[0]/(w*h*255)*100).toFixed(1)}% G:${(channelDiff[1]/(w*h*255)*100).toFixed(1)}% B:${(channelDiff[2]/(w*h*255)*100).toFixed(1)}%</div>`
+        row.innerHTML = `<div style="color:#fff;font-size:11px;margin-bottom:4px;">${t('diff.rowLabel', { label, pct, r: (channelDiff[0]/(w*h*255)*100).toFixed(1), g: (channelDiff[1]/(w*h*255)*100).toFixed(1), b: (channelDiff[2]/(w*h*255)*100).toFixed(1) })}</div>`
 
         if (currentMode === 'hist') {
           const cH = document.createElement('canvas')
@@ -403,13 +407,13 @@ export function swapFolders() {
   const tp = state.leftPath, te = state.leftEntries
   state.leftPath = state.rightPath; state.leftEntries = state.rightEntries
   state.rightPath = tp; state.rightEntries = te
-  leftPathEl.textContent = state.leftPath || '未选择'
-  rightPathEl.textContent = state.rightPath || '未选择'
+  leftPathEl.textContent = state.leftPath || t('common.empty')
+  rightPathEl.textContent = state.rightPath || t('common.empty')
   renderStat(leftStatEl, state.leftEntries, state.leftPath)
   renderStat(rightStatEl, state.rightEntries, state.rightPath)
   renderEntryList(leftListEl, state.leftEntries)
   renderEntryList(rightListEl, state.rightEntries)
   updateCompareButton()
   if (state.leftPath && state.rightPath) compare()
-  showToast('已交换左右文件夹')
+  showToast(t('toast.swapped'))
 }

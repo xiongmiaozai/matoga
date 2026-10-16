@@ -8,6 +8,7 @@ import * as THREE from '../node_modules/three/build/three.module.js'
 import { fileUrl, isImageFile } from './utils.js'
 import { HDRLoader } from './hdr-loader.js'
 import { Sky } from './sky.js'
+import { t as _t } from './i18n.js'
 
 let scene, camera, renderer, animationId, pmrem, envTexture, pmremTexture
 let isWebGL2 = false
@@ -36,16 +37,16 @@ const _lightDirTmp = new THREE.Vector3()
 let currentLightPreset = 'studio'
 let currentEnvMode = 'custom'
 let groundVisible = true
-let envIntensity = 1.0
+let envIntensity = 0.5
 let hdrTexture = null
 let skyMesh = null
 let skyEnvTexture = null
 let skySunLight = null
-let skyTurbidity = 2
-let skyRayleigh = 1
+let skyTurbidity = 3
+let skyRayleigh = 2.5
 let skyMieCoefficient = 0.005
 let skyMieDirectionalG = 0.8
-let skySunElevation = 30
+let skySunElevation = 15
 let skySunAzimuth = 180
 let skyCloudCoverage = 0.4
 let skyCloudScale = 0.0002
@@ -53,7 +54,7 @@ let skyCloudSpeed = 0.00002
 let skyCloudDensity = 0.4
 let skyCloudElevation = 0.5
 let skyClock = null
-let skyTintHex = 0xffffff
+let skyTintHex = 0xa0c0ff
 let skyBakeTimer = null
 const _skyTint = new THREE.Color()
 let opacityMode = 'auto'
@@ -780,7 +781,7 @@ export function initMaterial3D(containerEl) {
   isWebGL2 = renderer.capabilities.isWebGL2
   maxAnisotropy = renderer.capabilities.getMaxAnisotropy() || 1
   renderer.setSize(width, height); renderer.setPixelRatio(window.devicePixelRatio)
-  renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0
+  renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.3
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap
   container.appendChild(renderer.domElement)
   pmrem = new THREE.PMREMGenerator(renderer)
@@ -788,7 +789,7 @@ export function initMaterial3D(containerEl) {
   const geo = geometries.sphere()
   meshLeft = new THREE.Mesh(geo, makeMaterial()); meshLeft.castShadow = true; meshLeft.receiveShadow = true; scene.add(meshLeft)
   meshRight = new THREE.Mesh(geo.clone(), makeMaterial()); meshRight.castShadow = true; meshRight.receiveShadow = true; scene.add(meshRight)
-  labelLeft = createLabel('左', '#2b6cff'); labelRight = createLabel('右', '#d97706')
+  labelLeft = createLabel(_t('common.left'), '#2b6cff'); labelRight = createLabel(_t('common.right'), '#d97706')
   scene.add(labelLeft); scene.add(labelRight)
   const groundGeo = new THREE.PlaneGeometry(8, 8)
   const groundMat = new THREE.MeshStandardMaterial({ color: 0x2a2a3e, roughness: 0.8, metalness: 0.0 })
@@ -956,7 +957,7 @@ function applyTexturesToMesh(mesh, group, side) {
       const sc = document.createElement('canvas'); sc.width = imgW(source); sc.height = imgH(source)
       const sctx = sc.getContext('2d', { willReadFrequently: true }); sctx.drawImage(source, 0, 0)
       const src = sc
-      if (side === 'left') showLoading('处理法线贴图...')
+      if (side === 'left') showLoading(_t('m3d.loading'))
       if (side === 'left' && heightDetectCallback) heightDetectCallback('loading')
       requestAnimationFrame(() => {
         setLoadingProgress(0.2)

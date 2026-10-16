@@ -26,8 +26,8 @@ class Sky extends Mesh {
 Sky.SkyShader = {
   name: 'SkyShader',
   uniforms: {
-    'turbidity': { value: 2 },
-    'rayleigh': { value: 1 },
+    'turbidity': { value: 3 },
+    'rayleigh': { value: 2.5 },
     'mieCoefficient': { value: 0.005 },
     'mieDirectionalG': { value: 0.8 },
     'sunPosition': { value: new Vector3() },
@@ -37,7 +37,7 @@ Sky.SkyShader = {
     'cloudDensity': { value: 0.4 },
     'cloudElevation': { value: 0.5 },
     'showSunDisc': { value: 1 },
-    'skyTint': { value: new Vector3( 1.0, 1.0, 1.0 ) },
+    'skyTint': { value: new Vector3( 0.627, 0.753, 1.0 ) },
     'time': { value: 0.0 }
   },
   vertexShader: /* glsl */`

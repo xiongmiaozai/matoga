@@ -5,6 +5,7 @@
  */
 
 import { $, IMG_EXTS, TEX_SUFFIXES, ROLES, ignoreChk, ignoreInput } from './core.js'
+import { t } from './i18n.js'
 
 export function formatSize(bytes) {
   if (!bytes) return '—'
@@ -113,7 +114,7 @@ export function mainEntryOf(g) {
 export function folderOf(g) {
   if (g._folder !== undefined) return g._folder
   const idx = g.key.lastIndexOf('/')
-  return (g._folder = idx >= 0 ? g.key.slice(0, idx) : '（根目录）')
+  return (g._folder = idx >= 0 ? g.key.slice(0, idx) : t('render.rootFolder'))
 }
 
 export function getIgnorePatterns() {

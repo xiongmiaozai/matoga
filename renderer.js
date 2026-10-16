@@ -29,6 +29,7 @@ import { initLayout } from './src/layout.js'
 import { initSettings, applyTheme } from './src/settings.js'
 import { initPreview2D } from './src/preview2d.js'
 import { initHdrPreset, refreshHdrPreset, clearHdrPresetSelection } from './src/hdri-preset.js'
+import { t, initI18n } from './src/i18n.js'
 
 import {
   leftBtn, rightBtn, exportBtn, exportHtmlBtn, swapBtn,
@@ -89,7 +90,7 @@ updateSortIndicators()
     if (!files || !files.length) return
     let p
     try { p = window.api.getPathForFile(files[0]) } catch { p = files[0].path }
-    if (!p) { showToast('无法获取拖入路径'); return }
+    if (!p) { showToast(t('toast.cannotGetPath')); return }
     await loadFromPath(side, p)
   })
 })
@@ -118,12 +119,12 @@ ignoreInput.addEventListener('input', () => {
 exportHtmlBtn.addEventListener('click', exportHtml)
 clearMemBtn.addEventListener('click', async () => {
   await window.api.clearConfig()
-  showToast('已清除记忆')
+  showToast(t('toast.clearedMem'))
 })
 
 batchRightBtn.addEventListener('click', () => batchCopyToSide('right'))
 batchLeftBtn.addEventListener('click', () => batchCopyToSide('left'))
-undoBtn.addEventListener('click', () => { undo().catch(err => showToast('撤回出错：' + err.message)) })
+undoBtn.addEventListener('click', () => { undo().catch(err => showToast(t('toast.undoError', { msg: err.message }))) })
 
 if (compareBtn2) compareBtn2.addEventListener('click', compare)
 if (swapBtn2) swapBtn2.addEventListener('click', swapFolders)
@@ -208,30 +209,88 @@ $('m3dSkyCloudSpeed').addEventListener('input', (e) => { const v = parseFloat(e.
 $('m3dSkyCloudElev').addEventListener('input', (e) => { const v = parseFloat(e.target.value); setSkyCloudElevation(v); $('m3dSkyCloudElevVal').textContent = v.toFixed(2) })
 $('m3dSkyTint').addEventListener('input', (e) => setSkyTint(e.target.value))
 const skyPresets = {
-  noon: { elevation:70, azimuth:180, turbidity:2, rayleigh:1, mie:0.005, mieG:0.8, cloudCov:0.3, cloudDen:0.4, cloudScale:0.0002, cloudSpeed:0.00002, cloudElev:0.5, tint:'#ffffff' },
+  noon: { elevation:50, azimuth:180, turbidity:3, rayleigh:2.5, mie:0.005, mieG:0.8, cloudCov:0.3, cloudDen:0.4, cloudScale:0.0002, cloudSpeed:0.00002, cloudElev:0.5, tint:'#a0c0ff' },
   sunset: { elevation:4, azimuth:270, turbidity:8, rayleigh:2, mie:0.01, mieG:0.85, cloudCov:0.5, cloudDen:0.5, cloudScale:0.0002, cloudSpeed:0.00002, cloudElev:0.4, tint:'#ffd0a0' },
   overcast: { elevation:25, azimuth:180, turbidity:15, rayleigh:0.5, mie:0.02, mieG:0.9, cloudCov:0.85, cloudDen:0.7, cloudScale:0.0003, cloudSpeed:0.00003, cloudElev:0.6, tint:'#d0d0d8' },
   night: { elevation:-5, azimuth:180, turbidity:3, rayleigh:0.3, mie:0.003, mieG:0.7, cloudCov:0.3, cloudDen:0.4, cloudScale:0.0002, cloudSpeed:0.00001, cloudElev:0.5, tint:'#2a3a5a' }
+}
+function applySkyPreset(p) {
+  const apply = (id, val, valId, text, fn) => { $(id).value = val; $(valId).textContent = text; fn(val) }
+  apply('m3dSkyElevation', p.elevation, 'm3dSkyElevationVal', p.elevation + '°', setSkySunElevation)
+  apply('m3dSkyAzimuth', p.azimuth, 'm3dSkyAzimuthVal', p.azimuth + '°', setSkySunAzimuth)
+  apply('m3dSkyTurbidity', p.turbidity, 'm3dSkyTurbidityVal', p.turbidity.toFixed(1), setSkyTurbidity)
+  apply('m3dSkyRayleigh', p.rayleigh, 'm3dSkyRayleighVal', p.rayleigh.toFixed(2), setSkyRayleigh)
+  apply('m3dSkyMie', p.mie, 'm3dSkyMieVal', p.mie.toFixed(3), setSkyMieCoefficient)
+  apply('m3dSkyMieG', p.mieG, 'm3dSkyMieGVal', p.mieG.toFixed(3), setSkyMieDirectionalG)
+  apply('m3dSkyCloudCov', p.cloudCov, 'm3dSkyCloudCovVal', p.cloudCov.toFixed(2), setSkyCloudCoverage)
+  apply('m3dSkyCloudDen', p.cloudDen, 'm3dSkyCloudDenVal', p.cloudDen.toFixed(2), setSkyCloudDensity)
+  apply('m3dSkyCloudScale', p.cloudScale, 'm3dSkyCloudScaleVal', p.cloudScale.toFixed(5), setSkyCloudScale)
+  apply('m3dSkyCloudSpeed', p.cloudSpeed, 'm3dSkyCloudSpeedVal', p.cloudSpeed.toFixed(6), setSkyCloudSpeed)
+  apply('m3dSkyCloudElev', p.cloudElev, 'm3dSkyCloudElevVal', p.cloudElev.toFixed(2), setSkyCloudElevation)
+  $('m3dSkyTint').value = p.tint; setSkyTint(p.tint)
+}
+function getSkyPresetFromUI() {
+  return {
+    elevation: parseFloat($('m3dSkyElevation').value),
+    azimuth: parseFloat($('m3dSkyAzimuth').value),
+    turbidity: parseFloat($('m3dSkyTurbidity').value),
+    rayleigh: parseFloat($('m3dSkyRayleigh').value),
+    mie: parseFloat($('m3dSkyMie').value),
+    mieG: parseFloat($('m3dSkyMieG').value),
+    cloudCov: parseFloat($('m3dSkyCloudCov').value),
+    cloudDen: parseFloat($('m3dSkyCloudDen').value),
+    cloudScale: parseFloat($('m3dSkyCloudScale').value),
+    cloudSpeed: parseFloat($('m3dSkyCloudSpeed').value),
+    cloudElev: parseFloat($('m3dSkyCloudElev').value),
+    tint: $('m3dSkyTint').value
+  }
+}
+function renderSkyCustomList(customPresets) {
+  const list = $('m3dSkyCustomList')
+  list.innerHTML = ''
+  if (!customPresets || customPresets.length === 0) return
+  customPresets.forEach((preset, i) => {
+    const item = document.createElement('div')
+    item.className = 'm3d-sky-custom-item'
+    const applyBtn = document.createElement('button')
+    applyBtn.className = 'm3d-sky-custom-apply'
+    applyBtn.textContent = preset.name
+    applyBtn.addEventListener('click', () => {
+      document.querySelectorAll('#m3dSkyPresetSeg button').forEach(b => b.classList.remove('active'))
+      applySkyPreset(preset)
+    })
+    const delBtn = document.createElement('button')
+    delBtn.className = 'm3d-sky-custom-del'
+    delBtn.innerHTML = '&times;'
+    delBtn.addEventListener('click', async () => {
+      const cfg = await window.api.getConfig()
+      const presets = (cfg.skyCustomPresets || []).filter((_, j) => j !== i)
+      await window.api.setConfig({ skyCustomPresets: presets })
+      renderSkyCustomList(presets)
+      showToast(t('m3d.skyPresetDeleted'))
+    })
+    item.appendChild(applyBtn)
+    item.appendChild(delBtn)
+    list.appendChild(item)
+  })
 }
 document.querySelectorAll('#m3dSkyPresetSeg button').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('#m3dSkyPresetSeg button').forEach(b => b.classList.remove('active'))
     btn.classList.add('active')
-    const p = skyPresets[btn.dataset.preset]
-    const apply = (id, val, valId, text, fn) => { $(id).value = val; $(valId).textContent = text; fn(val) }
-    apply('m3dSkyElevation', p.elevation, 'm3dSkyElevationVal', p.elevation + '°', setSkySunElevation)
-    apply('m3dSkyAzimuth', p.azimuth, 'm3dSkyAzimuthVal', p.azimuth + '°', setSkySunAzimuth)
-    apply('m3dSkyTurbidity', p.turbidity, 'm3dSkyTurbidityVal', p.turbidity.toFixed(1), setSkyTurbidity)
-    apply('m3dSkyRayleigh', p.rayleigh, 'm3dSkyRayleighVal', p.rayleigh.toFixed(2), setSkyRayleigh)
-    apply('m3dSkyMie', p.mie, 'm3dSkyMieVal', p.mie.toFixed(3), setSkyMieCoefficient)
-    apply('m3dSkyMieG', p.mieG, 'm3dSkyMieGVal', p.mieG.toFixed(3), setSkyMieDirectionalG)
-    apply('m3dSkyCloudCov', p.cloudCov, 'm3dSkyCloudCovVal', p.cloudCov.toFixed(2), setSkyCloudCoverage)
-    apply('m3dSkyCloudDen', p.cloudDen, 'm3dSkyCloudDenVal', p.cloudDen.toFixed(2), setSkyCloudDensity)
-    apply('m3dSkyCloudScale', p.cloudScale, 'm3dSkyCloudScaleVal', p.cloudScale.toFixed(5), setSkyCloudScale)
-    apply('m3dSkyCloudSpeed', p.cloudSpeed, 'm3dSkyCloudSpeedVal', p.cloudSpeed.toFixed(6), setSkyCloudSpeed)
-    apply('m3dSkyCloudElev', p.cloudElev, 'm3dSkyCloudElevVal', p.cloudElev.toFixed(2), setSkyCloudElevation)
-    $('m3dSkyTint').value = p.tint; setSkyTint(p.tint)
+    applySkyPreset(skyPresets[btn.dataset.preset])
   })
+})
+$('m3dSkySaveBtn').addEventListener('click', async () => {
+  const name = $('m3dSkyPresetName').value.trim()
+  if (!name) { showToast(t('m3d.skyPresetNameEmpty')); return }
+  const cfg = await window.api.getConfig()
+  const presets = cfg.skyCustomPresets || []
+  presets.push({ name, ...getSkyPresetFromUI() })
+  await window.api.setConfig({ skyCustomPresets: presets })
+  $('m3dSkyPresetName').value = ''
+  renderSkyCustomList(presets)
+  showToast(t('m3d.skyPresetSaved'))
 })
 $('m3dGround').addEventListener('change', (e) => toggleGround(e.target.checked))
 $('m3dAutoRotate').addEventListener('change', (e) => setAutoRotate(e.target.checked))
@@ -307,15 +366,15 @@ $('m3dHdrClearBtn').addEventListener('click', () => {
 $('m3dHdrRefreshBtn').addEventListener('click', () => refreshHdrPreset())
 
 $('m3dFormat').addEventListener('change', (e) => { setMaterialFormat(e.target.value); $('m3dFormatDetected').textContent = '' })
-setFormatDetectCallback((fmt) => { $('m3dFormatDetected').textContent = fmt === 'labpbr' ? '→ labPBR' : '→ 旧版PBR' })
+setFormatDetectCallback((fmt) => { $('m3dFormatDetected').textContent = fmt === 'labpbr' ? t('m3d.detectedLabpbr') : t('m3d.detectedOld') })
 setHeightDetectCallback((status) => {
   const el = $('m3dHeightStatus'); if (!el) return
   const fill = $('m3dParallaxStatusFill')
   el.classList.remove('has-height', 'no-height')
   if (fill) fill.classList.remove('success', 'fail', 'loading')
-  if (status === 'loading') { el.textContent = '处理中...'; if (fill) fill.classList.add('loading') }
-  else if (status === 'alpha') { el.textContent = '✓ A通道高度图'; el.classList.add('has-height'); if (fill) fill.classList.add('success') }
-  else if (status === 'normal') { el.textContent = '✓ 法线推算'; el.classList.add('has-height'); if (fill) fill.classList.add('success') }
+  if (status === 'loading') { el.textContent = t('m3d.heightLoading'); if (fill) fill.classList.add('loading') }
+  else if (status === 'alpha') { el.textContent = t('m3d.heightAlpha'); el.classList.add('has-height'); if (fill) fill.classList.add('success') }
+  else if (status === 'normal') { el.textContent = t('m3d.heightNormal'); el.classList.add('has-height'); if (fill) fill.classList.add('success') }
   else { el.textContent = ''; el.classList.remove('has-height', 'no-height'); if (fill) fill.classList.remove('success', 'fail', 'loading') }
 
 })
@@ -338,10 +397,54 @@ document.querySelectorAll('.m3d-presets button').forEach(btn => btn.addEventList
   else if (p === 'emissive') { set('m3dMetalness', 0); set('m3dRoughness', 0.5); set('m3dEmissive', 3); set('m3dOpacity', 1); set('m3dTransmission', 0) }
 }))
 
+;(() => {
+  const table = $('resultTable')
+  if (!table) return
+  const ths = table.querySelectorAll('thead th')
+  const COL_MIN = 40, COL_MAX = 600
+  const colKey = (th) => th.dataset.key || (th.className.match(/col-(\w+)/) || [])[1] || th.cellIndex
+  const saveWidths = async () => {
+    const widths = {}
+    ths.forEach(th => { const k = colKey(th); if (k) widths[k] = th.offsetWidth })
+    await window.api.setConfig({ tableColWidths: widths })
+  }
+  ths.forEach((th, i) => {
+    if (i === ths.length - 1) return
+    const handle = document.createElement('div')
+    handle.className = 'col-resize-handle'
+    th.appendChild(handle)
+    handle.addEventListener('mousedown', (e) => {
+      e.preventDefault(); e.stopPropagation()
+      const startX = e.clientX, startW = th.offsetWidth
+      handle.classList.add('dragging'); table.classList.add('resizing')
+      const onMove = (ev) => { th.style.width = Math.max(COL_MIN, Math.min(COL_MAX, startW + ev.clientX - startX)) + 'px' }
+      const onUp = () => {
+        handle.classList.remove('dragging'); table.classList.remove('resizing')
+        document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp)
+        saveWidths()
+      }
+      document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp)
+    })
+    handle.addEventListener('dblclick', () => {
+      const ci = i + 1
+      const prevW = th.style.width
+      th.style.width = 'auto'
+      void table.offsetWidth
+      const naturalW = th.offsetWidth
+      th.style.width = Math.max(COL_MIN, Math.min(COL_MAX, naturalW)) + 'px'
+      saveWidths()
+    })
+  })
+  window.api.getConfig().then(cfg => {
+    if (!cfg.tableColWidths) return
+    ths.forEach(th => { const k = colKey(th); if (k && cfg.tableColWidths[k]) th.style.width = cfg.tableColWidths[k] + 'px' })
+  })
+})()
+
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') { closePreview(); return }
   if ((e.metaKey || e.ctrlKey) && e.key === 'f') { e.preventDefault(); searchInput.focus(); return }
-  if ((e.metaKey || e.ctrlKey) && e.key === 'z') { e.preventDefault(); undo().catch(err => showToast('撤回出错：' + err.message)); return }
+  if ((e.metaKey || e.ctrlKey) && e.key === 'z') { e.preventDefault(); undo().catch(err => showToast(t('toast.undoError', { msg: err.message }))); return }
   const tag = e.target.tagName
   if (tag === 'INPUT' || tag === 'TEXTAREA') return
   const modal = $('previewModal')
@@ -397,6 +500,7 @@ function initCtxMenu() {
 }
 
 ;(async function init() {
+  await initI18n()
   initSettings()
   initPreview2D()
   initHdrPreset()
@@ -407,6 +511,7 @@ function initCtxMenu() {
   const cfg = await window.api.getConfig()
   if (cfg.theme === 'dark') applyTheme('dark')
   if (cfg.m3dHeight) { const c = $('material3dContainer'); if (c) { c.style.flex = 'none'; c.style.height = cfg.m3dHeight + 'px' } }
+  renderSkyCustomList(cfg.skyCustomPresets || [])
 
   if (cfg.recursive) recursiveChk.checked = true
   if (cfg.hash) hashChk.checked = true

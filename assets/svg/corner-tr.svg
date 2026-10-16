@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
+  <!-- CC0 - minecraft-svg-icons: corner decoration (top-right) -->
+  <rect x="8" y="0" width="8" height="3" fill="#7cbd56"/>
+  <rect x="8" y="3" width="8" height="5" fill="#8b6f47"/>
+  <rect x="12" y="0" width="2" height="4" fill="#5a9a3e"/>
+  <rect x="8" y="0" width="2" height="3" fill="#5a9a3e"/>
+  <rect x="5" y="2" width="3" height="3" fill="#8b6f47"/>
+  <rect x="6" y="5" width="2" height="2" fill="#6b5437"/>
+  <rect x="11" y="8" width="3" height="3" fill="#828282"/>
+  <rect x="9" y="8" width="2" height="2" fill="#6a6a6a"/>
+  <rect x="14" y="8" width="2" height="2" fill="#6b5437"/>
+</svg>

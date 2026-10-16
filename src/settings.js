@@ -6,6 +6,7 @@
 
 import { $, showToast } from './core.js'
 import { refreshHdrPreset } from './hdri-preset.js'
+import { t, setLocale, getLocale, onLocaleChange, applyI18n } from './i18n.js'
 
 let themeChangeCallbacks = []
 
@@ -40,7 +41,31 @@ export function initSettings() {
   const toggle = $('themeToggle')
   if (toggle) toggle.addEventListener('click', toggleTheme)
 
+  initLanguageSettings()
   initPathSettings()
+}
+
+function initLanguageSettings() {
+  const langBtn = $('langBtn')
+  if (langBtn) langBtn.addEventListener('click', () => {
+    setLocale(getLocale() === 'zh' ? 'en' : 'zh')
+    window.api.setConfig({ locale: getLocale() })
+  })
+
+  const langSeg = $('langSeg')
+  if (langSeg) {
+    langSeg.querySelectorAll('button').forEach(b => {
+      b.addEventListener('click', () => {
+        const lang = b.dataset.lang
+        setLocale(lang)
+        window.api.setConfig({ locale: lang })
+        langSeg.querySelectorAll('button').forEach(x => x.classList.toggle('active', x.dataset.lang === lang))
+      })
+    })
+    onLocaleChange(() => {
+      langSeg.querySelectorAll('button').forEach(x => x.classList.toggle('active', x.dataset.lang === getLocale()))
+    })
+  }
 }
 
 function initPathSettings() {
@@ -62,14 +87,14 @@ function initPathSettings() {
     const notifyChange = () => { if (it.cfgKey === 'hdriPresetPath') refreshHdrPreset() }
     if (createBtn) createBtn.addEventListener('click', async () => {
       const v = input && input.value.trim()
-      if (!v) { showToast('请先输入要创建的文件夹路径'); return }
+      if (!v) { showToast(t('toast.inputPathFirst')); return }
       const res = await window.api.createFolder(v)
       if (res && res.success) {
         window.api.setConfig({ [it.cfgKey]: v })
-        showToast('已创建文件夹并保存地址')
+        showToast(t('toast.createdFolder'))
         notifyChange()
       } else {
-        showToast('创建失败：' + (res && res.error ? res.error : '未知错误'))
+        showToast(t('toast.createFail', { msg: (res && res.error) ? res.error : t('toast.unknownError') }))
       }
     })
     if (pickBtn) pickBtn.addEventListener('click', async () => {
@@ -77,7 +102,7 @@ function initPathSettings() {
       if (!p) return
       if (input) input.value = p
       window.api.setConfig({ [it.cfgKey]: p })
-      showToast('已保存地址')
+      showToast(t('toast.savedPath'))
       notifyChange()
     })
     if (input) input.addEventListener('change', () => {
@@ -86,7 +111,7 @@ function initPathSettings() {
     })
     if (openBtn) openBtn.addEventListener('click', () => {
       const v = input && input.value.trim()
-      if (!v) { showToast('请先选择地址'); return }
+      if (!v) { showToast(t('toast.selectPathFirst')); return }
       window.api.openPath(v)
     })
   })

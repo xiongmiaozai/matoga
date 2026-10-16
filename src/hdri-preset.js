@@ -9,6 +9,7 @@ import { fileUrl } from './utils.js'
 import { HDRLoader } from './hdr-loader.js'
 import { loadHDREnv } from './material3d.js'
 import { FloatType } from '../node_modules/three/build/three.module.js'
+import { t } from './i18n.js'
 
 const THUMB_W = 320
 const THUMB_H = 160
@@ -27,12 +28,12 @@ export async function refreshHdrPreset() {
   thumbQueue = []
   const res = await window.api.listHdrPresets()
   if (!res || !res.success) {
-    grid.innerHTML = '<div class="hdri-preset-empty">无法读取预设文件夹</div>'
+    grid.innerHTML = `<div class="hdri-preset-empty">${t('toast.cannotReadPreset')}</div>`
     return
   }
   const entries = res.entries || []
   if (!entries.length) {
-    grid.innerHTML = '<div class="hdri-preset-empty">预设文件夹为空，请放入 .hdr 文件</div>'
+    grid.innerHTML = `<div class="hdri-preset-empty">${t('toast.presetEmpty')}</div>`
     return
   }
   grid.innerHTML = ''
@@ -170,7 +171,7 @@ function selectPreset(fullPath, item) {
     seg.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.envmode === 'hdri'))
     document.querySelectorAll('.m3d-env-subpane').forEach(p => p.classList.toggle('active', p.dataset.envpane === 'hdri'))
   }
-  showToast('已加载：' + item.title)
+  showToast(t('toast.loadedHdr', { name: item.title }))
 }
 
 export function clearHdrPresetSelection() {

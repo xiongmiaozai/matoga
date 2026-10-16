@@ -19,11 +19,12 @@ import { sortResult } from './compare.js'
 import { copySingleFile, replaceWithExternalFile, deleteTexture, handleAction, showPixelDiff } from './actions.js'
 import { initMaterial3D, updateMaterial3D } from './material3d.js'
 import { enhancePreview } from './preview2d.js'
+import { t } from './i18n.js'
 
 export function renderEntryList(container, entries) {
   container.innerHTML = ''
   if (entries.length === 0) {
-    container.innerHTML = '<div class="entry-item" style="color:var(--text-muted);justify-content:center;">（空文件夹）</div>'
+    container.innerHTML = `<div class="entry-item" style="color:var(--text-muted);justify-content:center;">${t('render.emptyFolder')}</div>`
     return
   }
   const sorted = entries.slice().sort((a, b) => {
@@ -44,13 +45,13 @@ export function renderStat(el, entries, pathLabel) {
   if (!pathLabel) { el.textContent = ''; return }
   const dirs = entries.filter(e => e.isDirectory).length
   const files = entries.length - dirs
-  el.textContent = `共 ${entries.length} 项（夹 ${dirs}，文件 ${files}）`
+  el.textContent = t('render.entryCount', { n: entries.length, dirs, files })
 }
 
 export function setLoading(side, on) {
   const stat = side === 'left' ? leftStatEl : rightStatEl
   const btn = side === 'left' ? leftBtn : rightBtn
-  stat.textContent = on ? '读取中…' : ''
+  stat.textContent = on ? t('render.loading') : ''
   btn.disabled = on
 }
 
@@ -70,7 +71,7 @@ export function applyEntries(side, folderPath, entries) {
 
 export function statusBadge(kind) {
   const icons = { have: 'i-check', diff: 'i-alert', partial: 'i-minus', miss: 'i-x', extra: 'i-plus' }
-  const labels = { have: '一致', diff: '不同', partial: '部分', miss: '缺失', extra: '多余' }
+  const labels = { have: t('status.haveShort'), diff: t('status.diffShort'), partial: t('status.partialShort'), miss: t('status.missShort'), extra: t('status.extraShort') }
   return `<span class="status-badge status-${kind}"><svg class="ico"><use href="#${icons[kind]}"/></svg>${labels[kind]}</span>`
 }
 
@@ -100,12 +101,12 @@ export function appendGroupRows(frag, g) {
   const previewCell = renderThumbPair(mainLeft, mainRight)
   const arrow = expandable ? `<span class="expand-arrow">${expanded ? '▾' : '▸'}</span>` : ''
   const folder = folderOf(g)
-  const displayName = state.viewMode === 'byFolder' && folder !== '（根目录）' ? g.key.slice(folder.length + 1) : g.key
+  const displayName = state.viewMode === 'byFolder' && folder !== t('render.rootFolder') ? g.key.slice(folder.length + 1) : g.key
   const nameHtml = `${arrow}<span class="cell-name" title="${g.key}">${displayName || g.key}</span>`
-  const typeHtml = g.isMaterial ? '<span class="type-mat"><svg class="ico"><use href="#i-layers"/></svg>材质</span>' : g.isDir ? '<span class="type-dir"><svg class="ico"><use href="#i-folder"/></svg>文件夹</span>' : '<span class="type-file"><svg class="ico"><use href="#i-image"/></svg>文件</span>'
+  const typeHtml = g.isMaterial ? `<span class="type-mat"><svg class="ico"><use href="#i-layers"/></svg>${t('type.material')}</span>` : g.isDir ? `<span class="type-dir"><svg class="ico"><use href="#i-folder"/></svg>${t('type.folder')}</span>` : `<span class="type-file"><svg class="ico"><use href="#i-image"/></svg>${t('type.file')}</span>`
   const me = mainLeft || mainRight
   const sizeHtml = (g.kind === 'diff' && mainLeft && mainRight && mainLeft.size !== mainRight.size)
-    ? `<span class="size-diff" title="左 ${formatSize(mainLeft.size)} / 右 ${formatSize(mainRight.size)}">${formatSize(mainLeft.size)} ≠ ${formatSize(mainRight.size)}</span>`
+    ? `<span class="size-diff" title="${t('common.left')} ${formatSize(mainLeft.size)} / ${t('common.right')} ${formatSize(mainRight.size)}">${formatSize(mainLeft.size)} ≠ ${formatSize(mainRight.size)}</span>`
     : formatSize(me ? me.size : 0)
   const mtimeHtml = formatDate(me ? me.mtime : 0)
   const leftCell = hasAny(g.left) ? '<span class="cell-yes">✓</span>' : '<span class="cell-empty">—</span>'
@@ -140,7 +141,7 @@ export function appendGroupRows(frag, g) {
         const dest = state.rightPath + '/' + rel
         const btn = document.createElement('button')
         btn.className = 'sub-replace-btn'
-        btn.textContent = '→右'
+        btn.textContent = t('render.toRight')
         btn.addEventListener('click', (ev) => { ev.stopPropagation(); copySingleFile(le.fullPath, dest, re && !re.isDirectory ? re.fullPath : null) })
         actionTd.appendChild(btn)
       }
@@ -149,7 +150,7 @@ export function appendGroupRows(frag, g) {
         const dest = state.leftPath + '/' + rel
         const btn = document.createElement('button')
         btn.className = 'sub-replace-btn'
-        btn.textContent = '→左'
+        btn.textContent = t('render.toLeft')
         btn.addEventListener('click', (ev) => { ev.stopPropagation(); copySingleFile(re.fullPath, dest, le && !le.isDirectory ? le.fullPath : null) })
         actionTd.appendChild(btn)
       }
@@ -192,18 +193,18 @@ export function renderResult() {
       `<div class="stat-card-sub">${sub}</div></div>`
     dash.innerHTML = total === 0 ? '' :
       `<div class="stat-cards">` +
-      card('覆盖率', cov.toFixed(1), '%', cov, `${counts.rightMatch}/${counts.leftTex} 贴图`, 'stat-cov') +
-      card('一致率', consist.toFixed(1), '%', consist, `${counts.have}/${leftGroups} 组`, 'stat-consist') +
-      card('缺失率', missRate.toFixed(1), '%', missRate, `${counts.miss} 组缺失`, 'stat-miss') +
-      card('差异率', diffRate.toFixed(1), '%', diffRate, `${counts.diff} 组不同`, 'stat-diff') +
-      (counts.pbrExtra ? card('PBR增强', counts.pbrExtra, '', pbrRate, `+${counts.pbrExtra} 贴图`, 'stat-pbr') : '') +
+      card(t('render.covTitle'), cov.toFixed(1), '%', cov, t('render.covSub', { match: counts.rightMatch, total: counts.leftTex }), 'stat-cov') +
+      card(t('render.consistTitle'), consist.toFixed(1), '%', consist, t('render.consistSub', { have: counts.have, total: leftGroups }), 'stat-consist') +
+      card(t('render.missTitle'), missRate.toFixed(1), '%', missRate, t('render.missSub', { n: counts.miss }), 'stat-miss') +
+      card(t('render.diffTitle'), diffRate.toFixed(1), '%', diffRate, t('render.diffSub', { n: counts.diff }), 'stat-diff') +
+      (counts.pbrExtra ? card(t('render.pbrTitle'), counts.pbrExtra, '', pbrRate, t('render.pbrSub', { n: counts.pbrExtra }), 'stat-pbr') : '') +
       `</div>`
   }
 
   summaryEl.innerHTML = total === 0 ? '' : `
-    <span class="s-item">左 <span class="s-num">${state.leftEntries.length}</span></span>
-    <span class="s-item">右 <span class="s-num">${state.rightEntries.length}</span></span>
-    <span class="s-item">组 <span class="s-num">${total}</span></span>
+    <span class="s-item">${t('render.leftItem')} <span class="s-num">${state.leftEntries.length}</span></span>
+    <span class="s-item">${t('render.rightItem')} <span class="s-num">${state.rightEntries.length}</span></span>
+    <span class="s-item">${t('render.groupItem')} <span class="s-num">${total}</span></span>
     <span class="s-item s-have">✓ <span class="s-num">${counts.have}</span></span>
     <span class="s-item s-diff">≈ <span class="s-num">${counts.diff}</span></span>
     <span class="s-item s-partial">◐ <span class="s-num">${counts.partial}</span></span>
@@ -215,10 +216,10 @@ export function renderResult() {
 
   if (filtered.length === 0) {
     const msg = !state.leftPath || !state.rightPath
-      ? '拖拽文件夹到左侧卡片，或点击「选择」开始对比'
-      : result.length === 0 ? '两侧均为空'
-      : q ? '没有匹配的材质/文件'
-      : (onlyDiff ? '全部一致，无不一致项 🎉' : '无数据')
+      ? t('render.dragHint')
+      : result.length === 0 ? t('render.bothEmpty')
+      : q ? t('render.noMatch')
+      : (onlyDiff ? t('render.allConsistent') : t('render.noData'))
     resultBody.innerHTML = `<tr class="empty-row"><td colspan="8">${msg}</td></tr>`
     return
   }
@@ -250,7 +251,7 @@ export function renderResult() {
       if (fc.extra) sp.push(`<span class="fc fc-extra">＋${fc.extra}</span>`)
       const ftr = document.createElement('tr')
       ftr.className = 'folder-group-row'
-      ftr.innerHTML = `<td colspan="8"><span class="folder-arrow">${collapsed ? '▸' : '▾'}</span><span class="folder-ico">📁</span><span class="folder-name">${f}</span><span class="folder-count">${items.length} 项</span><span class="folder-summary">${sp.join(' ')}</span></td>`
+      ftr.innerHTML = `<td colspan="8"><span class="folder-arrow">${collapsed ? '▸' : '▾'}</span><span class="folder-ico">📁</span><span class="folder-name">${f}</span><span class="folder-count">${t('render.folderCount', { n: items.length })}</span><span class="folder-summary">${sp.join(' ')}</span></td>`
       ftr.addEventListener('click', () => {
         if (state.collapsedFolders.has(f)) state.collapsedFolders.delete(f)
         else state.collapsedFolders.add(f)
@@ -267,7 +268,7 @@ export function renderResult() {
   if (truncated) {
     const moreRow = document.createElement('tr')
     moreRow.className = 'show-more-row'
-    moreRow.innerHTML = `<td colspan="8" style="text-align:center;padding:8px;"><button class="btn btn-ghost btn-sm">显示更多（${rendered}/${filtered.length}）</button></td>`
+    moreRow.innerHTML = `<td colspan="8" style="text-align:center;padding:8px;"><button class="btn btn-ghost btn-sm">${t('render.showMore', { rendered, total: filtered.length })}</button></td>`
     moreRow.querySelector('button').addEventListener('click', () => { state.renderLimit += 200; renderResult() })
     frag.appendChild(moreRow)
   }
@@ -287,8 +288,8 @@ export function selectGroup(g, toggle = true) {
 }
 
 function pvCell(entry, side) {
-  if (!entry) return `<div class="pv-cell"><span class="pv-tag">${side}</span><span class="pv-empty">该侧无</span></div>`
-  if (entry.isDirectory || !isImageFile(entry.name)) return `<div class="pv-cell"><span class="pv-tag">${side}</span><span class="pv-empty">非图片</span></div>`
+  if (!entry) return `<div class="pv-cell"><span class="pv-tag">${side}</span><span class="pv-empty">${t('preview.noSide')}</span></div>`
+  if (entry.isDirectory || !isImageFile(entry.name)) return `<div class="pv-cell"><span class="pv-tag">${side}</span><span class="pv-empty">${t('preview.notImage')}</span></div>`
   const url = fileUrl(entry.fullPath)
   return `<div class="pv-cell"><span class="pv-tag">${side}</span><img src="${url}" data-name="${entry.name}" data-path="${entry.fullPath}" alt="" /><span class="pv-size"></span></div>`
 }
@@ -303,8 +304,8 @@ export function renderSidebar() {
   if (mat3dContainer) initMaterial3D(mat3dContainer)
 
   if (!g) {
-    panel.innerHTML = '<div class="pv-hint">点击表格中的材质查看预览</div>'
-    detail.innerHTML = '<div class="detail-hint">未选中</div>'
+    panel.innerHTML = `<div class="pv-hint">${t('preview.hint')}</div>`
+    detail.innerHTML = `<div class="detail-hint">${t('preview.notSelected')}</div>`
     action.innerHTML = ''
     updateMaterial3D(null)
     return
@@ -318,93 +319,75 @@ export function renderSidebar() {
     for (const role of ['main', 'normal', 'specular']) {
       const le = g.left && g.left[role], re = g.right && g.right[role]
       if (!le && !re) continue
-      html += `<div class="pv-row"><span class="pv-role">${ROLE_LABEL[role]}</span>${pvCell(le, '左')}${pvCell(re, '右')}</div>`
+      html += `<div class="pv-row"><span class="pv-role">${ROLE_LABEL[role]}</span>${pvCell(le, t('common.left'))}${pvCell(re, t('common.right'))}</div>`
       if (le && re && !le.isDirectory && !re.isDirectory && isImageFile(le.name) && isImageFile(re.name))
         diffPairs.push([le, re, ROLE_LABEL[role]])
     }
   } else if (g.isDir) {
-    html = '<div class="pv-hint">📁 文件夹</div>'
+    html = `<div class="pv-hint">${t('preview.folder')}</div>`
   } else {
     const le = g.left && (g.left.file || g.left.dir), re = g.right && (g.right.file || g.right.dir)
-    html = `<div class="pv-row"><span class="pv-role">文件</span>${pvCell(le, '左')}${pvCell(re, '右')}</div>`
+    html = `<div class="pv-row"><span class="pv-role">${t('preview.file')}</span>${pvCell(le, t('common.left'))}${pvCell(re, t('common.right'))}</div>`
     if (le && re && !le.isDirectory && !re.isDirectory && isImageFile(le.name) && isImageFile(re.name))
-      diffPairs.push([le, re, '文件'])
+      diffPairs.push([le, re, t('preview.file')])
   }
   if (diffPairs.length) {
-    html += `<div class="pv-diff-btn-bar"><button class="btn btn-ghost btn-sm" id="pixelDiffBtn">🔍 像素差异对比</button></div>`
+    html += `<div class="pv-diff-btn-bar"><button class="btn btn-ghost btn-sm" id="pixelDiffBtn">${t('preview.pixelDiff')}</button></div>`
   }
+  panel.querySelectorAll('.pv-row').forEach(row => { if (row._splitCleanup) row._splitCleanup() })
   panel.innerHTML = html
   panel.querySelectorAll('img').forEach(img => {
-    img.addEventListener('click', () => openPreview(img.src, img.dataset.name || ''))
     const cell = img.parentElement
+    cell.classList.add('pv-loading')
+    img.addEventListener('click', () => openPreview(img.src, img.dataset.name || ''))
     img.addEventListener('load', () => {
+      cell.classList.remove('pv-loading')
       const sl = cell.querySelector('.pv-size')
       if (sl && img.naturalWidth) sl.textContent = `${img.naturalWidth}×${img.naturalHeight}`
     })
+    img.addEventListener('error', () => { cell.classList.remove('pv-loading'); cell.classList.add('pv-error') })
     const btn = document.createElement('button')
     btn.className = 'pv-replace-btn'
-    btn.textContent = '替换'
-    btn.title = '选择外部文件替换此贴图'
+    btn.textContent = t('preview.replace')
+    btn.title = t('preview.replaceTitle')
     btn.addEventListener('click', (e) => { e.stopPropagation(); replaceWithExternalFile(img.dataset.path) })
     cell.appendChild(btn)
     const delBtn = document.createElement('button')
     delBtn.className = 'pv-delete-btn'
-    delBtn.textContent = '删除'
-    delBtn.title = '删除此贴图（可撤回）'
+    delBtn.textContent = t('preview.delete')
+    delBtn.title = t('preview.deleteTitle')
     delBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteTexture(img.dataset.path) })
     cell.appendChild(delBtn)
   })
 
-  panel.querySelectorAll('.pv-row').forEach(row => {
-    const imgs = [...row.querySelectorAll('img')].filter(i => isImageFile(i.dataset.name || ''))
-    if (!imgs.length) return
-    let loaded = 0
-    const maxN = { w: 0, h: 0 }
-    imgs.forEach(img => {
-      const done = () => {
-        maxN.w = Math.max(maxN.w, img.naturalWidth)
-        maxN.h = Math.max(maxN.h, img.naturalHeight)
-        if (++loaded === imgs.length) apply()
-      }
-      if (img.complete && img.naturalWidth) done()
-      else img.addEventListener('load', done)
-    })
-    function apply() {
-      imgs.forEach(img => {
-
-        const sl = img.parentElement.querySelector('.pv-size')
-        if (sl && img.naturalWidth) sl.textContent = `${img.naturalWidth}×${img.naturalHeight}`
-      })
-    }
-  })
 
   const diffBtn = $('pixelDiffBtn')
   if (diffBtn) diffBtn.addEventListener('click', () => showPixelDiff(diffPairs, panel))
 
   const dRow = (label, val) => `<div class="detail-row"><span class="detail-label">${label}</span><span>${val}</span></div>`
   let dh = `<div class="detail-title" title="${g.key}">${g.key}</div>`
-  dh += dRow('状态', KIND_TEXT[g.kind])
+  dh += dRow(t('common.status'), KIND_TEXT[g.kind])
   if (g.isMaterial) {
-    dh += dRow('类型', '材质')
-    dh += dRow('贴图数', `左 ${leftRoles(g).length} / 右 ${rightRoles(g).length}`)
+    dh += dRow(t('common.type'), t('type.material'))
+    dh += dRow(t('detail.texCount'), `${t('common.left')} ${leftRoles(g).length} / ${t('common.right')} ${rightRoles(g).length}`)
     const m = mainEntryOf(g)
-    if (m) { dh += dRow('主贴图大小', formatSize(m.size)); dh += dRow('主贴图时间', formatDate(m.mtime)) }
+    if (m) { dh += dRow(t('detail.mainSize'), formatSize(m.size)); dh += dRow(t('detail.mainMtime'), formatDate(m.mtime)) }
   } else if (g.isDir) {
-    dh += dRow('类型', '文件夹')
+    dh += dRow(t('common.type'), t('type.folder'))
   } else {
-    dh += dRow('类型', '文件')
+    dh += dRow(t('common.type'), t('type.file'))
     const e = mainEntryOf(g)
-    if (e) { dh += dRow('大小', formatSize(e.size)); dh += dRow('时间', formatDate(e.mtime)) }
+    if (e) { dh += dRow(t('common.size'), formatSize(e.size)); dh += dRow(t('detail.mtime'), formatDate(e.mtime)) }
   }
   detail.innerHTML = dh
 
   const target = mainEntryOf(g)
   let btns = ''
-  if (g.left && target) btns += '<button class="btn btn-sm" data-act="open-left">打开左侧</button><button class="btn btn-ghost btn-sm" data-act="loc-left">定位左侧文件夹</button>'
-  if (g.right && target) btns += '<button class="btn btn-sm" data-act="open-right">打开右侧</button><button class="btn btn-ghost btn-sm" data-act="loc-right">定位右侧文件夹</button>'
-  if (g.left && hasAny(g.left) && state.rightPath) btns += '<button class="btn btn-accent btn-sm" data-act="copy-to-right">复制到右侧</button>'
-  if (g.right && hasAny(g.right) && state.leftPath) btns += '<button class="btn btn-accent btn-sm" data-act="copy-to-left">复制到左侧</button>'
-  btns += '<button class="btn btn-ghost btn-sm" data-act="copy">复制名称</button>'
+  if (g.left && target) btns += `<button class="btn btn-sm" data-act="open-left">${t('detail.openLeft')}</button><button class="btn btn-ghost btn-sm" data-act="loc-left">${t('detail.locLeft')}</button>`
+  if (g.right && target) btns += `<button class="btn btn-sm" data-act="open-right">${t('detail.openRight')}</button><button class="btn btn-ghost btn-sm" data-act="loc-right">${t('detail.locRight')}</button>`
+  if (g.left && hasAny(g.left) && state.rightPath) btns += `<button class="btn btn-accent btn-sm" data-act="copy-to-right">${t('detail.copyRight')}</button>`
+  if (g.right && hasAny(g.right) && state.leftPath) btns += `<button class="btn btn-accent btn-sm" data-act="copy-to-left">${t('detail.copyLeft')}</button>`
+  btns += `<button class="btn btn-ghost btn-sm" data-act="copy">${t('detail.copyName')}</button>`
   action.innerHTML = btns
   action.querySelectorAll('button').forEach(b => {
     b.addEventListener('click', () => handleAction(b.dataset.act, g))
@@ -470,7 +453,7 @@ function donutChart(segments) {
     `<circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="var(--border)" stroke-width="${sw}"/>` +
     circles +
     `<text x="${size/2}" y="${size/2}" text-anchor="middle" dy="-2" class="chart-donut-num">${total}</text>` +
-    `<text x="${size/2}" y="${size/2}" text-anchor="middle" dy="16" class="chart-donut-label">总组数</text></svg>`
+    `<text x="${size/2}" y="${size/2}" text-anchor="middle" dy="16" class="chart-donut-label">${t('render.totalGroups')}</text></svg>`
 }
 
 function gaugeChart(pct, label, color) {
@@ -501,7 +484,7 @@ function renderChart() {
   const total = c.have + c.diff + c.partial + c.miss + c.extra
   const leftGroups = c.have + c.diff + c.partial + c.miss
   if (total === 0) {
-    el.innerHTML = '<div class="chart-empty"><svg class="ico"><use href="#i-pie"/></svg><p>暂无数据，请先选择文件夹进行对比</p></div>'
+    el.innerHTML = `<div class="chart-empty"><svg class="ico"><use href="#i-pie"/></svg><p>${t('render.chartEmpty')}</p></div>`
     return
   }
   const cov = c.leftTex > 0 ? c.rightMatch / c.leftTex * 100 : 0
@@ -510,53 +493,55 @@ function renderChart() {
   const diffRate = leftGroups > 0 ? c.diff / leftGroups * 100 : 0
   const extraRate = total > 0 ? c.extra / total * 100 : 0
 
+  const sh = t('status.haveShort'), sd = t('status.diffShort'), sp = t('status.partialShort'), sm = t('status.missShort'), se = t('status.extraShort')
+
   const donut = donutChart([
-    { value: c.have, color: 'var(--accent)', label: '一致' },
-    { value: c.diff, color: 'var(--warn)', label: '不同' },
-    { value: c.partial, color: 'var(--partial)', label: '部分' },
-    { value: c.miss, color: 'var(--danger)', label: '缺失' },
-    { value: c.extra, color: 'var(--text-dim)', label: '多余' },
+    { value: c.have, color: 'var(--accent)', label: sh },
+    { value: c.diff, color: 'var(--warn)', label: sd },
+    { value: c.partial, color: 'var(--partial)', label: sp },
+    { value: c.miss, color: 'var(--danger)', label: sm },
+    { value: c.extra, color: 'var(--text-dim)', label: se },
   ])
 
   const legend = [
-    { label: '一致', value: c.have, color: 'var(--accent)' },
-    { label: '不同', value: c.diff, color: 'var(--warn)' },
-    { label: '部分', value: c.partial, color: 'var(--partial)' },
-    { label: '缺失', value: c.miss, color: 'var(--danger)' },
-    { label: '多余', value: c.extra, color: 'var(--text-dim)' },
+    { label: sh, value: c.have, color: 'var(--accent)' },
+    { label: sd, value: c.diff, color: 'var(--warn)' },
+    { label: sp, value: c.partial, color: 'var(--partial)' },
+    { label: sm, value: c.miss, color: 'var(--danger)' },
+    { label: se, value: c.extra, color: 'var(--text-dim)' },
   ].map(l => `<div class="legend-item"><span class="legend-dot" style="background:${l.color}"></span>${l.label} <b>${l.value}</b></div>`).join('')
 
   const bars = barChart([
-    { label: '一致', value: c.have, color: 'var(--accent)' },
-    { label: '不同', value: c.diff, color: 'var(--warn)' },
-    { label: '部分缺失', value: c.partial, color: 'var(--partial)' },
-    { label: '缺失', value: c.miss, color: 'var(--danger)' },
-    { label: '多余', value: c.extra, color: 'var(--text-dim)' },
+    { label: sh, value: c.have, color: 'var(--accent)' },
+    { label: sd, value: c.diff, color: 'var(--warn)' },
+    { label: t('status.partialFull'), value: c.partial, color: 'var(--partial)' },
+    { label: sm, value: c.miss, color: 'var(--danger)' },
+    { label: se, value: c.extra, color: 'var(--text-dim)' },
   ])
 
   const texBars = barChart([
-    { label: '左侧贴图', value: c.leftTex, color: 'var(--primary)' },
-    { label: '右侧贴图', value: c.rightTex, color: 'var(--accent)' },
-    { label: '匹配贴图', value: c.rightMatch, color: 'var(--accent)' },
-    { label: 'PBR增强', value: c.pbrExtra, color: 'var(--partial)' },
+    { label: t('render.leftTex'), value: c.leftTex, color: 'var(--primary)' },
+    { label: t('render.rightTex'), value: c.rightTex, color: 'var(--accent)' },
+    { label: t('render.matchTex'), value: c.rightMatch, color: 'var(--accent)' },
+    { label: t('render.pbrTitle'), value: c.pbrExtra, color: 'var(--partial)' },
   ])
 
   const rateCards = [
-    { label: '覆盖率', val: cov, sub: `${c.rightMatch}/${c.leftTex} 贴图`, color: 'var(--primary)' },
-    { label: '一致率', val: consist, sub: `${c.have}/${leftGroups} 组`, color: 'var(--accent)' },
-    { label: '缺失率', val: missRate, sub: `${c.miss} 组缺失`, color: 'var(--danger)' },
-    { label: '差异率', val: diffRate, sub: `${c.diff} 组不同`, color: 'var(--warn)' },
-    { label: '冗余率', val: extraRate, sub: `${c.extra} 组多余`, color: 'var(--text-dim)' },
+    { label: t('render.covTitle'), val: cov, sub: t('render.covSub', { match: c.rightMatch, total: c.leftTex }), color: 'var(--primary)' },
+    { label: t('render.consistTitle'), val: consist, sub: t('render.consistSub', { have: c.have, total: leftGroups }), color: 'var(--accent)' },
+    { label: t('render.missTitle'), val: missRate, sub: t('render.missSub', { n: c.miss }), color: 'var(--danger)' },
+    { label: t('render.diffTitle'), val: diffRate, sub: t('render.diffSub', { n: c.diff }), color: 'var(--warn)' },
+    { label: t('render.redundancyTitle'), val: extraRate, sub: t('render.extraSub', { n: c.extra }), color: 'var(--text-dim)' },
   ].map(r => `<div class="rate-card" style="--rc:${r.color}"><div class="rate-label">${r.label}</div>` +
     `<div class="rate-val">${r.val.toFixed(1)}<span class="rate-unit">%</span></div>` +
     `<div class="rate-bar"><div class="rate-fill" style="width:${Math.min(r.val,100)}%"></div></div>` +
     `<div class="rate-sub">${r.sub}</div></div>`).join('')
 
   const funnelData = [
-    { label: '左侧总组数', value: leftGroups, color: 'var(--primary)' },
-    { label: '右侧存在', value: leftGroups - c.miss, color: 'var(--accent)' },
-    { label: '一致/部分', value: c.have + c.partial, color: 'var(--partial)' },
-    { label: '完全一致', value: c.have, color: 'var(--accent)' },
+    { label: t('render.leftTotalGroups'), value: leftGroups, color: 'var(--primary)' },
+    { label: t('render.rightExist'), value: leftGroups - c.miss, color: 'var(--accent)' },
+    { label: t('render.consistPartial'), value: c.have + c.partial, color: 'var(--partial)' },
+    { label: t('render.fullConsist'), value: c.have, color: 'var(--accent)' },
   ]
   const funnelMax = funnelData[0].value || 1
   const funnel = funnelData.map((f, i) => {
@@ -569,7 +554,7 @@ function renderChart() {
   }).join('')
 
   const stackColors = { have: 'var(--accent)', diff: 'var(--warn)', partial: 'var(--partial)', miss: 'var(--danger)', extra: 'var(--text-dim)' }
-  const stackLabels = { have: '一致', diff: '不同', partial: '部分', miss: '缺失', extra: '多余' }
+  const stackLabels = { have: sh, diff: sd, partial: sp, miss: sm, extra: se }
   const folderMap = new Map()
   for (const g of state.result) {
     const f = folderOf(g)
@@ -589,8 +574,8 @@ function renderChart() {
 
   const heatFolders = topFolders.slice(0, 10)
   const heatMax = Math.max(...heatFolders.flatMap(([, fs]) => [fs.have, fs.diff, fs.partial, fs.miss, fs.extra]), 1)
-  const heatHeader = `<div class="heat-row heat-head"><span class="heat-label">文件夹</span>` +
-    ['一致', '不同', '部分', '缺失', '多余'].map(l => `<div class="heat-cell">${l}</div>`).join('') + `</div>`
+  const heatHeader = `<div class="heat-row heat-head"><span class="heat-label">${t('render.heatFolder')}</span>` +
+    [sh, sd, sp, sm, se].map(l => `<div class="heat-cell">${l}</div>`).join('') + `</div>`
   const heatRows = heatFolders.map(([folder, fs]) => {
     const cells = ['have', 'diff', 'partial', 'miss', 'extra'].map(k => {
       const v = fs[k]
@@ -640,16 +625,16 @@ function renderChart() {
   ))
 
   el.innerHTML = `<div class="chart-grid">` +
-    `<div class="chart-card"><div class="chart-card-title">状态分布</div><div class="chart-donut-wrap">${donut}</div><div class="chart-legend">${legend}</div></div>` +
-    `<div class="chart-card"><div class="chart-card-title">覆盖率仪表盘</div><div class="chart-donut-wrap">${gaugeChart(cov, '覆盖率', 'var(--primary)')}</div></div>` +
-    `<div class="chart-card chart-wide"><div class="chart-card-title">类别数量统计</div><div class="chart-bars">${bars}</div></div>` +
-    `<div class="chart-card chart-wide"><div class="chart-card-title">贴图级别对比</div><div class="chart-bars">${texBars}</div></div>` +
-    `<div class="chart-card chart-full"><div class="chart-card-title">算法指标</div><div class="rate-cards">${rateCards}</div></div>` +
-    `<div class="chart-card"><div class="chart-card-title">文件类型分布</div><div class="chart-donut-wrap">${typeDonut}</div><div class="chart-legend">${typeLegend}</div></div>` +
-    `<div class="chart-card"><div class="chart-card-title">大小分布直方图</div><div class="chart-bars">${sizeBars}</div></div>` +
-    `<div class="chart-card chart-full"><div class="chart-card-title">对比漏斗</div><div class="chart-funnel">${funnel}</div></div>` +
-    `<div class="chart-card chart-full"><div class="chart-card-title">文件夹分布（Top 12）</div><div class="chart-stacks">${folderBars}</div></div>` +
-    `<div class="chart-card chart-full"><div class="chart-card-title">差异热力图</div><div class="chart-heat">${heatHeader}${heatRows}</div></div>` +
+    `<div class="chart-card"><div class="chart-card-title">${t('render.chartStatusDist')}</div><div class="chart-donut-wrap">${donut}</div><div class="chart-legend">${legend}</div></div>` +
+    `<div class="chart-card"><div class="chart-card-title">${t('render.chartCovGauge')}</div><div class="chart-donut-wrap">${gaugeChart(cov, t('render.covTitle'), 'var(--primary)')}</div></div>` +
+    `<div class="chart-card chart-wide"><div class="chart-card-title">${t('render.chartCategoryCount')}</div><div class="chart-bars">${bars}</div></div>` +
+    `<div class="chart-card chart-wide"><div class="chart-card-title">${t('render.chartTexCompare')}</div><div class="chart-bars">${texBars}</div></div>` +
+    `<div class="chart-card chart-full"><div class="chart-card-title">${t('render.chartMetrics')}</div><div class="rate-cards">${rateCards}</div></div>` +
+    `<div class="chart-card"><div class="chart-card-title">${t('render.chartTypeDist')}</div><div class="chart-donut-wrap">${typeDonut}</div><div class="chart-legend">${typeLegend}</div></div>` +
+    `<div class="chart-card"><div class="chart-card-title">${t('render.chartSizeDist')}</div><div class="chart-bars">${sizeBars}</div></div>` +
+    `<div class="chart-card chart-full"><div class="chart-card-title">${t('render.chartFunnel')}</div><div class="chart-funnel">${funnel}</div></div>` +
+    `<div class="chart-card chart-full"><div class="chart-card-title">${t('render.chartFolderDist')}</div><div class="chart-stacks">${folderBars}</div></div>` +
+    `<div class="chart-card chart-full"><div class="chart-card-title">${t('render.chartHeatmap')}</div><div class="chart-heat">${heatHeader}${heatRows}</div></div>` +
     `</div>`
 
   el.querySelectorAll('.legend-drill').forEach(item => {

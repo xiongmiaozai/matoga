@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="8" viewBox="0 0 32 8" shape-rendering="crispEdges" preserveAspectRatio="none">
+  <!-- CC0 - minecraft-svg-icons: block divider (tileable dirt strip) -->
+  <rect width="32" height="8" fill="#8b6f47"/>
+  <rect width="32" height="2" y="0" fill="#6b5437"/>
+  <rect x="0"  y="2" width="16" height="6" fill="#8b6f47"/>
+  <rect x="16" y="2" width="16" height="6" fill="#7a5f3f"/>
+</svg>

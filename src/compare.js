@@ -7,6 +7,7 @@
 import { state, compareBtn2, hashChk, exportBtn, exportHtmlBtn, batchRightBtn, batchLeftBtn, STATUS_ORDER, ROLES } from './core.js'
 import { buildGroups, materialKind, singleKind, mainEntryOf, hasAny, leftRoles, rightRoles } from './utils.js'
 import { renderResult, renderSidebar } from './render.js'
+import { t } from './i18n.js'
 
 export function computeCounts() {
   const c = { have: 0, diff: 0, partial: 0, miss: 0, extra: 0, leftTex: 0, rightTex: 0, rightMatch: 0, pbrExtra: 0 }
@@ -68,7 +69,7 @@ export async function compare() {
       }
     }
     if (pairs.length) {
-      if (compareBtn2) { compareBtn2.disabled = true; compareBtn2.textContent = '对比中…' }
+      if (compareBtn2) { compareBtn2.disabled = true; compareBtn2.textContent = t('compare.comparing') }
       let idx = 0
       const N = Math.min(navigator.hardwareConcurrency || 4, 8)
       async function worker() {
@@ -79,7 +80,7 @@ export async function compare() {
         }
       }
       await Promise.all(Array.from({ length: N }, worker))
-      if (compareBtn2) { compareBtn2.disabled = false; compareBtn2.textContent = '开始对比' }
+      if (compareBtn2) { compareBtn2.disabled = false; compareBtn2.textContent = t('compare.start') }
       renderResult()
       if (state.selected) renderSidebar()
     }

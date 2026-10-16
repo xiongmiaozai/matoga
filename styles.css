@@ -416,7 +416,7 @@ body {
 .funnel-row:hover { filter: brightness(1.08); }
 
 .result-table-wrap { flex: 1; overflow: auto; padding: 0 18px 14px; }
-.result-table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+.result-table { width: auto; min-width: 100%; border-collapse: collapse; font-size: 13px; table-layout: auto; }
 .result-table th {
   position: sticky; top: 0; background: var(--panel-2); text-align: left; padding: 10px 12px;
   font-weight: 600; color: var(--text-muted); border-bottom: 1px solid var(--border); z-index: 1;
@@ -439,19 +439,24 @@ tr.row-extra td:first-child { border-left-color: var(--extra); }
 tr.sub-row td { background: var(--panel-2) !important; }
 tr.sub-row td:nth-child(3) { padding-left: 30px; color: var(--text-muted); }
 .sub-name { font-size: 12px; }
-.sub-actions { display: flex; gap: 4px; }
+.sub-actions { display: flex; gap: 4px; overflow: visible; white-space: normal; }
 .sub-replace-btn { padding: 2px 8px; border: 1px solid var(--primary); border-radius: var(--radius-sm); background: var(--primary); color: #fff; font-size: 11px; cursor: pointer; white-space: nowrap; }
 .sub-replace-btn:hover { background: var(--primary-hover); }
 .expand-arrow { display: inline-block; width: 14px; color: var(--text-muted); margin-right: 2px; }
 
-.col-status { width: 96px; }
-.col-preview { width: 96px; text-align: center; }
-.col-type { width: 72px; }
-.col-size { width: 140px; }
-.col-mtime { width: 132px; }
-.col-left, .col-right { width: 48px; text-align: center; }
+.col-status { width: 96px; min-width: 80px; }
+.col-preview { width: 96px; min-width: 80px; text-align: center; }
+.col-name { min-width: 200px; }
+.col-type { width: 72px; min-width: 60px; }
+.col-size { width: 140px; min-width: 90px; }
+.col-mtime { width: 132px; min-width: 100px; }
+.col-left, .col-right { width: 48px; min-width: 40px; text-align: center; }
 .preview-cell { text-align: center; }
 .size-diff { color: var(--warn); font-weight: 500; }
+.result-table th { position: relative; }
+.col-resize-handle { position: absolute; top: 0; right: -2px; width: 7px; height: 100%; cursor: col-resize; z-index: 2; user-select: none; }
+.col-resize-handle:hover, .col-resize-handle.dragging { background: var(--primary); opacity: .4; }
+.result-table.resizing { cursor: col-resize; user-select: none; }
 
 /* 状态圆点徽章 */
 .status-badge { display: inline-flex; align-items: center; gap: 7px; padding: 2px 4px; font-size: 12px; font-weight: 500; }
@@ -567,6 +572,22 @@ tr.sub-row td:nth-child(3) { padding-left: 30px; color: var(--text-muted); }
 .pv-diff-result { grid-column: 1 / -1; background: #1a1a1a; border-radius: var(--radius-md); padding: 10px; text-align: center; }
 .pv-diff-result canvas { max-width: 100%; border-radius: var(--radius-sm); }
 .pv-diff-info { color: #ccc; font-size: 11px; margin-top: 6px; }
+.pv-cell.pv-loading { position: relative; }
+.pv-cell.pv-loading::after {
+  content: ""; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,.35); border-radius: var(--radius-md);
+}
+.pv-cell.pv-loading::before {
+  content: ""; position: absolute; top: 50%; left: 50%; width: 20px; height: 20px; margin: -10px 0 0 -10px;
+  border: 2px solid rgba(255,255,255,.3); border-top-color: var(--primary); border-radius: 50%;
+  animation: pv-spin .7s linear infinite; z-index: 1;
+}
+@keyframes pv-spin { to { transform: rotate(360deg); } }
+.pv-cell.pv-error { display: flex; align-items: center; justify-content: center; background: rgba(230,74,74,.12); }
+.pv-cell.pv-error::after {
+  content: "⚠"; color: var(--danger); font-size: 20px; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+}
+.pv-cell.pv-error img { opacity: .15; }
 
 /* ── 3D 面板 ── */
 .material3d-container { flex: 1; min-height: 220px; position: relative; background: #1a1a2e; overflow: hidden; border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow-1), inset 0 0 0 1px rgba(255,255,255,.04); }
@@ -600,6 +621,19 @@ tr.sub-row td:nth-child(3) { padding-left: 30px; color: var(--text-muted); }
   transition: all .18s var(--ease); white-space: nowrap;
 }
 .m3d-segment button:hover { color: var(--text); }
+.m3d-sky-save-row { gap: 6px; }
+.m3d-sky-name-input { flex: 1; min-width: 0; height: 28px; padding: 0 8px; font-size: 12px; border-radius: var(--radius-sm); border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.06); color: rgba(255,255,255,.7); outline: none; transition: border-color .15s var(--ease); }
+.m3d-sky-name-input:focus { border-color: var(--primary); color: #fff; }
+.m3d-sky-name-input::placeholder { color: rgba(255,255,255,.3); }
+.m3d-sky-save-btn { height: 28px; padding: 0 12px; font-size: 12px; border: none; border-radius: var(--radius-sm); background: var(--primary); color: #fff; cursor: pointer; transition: opacity .15s var(--ease); white-space: nowrap; }
+.m3d-sky-save-btn:hover { opacity: .85; }
+.m3d-sky-custom-list { flex-direction: column; gap: 4px; align-items: stretch; }
+.m3d-sky-custom-item { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: var(--radius-sm); background: rgba(255,255,255,.04); transition: background .15s var(--ease); }
+.m3d-sky-custom-item:hover { background: rgba(255,255,255,.08); }
+.m3d-sky-custom-apply { flex: 1; min-width: 0; border: none; background: transparent; color: rgba(255,255,255,.7); font-size: 12px; cursor: pointer; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m3d-sky-custom-apply:hover { color: #fff; }
+.m3d-sky-custom-del { width: 22px; height: 22px; flex-shrink: 0; border: none; border-radius: 5px; background: rgba(255,255,255,.08); color: rgba(255,255,255,.4); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 13px; transition: all .15s var(--ease); }
+.m3d-sky-custom-del:hover { background: rgba(255,80,80,.3); color: #ff8080; }
 .m3d-segment button.active { background: var(--panel-bg); color: var(--primary); box-shadow: var(--shadow-1); }
 :root[data-theme="dark"] .m3d-segment button.active { background: var(--panel-3); }
 .m3d-slider { display: flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: 11px; flex: 1; min-width: 140px; }
@@ -640,7 +674,7 @@ input[type="color"].m3d-color-input, #m3dSkyTint {
 .m3d-hud-btn { width: 30px; height: 30px; border-radius: var(--radius-md); border: none; background: rgba(255,255,255,.12); color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all .15s var(--ease); backdrop-filter: blur(8px); }
 .m3d-hud-btn:hover { background: rgba(255,255,255,.22); }
 .m3d-hud-btn.active { background: var(--primary); }
-.m3d-params-overlay { position: absolute; top: 46px; left: 8px; right: 8px; z-index: 16; max-height: calc(100% - 60px); overflow-y: auto; background: rgba(20,20,30,.82); backdrop-filter: blur(16px) saturate(150%); border-radius: 12px; border: 1px solid rgba(255,255,255,.1); box-shadow: 0 8px 32px rgba(0,0,0,.4); transform: translateY(calc(-100% - 16px)); opacity: 0; transition: transform .25s var(--ease), opacity .25s var(--ease); pointer-events: none; }
+.m3d-params-overlay { position: absolute; bottom: 10px; left: 8px; right: 8px; z-index: 16; max-height: calc(100% - 60px); overflow-y: auto; background: rgba(20,20,30,.82); backdrop-filter: blur(16px) saturate(150%); border-radius: 12px; border: 1px solid rgba(255,255,255,.1); box-shadow: 0 8px 32px rgba(0,0,0,.4); transform: translateY(calc(100% + 16px)); opacity: 0; transition: transform .25s var(--ease), opacity .25s var(--ease); pointer-events: none; }
 .m3d-params-overlay.show { transform: translateY(0); opacity: 1; pointer-events: auto; }
 .m3d-params-close { position: absolute; top: 6px; right: 6px; z-index: 2; width: 26px; height: 26px; border-radius: 7px; border: none; background: rgba(255,255,255,.1); color: rgba(255,255,255,.7); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all .15s var(--ease); }
 .m3d-params-close:hover { background: rgba(255,255,255,.22); color: #fff; }

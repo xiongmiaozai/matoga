@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { t as _t } from './i18n.js'
+
 export const state = {
   leftPath: null,
   rightPath: null,
@@ -58,9 +60,20 @@ export const rightCard = $('rightCard')
 export const IMG_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'ico', 'tif', 'tiff', 'avif'])
 export const TEX_SUFFIXES = [['_n', 'normal'], ['_s', 'specular']]
 export const ROLES = ['main', 'normal', 'specular']
-export const ROLE_LABEL = { main: '主贴图', normal: '法线 _n', specular: '高光 _s' }
 export const STATUS_ORDER = { miss: 0, partial: 1, diff: 2, extra: 3, have: 4 }
-export const KIND_TEXT = { have: '✓ 一致', diff: '≈ 内容不同', partial: '◐ 部分缺失', miss: '✗ 右侧缺失', extra: '＋ 右侧多余' }
+
+export function roleLabel(role) {
+  const labels = { main: 'preview.roleMain', normal: 'preview.roleNormal', specular: 'preview.roleSpecular' }
+  return _t(labels[role] || role)
+}
+
+export function kindText(kind) {
+  const labels = { have: 'status.have', diff: 'status.diff', partial: 'status.partial', miss: 'status.miss', extra: 'status.extra' }
+  return _t(labels[kind] || kind)
+}
+
+export const ROLE_LABEL = new Proxy({}, { get: (_, k) => roleLabel(k) })
+export const KIND_TEXT = new Proxy({}, { get: (_, k) => kindText(k) })
 
 export function showToast(msg) {
   const t = $('toast')
