@@ -44,6 +44,7 @@
     <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></symbol>
     <symbol id="i-pie" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.21A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></symbol>
     <symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
   </svg>
 
   <header class="app-header">
@@ -57,9 +58,9 @@
       <input type="search" id="searchInput" placeholder="搜索…  ⌘K" />
     </div>
     <div class="header-actions">
-      <button id="compareBtn" class="icon-btn icon-btn-accent" title="开始对比" disabled><svg class="ico"><use href="#i-play"/></svg></button>
       <button id="swapBtn" class="icon-btn" title="交换左右"><svg class="ico"><use href="#i-swap"/></svg></button>
       <button id="themeToggle" class="icon-btn" title="切换深色/浅色模式"><svg class="ico"><use href="#i-moon"/></svg></button>
+      <button id="settingsBtn" class="icon-btn" title="设置"><svg class="ico"><use href="#i-settings"/></svg></button>
     </div>
   </header>
 
@@ -103,29 +104,6 @@
           <label class="opt-text">自定义忽略<input type="text" id="ignoreInput" class="input-text" placeholder="*.tmp,*.bak" /></label>
         </div>
 
-        <div class="panel-card panel-card-collapsible collapsed">
-          <div class="panel-card-title" data-toggle-card><svg class="ico ico-sm"><use href="#i-folder"/></svg>路径设置<svg class="ico ico-sm ico-chev-right"><use href="#i-chevron-down"/></svg></div>
-          <div class="panel-card-body">
-            <div class="path-setting">
-              <span class="path-setting-label">HDRI 预设</span>
-              <div class="path-setting-row">
-                <input type="text" id="hdriPresetPathInput" class="input-text" placeholder="路径" />
-                <button id="hdriPresetPickBtn" class="btn btn-ghost btn-sm">选</button>
-                <button id="hdriPresetCreateBtn" class="btn btn-ghost btn-sm">建</button>
-                <button id="hdriPresetOpenBtn" class="btn btn-ghost btn-sm">开</button>
-              </div>
-            </div>
-            <div class="path-setting">
-              <span class="path-setting-label">MC 材质包</span>
-              <div class="path-setting-row">
-                <input type="text" id="mcPacksPathInput" class="input-text" placeholder="路径" />
-                <button id="mcPacksPickBtn" class="btn btn-ghost btn-sm">选</button>
-                <button id="mcPacksCreateBtn" class="btn btn-ghost btn-sm">建</button>
-                <button id="mcPacksOpenBtn" class="btn btn-ghost btn-sm">开</button>
-              </div>
-            </div>
-          </div>
-        </div>
 
         <div class="panel-card">
           <div class="panel-card-title"><svg class="ico ico-sm"><use href="#i-swap"/></svg>操作</div>
@@ -207,6 +185,10 @@
               </div>
               <label class="pv-zoom"><span>缩放</span><input type="range" id="pvZoom" min="50" max="300" step="10" value="100" /><span class="pv-zoom-val" id="pvZoomVal">100%</span></label>
               <label class="pv-split-toggle"><input type="checkbox" id="pvSplit" /> 对比滑块</label>
+              <div class="m3d-segment" id="pvFilterSeg">
+                <button class="active" data-pvf="smooth">平滑</button>
+                <button data-pvf="pixel">像素</button>
+              </div>
             </div>
             <div class="preview-panel" id="previewPanel">
               <div class="pv-hint">点击表格中的材质查看预览</div>
@@ -259,10 +241,26 @@
                     </div>
                   </div>
                   <div class="m3d-tab-pane" data-pane="parallax">
-                    <div class="m3d-height-status" id="m3dHeightStatus">未检测</div>
+                    <div class="m3d-parallax-status">
+                      <div class="m3d-parallax-status-bar"><div class="m3d-parallax-status-fill" id="m3dParallaxStatusFill"></div></div>
+                      <div class="m3d-height-status" id="m3dHeightStatus">未检测</div>
+                    </div>
+                    <div class="m3d-ctrl-group">
+                      <label class="m3d-checkbox"><input type="checkbox" id="m3dParallaxEnable" checked /> 启用视差</label>
+                    </div>
+                    <div class="m3d-ctrl-group">
+                      <span class="m3d-light-label">算法</span>
+                      <div class="m3d-segment" id="m3dParallaxModeSeg">
+                        <button data-mode="0">基础</button>
+                        <button data-mode="1">陡峭</button>
+                        <button class="active" data-mode="2">POM</button>
+                        <button data-mode="3">Relief</button>
+                      </div>
+                    </div>
                     <div class="m3d-ctrl-group">
                       <label class="m3d-slider"><span>视差强度</span><input type="range" id="m3dParallax" min="0" max="1" step="0.01" value="0.05" /><span class="m3d-val" id="m3dParallaxVal">0.05</span></label>
                       <label class="m3d-slider"><span>视差步数</span><input type="range" id="m3dParallaxSteps" min="8" max="64" step="1" value="32" /><span class="m3d-val" id="m3dParallaxStepsVal">32</span></label>
+                      <label class="m3d-checkbox"><input type="checkbox" id="m3dParallaxAdaptive" checked />自适应层数</label>
                     </div>
                   </div>
                   <div class="m3d-tab-pane" data-pane="opacity">
@@ -312,10 +310,23 @@
                       <button id="m3dHdrBtn" class="btn btn-ghost btn-sm"><svg class="ico ico-sm"><use href="#i-globe"/></svg> 加载HDR环境</button>
                       <button id="m3dHdrClearBtn" class="btn btn-ghost btn-sm">清除HDR</button>
                     </div>
+                    <div class="m3d-ctrl-group">
+                      <span class="m3d-light-label">纹理过滤</span>
+                      <div class="m3d-segment" id="m3dFilterSeg">
+                        <button data-filter="nearest">邻近</button>
+                        <button data-filter="bilinear">双线性</button>
+                        <button class="active" data-filter="trilinear">三线性</button>
+                        <button data-filter="anisotropic">各向异性</button>
+                      </div>
+                    </div>
+                    <div class="m3d-ctrl-group">
+                      <label class="m3d-slider"><span>各向异性</span><input type="range" id="m3dAniso" min="1" max="16" step="1" value="4" /><span class="m3d-val" id="m3dAnisoVal">4</span></label>
+                      <label class="m3d-checkbox"><input type="checkbox" id="m3dMipmaps" checked />Mipmap</label>
+                    </div>
                   </div>
                 </div>
               </div>
-              <div class="m3d-resizer" id="m3dResizer" title="拖拽调整 3D 预览高度"></div>
+              <div class="m3d-resizer" id="m3dResizer" title="上下拖拽调整大小 · 双击重置"></div>
             </div>
           </div>
         </div>
@@ -341,6 +352,45 @@
         </div>
       </div>
     </aside>
+  </div>
+
+  <div id="settingsDrawer" class="settings-drawer">
+    <div class="settings-head">
+      <span class="settings-title">设置</span>
+      <button id="settingsClose" class="icon-btn" title="关闭"><svg class="ico"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="settings-body">
+      <div class="settings-section">
+        <div class="settings-section-title">外观</div>
+        <label class="opt"><input type="checkbox" id="settingThemeChk" /><span>深色模式</span></label>
+      </div>
+      <div class="settings-section">
+        <div class="settings-section-title">路径</div>
+        <div class="path-setting">
+          <span class="path-setting-label">HDRI 预设</span>
+          <div class="path-setting-row">
+            <input type="text" id="hdriPresetPathInput" class="input-text" placeholder="路径" />
+            <button id="hdriPresetPickBtn" class="btn btn-ghost btn-sm">选</button>
+            <button id="hdriPresetCreateBtn" class="btn btn-ghost btn-sm">建</button>
+            <button id="hdriPresetOpenBtn" class="btn btn-ghost btn-sm">开</button>
+          </div>
+        </div>
+        <div class="path-setting">
+          <span class="path-setting-label">MC 材质包</span>
+          <div class="path-setting-row">
+            <input type="text" id="mcPacksPathInput" class="input-text" placeholder="路径" />
+            <button id="mcPacksPickBtn" class="btn btn-ghost btn-sm">选</button>
+            <button id="mcPacksCreateBtn" class="btn btn-ghost btn-sm">建</button>
+            <button id="mcPacksOpenBtn" class="btn btn-ghost btn-sm">开</button>
+          </div>
+        </div>
+      </div>
+      <div class="settings-section">
+        <div class="settings-section-title">关于</div>
+        <div class="detail-row"><span class="detail-label">版本</span><span>v1.0</span></div>
+        <div class="detail-row"><span class="detail-label">材质贴图对比工具</span></div>
+      </div>
+    </div>
   </div>
 
   <div id="toast" class="toast"></div>

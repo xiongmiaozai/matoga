@@ -27,7 +27,7 @@ export const $ = (id) => document.getElementById(id)
 
 export const leftBtn = $('leftBtn')
 export const rightBtn = $('rightBtn')
-export const compareBtn = $('compareBtn')
+
 export const exportBtn = $('exportBtn')
 export const exportHtmlBtn = $('exportHtmlBtn')
 export const swapBtn = $('swapBtn')
@@ -64,6 +64,7 @@ export const KIND_TEXT = { have: '✓ 一致', diff: '≈ 内容不同', partial
 
 export function showToast(msg) {
   const t = $('toast')
+  if (!t) return
   t.textContent = msg
   t.classList.add('show')
   clearTimeout(showToast._timer)

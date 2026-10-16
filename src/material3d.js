@@ -9,6 +9,7 @@ import { fileUrl, isImageFile } from './utils.js'
 import { HDRLoader } from './hdr-loader.js'
 
 let scene, camera, renderer, animationId, pmrem, envTexture, pmremTexture
+let isWebGL2 = false
 
 function showLoading(text) { const el = document.getElementById('m3dLoading'); if (!el) return; const t = el.querySelector('.m3d-loading-text'); if (t && text) t.textContent = text; el.classList.add('show') }
 function hideLoading() { const el = document.getElementById('m3dLoading'); if (el) el.classList.remove('show') }
@@ -26,6 +27,9 @@ let heightDetectCallback = null
 let sourceSide = 'dual'
 let parallaxScale = 0.05
 let parallaxSteps = 32.0
+let parallaxMode = 2.0
+let parallaxAdaptive = 1.0
+let parallaxEnabled = true
 let currentLightPreset = 'studio'
 let groundVisible = true
 let envIntensity = 1.0
@@ -35,6 +39,10 @@ let opacityValue = 1.0
 let transmissionValue = 0.0
 let iorValue = 1.5
 let clearcoatValue = 0.0
+let textureFilter = 'trilinear'
+let mipmapsEnabled = true
+let anisotropyLevel = 4
+let maxAnisotropy = 1
 
 let rotX = 0, rotY = 0, targetRotX = 0, targetRotY = 0
 let isDragging = false, lastX = 0, lastY = 0
@@ -281,29 +289,47 @@ function extractHeight(image) {
   const ctx = c.getContext('2d', { willReadFrequently: true }); ctx.drawImage(image, 0, 0)
   const imageData = ctx.getImageData(0, 0, c.width, c.height), d = imageData.data
   let minA = 255, maxA = 0
-  for (let i = 3; i < d.length; i += 4) { if (d[i] < minA) minA = d[i]; if (d[i] > maxA) maxA = d[i] }
+  const buckets = new Set()
+  for (let i = 3; i < d.length; i += 4) { if (d[i] < minA) minA = d[i]; if (d[i] > maxA) maxA = d[i]; if (buckets.size < 8) buckets.add(d[i]) }
   const range = maxA - minA
-  if (range < 2) return null
+  if (range < 1 || buckets.size <= 2) return null
   for (let i = 0; i < d.length; i += 4) { const v = Math.round((d[i + 3] - minA) / range * 255); d[i] = v; d[i + 1] = v; d[i + 2] = v; d[i + 3] = 255 }
   ctx.putImageData(imageData, 0, 0)
   const tex = new THREE.CanvasTexture(c); tex.wrapS = tex.wrapT = THREE.RepeatWrapping; return tex
 }
 
 function extractHeightFromNormal(image) {
-  const w = imgW(image), h = imgH(image)
+  const maxDim = 256
+  const ow = imgW(image), oh = imgH(image)
+  const sc = Math.min(1, maxDim / Math.max(ow, oh))
+  const w = Math.max(1, Math.round(ow * sc)), h = Math.max(1, Math.round(oh * sc))
   const c = document.createElement('canvas'); c.width = w; c.height = h
-  const ctx = c.getContext('2d', { willReadFrequently: true }); ctx.drawImage(image, 0, 0)
+  const ctx = c.getContext('2d', { willReadFrequently: true })
+  ctx.drawImage(image, 0, 0, w, h)
   const src = ctx.getImageData(0, 0, w, h).data
   const n = w * h
   const gx = new Float32Array(n), gy = new Float32Array(n)
   for (let i = 0; i < n; i++) { const j = i * 4; gx[i] = (src[j] - 128) / 127.5; gy[i] = (src[j + 1] - 128) / 127.5 }
-  const hRow = new Float32Array(n)
-  for (let y = 0; y < h; y++) { let acc = 0; const row = y * w; for (let x = 0; x < w; x++) { acc += gx[row + x]; hRow[row + x] = acc } }
-  const hCol = new Float32Array(n)
-  for (let x = 0; x < w; x++) { let acc = 0; for (let y = 0; y < h; y++) { acc += gy[y * w + x]; hCol[y * w + x] = acc } }
-  let minH = Infinity, maxH = -Infinity
   const height = new Float32Array(n)
-  for (let i = 0; i < n; i++) { height[i] = hRow[i] + hCol[i]; if (height[i] < minH) minH = height[i]; if (height[i] > maxH) maxH = height[i] }
+  for (let y = 0; y < h; y++) {
+    const row = y * w
+    let rowSum = 0
+    for (let x = 0; x < w; x++) rowSum += gx[row + x]
+    const mean = rowSum / w
+    for (let x = 1; x < w; x++) height[row + x] = height[row + x - 1] + gx[row + x] - mean
+  }
+  const rowOff = new Float32Array(h)
+  for (let y = 1; y < h; y++) {
+    const r1 = y * w
+    let diff = 0
+    for (let x = 0; x < w; x++) diff += gy[r1 + x]
+    rowOff[y] = rowOff[y - 1] + diff / w
+  }
+  let minH = Infinity, maxH = -Infinity
+  for (let y = 0; y < h; y++) {
+    const row = y * w, off = rowOff[y]
+    for (let x = 0; x < w; x++) { const v = height[row + x] + off; height[row + x] = v; if (v < minH) minH = v; if (v > maxH) maxH = v }
+  }
   const range = maxH - minH
   if (range < 1e-4) return null
   const out = ctx.createImageData(w, h), od = out.data
@@ -375,18 +401,56 @@ function applyOpacityMode(material) {
   material.needsUpdate = true
 }
 
+function applyTextureFilter(tex) {
+  if (!tex) return
+  const useMipmap = mipmapsEnabled && (textureFilter === 'trilinear' || textureFilter === 'anisotropic')
+  tex.generateMipmaps = useMipmap
+  if (textureFilter === 'nearest') {
+    tex.magFilter = THREE.NearestFilter
+    tex.minFilter = useMipmap ? THREE.NearestMipmapNearestFilter : THREE.NearestFilter
+  } else {
+    tex.magFilter = THREE.LinearFilter
+    tex.minFilter = useMipmap ? THREE.LinearMipmapLinearFilter : THREE.LinearFilter
+  }
+  tex.anisotropy = (textureFilter === 'anisotropic' && useMipmap) ? Math.min(anisotropyLevel, maxAnisotropy) : 1
+  tex.needsUpdate = true
+}
+
+function collectMaterialTextures(m) {
+  const list = []
+  if (m.map) list.push(m.map)
+  if (m.normalMap) list.push(m.normalMap)
+  if (m.roughnessMap) list.push(m.roughnessMap)
+  if (m.metalnessMap) list.push(m.metalnessMap)
+  if (m.emissiveMap) list.push(m.emissiveMap)
+  if (m.userData.shaderRefs && m.userData.shaderRefs.heightMap && m.userData.shaderRefs.heightMap.value) list.push(m.userData.shaderRefs.heightMap.value)
+  return list
+}
+
+function applyFilterToAllTextures() {
+  if (!initialized) return
+  for (const mesh of [meshLeft, meshRight]) {
+    if (!mesh || !mesh.material) continue
+    for (const tex of collectMaterialTextures(mesh.material)) applyTextureFilter(tex)
+    mesh.material.needsUpdate = true
+  }
+}
+
 function makeMaterial() {
   const mat = new THREE.MeshPhysicalMaterial({ color: 0x888888, roughness: 0.5, metalness: 0.1, envMapIntensity: 1.0, emissive: new THREE.Color(0x000000), emissiveIntensity: 1.0, transmission: 0.0, ior: 1.5, thickness: 0.5, clearcoat: 0.0, clearcoatRoughness: 0.0 })
   mat.userData.shaderRefs = null
+  mat.userData.pendingHeightMap = null
   mat.onBeforeCompile = (shader) => {
     const prev = mat.userData.shaderRefs
-    shader.uniforms.heightMap = { value: prev ? prev.heightMap.value : null }
-    shader.uniforms.hasHeightMap = { value: prev ? prev.hasHeightMap.value : 0.0 }
+    shader.uniforms.heightMap = { value: prev ? prev.heightMap.value : mat.userData.pendingHeightMap }
+    shader.uniforms.hasHeightMap = { value: prev ? prev.hasHeightMap.value : (mat.userData.pendingHeightMap && parallaxEnabled ? 1.0 : 0.0) }
     shader.uniforms.parallaxScale = { value: parallaxScale }
     shader.uniforms.parallaxSteps = { value: parallaxSteps }
+    shader.uniforms.parallaxMode = { value: parallaxMode }
+    shader.uniforms.parallaxAdaptive = { value: parallaxAdaptive }
     mat.userData.shaderRefs = shader.uniforms
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', 'uniform sampler2D heightMap;\nuniform float hasHeightMap;\nuniform float parallaxScale;\nuniform float parallaxSteps;\n#include <common>')
+      .replace('#include <common>', 'uniform sampler2D heightMap;\nuniform float hasHeightMap;\nuniform float parallaxScale;\nuniform float parallaxSteps;\nuniform float parallaxMode;\nuniform float parallaxAdaptive;\n#include <common>')
       .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
         vec2 parallaxUv;
         #if defined(USE_MAP)
@@ -401,6 +465,7 @@ function makeMaterial() {
         if (parallaxScale > 0.0 && hasHeightMap > 0.5) {
           vec3 viewDir = normalize(vViewPosition);
           vec2 P;
+          float viewDotN;
           #if defined(USE_TANGENT)
             vec3 t = normalize( vTangent );
             vec3 n = normalize( vNormal );
@@ -409,30 +474,66 @@ function makeMaterial() {
             tView.x = dot(t, viewDir);
             tView.y = dot(b, viewDir);
             tView.z = dot(n, viewDir);
+            viewDotN = abs(tView.z);
             P = tView.xy / max(tView.z, 0.001) * parallaxScale;
           #else
+            viewDotN = abs(viewDir.z);
             P = viewDir.xy / max(viewDir.z, 0.001) * parallaxScale;
           #endif
           float Plen = length(P);
           float maxOffset = 0.08;
           if (Plen > maxOffset) P *= maxOffset / Plen;
-          float numLayers = parallaxSteps;
-          float layerDepth = 1.0 / numLayers;
-          float currentLayerDepth = 0.0;
-          vec2 deltaTexCoords = P / numLayers;
-          vec2 currentTexCoords = parallaxUv;
-          float currentDepthValue = texture2D(heightMap, currentTexCoords).r;
-          for (int i = 0; i < 64; i++) {
-            if (currentLayerDepth >= currentDepthValue) break;
-            currentTexCoords -= deltaTexCoords;
-            currentDepthValue = texture2D(heightMap, currentTexCoords).r;
-            currentLayerDepth += layerDepth;
+          float uvFade = 1.0;
+          ${isWebGL2 ? 'uvFade = 1.0 - smoothstep(0.01, 0.08, length(fwidth(parallaxUv)));' : ''}
+          P *= uvFade;
+          if (parallaxMode < 0.5) {
+            float height = texture2D(heightMap, parallaxUv).r;
+            parallaxUv = parallaxUv - P * height;
+          } else {
+            float numLayers = parallaxSteps;
+            if (parallaxAdaptive > 0.5) {
+              numLayers = mix(parallaxSteps, max(parallaxSteps * 0.3, 4.0), viewDotN);
+            }
+            numLayers = clamp(numLayers, 4.0, 64.0);
+            float layerDepth = 1.0 / numLayers;
+            float currentLayerDepth = 0.0;
+            vec2 deltaTexCoords = P / numLayers;
+            vec2 currentTexCoords = parallaxUv;
+            float currentDepthValue = texture2D(heightMap, currentTexCoords).r;
+            for (int i = 0; i < 64; i++) {
+              if (currentLayerDepth >= currentDepthValue) break;
+              currentTexCoords -= deltaTexCoords;
+              currentDepthValue = texture2D(heightMap, currentTexCoords).r;
+              currentLayerDepth += layerDepth;
+            }
+            if (parallaxMode < 1.5) {
+              parallaxUv = currentTexCoords;
+            } else if (parallaxMode < 2.5) {
+              vec2 prevTexCoords = currentTexCoords + deltaTexCoords;
+              float beforeDepth = texture2D(heightMap, prevTexCoords).r - currentLayerDepth + layerDepth;
+              float afterDepth = currentDepthValue - currentLayerDepth;
+              float weight = afterDepth / (afterDepth - beforeDepth);
+              parallaxUv = mix(currentTexCoords, prevTexCoords, weight);
+            } else {
+              vec2 prevTexCoords = currentTexCoords + deltaTexCoords;
+              float prevLayerDepth = currentLayerDepth - layerDepth;
+              for (int j = 0; j < 5; j++) {
+                deltaTexCoords *= 0.5;
+                layerDepth *= 0.5;
+                vec2 midTexCoords = prevTexCoords - deltaTexCoords;
+                float midLayerDepth = prevLayerDepth + layerDepth;
+                float midDepthValue = texture2D(heightMap, midTexCoords).r;
+                if (midLayerDepth < midDepthValue) {
+                  prevTexCoords = midTexCoords;
+                  prevLayerDepth = midLayerDepth;
+                } else {
+                  currentTexCoords = midTexCoords;
+                  currentLayerDepth = midLayerDepth;
+                }
+              }
+              parallaxUv = prevTexCoords;
+            }
           }
-          vec2 prevTexCoords = currentTexCoords + deltaTexCoords;
-          float beforeDepth = texture2D(heightMap, prevTexCoords).r - currentLayerDepth + layerDepth;
-          float afterDepth = currentDepthValue - currentLayerDepth;
-          float weight = afterDepth / (afterDepth - beforeDepth);
-          parallaxUv = mix(currentTexCoords, prevTexCoords, weight);
         }`)
     shader.fragmentShader = parseIncludes(shader.fragmentShader)
     shader.fragmentShader = shader.fragmentShader
@@ -455,9 +556,11 @@ export function initMaterial3D(containerEl) {
   scene = new THREE.Scene(); scene.background = new THREE.Color(LIGHT_PRESETS.studio.bg)
   camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100); camera.position.set(0, 0.5, camDist)
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
+  isWebGL2 = renderer.capabilities.isWebGL2
+  maxAnisotropy = renderer.capabilities.getMaxAnisotropy() || 1
   renderer.setSize(width, height); renderer.setPixelRatio(window.devicePixelRatio)
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0
-  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap
   container.appendChild(renderer.domElement)
   pmrem = new THREE.PMREMGenerator(renderer)
   lightGroup = new THREE.Group(); scene.add(lightGroup)
@@ -527,8 +630,11 @@ export function setMaterialFormat(fmt) { materialFormat = fmt }
 export function setFormatDetectCallback(cb) { formatDetectCallback = cb }
 export function setHeightDetectCallback(cb) { heightDetectCallback = cb }
 export function setSourceSide(side) { sourceSide = side; applySourceSide() }
-export function setParallaxScale(val) { parallaxScale = val; if (initialized) { for (const m of [meshLeft, meshRight]) { if (m && m.userData.shaderRefs) m.userData.shaderRefs.parallaxScale.value = val } } }
-export function setParallaxSteps(val) { parallaxSteps = val; if (initialized) { for (const m of [meshLeft, meshRight]) { if (m && m.userData.shaderRefs) m.userData.shaderRefs.parallaxSteps.value = val } } }
+export function setParallaxScale(val) { parallaxScale = val; if (initialized) { for (const m of [meshLeft, meshRight]) { if (m && m.material && m.material.userData.shaderRefs) m.material.userData.shaderRefs.parallaxScale.value = val } } }
+export function setParallaxSteps(val) { parallaxSteps = val; if (initialized) { for (const m of [meshLeft, meshRight]) { if (m && m.material && m.material.userData.shaderRefs) m.material.userData.shaderRefs.parallaxSteps.value = val } } }
+export function setParallaxMode(val) { parallaxMode = val; if (initialized) { for (const m of [meshLeft, meshRight]) { if (m && m.material && m.material.userData.shaderRefs) m.material.userData.shaderRefs.parallaxMode.value = val } } }
+export function setParallaxAdaptive(val) { parallaxAdaptive = val; if (initialized) { for (const m of [meshLeft, meshRight]) { if (m && m.material && m.material.userData.shaderRefs) m.material.userData.shaderRefs.parallaxAdaptive.value = val } } }
+export function setParallaxEnabled(on) { parallaxEnabled = on; if (initialized) { for (const m of [meshLeft, meshRight]) { if (m && m.material && m.material.userData.shaderRefs) { const ht = m.material.userData.shaderRefs.heightMap.value; m.material.userData.shaderRefs.hasHeightMap.value = (ht && on) ? 1.0 : 0.0; if (ht) { ht.needsUpdate = true; m.material.needsUpdate = true } } } } }
 export function setLightPreset(presetKey) { applyLightPreset(presetKey) }
 export function setEnvIntensity(val) { envIntensity = val; if (initialized) { for (const m of [meshLeft, meshRight]) { if (m) m.material.envMapIntensity = val } } }
 export function setExposure(val) { if (initialized && renderer) renderer.toneMappingExposure = val }
@@ -540,6 +646,10 @@ export function setOpacity(val) { opacityValue = val; if (initialized) { for (co
 export function setTransmission(val) { transmissionValue = val; if (initialized) { for (const m of [meshLeft, meshRight]) { if (m) { m.material.transmission = val; if (val > 0) { m.material.transparent = true; m.material.alphaTest = 0 } m.material.needsUpdate = true } } } }
 export function setIOR(val) { iorValue = val; if (initialized) { for (const m of [meshLeft, meshRight]) { if (m) m.material.ior = val } } }
 export function setClearcoat(val) { clearcoatValue = val; if (initialized) { for (const m of [meshLeft, meshRight]) { if (m) m.material.clearcoat = val } } }
+export function setTextureFilter(mode) { textureFilter = mode; applyFilterToAllTextures() }
+export function setMipmapsEnabled(on) { mipmapsEnabled = on; applyFilterToAllTextures() }
+export function setAnisotropyLevel(val) { anisotropyLevel = Math.max(1, Math.round(val)); applyFilterToAllTextures() }
+export function getMaxAnisotropy() { return maxAnisotropy }
 export function screenshot() {
   if (!initialized || !renderer) return
   renderer.render(scene, camera)
@@ -570,9 +680,10 @@ export function clearHDREnv() {
   if (hdrTexture) { hdrTexture.dispose(); hdrTexture = null }
   applyLightPreset(currentLightPreset)
 }
+export function getCurrentLightPreset() { return currentLightPreset }
 
 function disposeTexture(tex) { if (tex && tex.dispose) tex.dispose() }
-function disposeAllMaterialTextures(m) { disposeTexture(m.map); disposeTexture(m.normalMap); disposeTexture(m.roughnessMap); disposeTexture(m.metalnessMap); disposeTexture(m.emissiveMap); if (m.userData.shaderRefs) { disposeTexture(m.userData.shaderRefs.heightMap.value); m.userData.shaderRefs.heightMap.value = null; m.userData.shaderRefs.hasHeightMap.value = 0.0 } m.map = null; m.normalMap = null; m.roughnessMap = null; m.metalnessMap = null; m.emissiveMap = null }
+function disposeAllMaterialTextures(m) { disposeTexture(m.map); disposeTexture(m.normalMap); disposeTexture(m.roughnessMap); disposeTexture(m.metalnessMap); disposeTexture(m.emissiveMap); if (m.userData.shaderRefs) { disposeTexture(m.userData.shaderRefs.heightMap.value); m.userData.shaderRefs.heightMap.value = null; m.userData.shaderRefs.hasHeightMap.value = 0.0 } disposeTexture(m.userData.pendingHeightMap); m.userData.pendingHeightMap = null; m.map = null; m.normalMap = null; m.roughnessMap = null; m.metalnessMap = null; m.emissiveMap = null }
 
 function applyTexturesToMesh(mesh, group, side) {
   const material = mesh.material
@@ -584,7 +695,7 @@ function applyTexturesToMesh(mesh, group, side) {
   const mainEntry = getEntry('main'), normalEntry = getEntry('normal'), specEntry = getEntry('specular')
 
   if (mainEntry) {
-    loader.load(fileUrl(mainEntry.fullPath), (tex) => { tex.colorSpace = THREE.SRGBColorSpace; tex.wrapS = tex.wrapT = THREE.RepeatWrapping; disposeTexture(material.map); material.map = tex; material.color.set(0xffffff); const mi = new Image(); mi.onload = () => { const w = Math.min(mi.naturalWidth, 64), h = Math.min(mi.naturalHeight, 64); const tc = document.createElement('canvas'); tc.width = w; tc.height = h; const tctx = tc.getContext('2d', { willReadFrequently: true }); tctx.drawImage(mi, 0, 0, w, h); const td = tctx.getImageData(0, 0, w, h).data; let hasAlpha = false, semiCount = 0, total = 0; for (let i = 3; i < td.length; i += 4) { total++; const a = td[i]; if (a < 250) hasAlpha = true; if (a > 5 && a < 250) semiCount++ } material.userData.hasAlpha = hasAlpha; material.userData.hasSemiTrans = semiCount / total > 0.02; applyOpacityMode(material) }; mi.src = fileUrl(mainEntry.fullPath); material.needsUpdate = true })
+    loader.load(fileUrl(mainEntry.fullPath), (tex) => { tex.colorSpace = THREE.SRGBColorSpace; tex.wrapS = tex.wrapT = THREE.RepeatWrapping; disposeTexture(material.map); material.map = tex; applyTextureFilter(tex); material.color.set(0xffffff); const mi = new Image(); mi.onload = () => { const w = Math.min(mi.naturalWidth, 64), h = Math.min(mi.naturalHeight, 64); const tc = document.createElement('canvas'); tc.width = w; tc.height = h; const tctx = tc.getContext('2d', { willReadFrequently: true }); tctx.drawImage(mi, 0, 0, w, h); const td = tctx.getImageData(0, 0, w, h).data; let hasAlpha = false, semiCount = 0, total = 0; for (let i = 3; i < td.length; i += 4) { total++; const a = td[i]; if (a < 250) hasAlpha = true; if (a > 5 && a < 250) semiCount++ } material.userData.hasAlpha = hasAlpha; material.userData.hasSemiTrans = semiCount / total > 0.02; applyOpacityMode(material) }; mi.src = fileUrl(mainEntry.fullPath); material.needsUpdate = true })
   } else { material.color.set(0x444466); material.userData.hasAlpha = false; material.userData.hasSemiTrans = false; applyOpacityMode(material) }
 
   if (normalEntry) {
@@ -594,26 +705,25 @@ function applyTexturesToMesh(mesh, group, side) {
       const sctx = sc.getContext('2d', { willReadFrequently: true }); sctx.drawImage(source, 0, 0)
       const src = sc
       if (side === 'left') showLoading('处理法线贴图...')
+      if (side === 'left' && heightDetectCallback) heightDetectCallback('loading')
       requestAnimationFrame(() => {
         setLoadingProgress(0.2)
-        disposeTexture(material.normalMap); material.normalMap = reconstructNormal(src); material.normalScale.set(normalScale, normalScale)
+        disposeTexture(material.normalMap); material.normalMap = reconstructNormal(src); applyTextureFilter(material.normalMap); material.normalScale.set(normalScale, normalScale)
         requestAnimationFrame(() => {
           setLoadingProgress(0.4)
           let heightTex = extractHeight(src); let hStatus = heightTex ? 'alpha' : false
-          requestAnimationFrame(() => {
-            setLoadingProgress(0.6)
-            if (!heightTex) { heightTex = extractHeightFromNormal(src); hStatus = heightTex ? 'normal' : false }
-            setLoadingProgress(0.9)
-            if (material.userData.shaderRefs) { disposeTexture(material.userData.shaderRefs.heightMap.value); material.userData.shaderRefs.heightMap.value = heightTex; material.userData.shaderRefs.hasHeightMap.value = heightTex ? 1.0 : 0.0 }
-            if (side === 'left' && heightDetectCallback) heightDetectCallback(hStatus)
-            material.needsUpdate = true
-            if (side === 'left') { setLoadingProgress(1.0); setTimeout(hideLoading, 200) }
-          })
+          if (!heightTex) { heightTex = extractHeightFromNormal(src); hStatus = heightTex ? 'normal' : false }
+          setLoadingProgress(0.9)
+          if (material.userData.shaderRefs) { disposeTexture(material.userData.shaderRefs.heightMap.value); material.userData.shaderRefs.heightMap.value = heightTex; material.userData.shaderRefs.hasHeightMap.value = (heightTex && parallaxEnabled) ? 1.0 : 0.0; if (heightTex) applyTextureFilter(heightTex) }
+          else { disposeTexture(material.userData.pendingHeightMap); material.userData.pendingHeightMap = heightTex }
+          if (side === 'left' && heightDetectCallback) heightDetectCallback(hStatus)
+          material.needsUpdate = true
+          if (side === 'left') { setLoadingProgress(1.0); setTimeout(hideLoading, 200) }
         })
       })
     }
     if (typeof createImageBitmap !== 'undefined') {
-      fetch(nUrl).then(r => r.blob()).then(blob => createImageBitmap(blob)).then(bitmap => { processNormal(bitmap); if (bitmap.close) bitmap.close() }).catch(() => { const img = new Image(); img.onload = () => processNormal(img); img.src = nUrl })
+      fetch(nUrl).then(r => r.blob()).then(blob => createImageBitmap(blob, { premultiplyAlpha: 'none' })).then(bitmap => { processNormal(bitmap); if (bitmap.close) bitmap.close() }).catch(() => { const img = new Image(); img.onload = () => processNormal(img); img.src = nUrl })
     } else { const img = new Image(); img.onload = () => processNormal(img); img.src = nUrl }
   } else { if (side === 'left' && heightDetectCallback) heightDetectCallback(false) }
 
@@ -623,13 +733,13 @@ function applyTexturesToMesh(mesh, group, side) {
       if (fmt === 'auto') { fmt = detectFormat(specImg); if (formatDetectCallback) formatDetectCallback(fmt) }
       disposeTexture(material.roughnessMap); disposeTexture(material.metalnessMap); disposeTexture(material.emissiveMap)
       if (fmt === 'old') {
-        material.roughnessMap = extractChannel(specImg, 0, true); material.metalnessMap = extractChannel(specImg, 1, false); material.emissiveMap = extractChannel(specImg, 2, false)
+        material.roughnessMap = extractChannel(specImg, 0, true); material.metalnessMap = extractChannel(specImg, 1, false); material.emissiveMap = extractChannel(specImg, 2, false); applyTextureFilter(material.roughnessMap); applyTextureFilter(material.metalnessMap); applyTextureFilter(material.emissiveMap)
         material.emissive.set(0xffffff); material.emissiveIntensity = emissiveIntensity; material.needsUpdate = true
       } else {
-        material.roughnessMap = extractRoughness(specImg); material.metalnessMap = extractMetalness(specImg)
+         material.roughnessMap = extractRoughness(specImg); material.metalnessMap = extractMetalness(specImg); applyTextureFilter(material.roughnessMap); applyTextureFilter(material.metalnessMap)
         if (mainEntry) {
           const mainImg = new Image(); mainImg.onload = () => {
-            disposeTexture(material.emissiveMap); material.emissiveMap = extractEmissive(specImg, mainImg)
+             disposeTexture(material.emissiveMap); material.emissiveMap = extractEmissive(specImg, mainImg); applyTextureFilter(material.emissiveMap)
             material.emissive.set(0xffffff); material.emissiveIntensity = emissiveIntensity; material.needsUpdate = true
           }; mainImg.src = fileUrl(mainEntry.fullPath)
         } else { material.emissive.set(0x000000) }

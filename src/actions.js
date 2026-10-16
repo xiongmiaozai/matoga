@@ -5,7 +5,7 @@
  */
 
 import {
-  state, showToast, undoBtn, compareBtn, compareBtn2, swapBtn2,
+  state, showToast, undoBtn, compareBtn2, swapBtn2,
   recursiveChk, hashChk, onlyMissingChk, ignoreChk, ignoreInput,
   leftPathEl, rightPathEl, leftStatEl, rightStatEl, leftListEl, rightListEl,
   KIND_TEXT
@@ -78,7 +78,7 @@ export async function loadFolder(side) {
 
 export function updateCompareButton() {
   const enabled = !!(state.leftPath && state.rightPath)
-  compareBtn.disabled = !enabled
+
   if (compareBtn2) compareBtn2.disabled = !enabled
 }
 
@@ -280,6 +280,7 @@ export function showPixelDiff(pairs, panel) {
     imgL.onerror = imgR.onerror = () => resolve(null)
     imgL.src = fileUrl(le.fullPath)
     imgR.src = fileUrl(re.fullPath)
+    if (imgL.complete && imgR.complete) resolve([imgL, imgR, label])
   }))).then(results => {
     container.innerHTML = ''
     const valid = results.filter(r => r)

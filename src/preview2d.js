@@ -9,6 +9,11 @@ import { $ } from './core.js'
 let channel = 'all'
 let zoom = 100
 let split = false
+let filter2d = 'smooth'
+
+function applyFilter2d(img) {
+  img.style.imageRendering = filter2d === 'pixel' ? 'pixelated' : 'auto'
+}
 
 function getOriginalSrc(img) {
   if (!img.dataset.origSrc) img.dataset.origSrc = img.src
@@ -30,9 +35,9 @@ function applyChannel(img) {
       let v
       if (channel === 'a') v = d[i + 3]
       else v = d[i + ci]
-      d[i] = channel === 'r' ? v : 0
-      d[i + 1] = channel === 'g' ? v : 0
-      d[i + 2] = channel === 'b' ? v : 0
+      d[i] = (channel === 'r' || channel === 'a') ? v : 0
+      d[i + 1] = (channel === 'g' || channel === 'a') ? v : 0
+      d[i + 2] = (channel === 'b' || channel === 'a') ? v : 0
       d[i + 3] = 255
     }
     ctx.putImageData(new ImageData(d, c.width, c.height), 0, 0)
@@ -78,12 +83,15 @@ function applySplitToRow(row) {
       cells[1].style.clipPath = `inset(0 0 0 ${pct}%)`
       handle.style.left = pct + '%'
     }
+    const onUp = () => { dragging = false; document.body.style.userSelect = '' }
     handle.addEventListener('mousedown', () => { dragging = true; document.body.style.userSelect = 'none' })
     window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', () => { dragging = false; document.body.style.userSelect = '' })
+    window.addEventListener('mouseup', onUp)
+    row._splitCleanup = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
   } else {
     if (!row.dataset.splitApplied) return
     delete row.dataset.splitApplied
+    if (row._splitCleanup) { row._splitCleanup(); row._splitCleanup = null }
     row.style.gridTemplateColumns = ''
     row.style.position = ''
     row.style.aspectRatio = ''
@@ -100,6 +108,7 @@ export function enhancePreview() {
   panel.querySelectorAll('.pv-cell img').forEach(img => {
     applyChannel(img)
     applyZoom(img)
+    applyFilter2d(img)
   })
   panel.querySelectorAll('.pv-row').forEach(applySplitToRow)
 }
@@ -122,4 +131,13 @@ export function initPreview2D() {
   })
   const s = $('pvSplit')
   if (s) s.addEventListener('change', () => { split = s.checked; enhancePreview() })
+  const pf = $('pvFilterSeg')
+  if (pf) pf.querySelectorAll('button').forEach(b => {
+    b.addEventListener('click', () => {
+      pf.querySelectorAll('button').forEach(x => x.classList.remove('active'))
+      b.classList.add('active')
+      filter2d = b.dataset.pvf
+      enhancePreview()
+    })
+  })
 }

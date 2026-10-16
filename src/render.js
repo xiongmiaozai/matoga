@@ -111,6 +111,7 @@ export function appendGroupRows(frag, g) {
   const rightCell = hasAny(g.right) ? '<span class="cell-yes">✓</span>' : '<span class="cell-empty">—</span>'
 
   tr.innerHTML = `<td>${statusBadge(g.kind)}</td><td class="preview-cell">${previewCell}</td><td>${nameHtml}</td><td>${typeHtml}</td><td>${sizeHtml}</td><td>${mtimeHtml}</td><td>${leftCell}</td><td>${rightCell}</td>`
+  tr._group = g
   tr.addEventListener('click', () => selectGroup(g))
   tr.addEventListener('dblclick', (ev) => {
     const e = mainEntryOf(g)
@@ -244,9 +245,9 @@ export function renderResult() {
   resultBody.appendChild(frag)
 }
 
-export function selectGroup(g) {
+export function selectGroup(g, toggle = true) {
   state.selected = g
-  if (g.isMaterial) {
+  if (toggle && g.isMaterial) {
     if (state.expandedKeys.has(g.key)) state.expandedKeys.delete(g.key)
     else state.expandedKeys.add(g.key)
   }

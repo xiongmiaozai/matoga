@@ -68,7 +68,7 @@ function setupLeftCollapse() {
   btn.addEventListener('click', () => {
     sidebar.classList.toggle('collapsed')
     layoutState.collapsedLeft = sidebar.classList.contains('collapsed')
-    btn.textContent = layoutState.collapsedLeft ? '⇥' : '⇤'
+    btn.innerHTML = layoutState.collapsedLeft ? '<svg class="ico"><use href="#i-chevron-right"/></svg>' : '<svg class="ico"><use href="#i-chevron-left"/></svg>'
     if (layoutState.collapsedLeft) {
       sidebar.style.width = ''
     } else {
@@ -191,7 +191,7 @@ export async function initLayout() {
   if (left) {
     if (layoutState.collapsedLeft) {
       left.classList.add('collapsed')
-      const cb = $('collapseLeftBtn'); if (cb) cb.textContent = '⇥'
+      const cb = $('collapseLeftBtn'); if (cb) cb.innerHTML = '<svg class="ico"><use href="#i-chevron-right"/></svg>'
     } else {
       left.style.width = layoutState.leftW + 'px'
     }

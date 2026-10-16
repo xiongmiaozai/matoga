@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { state, compareBtn, hashChk, exportBtn, exportHtmlBtn, batchRightBtn, batchLeftBtn, STATUS_ORDER, ROLES } from './core.js'
+import { state, compareBtn2, hashChk, exportBtn, exportHtmlBtn, batchRightBtn, batchLeftBtn, STATUS_ORDER, ROLES } from './core.js'
 import { buildGroups, materialKind, singleKind, mainEntryOf, hasAny } from './utils.js'
 import { renderResult, renderSidebar } from './render.js'
 
@@ -52,8 +52,7 @@ export async function compare() {
       }
     }
     if (pairs.length) {
-      compareBtn.disabled = true
-      compareBtn.textContent = '对比中…'
+      if (compareBtn2) { compareBtn2.disabled = true; compareBtn2.textContent = '对比中…' }
       let idx = 0
       const N = Math.min(navigator.hardwareConcurrency || 4, 8)
       async function worker() {
@@ -64,8 +63,7 @@ export async function compare() {
         }
       }
       await Promise.all(Array.from({ length: N }, worker))
-      compareBtn.disabled = false
-      compareBtn.textContent = '开始对比'
+      if (compareBtn2) { compareBtn2.disabled = false; compareBtn2.textContent = '开始对比' }
       renderResult()
       if (state.selected) renderSidebar()
     }
