@@ -5,6 +5,7 @@
  */
 
 import { $, showToast } from './core.js'
+import { refreshHdrPreset } from './hdri-preset.js'
 
 let themeChangeCallbacks = []
 
@@ -58,6 +59,7 @@ function initPathSettings() {
     const pickBtn = $(it.pickId)
     const createBtn = $(it.createId)
     const openBtn = $(it.openId)
+    const notifyChange = () => { if (it.cfgKey === 'hdriPresetPath') refreshHdrPreset() }
     if (createBtn) createBtn.addEventListener('click', async () => {
       const v = input && input.value.trim()
       if (!v) { showToast('请先输入要创建的文件夹路径'); return }
@@ -65,6 +67,7 @@ function initPathSettings() {
       if (res && res.success) {
         window.api.setConfig({ [it.cfgKey]: v })
         showToast('已创建文件夹并保存地址')
+        notifyChange()
       } else {
         showToast('创建失败：' + (res && res.error ? res.error : '未知错误'))
       }
@@ -75,9 +78,11 @@ function initPathSettings() {
       if (input) input.value = p
       window.api.setConfig({ [it.cfgKey]: p })
       showToast('已保存地址')
+      notifyChange()
     })
     if (input) input.addEventListener('change', () => {
       window.api.setConfig({ [it.cfgKey]: input.value.trim() })
+      notifyChange()
     })
     if (openBtn) openBtn.addEventListener('click', () => {
       const v = input && input.value.trim()

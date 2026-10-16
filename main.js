@@ -24,7 +24,7 @@ function saveConfig(c) {
 }
 
 function defaultPaths() {
-  const base = path.dirname(app.getAppPath())
+  const base = app.isPackaged ? path.dirname(app.getAppPath()) : app.getAppPath()
   return {
     hdriPresetPath: path.join(base, 'HDRI预设'),
     mcPacksPath: path.join(base, '材质包')
@@ -264,5 +264,62 @@ ipcMain.handle('file:backup', async (e, filePath) => {
     const backupPath = path.join(dir, `${base}_backup_${ts}${ext}`)
     await fs.promises.copyFile(filePath, backupPath)
     return { success: true, backupPath }
+  } catch (err) { return { success: false, error: err.message } }
+})
+function hdriThumbDir() {
+  return path.join(app.getPath('userData'), 'hdri-thumbs')
+}
+
+function hdriThumbPathFor(filePath) {
+  const base = path.basename(filePath, path.extname(filePath))
+  return path.join(hdriThumbDir(), base + '.jpg')
+}
+
+ipcMain.handle('hdri:list', async () => {
+  try {
+    const cfg = loadConfig()
+    const dp = defaultPaths()
+    const dir = cfg.hdriPresetPath || dp.hdriPresetPath
+    const names = await fs.promises.readdir(dir)
+    const entries = []
+    for (const name of names) {
+      const ext = path.extname(name).toLowerCase()
+      if (ext !== '.hdr' && ext !== '.exr') continue
+      const fullPath = path.join(dir, name)
+      try {
+        const stat = await fs.promises.stat(fullPath)
+        if (stat.isFile()) entries.push({ name, fullPath, size: stat.size, mtime: stat.mtimeMs })
+      } catch {}
+    }
+    entries.sort((a, b) => a.name.localeCompare(b.name, 'zh'))
+    return { success: true, dir, entries }
+  } catch (err) { return { success: false, error: err.message, entries: [] } }
+})
+
+ipcMain.handle('hdri:thumbInfo', async (e, fullPath) => {
+  try {
+    const thumbPath = hdriThumbPathFor(fullPath)
+    const hdrStat = await fs.promises.stat(fullPath)
+    let exists = false, stale = true, mtime = 0
+    try {
+      const tStat = await fs.promises.stat(thumbPath)
+      exists = true
+      mtime = tStat.mtimeMs
+      stale = tStat.mtimeMs < hdrStat.mtimeMs
+    } catch {}
+    const thumbUrl = 'file://' + thumbPath.replace(/\\/g, '/')
+    return { exists, stale, thumbUrl, mtime }
+  } catch (err) { return { exists: false, stale: true, thumbUrl: null, error: err.message } }
+})
+
+ipcMain.handle('hdri:saveThumb', async (e, fullPath, dataUrl) => {
+  try {
+    const dir = hdriThumbDir()
+    await fs.promises.mkdir(dir, { recursive: true })
+    const thumbPath = hdriThumbPathFor(fullPath)
+    const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, '')
+    await fs.promises.writeFile(thumbPath, Buffer.from(base64, 'base64'))
+    const thumbUrl = 'file://' + thumbPath.replace(/\\/g, '/')
+    return { success: true, thumbUrl }
   } catch (err) { return { success: false, error: err.message } }
 })

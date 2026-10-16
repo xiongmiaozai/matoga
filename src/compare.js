@@ -5,12 +5,28 @@
  */
 
 import { state, compareBtn2, hashChk, exportBtn, exportHtmlBtn, batchRightBtn, batchLeftBtn, STATUS_ORDER, ROLES } from './core.js'
-import { buildGroups, materialKind, singleKind, mainEntryOf, hasAny } from './utils.js'
+import { buildGroups, materialKind, singleKind, mainEntryOf, hasAny, leftRoles, rightRoles } from './utils.js'
 import { renderResult, renderSidebar } from './render.js'
 
 export function computeCounts() {
-  const c = { have: 0, diff: 0, partial: 0, miss: 0, extra: 0 }
-  for (const g of state.result) c[g.kind]++
+  const c = { have: 0, diff: 0, partial: 0, miss: 0, extra: 0, leftTex: 0, rightTex: 0, rightMatch: 0, pbrExtra: 0 }
+  for (const g of state.result) {
+    c[g.kind]++
+    if (g.isMaterial) {
+      const lr = leftRoles(g), rr = rightRoles(g)
+      c.leftTex += lr.length
+      c.rightTex += rr.length
+      for (const r of rr) {
+        if (lr.includes(r)) c.rightMatch++
+        else c.pbrExtra++
+      }
+    } else if (g.isFile) {
+      const lHas = hasAny(g.left), rHas = hasAny(g.right)
+      if (lHas) c.leftTex++
+      if (rHas) c.rightTex++
+      if (lHas && rHas) c.rightMatch++
+    }
+  }
   state.counts = c
 }
 

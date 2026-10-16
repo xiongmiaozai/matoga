@@ -9,10 +9,11 @@ import { $ } from './core.js'
 let channel = 'all'
 let zoom = 100
 let split = false
-let filter2d = 'smooth'
+let filter2d = 'bilinear'
 
 function applyFilter2d(img) {
-  img.style.imageRendering = filter2d === 'pixel' ? 'pixelated' : 'auto'
+  if (filter2d === 'nearest') img.style.imageRendering = 'pixelated'
+  else img.style.imageRendering = 'auto'
 }
 
 function getOriginalSrc(img) {
@@ -47,8 +48,17 @@ function applyChannel(img) {
 }
 
 function applyZoom(img) {
-  img.style.maxWidth = zoom + '%'
-  img.style.maxHeight = zoom + '%'
+  if (zoom <= 100) {
+    img.style.width = '100%'
+    img.style.height = '100%'
+    img.style.maxWidth = ''
+    img.style.maxHeight = ''
+  } else {
+    img.style.width = ''
+    img.style.height = ''
+    img.style.maxWidth = zoom + '%'
+    img.style.maxHeight = zoom + '%'
+  }
   const cell = img.closest('.pv-cell')
   if (cell) cell.style.overflow = zoom > 100 ? 'auto' : 'hidden'
 }

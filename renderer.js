@@ -7,24 +7,28 @@
 import { state, $, showToast } from './src/core.js'
 import { closePreview, mainEntryOf, getIgnorePatterns, fileUrl } from './src/utils.js'
 import { compare, sortResult } from './src/compare.js'
-import { renderResult, renderSidebar, updateSortIndicators, selectGroup } from './src/render.js'
+import { renderResult, renderSidebar, updateSortIndicators, selectGroup, initViewTabs } from './src/render.js'
 import {
   loadFromPath, loadFolder, updateCompareButton, saveOptions,
   undo, updateUndoBtn, swapFolders, exportResult, exportHtml,
-  batchCopyToSide, reloadAndCompare
+  batchCopyToSide, reloadAndCompare, handleAction
 } from './src/actions.js'
 import {
   setGeometry, setMetalness, setRoughness, setNormalScale, setEmissiveIntensity,
   setMaterialFormat, setFormatDetectCallback, setHeightDetectCallback, setSourceSide,
-  setParallaxScale, setParallaxSteps, setParallaxMode, setParallaxAdaptive, setParallaxEnabled,
+  setParallaxScale, setParallaxSteps, setParallaxMode, setParallaxAdaptive, setParallaxEnabled, setParallaxShadow,
   setLightPreset, setEnvIntensity, setExposure,
-  toggleGround, loadHDREnv, clearHDREnv, getCurrentLightPreset, setAutoRotate, setWireframe, screenshot, toggleFullscreen,
+  toggleGround, loadHDREnv, clearHDREnv, getCurrentLightPreset, getCurrentEnvMode, setEnvModeExport,
+  setSkyTurbidity, setSkyRayleigh, setSkyMieCoefficient, setSkyMieDirectionalG, setSkySunElevation, setSkySunAzimuth,
+  setSkyCloudCoverage, setSkyCloudScale, setSkyCloudSpeed, setSkyCloudDensity, setSkyCloudElevation, setSkyTint,
+  setAutoRotate, setWireframe, screenshot, toggleFullscreen,
   setOpacityMode, setOpacity, setTransmission, setIOR, setClearcoat,
   setTextureFilter, setMipmapsEnabled, setAnisotropyLevel, getMaxAnisotropy
 } from './src/material3d.js'
 import { initLayout } from './src/layout.js'
 import { initSettings, applyTheme } from './src/settings.js'
 import { initPreview2D } from './src/preview2d.js'
+import { initHdrPreset, refreshHdrPreset, clearHdrPresetSelection } from './src/hdri-preset.js'
 
 import {
   leftBtn, rightBtn, exportBtn, exportHtmlBtn, swapBtn,
@@ -157,7 +161,22 @@ bindSegment('m3dSrcSeg', 'src', setSourceSide)
 bindSegment('m3dLightSeg', 'light', setLightPreset)
 bindSegment('m3dOpacityModeSeg', 'mode', setOpacityMode)
 bindSegment('m3dParallaxModeSeg', 'mode', (v) => setParallaxMode(parseFloat(v)))
-bindSegment('m3dFilterSeg', 'filter', setTextureFilter)
+bindSegment('m3dFilterSeg', 'filter', (v) => { setTextureFilter(v); updateFilterControls() })
+
+bindSegment('m3dEnvModeSeg', 'envmode', (mode) => {
+  setEnvModeExport(mode)
+  document.querySelectorAll('.m3d-env-subpane').forEach(p => p.classList.toggle('active', p.dataset.envpane === mode))
+})
+function updateFilterControls() {
+  const active = document.querySelector('#m3dFilterSeg button.active')
+  const mode = active ? active.dataset.filter : 'trilinear'
+  const aniso = $('m3dAniso'), anisoVal = $('m3dAnisoVal'), mipmap = $('m3dMipmaps')
+  const anisoOn = mode === 'anisotropic'
+  const mipmapOn = mode === 'trilinear' || mode === 'anisotropic'
+  if (aniso) { aniso.disabled = !anisoOn; if (anisoVal) anisoVal.style.opacity = anisoOn ? '1' : '.4' }
+  if (mipmap) { mipmap.disabled = !mipmapOn; mipmap.parentElement.style.opacity = mipmapOn ? '1' : '.4' }
+}
+updateFilterControls()
 
 $('m3dMetalness').addEventListener('input', (e) => { const v = parseFloat(e.target.value); setMetalness(v); $('m3dMetalnessVal').textContent = v.toFixed(2) })
 $('m3dRoughness').addEventListener('input', (e) => { const v = parseFloat(e.target.value); setRoughness(v); $('m3dRoughnessVal').textContent = v.toFixed(2) })
@@ -171,9 +190,49 @@ $('m3dParallax').addEventListener('input', (e) => { const v = parseFloat(e.targe
 $('m3dParallaxSteps').addEventListener('input', (e) => { const v = parseInt(e.target.value); setParallaxSteps(v); $('m3dParallaxStepsVal').textContent = v })
 $('m3dParallaxAdaptive').addEventListener('change', (e) => setParallaxAdaptive(e.target.checked ? 1.0 : 0.0))
 $('m3dParallaxEnable').addEventListener('change', (e) => setParallaxEnabled(e.target.checked))
+$('m3dParallaxShadow').addEventListener('change', (e) => { const s = $('m3dParallaxShadowStr'); s.disabled = !e.target.checked; setParallaxShadow(e.target.checked ? parseFloat(s.value) : 0.0) })
+$('m3dParallaxShadowStr').addEventListener('input', (e) => { const v = parseFloat(e.target.value); setParallaxShadow(v); $('m3dParallaxShadowStrVal').textContent = v.toFixed(2) })
 
 $('m3dEnvIntensity').addEventListener('input', (e) => { const v = parseFloat(e.target.value); setEnvIntensity(v); $('m3dEnvIntensityVal').textContent = v.toFixed(2) })
 $('m3dExposure').addEventListener('input', (e) => { const v = parseFloat(e.target.value); setExposure(v); $('m3dExposureVal').textContent = v.toFixed(2) })
+$('m3dSkyElevation').addEventListener('input', (e) => { const v = parseFloat(e.target.value); setSkySunElevation(v); $('m3dSkyElevationVal').textContent = v + '°' })
+$('m3dSkyAzimuth').addEventListener('input', (e) => { const v = parseFloat(e.target.value); setSkySunAzimuth(v); $('m3dSkyAzimuthVal').textContent = v + '°' })
+$('m3dSkyTurbidity').addEventListener('input', (e) => { const v = parseFloat(e.target.value); setSkyTurbidity(v); $('m3dSkyTurbidityVal').textContent = v.toFixed(1) })
+$('m3dSkyRayleigh').addEventListener('input', (e) => { const v = parseFloat(e.target.value); setSkyRayleigh(v); $('m3dSkyRayleighVal').textContent = v.toFixed(2) })
+$('m3dSkyMie').addEventListener('input', (e) => { const v = parseFloat(e.target.value); setSkyMieCoefficient(v); $('m3dSkyMieVal').textContent = v.toFixed(3) })
+$('m3dSkyMieG').addEventListener('input', (e) => { const v = parseFloat(e.target.value); setSkyMieDirectionalG(v); $('m3dSkyMieGVal').textContent = v.toFixed(3) })
+$('m3dSkyCloudCov').addEventListener('input', (e) => { const v = parseFloat(e.target.value); setSkyCloudCoverage(v); $('m3dSkyCloudCovVal').textContent = v.toFixed(2) })
+$('m3dSkyCloudDen').addEventListener('input', (e) => { const v = parseFloat(e.target.value); setSkyCloudDensity(v); $('m3dSkyCloudDenVal').textContent = v.toFixed(2) })
+$('m3dSkyCloudScale').addEventListener('input', (e) => { const v = parseFloat(e.target.value); setSkyCloudScale(v); $('m3dSkyCloudScaleVal').textContent = v.toFixed(5) })
+$('m3dSkyCloudSpeed').addEventListener('input', (e) => { const v = parseFloat(e.target.value); setSkyCloudSpeed(v); $('m3dSkyCloudSpeedVal').textContent = v.toFixed(6) })
+$('m3dSkyCloudElev').addEventListener('input', (e) => { const v = parseFloat(e.target.value); setSkyCloudElevation(v); $('m3dSkyCloudElevVal').textContent = v.toFixed(2) })
+$('m3dSkyTint').addEventListener('input', (e) => setSkyTint(e.target.value))
+const skyPresets = {
+  noon: { elevation:70, azimuth:180, turbidity:2, rayleigh:1, mie:0.005, mieG:0.8, cloudCov:0.3, cloudDen:0.4, cloudScale:0.0002, cloudSpeed:0.00002, cloudElev:0.5, tint:'#ffffff' },
+  sunset: { elevation:4, azimuth:270, turbidity:8, rayleigh:2, mie:0.01, mieG:0.85, cloudCov:0.5, cloudDen:0.5, cloudScale:0.0002, cloudSpeed:0.00002, cloudElev:0.4, tint:'#ffd0a0' },
+  overcast: { elevation:25, azimuth:180, turbidity:15, rayleigh:0.5, mie:0.02, mieG:0.9, cloudCov:0.85, cloudDen:0.7, cloudScale:0.0003, cloudSpeed:0.00003, cloudElev:0.6, tint:'#d0d0d8' },
+  night: { elevation:-5, azimuth:180, turbidity:3, rayleigh:0.3, mie:0.003, mieG:0.7, cloudCov:0.3, cloudDen:0.4, cloudScale:0.0002, cloudSpeed:0.00001, cloudElev:0.5, tint:'#2a3a5a' }
+}
+document.querySelectorAll('#m3dSkyPresetSeg button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#m3dSkyPresetSeg button').forEach(b => b.classList.remove('active'))
+    btn.classList.add('active')
+    const p = skyPresets[btn.dataset.preset]
+    const apply = (id, val, valId, text, fn) => { $(id).value = val; $(valId).textContent = text; fn(val) }
+    apply('m3dSkyElevation', p.elevation, 'm3dSkyElevationVal', p.elevation + '°', setSkySunElevation)
+    apply('m3dSkyAzimuth', p.azimuth, 'm3dSkyAzimuthVal', p.azimuth + '°', setSkySunAzimuth)
+    apply('m3dSkyTurbidity', p.turbidity, 'm3dSkyTurbidityVal', p.turbidity.toFixed(1), setSkyTurbidity)
+    apply('m3dSkyRayleigh', p.rayleigh, 'm3dSkyRayleighVal', p.rayleigh.toFixed(2), setSkyRayleigh)
+    apply('m3dSkyMie', p.mie, 'm3dSkyMieVal', p.mie.toFixed(3), setSkyMieCoefficient)
+    apply('m3dSkyMieG', p.mieG, 'm3dSkyMieGVal', p.mieG.toFixed(3), setSkyMieDirectionalG)
+    apply('m3dSkyCloudCov', p.cloudCov, 'm3dSkyCloudCovVal', p.cloudCov.toFixed(2), setSkyCloudCoverage)
+    apply('m3dSkyCloudDen', p.cloudDen, 'm3dSkyCloudDenVal', p.cloudDen.toFixed(2), setSkyCloudDensity)
+    apply('m3dSkyCloudScale', p.cloudScale, 'm3dSkyCloudScaleVal', p.cloudScale.toFixed(5), setSkyCloudScale)
+    apply('m3dSkyCloudSpeed', p.cloudSpeed, 'm3dSkyCloudSpeedVal', p.cloudSpeed.toFixed(6), setSkyCloudSpeed)
+    apply('m3dSkyCloudElev', p.cloudElev, 'm3dSkyCloudElevVal', p.cloudElev.toFixed(2), setSkyCloudElevation)
+    $('m3dSkyTint').value = p.tint; setSkyTint(p.tint)
+  })
+})
 $('m3dGround').addEventListener('change', (e) => toggleGround(e.target.checked))
 $('m3dAutoRotate').addEventListener('change', (e) => setAutoRotate(e.target.checked))
 $('m3dWireframe').addEventListener('change', (e) => setWireframe(e.target.checked))
@@ -222,14 +281,30 @@ $('m3dFullscreenBtn').addEventListener('click', toggleFullscreen)
 
 $('m3dHdrBtn').addEventListener('click', async () => {
   const filePath = await window.api.selectHDRFile()
-  if (filePath) loadHDREnv(fileUrl(filePath))
+  if (filePath) {
+    loadHDREnv(fileUrl(filePath))
+    clearHdrPresetSelection()
+    const seg = $('m3dEnvModeSeg')
+    if (seg) {
+      seg.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.envmode === 'hdri'))
+      document.querySelectorAll('.m3d-env-subpane').forEach(p => p.classList.toggle('active', p.dataset.envpane === 'hdri'))
+    }
+  }
 })
 $('m3dHdrClearBtn').addEventListener('click', () => {
   clearHDREnv()
+  clearHdrPresetSelection()
+  const mode = getCurrentEnvMode()
+  const seg = $('m3dEnvModeSeg')
+  if (seg) {
+    seg.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.envmode === mode))
+    document.querySelectorAll('.m3d-env-subpane').forEach(p => p.classList.toggle('active', p.dataset.envpane === mode))
+  }
   const preset = getCurrentLightPreset()
-  const seg = $('m3dLightSeg')
-  if (seg) seg.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.light === preset))
+  const lightSeg = $('m3dLightSeg')
+  if (lightSeg) lightSeg.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.light === preset))
 })
+$('m3dHdrRefreshBtn').addEventListener('click', () => refreshHdrPreset())
 
 $('m3dFormat').addEventListener('change', (e) => { setMaterialFormat(e.target.value); $('m3dFormatDetected').textContent = '' })
 setFormatDetectCallback((fmt) => { $('m3dFormatDetected').textContent = fmt === 'labpbr' ? '→ labPBR' : '→ 旧版PBR' })
@@ -245,6 +320,8 @@ setHeightDetectCallback((status) => {
 
 })
 $('m3dParamsBtn').addEventListener('click', () => $('m3dParamsOverlay').classList.toggle('show'))
+$('m3dParamsClose').addEventListener('click', () => $('m3dParamsOverlay').classList.remove('show'))
+$('material3dContainer').addEventListener('mousedown', (e) => { const ov = $('m3dParamsOverlay'); if (ov && ov.classList.contains('show') && !ov.contains(e.target)) ov.classList.remove('show') })
 document.querySelectorAll('.m3d-tabs button').forEach(btn => btn.addEventListener('click', () => {
   const tab = btn.dataset.tab
   document.querySelectorAll('.m3d-tabs button').forEach(b => b.classList.remove('active'))
@@ -285,9 +362,46 @@ document.addEventListener('keydown', (e) => {
   }
 })
 
+function initCtxMenu() {
+  const menu = $('ctxMenu')
+  const tbody = $('resultBody')
+  if (!menu || !tbody) return
+  tbody.addEventListener('contextmenu', (ev) => {
+    const tr = ev.target.closest('tr')
+    if (!tr || !tr._group) return
+    ev.preventDefault()
+    const g = tr._group
+    state.selected = g
+    selectGroup(g)
+    menu.style.display = 'block'
+    const mx = Math.min(ev.clientX, window.innerWidth - 180)
+    const my = Math.min(ev.clientY, window.innerHeight - 260)
+    menu.style.left = mx + 'px'
+    menu.style.top = my + 'px'
+    menu.querySelectorAll('.ctx-item').forEach(item => {
+      const act = item.dataset.act
+      const pickEntry = (side) => { const s = g[side]; if (!s) return null; return s.main || s.file || s.dir || s.normal || s.specular || null }
+      let enabled = true
+      if (act === 'open-left' || act === 'loc-left') enabled = !!pickEntry('left')
+      else if (act === 'open-right' || act === 'loc-right') enabled = !!pickEntry('right')
+      else if (act === 'copy-to-right') enabled = !!(g.left && state.rightPath)
+      else if (act === 'copy-to-left') enabled = !!(g.right && state.leftPath)
+      item.classList.toggle('disabled', !enabled)
+      item.onclick = enabled ? () => { handleAction(act, g); menu.style.display = 'none' } : null
+    })
+  })
+  document.addEventListener('click', () => { menu.style.display = 'none' })
+  document.addEventListener('contextmenu', (ev) => {
+    if (!ev.target.closest('tr')) menu.style.display = 'none'
+  })
+}
+
 ;(async function init() {
   initSettings()
   initPreview2D()
+  initHdrPreset()
+  initViewTabs()
+  initCtxMenu()
   await initLayout()
 
   const cfg = await window.api.getConfig()

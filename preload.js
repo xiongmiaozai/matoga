@@ -23,5 +23,8 @@ contextBridge.exposeInMainWorld('api', {
   selectFile: () => ipcRenderer.invoke('dialog:selectFile'),
   selectHDRFile: () => ipcRenderer.invoke('dialog:selectHDR'),
   pickFolder: () => ipcRenderer.invoke('dialog:pickFolder'),
-  createFolder: (p) => ipcRenderer.invoke('folder:create', p)
+  createFolder: (p) => ipcRenderer.invoke('folder:create', p),
+  listHdrPresets: () => ipcRenderer.invoke('hdri:list'),
+  hdrThumbInfo: (fullPath) => ipcRenderer.invoke('hdri:thumbInfo', fullPath),
+  saveHdrThumb: (fullPath, dataUrl) => ipcRenderer.invoke('hdri:saveThumb', fullPath, dataUrl)
 })

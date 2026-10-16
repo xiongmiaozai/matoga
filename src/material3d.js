@@ -7,6 +7,7 @@
 import * as THREE from '../node_modules/three/build/three.module.js'
 import { fileUrl, isImageFile } from './utils.js'
 import { HDRLoader } from './hdr-loader.js'
+import { Sky } from './sky.js'
 
 let scene, camera, renderer, animationId, pmrem, envTexture, pmremTexture
 let isWebGL2 = false
@@ -30,10 +31,31 @@ let parallaxSteps = 32.0
 let parallaxMode = 2.0
 let parallaxAdaptive = 1.0
 let parallaxEnabled = true
+let parallaxShadow = 0.0
+const _lightDirTmp = new THREE.Vector3()
 let currentLightPreset = 'studio'
+let currentEnvMode = 'custom'
 let groundVisible = true
 let envIntensity = 1.0
 let hdrTexture = null
+let skyMesh = null
+let skyEnvTexture = null
+let skySunLight = null
+let skyTurbidity = 2
+let skyRayleigh = 1
+let skyMieCoefficient = 0.005
+let skyMieDirectionalG = 0.8
+let skySunElevation = 30
+let skySunAzimuth = 180
+let skyCloudCoverage = 0.4
+let skyCloudScale = 0.0002
+let skyCloudSpeed = 0.00002
+let skyCloudDensity = 0.4
+let skyCloudElevation = 0.5
+let skyClock = null
+let skyTintHex = 0xffffff
+let skyBakeTimer = null
+const _skyTint = new THREE.Color()
 let opacityMode = 'auto'
 let opacityValue = 1.0
 let transmissionValue = 0.0
@@ -116,13 +138,53 @@ function scaleUV(geometry, su, sv) {
   return geometry
 }
 
+function computeTangents(geometry) {
+  const index = geometry.index
+  const positionAttribute = geometry.attributes.position
+  const normalAttribute = geometry.attributes.normal
+  const uvAttribute = geometry.attributes.uv
+  if (!positionAttribute || !normalAttribute || !uvAttribute) return geometry
+  const vertexCount = positionAttribute.count
+  const tan1 = new Float32Array(vertexCount * 3)
+  const tan2 = new Float32Array(vertexCount * 3)
+  const vA = new THREE.Vector3(), vB = new THREE.Vector3(), vC = new THREE.Vector3()
+  const uvA = new THREE.Vector2(), uvB = new THREE.Vector2(), uvC = new THREE.Vector2()
+  const sdir = new THREE.Vector3(), tdir = new THREE.Vector3()
+  const handleTriangle = (a, b, c) => {
+    vA.fromBufferAttribute(positionAttribute, a); vB.fromBufferAttribute(positionAttribute, b); vC.fromBufferAttribute(positionAttribute, c)
+    uvA.fromBufferAttribute(uvAttribute, a); uvB.fromBufferAttribute(uvAttribute, b); uvC.fromBufferAttribute(uvAttribute, c)
+    const x1 = vB.x - vA.x, x2 = vC.x - vA.x, y1 = vB.y - vA.y, y2 = vC.y - vA.y, z1 = vB.z - vA.z, z2 = vC.z - vA.z
+    const s1 = uvB.x - uvA.x, s2 = uvC.x - uvA.x, t1 = uvB.y - uvA.y, t2 = uvC.y - uvA.y
+    const det = s1 * t2 - s2 * t1, r = det === 0 ? 0 : 1 / det
+    sdir.set((t2 * x1 - t1 * x2) * r, (t2 * y1 - t1 * y2) * r, (t2 * z1 - t1 * z2) * r)
+    tdir.set((s1 * x2 - s2 * x1) * r, (s1 * y2 - s2 * y1) * r, (s1 * z2 - s2 * z1) * r)
+    for (const i of [a, b, c]) { tan1[i * 3] += sdir.x; tan1[i * 3 + 1] += sdir.y; tan1[i * 3 + 2] += sdir.z; tan2[i * 3] += tdir.x; tan2[i * 3 + 1] += tdir.y; tan2[i * 3 + 2] += tdir.z }
+  }
+  if (index) { for (let i = 0; i < index.count; i += 3) handleTriangle(index.getX(i), index.getX(i + 1), index.getX(i + 2)) }
+  else { for (let i = 0; i < vertexCount; i += 3) handleTriangle(i, i + 1, i + 2) }
+  const tangentArray = new Float32Array(vertexCount * 4)
+  const t = new THREE.Vector3(), n = new THREE.Vector3(), tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3()
+  for (let i = 0; i < vertexCount; i++) {
+    n.fromBufferAttribute(normalAttribute, i)
+    t.set(tan1[i * 3], tan1[i * 3 + 1], tan1[i * 3 + 2])
+    tmp.copy(n).multiplyScalar(n.dot(t)); t.sub(tmp).normalize()
+    tmp2.set(tan2[i * 3], tan2[i * 3 + 1], tan2[i * 3 + 2])
+    const w = n.cross(t).dot(tmp2) < 0 ? -1 : 1
+    tangentArray[i * 4] = t.x; tangentArray[i * 4 + 1] = t.y; tangentArray[i * 4 + 2] = t.z; tangentArray[i * 4 + 3] = w
+  }
+  geometry.setAttribute('tangent', new THREE.BufferAttribute(tangentArray, 4))
+  return geometry
+}
+
+function withTangents(geo) { computeTangents(geo); return geo }
+
 const geometries = {
-  sphere: () => scaleUV(new THREE.SphereGeometry(1, 64, 64), 4.0, 1.25),
-  cube: () => new THREE.BoxGeometry(1.4, 1.4, 1.4),
-  plane: () => new THREE.PlaneGeometry(1.6, 1.6),
-  torus: () => scaleUV(new THREE.TorusGeometry(0.8, 0.3, 32, 64), 3.0, 1.0),
-  cylinder: () => scaleUV(new THREE.CylinderGeometry(0.7, 0.7, 1.6, 48), 2.75, 1.0),
-  capsule: () => scaleUV(new THREE.CapsuleGeometry(0.6, 1.0, 16, 32), 2.5, 1.25)
+  sphere: () => withTangents(scaleUV(new THREE.SphereGeometry(1, 64, 64), 4.0, 1.25)),
+  cube: () => withTangents(new THREE.BoxGeometry(1.4, 1.4, 1.4)),
+  plane: () => withTangents(new THREE.PlaneGeometry(1.6, 1.6)),
+  torus: () => withTangents(scaleUV(new THREE.TorusGeometry(0.8, 0.3, 32, 64), 3.0, 1.0)),
+  cylinder: () => withTangents(scaleUV(new THREE.CylinderGeometry(0.7, 0.7, 1.6, 48), 2.75, 1.0)),
+  capsule: () => withTangents(scaleUV(new THREE.CapsuleGeometry(0.6, 1.0, 16, 32), 2.5, 1.25))
 }
 
 function createEnvTexture(presetKey) {
@@ -179,18 +241,129 @@ function applyLightPreset(presetKey) {
     dir.shadow.camera.near = 0.1; dir.shadow.camera.far = 15
     lightGroup.add(dir)
   }
-  if (hdrTexture) {
-    if (pmremTexture) { pmremTexture.dispose(); pmremTexture = null }
-    scene.environment = hdrTexture
-  } else {
+  if (currentEnvMode === 'custom') {
     if (envTexture) envTexture.dispose()
     envTexture = createEnvTexture(presetKey)
     if (pmremTexture) pmremTexture.dispose()
     pmremTexture = pmrem.fromEquirectangular(envTexture)
     scene.environment = pmremTexture.texture
+    scene.background = new THREE.Color(preset.bg)
   }
-  scene.background = new THREE.Color(preset.bg)
   for (const m of [meshLeft, meshRight]) { if (m) m.material.envMapIntensity = envIntensity }
+}
+
+function updateSkySunPosition() {
+  if (!skyMesh) return
+  const u = skyMesh.material.uniforms
+  const elevation = skySunElevation * Math.PI / 180
+  const azimuth = skySunAzimuth * Math.PI / 180
+  const phi = Math.PI / 2 - elevation
+  const sun = new THREE.Vector3()
+  sun.setFromSphericalCoords(1, phi, azimuth)
+  u.sunPosition.value.copy(sun)
+  u.turbidity.value = skyTurbidity
+  u.rayleigh.value = skyRayleigh
+  u.mieCoefficient.value = skyMieCoefficient
+  u.mieDirectionalG.value = skyMieDirectionalG
+  u.cloudCoverage.value = skyCloudCoverage
+  u.cloudScale.value = skyCloudScale
+  u.cloudSpeed.value = skyCloudSpeed
+  u.cloudDensity.value = skyCloudDensity
+  u.cloudElevation.value = skyCloudElevation
+  _skyTint.setHex(skyTintHex)
+  u.skyTint.value.set(_skyTint.r, _skyTint.g, _skyTint.b)
+  if (skySunLight) {
+    skySunLight.position.copy(sun).multiplyScalar(10)
+    const dayFactor = Math.max(0, Math.sin(elevation))
+    skySunLight.intensity = 2.5 * dayFactor
+  }
+}
+
+function bakeSkyEnvironment() {
+  if (!skyMesh || !pmrem) return
+  const u = skyMesh.material.uniforms
+  const prevSunDisc = u.showSunDisc.value
+  u.showSunDisc.value = 0
+  const skyScene = new THREE.Scene()
+  scene.remove(skyMesh)
+  skyScene.add(skyMesh)
+  if (skyEnvTexture) skyEnvTexture.dispose()
+  skyEnvTexture = pmrem.fromScene(skyScene)
+  scene.environment = skyEnvTexture.texture
+  skyScene.remove(skyMesh)
+  scene.add(skyMesh)
+  u.showSunDisc.value = prevSunDisc
+  for (const m of [meshLeft, meshRight]) { if (m) m.material.envMapIntensity = envIntensity }
+}
+
+function scheduleSkyBake() {
+  clearTimeout(skyBakeTimer)
+  skyBakeTimer = setTimeout(() => {
+    skyBakeTimer = null
+    if (initialized && currentEnvMode === 'sky') bakeSkyEnvironment()
+  }, 120)
+}
+
+function applyProceduralSky() {
+  if (!initialized) return
+  if (hdrTexture) { hdrTexture.dispose(); hdrTexture = null }
+  if (envTexture) { envTexture.dispose(); envTexture = null }
+  if (pmremTexture) { pmremTexture.dispose(); pmremTexture = null }
+  if (lightGroup) { while (lightGroup.children.length) lightGroup.remove(lightGroup.children[0]) }
+  const ambient = new THREE.AmbientLight(0xffffff, 0.15)
+  lightGroup.add(ambient)
+  if (!skySunLight) {
+    skySunLight = new THREE.DirectionalLight(0xffffff, 2.5)
+    skySunLight.castShadow = true
+    skySunLight.shadow.mapSize.set(1024, 1024)
+    skySunLight.shadow.camera.left = -3; skySunLight.shadow.camera.right = 3
+    skySunLight.shadow.camera.top = 3; skySunLight.shadow.camera.bottom = -3
+    skySunLight.shadow.camera.near = 0.1; skySunLight.shadow.camera.far = 50
+  }
+  lightGroup.add(skySunLight)
+  if (!skyMesh) {
+    skyMesh = new Sky()
+    skyMesh.scale.setScalar(10000)
+    scene.add(skyMesh)
+  }
+  updateSkySunPosition()
+  scene.background = null
+  bakeSkyEnvironment()
+}
+
+function applyHDREnvMode() {
+  if (!initialized) return
+  if (skyMesh) { scene.remove(skyMesh); skyMesh = null }
+  if (skyEnvTexture) { skyEnvTexture.dispose(); skyEnvTexture = null }
+  if (skySunLight) { lightGroup.remove(skySunLight); skySunLight = null }
+  if (envTexture) { envTexture.dispose(); envTexture = null }
+  if (pmremTexture) { pmremTexture.dispose(); pmremTexture = null }
+  if (lightGroup) { while (lightGroup.children.length) lightGroup.remove(lightGroup.children[0]) }
+  const ambient = new THREE.AmbientLight(0xffffff, 0.1)
+  lightGroup.add(ambient)
+  if (hdrTexture) {
+    scene.environment = hdrTexture
+    scene.background = hdrTexture
+  } else {
+    scene.environment = null
+    scene.background = new THREE.Color(0x1a1a2e)
+  }
+  for (const m of [meshLeft, meshRight]) { if (m) m.material.envMapIntensity = envIntensity }
+}
+
+function setEnvMode(mode) {
+  if (!initialized || !['custom', 'sky', 'hdri'].includes(mode)) return
+  currentEnvMode = mode
+  if (mode === 'sky') {
+    applyProceduralSky()
+  } else if (mode === 'hdri') {
+    applyHDREnvMode()
+  } else {
+    if (skyMesh) { scene.remove(skyMesh); skyMesh = null }
+    if (skyEnvTexture) { skyEnvTexture.dispose(); skyEnvTexture = null }
+    if (skySunLight) { lightGroup.remove(skySunLight); skySunLight = null }
+    applyLightPreset(currentLightPreset)
+  }
 }
 
 function imgW(img) { return img.naturalWidth || img.width }
@@ -274,9 +447,7 @@ function reconstructNormal(image) {
   const ctx = c.getContext('2d', { willReadFrequently: true }); ctx.drawImage(image, 0, 0)
   const imageData = ctx.getImageData(0, 0, c.width, c.height), d = imageData.data
   for (let i = 0; i < d.length; i += 4) {
-    let nx = (d[i] / 255) * 2 - 1, ny = (d[i + 1] / 255) * 2 - 1
-    const strength = d[i + 3] / 255
-    nx *= strength; ny *= strength
+    const nx = (d[i] / 255) * 2 - 1, ny = (d[i + 1] / 255) * 2 - 1
     const nz = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny))
     d[i] = Math.round((nx + 1) * 127.5); d[i + 1] = Math.round((ny + 1) * 127.5); d[i + 2] = Math.round((nz + 1) * 127.5); d[i + 3] = 255
   }
@@ -295,7 +466,7 @@ function extractHeight(image) {
   if (range < 1 || buckets.size <= 2) return null
   for (let i = 0; i < d.length; i += 4) { const v = Math.round((d[i + 3] - minA) / range * 255); d[i] = v; d[i + 1] = v; d[i + 2] = v; d[i + 3] = 255 }
   ctx.putImageData(imageData, 0, 0)
-  const tex = new THREE.CanvasTexture(c); tex.wrapS = tex.wrapT = THREE.RepeatWrapping; return tex
+  const tex = new THREE.CanvasTexture(c); tex.wrapS = tex.wrapT = THREE.RepeatWrapping; applyHeightFilter(tex); return tex
 }
 
 function extractHeightFromNormal(image) {
@@ -335,7 +506,7 @@ function extractHeightFromNormal(image) {
   const out = ctx.createImageData(w, h), od = out.data
   for (let i = 0; i < n; i++) { const v = Math.round((height[i] - minH) / range * 255); od[i * 4] = v; od[i * 4 + 1] = v; od[i * 4 + 2] = v; od[i * 4 + 3] = 255 }
   ctx.putImageData(out, 0, 0)
-  const tex = new THREE.CanvasTexture(c); tex.wrapS = tex.wrapT = THREE.RepeatWrapping; return tex
+  const tex = new THREE.CanvasTexture(c); tex.wrapS = tex.wrapT = THREE.RepeatWrapping; applyHeightFilter(tex); return tex
 }
 
 function createLabel(text, color) {
@@ -401,6 +572,15 @@ function applyOpacityMode(material) {
   material.needsUpdate = true
 }
 
+function applyHeightFilter(tex) {
+  if (!tex) return
+  tex.generateMipmaps = true
+  tex.magFilter = THREE.LinearFilter
+  tex.minFilter = THREE.LinearMipmapLinearFilter
+  tex.anisotropy = 1
+  tex.needsUpdate = true
+}
+
 function applyTextureFilter(tex) {
   if (!tex) return
   const useMipmap = mipmapsEnabled && (textureFilter === 'trilinear' || textureFilter === 'anisotropic')
@@ -448,9 +628,12 @@ function makeMaterial() {
     shader.uniforms.parallaxSteps = { value: parallaxSteps }
     shader.uniforms.parallaxMode = { value: parallaxMode }
     shader.uniforms.parallaxAdaptive = { value: parallaxAdaptive }
+    shader.uniforms.parallaxShadow = { value: parallaxShadow }
+    shader.uniforms.uHeightLightDir = { value: prev ? prev.uHeightLightDir.value : new THREE.Vector3(0, 1, 0) }
+    shader.uniforms.uHeightTexSize = { value: prev ? prev.uHeightTexSize.value : (mat.userData.pendingHeightMap ? new THREE.Vector2(mat.userData.pendingHeightMap.image.width, mat.userData.pendingHeightMap.image.height) : new THREE.Vector2(256, 256)) }
     mat.userData.shaderRefs = shader.uniforms
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', 'uniform sampler2D heightMap;\nuniform float hasHeightMap;\nuniform float parallaxScale;\nuniform float parallaxSteps;\nuniform float parallaxMode;\nuniform float parallaxAdaptive;\n#include <common>')
+      .replace('#include <common>', 'uniform sampler2D heightMap;\nuniform vec2 uHeightTexSize;\nuniform vec3 uHeightLightDir;\nuniform float hasHeightMap;\nuniform float parallaxScale;\nuniform float parallaxSteps;\nuniform float parallaxMode;\nuniform float parallaxAdaptive;\nuniform float parallaxShadow;\n#include <common>')
       .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
         vec2 parallaxUv;
         #if defined(USE_MAP)
@@ -462,10 +645,12 @@ function makeMaterial() {
         #else
           parallaxUv = vec2(0.0);
         #endif
-        if (parallaxScale > 0.0 && hasHeightMap > 0.5) {
+        float parallaxShadowFactor = 1.0;
+        if (abs(parallaxScale) > 0.0 && hasHeightMap > 0.5) {
           vec3 viewDir = normalize(vViewPosition);
           vec2 P;
           float viewDotN;
+          vec3 tLight;
           #if defined(USE_TANGENT)
             vec3 t = normalize( vTangent );
             vec3 n = normalize( vNormal );
@@ -474,20 +659,42 @@ function makeMaterial() {
             tView.x = dot(t, viewDir);
             tView.y = dot(b, viewDir);
             tView.z = dot(n, viewDir);
-            viewDotN = abs(tView.z);
-            P = tView.xy / max(tView.z, 0.001) * parallaxScale;
+            tLight.x = dot(t, uHeightLightDir);
+            tLight.y = dot(b, uHeightLightDir);
+            tLight.z = dot(n, uHeightLightDir);
           #else
-            viewDotN = abs(viewDir.z);
-            P = viewDir.xy / max(viewDir.z, 0.001) * parallaxScale;
+            vec3 n = normalize( vNormal );
+            if ( !gl_FrontFacing ) n = -n;
+            vec3 sp = -vViewPosition;
+            vec3 dp1 = dFdx( sp );
+            vec3 dp2 = dFdy( sp );
+            vec2 duv1 = dFdx( parallaxUv );
+            vec2 duv2 = dFdy( parallaxUv );
+            vec3 dp2perp = cross( dp2, n );
+            vec3 dp1perp = cross( n, dp1 );
+            vec3 T = dp2perp * duv1.x + dp1perp * duv2.x;
+            vec3 B = dp2perp * duv1.y + dp1perp * duv2.y;
+            float invmax = inversesqrt( max( dot(T, T), dot(B, B) ) + 1e-8 );
+            vec3 tView;
+            tView.x = dot( T * invmax, viewDir );
+            tView.y = dot( B * invmax, viewDir );
+            tView.z = dot( n, viewDir );
+            tLight.x = dot( T * invmax, uHeightLightDir );
+            tLight.y = dot( B * invmax, uHeightLightDir );
+            tLight.z = dot( n, uHeightLightDir );
           #endif
+          viewDotN = clamp(abs(tView.z), 0.0, 1.0);
+          P = tView.xy / max(abs(tView.z), 0.05) * parallaxScale;
           float Plen = length(P);
-          float maxOffset = 0.08;
-          if (Plen > maxOffset) P *= maxOffset / Plen;
+          P *= 1.0 / (1.0 + max(Plen - 0.1, 0.0) * 4.0);
           float uvFade = 1.0;
-          ${isWebGL2 ? 'uvFade = 1.0 - smoothstep(0.01, 0.08, length(fwidth(parallaxUv)));' : ''}
+          ${isWebGL2 ? 'uvFade = 1.0 - smoothstep(0.15, 0.45, length(fwidth(parallaxUv)));' : ''}
           P *= uvFade;
+          P *= smoothstep(0.0, 0.2, viewDotN);
+          float hMip = 0.0;
+          ${isWebGL2 ? 'hMip = log2(max(max(fwidth(parallaxUv.x) * uHeightTexSize.x, fwidth(parallaxUv.y) * uHeightTexSize.y), 1.0));' : ''}
           if (parallaxMode < 0.5) {
-            float height = texture2D(heightMap, parallaxUv).r;
+            float height = ${isWebGL2 ? 'textureLod( heightMap, parallaxUv, hMip )' : 'texture2D( heightMap, parallaxUv )'}.r;
             parallaxUv = parallaxUv - P * height;
           } else {
             float numLayers = parallaxSteps;
@@ -499,18 +706,18 @@ function makeMaterial() {
             float currentLayerDepth = 0.0;
             vec2 deltaTexCoords = P / numLayers;
             vec2 currentTexCoords = parallaxUv;
-            float currentDepthValue = texture2D(heightMap, currentTexCoords).r;
+            float currentDepthValue = ${isWebGL2 ? 'textureLod( heightMap, currentTexCoords, hMip )' : 'texture2D( heightMap, currentTexCoords )'}.r;
             for (int i = 0; i < 64; i++) {
               if (currentLayerDepth >= currentDepthValue) break;
               currentTexCoords -= deltaTexCoords;
-              currentDepthValue = texture2D(heightMap, currentTexCoords).r;
+              currentDepthValue = ${isWebGL2 ? 'textureLod( heightMap, currentTexCoords, hMip )' : 'texture2D( heightMap, currentTexCoords )'}.r;
               currentLayerDepth += layerDepth;
             }
             if (parallaxMode < 1.5) {
               parallaxUv = currentTexCoords;
             } else if (parallaxMode < 2.5) {
               vec2 prevTexCoords = currentTexCoords + deltaTexCoords;
-              float beforeDepth = texture2D(heightMap, prevTexCoords).r - currentLayerDepth + layerDepth;
+              float beforeDepth = ${isWebGL2 ? 'textureLod( heightMap, prevTexCoords, hMip )' : 'texture2D( heightMap, prevTexCoords )'}.r - currentLayerDepth + layerDepth;
               float afterDepth = currentDepthValue - currentLayerDepth;
               float weight = afterDepth / (afterDepth - beforeDepth);
               parallaxUv = mix(currentTexCoords, prevTexCoords, weight);
@@ -522,7 +729,7 @@ function makeMaterial() {
                 layerDepth *= 0.5;
                 vec2 midTexCoords = prevTexCoords - deltaTexCoords;
                 float midLayerDepth = prevLayerDepth + layerDepth;
-                float midDepthValue = texture2D(heightMap, midTexCoords).r;
+                float midDepthValue = ${isWebGL2 ? 'textureLod( heightMap, midTexCoords, hMip )' : 'texture2D( heightMap, midTexCoords )'}.r;
                 if (midLayerDepth < midDepthValue) {
                   prevTexCoords = midTexCoords;
                   prevLayerDepth = midLayerDepth;
@@ -534,7 +741,21 @@ function makeMaterial() {
               parallaxUv = prevTexCoords;
             }
           }
+          if (parallaxShadow > 0.0 && tLight.z > 0.01) {
+            float numSS = 8.0;
+            vec2 ssDelta = tLight.xy / max(abs(tLight.z), 0.05) * abs(parallaxScale) / numSS;
+            float hRay = ${isWebGL2 ? 'textureLod( heightMap, parallaxUv, hMip )' : 'texture2D( heightMap, parallaxUv )'}.r;
+            vec2 ssUv = parallaxUv;
+            for (int i = 0; i < 8; i++) {
+              ssUv += ssDelta;
+              hRay += 1.0 / numSS;
+              float hSurf = ${isWebGL2 ? 'textureLod( heightMap, ssUv, hMip )' : 'texture2D( heightMap, ssUv )'}.r;
+              parallaxShadowFactor = min(parallaxShadowFactor, smoothstep(0.0, 0.06, hRay - hSurf));
+            }
+            parallaxShadowFactor = mix(1.0, parallaxShadowFactor, parallaxShadow);
+          }
         }`)
+      .replace('#include <lights_fragment_begin>', '#include <lights_fragment_begin>\n        reflectedLight.directDiffuse *= parallaxShadowFactor;')
     shader.fragmentShader = parseIncludes(shader.fragmentShader)
     shader.fragmentShader = shader.fragmentShader
       .replace(/texture2D\(\s*map\s*,\s*vMapUv\s*\)/g, 'texture2D( map, parallaxUv )')
@@ -614,7 +835,23 @@ function animate() {
   rotX += (targetRotX - rotX) * 0.1; rotY += (targetRotY - rotY) * 0.1; camDist += (targetCamDist - camDist) * 0.1
   meshLeft.rotation.x = rotX; meshLeft.rotation.y = rotY
   meshRight.rotation.x = rotX; meshRight.rotation.y = rotY
-  camera.position.z = camDist; renderer.render(scene, camera)
+  if (skyMesh && currentEnvMode === 'sky' && skyCloudSpeed > 0) {
+    const now = performance.now() * 0.001
+    if (skyClock > 0) skyMesh.material.uniforms.time.value += now - skyClock
+    skyClock = now
+  } else { skyClock = 0 }
+  camera.position.z = camDist
+  camera.updateMatrixWorld()
+  if (parallaxShadow > 0.0) {
+    let lDir = null
+    if (skySunLight && currentEnvMode === 'sky') lDir = skySunLight.position
+    else { for (const c of lightGroup.children) { if (c.isDirectionalLight) { lDir = c.position; break } } }
+    if (lDir) {
+      _lightDirTmp.copy(lDir).normalize().transformDirection(camera.matrixWorldInverse)
+      for (const m of [meshLeft, meshRight]) { if (m && m.material && m.material.userData.shaderRefs) m.material.userData.shaderRefs.uHeightLightDir.value.copy(_lightDirTmp) }
+    }
+  }
+  renderer.render(scene, camera)
 }
 
 export function setGeometry(geoType) {
@@ -635,7 +872,8 @@ export function setParallaxSteps(val) { parallaxSteps = val; if (initialized) { 
 export function setParallaxMode(val) { parallaxMode = val; if (initialized) { for (const m of [meshLeft, meshRight]) { if (m && m.material && m.material.userData.shaderRefs) m.material.userData.shaderRefs.parallaxMode.value = val } } }
 export function setParallaxAdaptive(val) { parallaxAdaptive = val; if (initialized) { for (const m of [meshLeft, meshRight]) { if (m && m.material && m.material.userData.shaderRefs) m.material.userData.shaderRefs.parallaxAdaptive.value = val } } }
 export function setParallaxEnabled(on) { parallaxEnabled = on; if (initialized) { for (const m of [meshLeft, meshRight]) { if (m && m.material && m.material.userData.shaderRefs) { const ht = m.material.userData.shaderRefs.heightMap.value; m.material.userData.shaderRefs.hasHeightMap.value = (ht && on) ? 1.0 : 0.0; if (ht) { ht.needsUpdate = true; m.material.needsUpdate = true } } } } }
-export function setLightPreset(presetKey) { applyLightPreset(presetKey) }
+export function setParallaxShadow(val) { parallaxShadow = val; if (initialized) { for (const m of [meshLeft, meshRight]) { if (m && m.material && m.material.userData.shaderRefs) m.material.userData.shaderRefs.parallaxShadow.value = val } } }
+export function setLightPreset(presetKey) { applyLightPreset(presetKey); if (currentEnvMode !== 'custom') setEnvMode('custom') }
 export function setEnvIntensity(val) { envIntensity = val; if (initialized) { for (const m of [meshLeft, meshRight]) { if (m) m.material.envMapIntensity = val } } }
 export function setExposure(val) { if (initialized && renderer) renderer.toneMappingExposure = val }
 export function toggleGround(visible) { groundVisible = visible; if (initialized) { if (groundMesh) groundMesh.visible = visible; if (gridHelper) gridHelper.visible = visible } }
@@ -671,16 +909,30 @@ export function loadHDREnv(filePath) {
     if (hdrTexture) hdrTexture.dispose()
     if (envTexture) { envTexture.dispose(); envTexture = null }
     hdrTexture = tex
-    scene.environment = tex
-    scene.background = tex
-    for (const m of [meshLeft, meshRight]) { if (m) m.material.envMapIntensity = envIntensity }
+    currentEnvMode = 'hdri'
+    applyHDREnvMode()
   })
 }
 export function clearHDREnv() {
   if (hdrTexture) { hdrTexture.dispose(); hdrTexture = null }
-  applyLightPreset(currentLightPreset)
+  if (currentEnvMode === 'hdri') setEnvMode('custom')
+  else applyHDREnvMode()
 }
 export function getCurrentLightPreset() { return currentLightPreset }
+export function getCurrentEnvMode() { return currentEnvMode }
+export function setEnvModeExport(mode) { setEnvMode(mode) }
+export function setSkyTurbidity(val) { skyTurbidity = val; if (initialized && currentEnvMode === 'sky') { updateSkySunPosition(); scheduleSkyBake() } }
+export function setSkyRayleigh(val) { skyRayleigh = val; if (initialized && currentEnvMode === 'sky') { updateSkySunPosition(); scheduleSkyBake() } }
+export function setSkyMieCoefficient(val) { skyMieCoefficient = val; if (initialized && currentEnvMode === 'sky') { updateSkySunPosition(); scheduleSkyBake() } }
+export function setSkyMieDirectionalG(val) { skyMieDirectionalG = val; if (initialized && currentEnvMode === 'sky') { updateSkySunPosition(); scheduleSkyBake() } }
+export function setSkySunElevation(val) { skySunElevation = val; if (initialized && currentEnvMode === 'sky') { updateSkySunPosition(); scheduleSkyBake() } }
+export function setSkySunAzimuth(val) { skySunAzimuth = val; if (initialized && currentEnvMode === 'sky') { updateSkySunPosition(); scheduleSkyBake() } }
+export function setSkyCloudCoverage(val) { skyCloudCoverage = val; if (initialized && currentEnvMode === 'sky') { updateSkySunPosition(); scheduleSkyBake() } }
+export function setSkyCloudScale(val) { skyCloudScale = val; if (initialized && currentEnvMode === 'sky') { updateSkySunPosition(); scheduleSkyBake() } }
+export function setSkyCloudSpeed(val) { skyCloudSpeed = val; if (initialized && currentEnvMode === 'sky') { updateSkySunPosition() } }
+export function setSkyCloudDensity(val) { skyCloudDensity = val; if (initialized && currentEnvMode === 'sky') { updateSkySunPosition(); scheduleSkyBake() } }
+export function setSkyCloudElevation(val) { skyCloudElevation = val; if (initialized && currentEnvMode === 'sky') { updateSkySunPosition(); scheduleSkyBake() } }
+export function setSkyTint(hex) { const n = parseInt(hex.slice(1), 16); if (Number.isNaN(n)) return; skyTintHex = n; if (initialized && currentEnvMode === 'sky') { updateSkySunPosition(); scheduleSkyBake() } }
 
 function disposeTexture(tex) { if (tex && tex.dispose) tex.dispose() }
 function disposeAllMaterialTextures(m) { disposeTexture(m.map); disposeTexture(m.normalMap); disposeTexture(m.roughnessMap); disposeTexture(m.metalnessMap); disposeTexture(m.emissiveMap); if (m.userData.shaderRefs) { disposeTexture(m.userData.shaderRefs.heightMap.value); m.userData.shaderRefs.heightMap.value = null; m.userData.shaderRefs.hasHeightMap.value = 0.0 } disposeTexture(m.userData.pendingHeightMap); m.userData.pendingHeightMap = null; m.map = null; m.normalMap = null; m.roughnessMap = null; m.metalnessMap = null; m.emissiveMap = null }
@@ -714,7 +966,7 @@ function applyTexturesToMesh(mesh, group, side) {
           let heightTex = extractHeight(src); let hStatus = heightTex ? 'alpha' : false
           if (!heightTex) { heightTex = extractHeightFromNormal(src); hStatus = heightTex ? 'normal' : false }
           setLoadingProgress(0.9)
-          if (material.userData.shaderRefs) { disposeTexture(material.userData.shaderRefs.heightMap.value); material.userData.shaderRefs.heightMap.value = heightTex; material.userData.shaderRefs.hasHeightMap.value = (heightTex && parallaxEnabled) ? 1.0 : 0.0; if (heightTex) applyTextureFilter(heightTex) }
+          if (material.userData.shaderRefs) { disposeTexture(material.userData.shaderRefs.heightMap.value); material.userData.shaderRefs.heightMap.value = heightTex; material.userData.shaderRefs.hasHeightMap.value = (heightTex && parallaxEnabled) ? 1.0 : 0.0; if (heightTex) { applyHeightFilter(heightTex); material.userData.shaderRefs.uHeightTexSize.value.set(heightTex.image.width, heightTex.image.height) } }
           else { disposeTexture(material.userData.pendingHeightMap); material.userData.pendingHeightMap = heightTex }
           if (side === 'left' && heightDetectCallback) heightDetectCallback(hStatus)
           material.needsUpdate = true
@@ -761,12 +1013,15 @@ export function clearMaterial3D() { updateMaterial3D(null) }
 
 export function disposeMaterial3D() {
   if (animationId) cancelAnimationFrame(animationId)
+  if (skyBakeTimer) { clearTimeout(skyBakeTimer); skyBakeTimer = null }
   for (const m of [meshLeft, meshRight]) { if (m) { if (m.material) { disposeAllMaterialTextures(m.material); m.material.dispose() }; if (m.geometry) m.geometry.dispose() } }
   if (groundMesh) { groundMesh.geometry.dispose(); groundMesh.material.dispose() }
   if (gridHelper) { gridHelper.geometry.dispose(); gridHelper.material.dispose() }
   if (envTexture) envTexture.dispose()
   if (pmremTexture) pmremTexture.dispose()
   if (hdrTexture) hdrTexture.dispose()
+  if (skyEnvTexture) skyEnvTexture.dispose()
+  if (skyMesh) { skyMesh.geometry.dispose(); skyMesh.material.dispose(); skyMesh = null }
   if (pmrem) pmrem.dispose(); if (renderer) renderer.dispose()
   initialized = false
 }
