@@ -12,7 +12,7 @@ import {
 } from './core.js'
 import {
   formatSize, formatDate, isImageFile, fileUrl, hasAny,
-  leftRoles, rightRoles, mainEntryOf, getIgnorePatterns
+  leftRoles, rightRoles, mainEntryOf, getIgnorePatterns, relPath, joinPath
 } from './utils.js'
 import { compare } from './compare.js'
 import { applyEntries, setLoading, renderResult, renderSidebar, renderStat, renderEntryList } from './render.js'
@@ -132,8 +132,8 @@ export function collectCopyPairs(g, srcSide, destSide, srcBase, destBase) {
   const pairs = []
   const addPair = (se, de) => {
     if (!se || se.isDirectory) return
-    const rel = se.fullPath.slice(srcBase.length + 1)
-    pairs.push({ src: se.fullPath, dest: destBase + '/' + rel, backup: de && !de.isDirectory ? de.fullPath : null, name: se.name })
+    const rel = relPath(srcBase, se.fullPath)
+    pairs.push({ src: se.fullPath, dest: joinPath(destBase, rel), backup: de && !de.isDirectory ? de.fullPath : null, name: se.name })
   }
   if (g.isMaterial) {
     for (const role of ROLES) addPair(g[srcSide] && g[srcSide][role], g[destSide] && g[destSide][role])

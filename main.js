@@ -24,7 +24,7 @@ function saveConfig(c) {
 }
 
 function defaultPaths() {
-  const base = app.isPackaged ? path.dirname(app.getAppPath()) : app.getAppPath()
+  const base = app.isPackaged ? process.resourcesPath : app.getAppPath()
   return {
     hdriPresetPath: path.join(base, 'HDRI预设'),
     mcPacksPath: path.join(base, '材质包')
@@ -104,12 +104,6 @@ ipcMain.handle('dialog:selectFolder', async (event, side) => {
   return p
 })
 
-const SYSTEM_IGNORE = ['.DS_Store', 'Thumbs.db', 'desktop.ini', '.git', 'node_modules', '__pycache__']
-
-function matchPattern(name, pattern) {
-  if (pattern.startsWith('*.')) return name.toLowerCase().endsWith(pattern.slice(1).toLowerCase())
-  return name.toLowerCase() === pattern.toLowerCase()
-}
 
 function shouldIgnore(name, patterns) {
   if (!patterns || !patterns.length) return false

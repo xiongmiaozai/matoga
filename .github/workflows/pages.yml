@@ -1,0 +1,55 @@
+name: pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'website/landing.html'
+      - 'assets/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Sync to gh-pages
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # 暂存 main 分支待部署文件
+          mkdir -p /tmp/deploy/assets
+          cp website/landing.html /tmp/deploy/index.html
+          cp -r assets/. /tmp/deploy/assets/
+
+          # 切换到 gh-pages 分支（远端已存在）
+          git checkout gh-pages
+
+          # 覆盖更新（先清空 assets 再拷入，保证删除的文件被同步）
+          rm -rf assets
+          mkdir -p assets
+          cp /tmp/deploy/index.html .
+          cp -r /tmp/deploy/assets/. assets/
+
+          git add index.html assets
+          if git diff --cached --quiet; then
+            echo "::notice::没有变更，跳过部署"
+          else
+            git commit -m "chore(pages): 同步 main 分支 index.html & assets"
+            git push origin gh-pages
+            echo "::notice::已部署到 gh-pages 分支"
+          fi

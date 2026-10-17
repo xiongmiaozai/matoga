@@ -13,7 +13,7 @@ import {
 import {
   typeIcon, formatSize, formatDate, isImageFile, fileUrl,
   folderOf, mainEntryOf, hasAny, leftRoles, rightRoles, subKind,
-  openPreview
+  openPreview, relPath, joinPath
 } from './utils.js'
 import { sortResult } from './compare.js'
 import { copySingleFile, replaceWithExternalFile, deleteTexture, handleAction, showPixelDiff } from './actions.js'
@@ -137,8 +137,8 @@ export function appendGroupRows(frag, g) {
       const actionTd = document.createElement('td')
       actionTd.className = 'sub-actions'
       if (le && !le.isDirectory && state.rightPath) {
-        const rel = le.fullPath.slice(state.leftPath.length + 1)
-        const dest = state.rightPath + '/' + rel
+        const rel = relPath(state.leftPath, le.fullPath)
+        const dest = joinPath(state.rightPath, rel)
         const btn = document.createElement('button')
         btn.className = 'sub-replace-btn'
         btn.textContent = t('render.toRight')
@@ -146,8 +146,8 @@ export function appendGroupRows(frag, g) {
         actionTd.appendChild(btn)
       }
       if (re && !re.isDirectory && state.leftPath) {
-        const rel = re.fullPath.slice(state.rightPath.length + 1)
-        const dest = state.leftPath + '/' + rel
+        const rel = relPath(state.rightPath, re.fullPath)
+        const dest = joinPath(state.leftPath, rel)
         const btn = document.createElement('button')
         btn.className = 'sub-replace-btn'
         btn.textContent = t('render.toLeft')

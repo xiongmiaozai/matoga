@@ -36,6 +36,20 @@ export function fileUrl(p) {
   return 'file://' + s
 }
 
+export function relPath(base, full) {
+  const b = base.replace(/\\/g, '/').replace(/\/+$/, '')
+  const f = full.replace(/\\/g, '/')
+  if (f.startsWith(b + '/')) return f.slice(b.length + 1)
+  if (f.startsWith(b)) return f.slice(b.length)
+  return f
+}
+
+export function joinPath(base, rel) {
+  const b = base.replace(/\\/g, '/').replace(/\/+$/, '')
+  const r = rel.replace(/\\/g, '/').replace(/^\/+/, '')
+  return b + '/' + r
+}
+
 export function openPreview(src, name) {
   $('previewImg').src = src
   $('previewCaption').textContent = name || ''

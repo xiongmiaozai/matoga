@@ -40,9 +40,15 @@
       "!releases/**",
       "!docs/**",
       "!.github/**",
-      "!index.html",
+      "!website/**",
       "!README.md",
-      "!AGENTS.md"
+      "!AGENTS.md",
+      "!HDRI预设/**",
+      "!材质包/**"
+    ],
+    "extraResources": [
+      { "from": "HDRI预设", "to": "HDRI预设" },
+      { "from": "材质包", "to": "材质包" }
     ],
     "mac": {
       "target": [
