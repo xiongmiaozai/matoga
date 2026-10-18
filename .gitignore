@@ -20,6 +20,7 @@ yarn-error.log*
 
 # 运行时 / 构建产物
 dist/
+dist-electron/
 out/
 build/
 release/

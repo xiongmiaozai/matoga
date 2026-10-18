@@ -8,11 +8,12 @@ const fs = require('fs')
 const path = require('path')
 const crypto = require('crypto')
 const { logger } = require('../middleware/logger')
-const { DATA_ROOT } = require('../paths')
+const { DATA_ROOT, PRESET_ROOT } = require('../paths')
 
 const ROOT = DATA_ROOT
 const DATA_DIR = path.join(ROOT, 'data')
 const FILE = path.join(DATA_DIR, 'config.json')
+const PRESET = PRESET_ROOT
 
 const SCHEMA = {
   locale: 'zh',
@@ -48,8 +49,8 @@ function atomicWrite(cfg) {
 
 function get() {
   const cfg = { ...SCHEMA, ...readRaw() }
-  if (!cfg.hdriPresetPath) cfg.hdriPresetPath = path.join(ROOT, 'HDRI预设')
-  if (!cfg.mcPacksPath) cfg.mcPacksPath = path.join(ROOT, '材质包')
+  if (!cfg.hdriPresetPath) cfg.hdriPresetPath = path.join(PRESET, 'HDRI预设')
+  if (!cfg.mcPacksPath) cfg.mcPacksPath = path.join(PRESET, '材质包')
   return cfg
 }
 

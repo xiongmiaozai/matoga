@@ -53,8 +53,8 @@ async function main() {
   uploadService.cleanup()
 
   const server = http.createServer(createApp())
-  wsSetup.setup(server)
   const port = await listen(server, requestedPort, host, 0)
+  wsSetup.setup(server)
   const display = lan ? localIp() : 'localhost'
   const url = `http://${display}:${port}/${token ? '?token=' + token : ''}`
   console.log('')

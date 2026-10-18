@@ -2,14 +2,18 @@
   "name": "matoga",
   "version": "2.0.0",
   "description": "材质贴图对比工具 - 本地 Web 服务版（B/S 架构）",
-  "main": "server/index.js",
+  "main": "electron/main.js",
   "scripts": {
     "start": "node server/index.js",
     "web": "node server/index.js",
     "web:lan": "node server/index.js --lan",
     "test": "node --test \"test/unit/**/*.test.js\"",
     "test:smoke": "node test/smoke/api-smoke.mjs && node test/smoke/ws-sync.test.mjs",
-    "build:win": "pkg server/index.js --target node18-win-x64 --output dist/matoga-win-x64.exe"
+    "build:win": "pkg server/index.js --target node22-win-x64 --output dist/matoga-win-x64.exe",
+    "electron": "node electron/launch.js",
+    "electron:dev": "node electron/launch.js --dev",
+    "dist:win": "electron-builder --win",
+    "dist:mac": "electron-builder --mac"
   },
   "keywords": [
     "folder",
@@ -39,11 +43,42 @@
       "node_modules/three/build/three.module.js"
     ],
     "targets": [
-      "node18-win-x64"
+      "node22-win-x64"
     ],
     "outputPath": "dist"
   },
+  "build": {
+    "appId": "com.xiongmiaozai.matoga",
+    "productName": "matoga",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "server/**/*",
+      "shared/**/*",
+      "web/**/*",
+      "electron/main.js",
+      "package.json"
+    ],
+    "extraResources": [
+      { "from": "HDRI预设", "to": "HDRI预设" },
+      { "from": "材质包", "to": "材质包" }
+    ],
+    "win": {
+      "target": ["nsis"]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "mac": {
+      "target": ["dmg"],
+      "category": "public.app-category.utilities"
+    }
+  },
   "devDependencies": {
-    "@yao-pkg/pkg": "^6.23.0"
+    "@yao-pkg/pkg": "^6.23.0",
+    "electron": "^44.9.0",
+    "electron-builder": "^26.15.3"
   }
 }

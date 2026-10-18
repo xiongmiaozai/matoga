@@ -10,6 +10,9 @@ const PKG = !!process.pkg
 
 const RES_ROOT = path.join(__dirname, '..')
 
-const DATA_ROOT = PKG ? path.dirname(process.execPath) : path.join(__dirname, '..')
+const DATA_ROOT = process.env.MATOGA_DATA_ROOT
+  || (PKG ? path.dirname(process.execPath) : path.join(__dirname, '..'))
 
-module.exports = { PKG, RES_ROOT, DATA_ROOT }
+const PRESET_ROOT = process.env.MATOGA_PRESET_ROOT || DATA_ROOT
+
+module.exports = { PKG, RES_ROOT, DATA_ROOT, PRESET_ROOT }
