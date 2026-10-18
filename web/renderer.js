@@ -22,6 +22,7 @@ import {
   setSkyTurbidity, setSkyRayleigh, setSkyMieCoefficient, setSkyMieDirectionalG, setSkySunElevation, setSkySunAzimuth,
   setSkyCloudCoverage, setSkyCloudScale, setSkyCloudSpeed, setSkyCloudDensity, setSkyCloudElevation, setSkyTint,
   setAutoRotate, setWireframe, screenshot, toggleFullscreen,
+  initMaterial3D, updateMaterial3D,
   setOpacityMode, setOpacity, setTransmission, setIOR, setClearcoat,
   setTextureFilter, setMipmapsEnabled, setAnisotropyLevel, getMaxAnisotropy
 } from './src/material3d.js'

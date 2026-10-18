@@ -6,17 +6,10 @@
   <title>matoga — 材质贴图对比工具</title>
   <meta name="description" content="matoga 是一款专为 Minecraft 材质开发者设计的高效贴图对比工具，支持双文件夹差异比对、3D PBR 预览、HDRI 环境光、批量操作与多语言界面。" />
 
-  <!-- ═══════════════════════════════════════════════
-       字体 — Minecraftia 像素字体替代 + Inter 正文
-       Minecraftia 为 MC 原版字体（版权归 Mojang），此处使用
-       开源替代 "Press Start 2P" (OFL 1.1, Google Fonts)
-       如需原版 Minecraftia，可本地 @font-face 引入替换
-       ═══════════════════════════════════════════════ -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Press+Start+2P&display=swap" rel="stylesheet" />
 
-  <!-- Tailwind CSS — Play CDN（生产环境建议改为本地构建） -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -43,11 +36,7 @@
     }
   </script>
 
-  <!-- ═══════════════════════════════════════════════
-       MC 主题自定义样式
-       ═══════════════════════════════════════════════ -->
   <style>
-    /* ── MC 全局配色变量 ── */
     :root {
       --mc-grass:     #7cbd56;
       --mc-grass-dk:  #5a9a3e;
@@ -63,16 +52,13 @@
       --mc-border-d:  rgba(0,0,0,.55);
     }
 
-    /* ── 全局：石头纹理背景 + 像素渲染 ── */
     body {
       background-color: var(--mc-dark);
-      /* 16×16 石头无缝纹理 — SVG data URI，低透明度不抢文字 */
       background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16'><rect width='16' height='16' fill='%231e1e22'/><rect x='0' y='0' width='8' height='8' fill='%23242428'/><rect x='8' y='8' width='8' height='8' fill='%23242428'/><rect x='4' y='4' width='4' height='4' fill='%231a1a1e'/><rect x='12' y='0' width='4' height='4' fill='%231a1a1e'/><rect x='0' y='12' width='4' height='4' fill='%231a1a1e'/><rect x='10' y='2' width='2' height='2' fill='%232a2a2e'/><rect x='2' y='10' width='2' height='2' fill='%232a2a2e'/></svg>");
       background-size: 16px 16px;
     }
     img, canvas, .pixelated { image-rendering: pixelated; image-rendering: crisp-edges; }
 
-    /* ── MC 物品槽卡片：黑色粗边框 + 双向内阴影 ── */
     .mc-slot {
       border: 2px solid #000;
       box-shadow: inset 2px 2px 0 0 var(--mc-border-d), inset -1px -1px 0 0 var(--mc-border-l);
@@ -83,7 +69,6 @@
       box-shadow: inset 2px 2px 0 0 var(--mc-border-d), inset -1px -1px 0 0 rgba(255,255,255,.25), 0 0 0 1px var(--mc-grass);
     }
 
-    /* ── MC 方块按钮：经典双向内阴影凹凸 ── */
     .mc-btn {
       border: 2px solid #000;
       padding: 10px 20px;
@@ -101,20 +86,17 @@
     .mc-btn-diamond  { background: var(--mc-diamond);  color: #1a1a1a; text-shadow: 1px 1px 0 rgba(255,255,255,.3); }
     .mc-btn-dirt     { background: var(--mc-dirt);     color: #fff; }
 
-    /* hover — 方块轻微抖动 */
     .mc-btn:hover { animation: mc-shake .15s steps(2); }
     .mc-btn-stone:hover   { background: var(--mc-stone-dk); }
     .mc-btn-grass:hover   { background: var(--mc-grass-dk); }
     .mc-btn-diamond:hover { background: var(--mc-diamond-dk); }
     .mc-btn-dirt:hover    { background: var(--mc-dirt-dk); }
 
-    /* :active — 阴影翻转模拟按下凹陷 */
     .mc-btn:active {
       box-shadow: inset -2px -2px 0 0 var(--mc-border-l), inset 2px 2px 0 0 var(--mc-border-d);
       transform: translateY(1px);
     }
 
-    /* ── MC 像素标题文字 ── */
     .mc-title {
       font-family: 'Press Start 2P', 'Courier New', monospace;
       text-shadow: 3px 3px 0 rgba(0,0,0,.5);
@@ -122,7 +104,6 @@
       line-height: 1.4;
     }
 
-    /* ── MC 分割条：方块交替条纹 ── */
     .mc-divider {
       height: 8px;
       background: repeating-linear-gradient(90deg,
@@ -131,7 +112,6 @@
       border-bottom: 2px solid #000;
     }
 
-    /* ── MC 像素粒子背景装饰 ── */
     .mc-particles {
       position: fixed; inset: 0; pointer-events: none; z-index: 0;
       background-image:
@@ -144,7 +124,6 @@
       animation: mc-particle-drift 25s linear infinite;
     }
 
-    /* ── 动画 ── */
     @keyframes mc-shake {
       0%   { transform: translate(0, 0); }
       25%  { transform: translate(-1px, 1px); }
@@ -167,144 +146,169 @@
     .mc-float    { animation: mc-float 3s ease-in-out infinite; }
     .mc-fade-up  { animation: mc-fade-up .3s steps(3) backwards; }
 
-    /* ── MC 代码块 ── */
-    .mc-code {
-      background: var(--mc-darker);
-      border: 2px solid #000;
-      box-shadow: inset 2px 2px 0 0 rgba(0,0,0,.5);
-      font-family: 'Courier New', monospace;
-      font-size: 13px;
-      color: var(--mc-diamond);
-      padding: 12px 16px;
-      overflow-x: auto;
-    }
-    .mc-code .cmt { color: var(--mc-stone); }
-    .mc-code .kw  { color: var(--mc-grass); }
-    .mc-code .str { color: #f5cd4d; }
-
-    /* ── 滚动条 MC 像素风格 ── */
     ::-webkit-scrollbar       { width: 12px; }
     ::-webkit-scrollbar-track { background: var(--mc-darker); border: 1px solid #000; }
     ::-webkit-scrollbar-thumb { background: var(--mc-stone); border: 2px solid #000; box-shadow: inset 1px 1px 0 0 var(--mc-border-l); }
     ::-webkit-scrollbar-thumb:hover { background: var(--mc-grass); }
 
-    /* ── MC 徽章标签 ── */
     .mc-badge {
       display: inline-flex; align-items: center; gap: 4px;
       padding: 2px 8px; font-size: 11px; font-weight: 700;
       border: 2px solid #000; text-shadow: 1px 1px 0 rgba(0,0,0,.4);
       box-shadow: inset 1px 1px 0 0 var(--mc-border-l);
     }
+
+    /* 滚动揭示 */
+    [data-reveal] { opacity: 0; transform: translateY(24px); transition: opacity .5s ease, transform .5s ease; }
+    [data-reveal].revealed { opacity: 1; transform: translateY(0); }
+
+    /* 对比演示滑块 */
+    .compare-wrap { position: relative; overflow: hidden; border: 2px solid #000; box-shadow: inset 2px 2px 0 0 var(--mc-border-d), inset -1px -1px 0 0 var(--mc-border-l); user-select: none; cursor: ew-resize; }
+    .compare-layer { position: absolute; inset: 0; }
+    .compare-after { clip-path: inset(0 0 0 50%); }
+    .compare-handle { position: absolute; top: 0; bottom: 0; left: 50%; width: 4px; background: var(--mc-grass); transform: translateX(-50%); pointer-events: none; z-index: 10; box-shadow: 0 0 0 2px #000; }
+    .compare-handle::before, .compare-handle::after { content: ''; position: absolute; top: 50%; width: 0; height: 0; border-style: solid; transform: translateY(-50%); }
+    .compare-handle::before { left: -12px; border-width: 7px 11px 7px 0; border-color: transparent var(--mc-grass) transparent transparent; }
+    .compare-handle::after { right: -12px; border-width: 7px 0 7px 11px; border-color: transparent transparent transparent var(--mc-grass); }
+    .compare-label { position: absolute; top: 12px; z-index: 5; padding: 4px 10px; font-size: 11px; font-weight: 700; border: 2px solid #000; text-shadow: 1px 1px 0 rgba(0,0,0,.4); box-shadow: inset 1px 1px 0 0 var(--mc-border-l); }
+
+    /* 特性卡片光晕跟随 */
+    .mc-glow { position: relative; }
+    .mc-glow::after { content: ''; position: absolute; inset: 0; background: radial-gradient(140px circle at var(--mx,50%) var(--my,50%), rgba(124,189,86,.18), transparent 65%); opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 1; }
+    .mc-glow:hover::after { opacity: 1; }
+
+    /* 打字机光标 */
+    .tw-caret { display: inline-block; width: 8px; height: 1em; background: var(--mc-diamond); margin-left: 6px; animation: tw-blink 1s steps(2) infinite; vertical-align: text-bottom; }
+    @keyframes tw-blink { 0%,49% { opacity: 1; } 50%,100% { opacity: 0; } }
+
+    /* 统计数字 */
+    .stat-num { font-family: 'Press Start 2P', monospace; font-size: 1.75rem; color: var(--mc-grass); text-shadow: 2px 2px 0 rgba(0,0,0,.5); }
+
+    /* 界面功能标注 */
+    .showcase-marker { position: absolute; border: 2px solid rgba(124,189,86,.55); cursor: pointer; transition: all .2s; }
+    .showcase-marker:hover, .showcase-marker.active { border-color: var(--mc-grass); background: rgba(124,189,86,.12); box-shadow: 0 0 0 1px var(--mc-grass); z-index: 5; }
+    .showcase-num { position: absolute; top: 6px; left: 6px; min-width: 22px; height: 22px; padding: 0 5px; display: flex; align-items: center; justify-content: center; background: var(--mc-grass); color: #fff; font-weight: 700; font-size: 11px; border: 2px solid #000; box-shadow: inset 1px 1px 0 0 rgba(255,255,255,.2); }
+    .showcase-marker[data-tip]::after { content: attr(data-tip); position: absolute; top: 4px; left: 50%; transform: translateX(-50%) translateY(-100%); white-space: nowrap; background: #000; color: #fff; font-size: 11px; padding: 3px 8px; border: 1px solid var(--mc-grass); opacity: 0; pointer-events: none; transition: opacity .15s; z-index: 10; }
+    .showcase-marker:hover[data-tip]::after, .showcase-marker.active[data-tip]::after { opacity: 1; }
+    .showcase-card { transition: box-shadow .2s, transform .2s; position: relative; }
+    .showcase-card.active { box-shadow: inset 2px 2px 0 0 var(--mc-border-d), inset -1px -1px 0 0 rgba(255,255,255,.25), 0 0 0 2px var(--mc-grass); transform: translateY(-2px); }
+    .showcase-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; height: 28px; padding: 0 6px; font-weight: 700; font-size: 13px; border: 2px solid #000; text-shadow: 1px 1px 0 rgba(0,0,0,.4); box-shadow: inset 1px 1px 0 0 var(--mc-border-l); }
+    .showcase-points { list-style: none; padding: 0; margin: 0; display: grid; gap: 5px; }
+    .showcase-points li { position: relative; padding-left: 14px; font-size: 12px; line-height: 1.55; color: var(--text-dim, #9ca3af); }
+    .showcase-points li::before { content: ''; position: absolute; left: 2px; top: 8px; width: 6px; height: 6px; background: currentColor; opacity: .55; }
+    .showcase-points kbd { display: inline-block; padding: 1px 5px; font-size: 10px; font-family: ui-monospace, monospace; background: rgba(0,0,0,.4); border: 1px solid #000; border-radius: 2px; color: #fff; margin: 0 1px; }
+    @media (max-width: 768px) { .showcase-marker { display: none; } .showcase-card { transform: none !important; } }
+
+    /* 视差层 */
+    [data-parallax] { will-change: transform; transition: transform .12s ease-out; }
+    .parallax-deep { will-change: transform; }
+
+    /* 视差遮蔽演示 */
+    .parallax-demo { position: relative; overflow: hidden; border: 2px solid #000; box-shadow: inset 2px 2px 0 0 var(--mc-border-d), inset -1px -1px 0 0 var(--mc-border-l); user-select: none; cursor: crosshair; background: #2a2a2e; }
+    .parallax-layer { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+    .parallax-surface { position: absolute; inset: 0; background-image: repeating-linear-gradient(45deg, #6a6a6a 0 6px, #7a7a7a 6px 12px); opacity: .35; }
+    .parallax-slider { -webkit-appearance: none; appearance: none; width: 100%; height: 8px; background: var(--mc-darker); border: 2px solid #000; outline: none; box-shadow: inset 1px 1px 0 0 var(--mc-border-d); }
+    .parallax-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 20px; background: var(--mc-grass); border: 2px solid #000; box-shadow: inset 1px 1px 0 0 var(--mc-border-l); cursor: ew-resize; }
+    .parallax-slider::-moz-range-thumb { width: 16px; height: 20px; background: var(--mc-grass); border: 2px solid #000; cursor: ew-resize; }
+    .parallax-readout { font-family: 'Press Start 2P', monospace; font-size: 10px; color: var(--mc-diamond); text-shadow: 1px 1px 0 rgba(0,0,0,.5); }
+
+    /* 亮点徽章 */
+    .hl-badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; font-size: 12px; font-weight: 600; color: #d4d4d8; background: rgba(42,42,46,.7); border: 2px solid #000; box-shadow: inset 1px 1px 0 0 var(--mc-border-l); backdrop-filter: blur(4px); }
+    .hl-badge svg { flex-shrink: 0; }
   </style>
 </head>
 
 <body class="font-sans text-gray-200 antialiased">
 
-  <!-- ═══════════════════════════════════════════════
-       MC 像素粒子背景装饰
-       纯 CSS 实现，不阻塞渲染
-       ═══════════════════════════════════════════════ -->
-  <div class="mc-particles"></div>
+  <div class="mc-particles" data-parallax data-parallax-speed="0.4"></div>
 
-  <!-- ═══════════════════════════════════════════════
-       导航栏 — MC 工具条风格
-       ═══════════════════════════════════════════════ -->
+  <!-- 导航栏 -->
   <header class="sticky top-0 z-50 bg-mcDarker border-b-[3px] border-black" style="box-shadow: 0 3px 0 0 rgba(0,0,0,.4);">
     <nav class="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-      <!-- Logo -->
       <a href="#top" class="flex items-center gap-3">
-        <!-- MC 方块 Logo — 独立 SVG，CC0 开源素材 -->
-        <!-- Source: github.com/minecraft-svg-icons (CC0) -->
-        <svg width="28" height="28" viewBox="0 0 16 16" shape-rendering="crispEdges" class="flex-shrink-0">
-          <rect width="16" height="16" fill="#5a9a3e"/>
-          <rect x="0" y="0" width="16" height="4" fill="#7cbd56"/>
-          <rect x="0" y="4" width="16" height="12" fill="#8b6f47"/>
-          <rect x="2" y="0" width="2" height="5" fill="#5a9a3e"/>
-          <rect x="7" y="0" width="2" height="4" fill="#5a9a3e"/>
-          <rect x="12" y="0" width="2" height="5" fill="#5a9a3e"/>
-          <rect x="0" y="4" width="16" height="1" fill="#6b5437"/>
-        </svg>
-        <span class="mc-title text-base text-mcGrass">matoga</span>
+        <img src="matoga-logo-2x.png" alt="matoga" height="28" width="89" class="pixelated flex-shrink-0" />
       </a>
 
-      <!-- 导航链接 — PC 端 -->
       <div class="hidden md:flex items-center gap-1">
         <a href="#features"   class="mc-btn mc-btn-stone text-xs px-3 py-2">特性</a>
         <a href="#download"   class="mc-btn mc-btn-stone text-xs px-3 py-2">下载</a>
-        <a href="#docs"       class="mc-btn mc-btn-stone text-xs px-3 py-2">文档</a>
-        <a href="#api"        class="mc-btn mc-btn-stone text-xs px-3 py-2">API</a>
         <a href="#changelog"  class="mc-btn mc-btn-stone text-xs px-3 py-2">更新日志</a>
         <a href="https://github.com/xiongmiaozai/matoga" target="_blank" class="mc-btn mc-btn-diamond text-xs px-3 py-2 ml-2">
-          <!-- GitHub 图标 SVG -->
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58v-2.03c-3.33.72-4.03-1.61-4.03-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.21.09 1.84 1.24 1.84 1.24 1.08 1.83 2.81 1.3 3.5 1 .11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.29-1.55 3.3-1.23 3.3-1.23.66 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.63-5.49 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.22.7.83.58A12 12 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
           GitHub
         </a>
       </div>
 
-      <!-- 移动端菜单按钮 -->
       <button id="mobileMenuBtn" class="md:hidden mc-btn mc-btn-stone px-3 py-2">
         <svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges" fill="currentColor"><rect x="1" y="2" width="14" height="2"/><rect x="1" y="7" width="14" height="2"/><rect x="1" y="12" width="14" height="2"/></svg>
       </button>
     </nav>
-    <!-- 移动端展开菜单 -->
     <div id="mobileMenu" class="hidden md:hidden bg-mcDarker border-b-2 border-black px-4 py-3 flex flex-col gap-2">
       <a href="#features"   class="mc-btn mc-btn-stone text-xs">特性</a>
       <a href="#download"   class="mc-btn mc-btn-stone text-xs">下载</a>
-      <a href="#docs"       class="mc-btn mc-btn-stone text-xs">文档</a>
-      <a href="#api"        class="mc-btn mc-btn-stone text-xs">API</a>
       <a href="#changelog"  class="mc-btn mc-btn-stone text-xs">更新日志</a>
       <a href="https://github.com/xiongmiaozai/matoga" target="_blank" class="mc-btn mc-btn-diamond text-xs">GitHub</a>
     </div>
   </header>
 
-  <!-- ═══════════════════════════════════════════════
-       Hero — 软件简介
-       含 MC 方块云朵装饰（CC0 开源矢量素材）
-       ═══════════════════════════════════════════════ -->
+  <!-- Hero -->
   <section id="top" class="relative overflow-hidden">
-    <!-- MC 边角装饰 — 独立 SVG, CC0 (github.com/minecraft-svg-icons) -->
-    <img src="../assets/svg/corner-tl.svg" width="48" height="48" alt="" class="absolute top-3 left-3 opacity-30 pointer-events-none pixelated z-0" />
-    <img src="../assets/svg/corner-tr.svg" width="48" height="48" alt="" class="absolute top-3 right-3 opacity-30 pointer-events-none pixelated z-0" />
-    <img src="../assets/svg/corner-bl.svg" width="48" height="48" alt="" class="absolute bottom-3 left-3 opacity-20 pointer-events-none pixelated z-0" />
-    <img src="../assets/svg/corner-br.svg" width="48" height="48" alt="" class="absolute bottom-3 right-3 opacity-20 pointer-events-none pixelated z-0" />
     <div class="max-w-6xl mx-auto px-4 pt-20 pb-24 md:pt-28 md:pb-32 relative z-10">
 
-      <!-- MC 方块云朵装饰 — 独立 SVG, CC0 -->
-      <!-- Source: github.com/minecraft-svg-icons (CC0) — 可单独下载使用 -->
-      <svg class="absolute top-8 right-4 md:right-12 mc-float opacity-40" width="80" height="40" viewBox="0 0 32 16" shape-rendering="crispEdges">
-        <rect x="6" y="4" width="20" height="8" fill="#e8e8e8"/>
-        <rect x="10" y="0" width="12" height="4" fill="#e8e8e8"/>
-        <rect x="2" y="8" width="28" height="4" fill="#d0d0d0"/>
-        <rect x="8" y="2" width="2" height="2" fill="#f8f8f8"/>
-        <rect x="22" y="6" width="2" height="2" fill="#f8f8f8"/>
-      </svg>
-      <svg class="absolute top-20 left-2 md:left-20 mc-float opacity-25" style="animation-delay:1.5s" width="64" height="32" viewBox="0 0 32 16" shape-rendering="crispEdges">
-        <rect x="4" y="4" width="24" height="8" fill="#e8e8e8"/>
-        <rect x="8" y="0" width="16" height="4" fill="#e8e8e8"/>
-        <rect x="0" y="8" width="32" height="4" fill="#d0d0d0"/>
-      </svg>
+      <div class="absolute top-8 right-4 md:right-12" data-parallax data-parallax-speed="0.6">
+        <svg class="mc-float opacity-40" width="80" height="40" viewBox="0 0 32 16" shape-rendering="crispEdges">
+          <rect x="6" y="4" width="20" height="8" fill="#e8e8e8"/>
+          <rect x="10" y="0" width="12" height="4" fill="#e8e8e8"/>
+          <rect x="2" y="8" width="28" height="4" fill="#d0d0d0"/>
+          <rect x="8" y="2" width="2" height="2" fill="#f8f8f8"/>
+          <rect x="22" y="6" width="2" height="2" fill="#f8f8f8"/>
+        </svg>
+      </div>
+      <div class="absolute top-20 left-2 md:left-20" data-parallax data-parallax-speed="1.0">
+        <svg class="mc-float opacity-25" style="animation-delay:1.5s" width="64" height="32" viewBox="0 0 32 16" shape-rendering="crispEdges">
+          <rect x="4" y="4" width="24" height="8" fill="#e8e8e8"/>
+          <rect x="8" y="0" width="16" height="4" fill="#e8e8e8"/>
+          <rect x="0" y="8" width="32" height="4" fill="#d0d0d0"/>
+        </svg>
+      </div>
 
-      <!-- 标题区 -->
       <div class="text-center max-w-3xl mx-auto">
-        <!-- MC 边角装饰 — 左上方块簇 (CC0) -->
+        <img src="matoga-logo-2x.png" alt="matoga" height="80" width="254" class="mx-auto mb-8 mc-fade-up pixelated" />
+
         <div class="flex items-center justify-center gap-2 mb-6">
           <span class="mc-badge bg-mcGrass text-white">v2.0</span>
           <span class="mc-badge bg-mcDiamond text-black" style="text-shadow:none">MIT</span>
           <span class="mc-badge bg-mcDirt text-white">Electron 44</span>
         </div>
 
-        <h1 class="mc-title text-3xl md:text-5xl text-mcGrass mb-4">matoga</h1>
-        <p class="mc-title text-sm md:text-base text-mcDiamond mb-8">材质贴图对比工具</p>
+        <p class="mc-title text-sm md:text-base text-mcDiamond mb-8"><span id="typewriter">材质贴图对比工具</span><span class="tw-caret"></span></p>
 
         <p class="text-base md:text-lg text-gray-400 leading-relaxed mb-10 max-w-2xl mx-auto">
           专为 Minecraft 材质开发者设计的高效贴图对比工具。支持双文件夹差异比对、
           3D PBR 实时预览、HDRI 环境光渲染、批量操作与多语言界面。
         </p>
 
-        <!-- CTA 按钮 -->
+        <div class="flex flex-wrap items-center justify-center gap-2 mb-8" data-reveal>
+          <span class="hl-badge">
+            <svg width="12" height="12" viewBox="0 0 16 16" shape-rendering="crispEdges" fill="none" stroke="currentColor" stroke-width="1"><rect x="1" y="2" width="14" height="9"/><rect x="5" y="12" width="6" height="2" fill="currentColor" stroke="none"/></svg>
+            不挑设备
+          </span>
+          <span class="hl-badge">
+            <svg width="12" height="12" viewBox="0 0 16 16" shape-rendering="crispEdges" fill="none" stroke="currentColor" stroke-width="1"><rect x="2" y="2" width="12" height="12"/><rect x="4" y="4" width="8" height="8" fill="currentColor" stroke="none" opacity=".35"/><rect x="9" y="3" width="4" height="1" fill="#1a1a1e" stroke="none"/></svg>
+            免配置 MC 环境
+          </span>
+          <span class="hl-badge">
+            <svg width="12" height="12" viewBox="0 0 16 16" shape-rendering="crispEdges" fill="currentColor"><rect x="1" y="3" width="14" height="3" opacity=".35"/><rect x="1" y="7" width="14" height="3" opacity=".7"/><rect x="1" y="11" width="14" height="3"/></svg>
+            实时视差
+          </span>
+          <span class="hl-badge">
+            <svg width="12" height="12" viewBox="0 0 16 16" shape-rendering="crispEdges" fill="none" stroke="currentColor" stroke-width="1"><rect x="2" y="3" width="12" height="10"/><rect x="2" y="3" width="12" height="3" fill="currentColor" stroke="none" opacity=".4"/><rect x="5" y="1" width="3" height="2" fill="currentColor" stroke="none"/></svg>
+            文件自动命名
+          </span>
+        </div>
+
         <div class="flex flex-wrap items-center justify-center gap-4">
           <a href="#download" class="mc-btn mc-btn-grass text-sm md:text-base">
-            <!-- 下载图标 — MC 像素箭头 (CC0) -->
             <svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges" fill="currentColor"><rect x="6" y="0" width="4" height="8"/><rect x="4" y="6" width="8" height="2"/><rect x="2" y="8" width="12" height="2"/><rect x="4" y="10" width="8" height="2"/><rect x="6" y="12" width="4" height="2"/></svg>
             立即下载
           </a>
@@ -316,25 +320,241 @@
       </div>
     </div>
 
-    <!-- MC 方块分割条 -->
     <div class="mc-divider"></div>
   </section>
 
-  <!-- ═══════════════════════════════════════════════
-       功能特性 — MC 物品槽卡片网格
-       矿石图标作为特性图标 (CC0 开源矢量素材)
-       ═══════════════════════════════════════════════ -->
+  <!-- 对比演示 -->
+  <section id="compare" class="py-20 md:py-28 relative z-10">
+    <div class="max-w-5xl mx-auto px-4">
+      <h2 class="mc-title text-xl md:text-2xl text-center text-mcGrass mb-4" data-reveal>实时对比演示</h2>
+      <p class="text-center text-gray-500 mb-12 text-sm" data-reveal>拖动分割线，体验材质对比的核心能力</p>
+
+      <div class="compare-wrap mx-auto max-w-3xl" style="aspect-ratio:16/9" id="compareDemo" data-reveal>
+        <div class="compare-layer">
+          <svg width="100%" height="100%" viewBox="0 0 16 16" preserveAspectRatio="xMidYMid slice">
+            <defs>
+              <linearGradient id="pbrGrass" x1="0" y1="0" x2="0.3" y2="1">
+                <stop offset="0" stop-color="#b8f078"/>
+                <stop offset="0.35" stop-color="#7cbd56"/>
+                <stop offset="0.7" stop-color="#5a9a3e"/>
+                <stop offset="1" stop-color="#3a7a2e"/>
+              </linearGradient>
+              <radialGradient id="pbrLight" cx="0.2" cy="0.1" r="1.1">
+                <stop offset="0" stop-color="#ffffff" stop-opacity="0.4"/>
+                <stop offset="0.4" stop-color="#ffffff" stop-opacity="0.1"/>
+                <stop offset="1" stop-color="#000000" stop-opacity="0.25"/>
+              </radialGradient>
+              <pattern id="grassBlades" x="0" y="0" width="2" height="2" patternUnits="userSpaceOnUse">
+                <rect width="2" height="2" fill="transparent"/>
+                <rect x="0" y="0" width="1" height="1" fill="#9ade78" opacity="0.35"/>
+                <rect x="1" y="1" width="1" height="1" fill="#4a8a2e" opacity="0.3"/>
+              </pattern>
+            </defs>
+            <rect width="16" height="16" fill="url(#pbrGrass)"/>
+            <rect width="16" height="16" fill="url(#grassBlades)"/>
+            <rect width="16" height="16" fill="url(#pbrLight)"/>
+          </svg>
+        </div>
+        <div class="compare-layer compare-after" id="compareAfter">
+          <svg width="100%" height="100%" viewBox="0 0 16 16" shape-rendering="crispEdges" preserveAspectRatio="xMidYMid slice">
+            <rect width="16" height="16" fill="#6b9a3e"/>
+            <rect width="16" height="5" fill="#7cbd56"/>
+            <rect y="5" width="16" height="1" fill="#6b5437"/>
+            <rect x="2" y="1" width="1" height="1" fill="#5a8a2e"/>
+            <rect x="6" y="2" width="1" height="1" fill="#5a8a2e"/>
+            <rect x="10" y="0" width="1" height="1" fill="#5a8a2e"/>
+            <rect x="13" y="3" width="1" height="1" fill="#5a8a2e"/>
+            <rect x="1" y="4" width="1" height="1" fill="#5a8a2e"/>
+            <rect x="4" y="3" width="1" height="1" fill="#5a8a2e"/>
+            <rect x="8" y="4" width="1" height="1" fill="#5a8a2e"/>
+            <rect x="11" y="2" width="1" height="1" fill="#5a8a2e"/>
+            <rect x="14" y="4" width="1" height="1" fill="#5a8a2e"/>
+            <rect x="3" y="7" width="1" height="1" fill="#5a8a2e"/>
+            <rect x="7" y="8" width="1" height="1" fill="#5a8a2e"/>
+            <rect x="12" y="7" width="1" height="1" fill="#5a8a2e"/>
+            <rect x="2" y="10" width="1" height="1" fill="#5a8a2e"/>
+            <rect x="6" y="11" width="1" height="1" fill="#5a8a2e"/>
+            <rect x="9" y="10" width="1" height="1" fill="#5a8a2e"/>
+            <rect x="13" y="11" width="1" height="1" fill="#5a8a2e"/>
+            <rect x="1" y="13" width="1" height="1" fill="#5a8a2e"/>
+            <rect x="5" y="14" width="1" height="1" fill="#5a8a2e"/>
+            <rect x="8" y="13" width="1" height="1" fill="#5a8a2e"/>
+            <rect x="11" y="14" width="1" height="1" fill="#5a8a2e"/>
+            <rect x="14" y="13" width="1" height="1" fill="#5a8a2e"/>
+          </svg>
+        </div>
+        <div class="compare-handle" id="compareHandle"></div>
+        <span class="compare-label left-3 bg-mcDirt text-white">原版 16×16</span>
+        <span class="compare-label right-3 bg-mcDiamond text-black" style="text-shadow:none">PBR 优化版</span>
+      </div>
+
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-6 mt-16 max-w-3xl mx-auto">
+        <div class="text-center" data-reveal>
+          <div class="stat-num" data-count-to="16">0</div>
+          <p class="text-xs text-gray-500 mt-2">支持贴图格式</p>
+        </div>
+        <div class="text-center" data-reveal>
+          <div class="stat-num" data-count-to="60">0</div>
+          <p class="text-xs text-gray-500 mt-2">FPS 实时渲染</p>
+        </div>
+        <div class="text-center" data-reveal>
+          <div class="stat-num" data-count-to="2">0</div>
+          <p class="text-xs text-gray-500 mt-2">文件夹同步对比</p>
+        </div>
+        <div class="text-center" data-reveal>
+          <div class="stat-num" data-count-to="100">0</div>
+          <p class="text-xs text-gray-500 mt-2">% 本地离线运行</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <div class="mc-divider"></div>
+
+  <!-- 界面功能导览 -->
+  <section id="showcase" class="py-20 md:py-28 relative z-10">
+    <div class="max-w-6xl mx-auto px-4">
+      <h2 class="mc-title text-xl md:text-2xl text-center text-mcGrass mb-4" data-reveal>界面功能导览</h2>
+      <p class="text-center text-gray-500 mb-12 text-sm" data-reveal>四大功能区协同工作，高效完成材质对比工作流</p>
+
+      <div class="relative mx-auto max-w-5xl mc-slot p-0" data-reveal>
+        <img src="app-screenshot.png" alt="matoga 应用界面" loading="lazy" class="w-full block" />
+
+        <div class="showcase-marker" style="top:0.4%;left:0.4%;width:99.2%;height:3.6%;" data-info="0" data-tip="标题栏">
+          <span class="showcase-num">1</span>
+        </div>
+        <div class="showcase-marker" style="top:4.6%;left:0.4%;width:19.2%;height:95%;" data-info="1" data-tip="左侧边栏 · 文件与设置">
+          <span class="showcase-num">2</span>
+        </div>
+        <div class="showcase-marker" style="top:4.6%;left:20.2%;width:54.6%;height:95%;" data-info="2" data-tip="中间主内容区 · 对比结果">
+          <span class="showcase-num">3</span>
+        </div>
+        <div class="showcase-marker" style="top:4.6%;left:75.4%;width:24.2%;height:95%;" data-info="3" data-tip="右侧边栏 · 3D 预览">
+          <span class="showcase-num">4</span>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-12">
+        <div class="mc-slot mc-slot-hover showcase-card p-6" data-info="0">
+          <div class="flex items-center gap-3 mb-3">
+            <span class="showcase-badge bg-mcGrass text-white">1</span>
+            <h3 class="mc-title text-sm text-mcGrass">标题栏</h3>
+          </div>
+          <p class="text-sm text-gray-400 leading-relaxed mb-3">应用身份与全局快捷入口，一眼识别工具版本与当前任务。</p>
+          <ul class="showcase-points text-mcGrass">
+            <li>应用图标 + 名称 + 版本号徽章</li>
+            <li>全局搜索框 <kbd>⌘K</kbd> 快速定位贴图</li>
+            <li>语言切换 / 深浅主题 / 设置 / POM 演示</li>
+          </ul>
+        </div>
+
+        <div class="mc-slot mc-slot-hover showcase-card p-6" data-info="1">
+          <div class="flex items-center gap-3 mb-3">
+            <span class="showcase-badge bg-mcDiamond text-black" style="text-shadow:none">2</span>
+            <h3 class="mc-title text-sm text-mcDiamond">左侧边栏 · 文件与设置</h3>
+          </div>
+          <p class="text-sm text-gray-400 leading-relaxed mb-3">双文件夹加载 + 目录树浏览 + 对比选项，精准控制对比范围。</p>
+          <ul class="showcase-points text-mcDiamond">
+            <li>基准 / 对比双文件夹卡片，目录树可视化</li>
+            <li>递归扫描 · 仅不一致 · 忽略系统 · 哈希校验</li>
+            <li>开始对比 / 批量同步 / 导出 TXT·HTML</li>
+          </ul>
+        </div>
+
+        <div class="mc-slot mc-slot-hover showcase-card p-6" data-info="2">
+          <div class="flex items-center gap-3 mb-3">
+            <span class="showcase-badge bg-mcDirt text-white">3</span>
+            <h3 class="mc-title text-sm text-mcDirt">中间主内容区 · 对比结果</h3>
+          </div>
+          <p class="text-sm text-gray-400 leading-relaxed mb-3">数据概览 + 筛选 + 逐行差异表格，对比结果的核心舞台。</p>
+          <ul class="showcase-points text-mcDirt">
+            <li>五项统计卡：覆盖率 / 一致 / 缺失 / 差异 / PBR</li>
+            <li>筛选标签：全部 · 缺失 · 不同 · 多余</li>
+            <li>双图并排表格，表格 / 可视化视图切换</li>
+          </ul>
+        </div>
+
+        <div class="mc-slot mc-slot-hover showcase-card p-6" data-info="3">
+          <div class="flex items-center gap-3 mb-3">
+            <span class="showcase-badge bg-mcStoneDark text-white">4</span>
+            <h3 class="mc-title text-sm text-mcStone">右侧边栏 · 3D 预览</h3>
+          </div>
+          <p class="text-sm text-gray-400 leading-relaxed mb-3">2D / 3D 自由切换，所见即所得的材质预览与 PBR 调参。</p>
+          <ul class="showcase-points text-mcStone">
+            <li>2D 贴图原样查看 / 3D PBR 实时渲染</li>
+            <li>渲染模式：线框 · 实体 · 光照 · 法线</li>
+            <li>旋转 · 光照 · 网格 · 浮动 / 折叠面板</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="mc-divider"></div>
+
+  <!-- 功能特性 -->
   <section id="features" class="py-20 md:py-28 relative z-10">
     <div class="max-w-6xl mx-auto px-4">
       <h2 class="mc-title text-xl md:text-2xl text-center text-mcGrass mb-4">功能特性</h2>
       <p class="text-center text-gray-500 mb-12 text-sm">为材质开发者打造的全方位工具链</p>
 
-      <!-- 特性卡片网格 — MC 物品槽样式 -->
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 
-        <!-- 特性 1: 双文件夹对比 — 钻石矿石图标 -->
-        <div class="mc-slot mc-slot-hover p-6 mc-fade-up" style="animation-delay:0s">
-          <!-- 钻石矿石图标 — CC0, github.com/minecraft-svg-icons -->
+        <div class="mc-slot mc-slot-hover mc-glow p-6 mc-fade-up" style="animation-delay:0s">
+          <svg width="32" height="32" viewBox="0 0 16 16" shape-rendering="crispEdges" class="mb-4">
+            <rect width="16" height="16" fill="#6a6a6a"/>
+            <rect x="0" y="0" width="16" height="16" fill="#828282" opacity=".5"/>
+            <rect x="1" y="2" width="4" height="3" fill="#7cbd56"/>
+            <rect x="6" y="2" width="4" height="3" fill="#7cbd56"/>
+            <rect x="11" y="2" width="4" height="3" fill="#7cbd56"/>
+            <rect x="1" y="6" width="4" height="3" fill="#5a9a3e"/>
+            <rect x="6" y="6" width="4" height="3" fill="#5a9a3e"/>
+            <rect x="11" y="6" width="4" height="3" fill="#5a9a3e"/>
+          </svg>
+          <h3 class="mc-title text-sm text-mcGrass mb-3">不挑设备</h3>
+          <p class="text-sm text-gray-400 leading-relaxed">Windows、macOS、Linux 全平台原生支持，普通笔记本即可流畅运行，无需独立显卡。</p>
+        </div>
+
+        <div class="mc-slot mc-slot-hover mc-glow p-6 mc-fade-up" style="animation-delay:.06s">
+          <svg width="32" height="32" viewBox="0 0 16 16" shape-rendering="crispEdges" class="mb-4">
+            <rect width="16" height="16" fill="#6a6a6a"/>
+            <rect x="0" y="0" width="16" height="16" fill="#828282" opacity=".5"/>
+            <rect x="6" y="6" width="4" height="4" fill="#7cbd56"/>
+            <rect x="5" y="7" width="6" height="2" fill="#9ade78"/>
+            <rect x="7" y="5" width="2" height="6" fill="#9ade78"/>
+            <rect x="2" y="2" width="12" height="1" fill="#c63a3a" opacity=".8"/>
+          </svg>
+          <h3 class="mc-title text-sm text-mcGrass mb-3">免配置 MC 环境</h3>
+          <p class="text-sm text-gray-400 leading-relaxed">无需安装 Minecraft 或 Java，下载即用，独立运行不依赖游戏本体与任何运行时环境。</p>
+        </div>
+
+        <div class="mc-slot mc-slot-hover mc-glow p-6 mc-fade-up" style="animation-delay:.12s">
+          <svg width="32" height="32" viewBox="0 0 16 16" shape-rendering="crispEdges" class="mb-4">
+            <rect width="16" height="16" fill="#6a6a6a"/>
+            <rect x="0" y="0" width="16" height="16" fill="#828282" opacity=".5"/>
+            <rect x="2" y="3" width="12" height="3" fill="#5a9a3e" opacity=".5"/>
+            <rect x="3" y="6" width="11" height="3" fill="#7cbd56" opacity=".7"/>
+            <rect x="4" y="9" width="10" height="3" fill="#9ade78"/>
+          </svg>
+          <h3 class="mc-title text-sm text-mcGrass mb-3">实时视差遮蔽</h3>
+          <p class="text-sm text-gray-400 leading-relaxed">PBR 视差遮蔽映射实时渲染，鼠标拖动即可感受贴图凹凸纵深，所见即所得。</p>
+        </div>
+
+        <div class="mc-slot mc-slot-hover mc-glow p-6 mc-fade-up" style="animation-delay:.18s">
+          <svg width="32" height="32" viewBox="0 0 16 16" shape-rendering="crispEdges" class="mb-4">
+            <rect width="16" height="16" fill="#6a6a6a"/>
+            <rect x="0" y="0" width="16" height="16" fill="#828282" opacity=".5"/>
+            <rect x="2" y="4" width="10" height="8" fill="#7cbd56"/>
+            <rect x="2" y="4" width="3" height="3" fill="#5a9a3e"/>
+            <rect x="11" y="2" width="2" height="2" fill="#ffe87a"/>
+            <rect x="13" y="4" width="1" height="1" fill="#ffe87a"/>
+          </svg>
+          <h3 class="mc-title text-sm text-mcGrass mb-3">文件自动命名</h3>
+          <p class="text-sm text-gray-400 leading-relaxed">智能识别 _n / _s / _r 等 PBR 后缀规范，自动匹配贴图通道，批量重命名一键完成。</p>
+        </div>
+
+        <div class="mc-slot mc-slot-hover mc-glow p-6 mc-fade-up" style="animation-delay:.24s">
           <svg width="32" height="32" viewBox="0 0 16 16" shape-rendering="crispEdges" class="mb-4">
             <rect width="16" height="16" fill="#6a6a6a"/>
             <rect x="0" y="0" width="16" height="16" fill="#828282" opacity=".5"/>
@@ -348,8 +568,7 @@
           <p class="text-sm text-gray-400 leading-relaxed">同时加载两个材质包文件夹，自动匹配对应贴图，一目了然查看差异与缺失文件。</p>
         </div>
 
-        <!-- 特性 2: 差异可视化 — 红石矿石图标 -->
-        <div class="mc-slot mc-slot-hover p-6 mc-fade-up" style="animation-delay:.06s">
+        <div class="mc-slot mc-slot-hover mc-glow p-6 mc-fade-up" style="animation-delay:.06s">
           <svg width="32" height="32" viewBox="0 0 16 16" shape-rendering="crispEdges" class="mb-4">
             <rect width="16" height="16" fill="#6a6a6a"/>
             <rect x="0" y="0" width="16" height="16" fill="#828282" opacity=".5"/>
@@ -362,8 +581,7 @@
           <p class="text-sm text-gray-400 leading-relaxed">像素级差异对比、覆盖率统计、一致性评分、漏斗图与热力图，数据驱动决策。</p>
         </div>
 
-        <!-- 特性 3: 3D PBR 预览 — 铁矿石图标 -->
-        <div class="mc-slot mc-slot-hover p-6 mc-fade-up" style="animation-delay:.12s">
+        <div class="mc-slot mc-slot-hover mc-glow p-6 mc-fade-up" style="animation-delay:.12s">
           <svg width="32" height="32" viewBox="0 0 16 16" shape-rendering="crispEdges" class="mb-4">
             <rect width="16" height="16" fill="#6a6a6a"/>
             <rect x="0" y="0" width="16" height="16" fill="#828282" opacity=".5"/>
@@ -376,8 +594,7 @@
           <p class="text-sm text-gray-400 leading-relaxed">基于 Three.js 的实时光栅化渲染，支持金属度、粗糙度、法线、视差遮蔽等完整 PBR 工作流。</p>
         </div>
 
-        <!-- 特性 4: HDRI 环境光 — 青金石矿石图标 -->
-        <div class="mc-slot mc-slot-hover p-6 mc-fade-up" style="animation-delay:.18s">
+        <div class="mc-slot mc-slot-hover mc-glow p-6 mc-fade-up" style="animation-delay:.18s">
           <svg width="32" height="32" viewBox="0 0 16 16" shape-rendering="crispEdges" class="mb-4">
             <rect width="16" height="16" fill="#6a6a6a"/>
             <rect x="0" y="0" width="16" height="16" fill="#828282" opacity=".5"/>
@@ -390,8 +607,7 @@
           <p class="text-sm text-gray-400 leading-relaxed">内置 HDRI 预设库与程序化天空盒，支持太阳角度、云层、瑞利散射等参数实时调节。</p>
         </div>
 
-        <!-- 特性 5: 批量操作 — 金矿石图标 -->
-        <div class="mc-slot mc-slot-hover p-6 mc-fade-up" style="animation-delay:.24s">
+        <div class="mc-slot mc-slot-hover mc-glow p-6 mc-fade-up" style="animation-delay:.24s">
           <svg width="32" height="32" viewBox="0 0 16 16" shape-rendering="crispEdges" class="mb-4">
             <rect width="16" height="16" fill="#6a6a6a"/>
             <rect x="0" y="0" width="16" height="16" fill="#828282" opacity=".5"/>
@@ -404,8 +620,7 @@
           <p class="text-sm text-gray-400 leading-relaxed">批量复制、替换、删除贴图，一键撤回操作历史，大幅提升材质包整理效率。</p>
         </div>
 
-        <!-- 特性 6: 多语言 + 导出 — 绿宝石矿石图标 -->
-        <div class="mc-slot mc-slot-hover p-6 mc-fade-up" style="animation-delay:.30s">
+        <div class="mc-slot mc-slot-hover mc-glow p-6 mc-fade-up" style="animation-delay:.30s">
           <svg width="32" height="32" viewBox="0 0 16 16" shape-rendering="crispEdges" class="mb-4">
             <rect width="16" height="16" fill="#6a6a6a"/>
             <rect x="0" y="0" width="16" height="16" fill="#828282" opacity=".5"/>
@@ -422,26 +637,16 @@
     </div>
   </section>
 
-  <!-- MC 方块分割条 -->
   <div class="mc-divider"></div>
 
-  <!-- ═══════════════════════════════════════════════
-       下载 — 多平台支持 + 系统要求 + 安装指南
-       ═══════════════════════════════════════════════ -->
+  <!-- 下载 -->
   <section id="download" class="py-20 md:py-28 relative z-10">
     <div class="max-w-5xl mx-auto px-4">
       <h2 class="mc-title text-xl md:text-2xl text-center text-mcGrass mb-4">下载安装</h2>
       <p class="text-center text-gray-500 mb-12 text-sm">选择你的平台，开箱即用 · 当前版本 <span class="text-mcGrass font-bold" id="dlVersion">v2.0.0</span></p>
 
-      <!-- 版本选择标签 -->
-      <div class="flex items-center justify-center gap-3 mb-10">
-        <button class="mc-btn mc-btn-grass text-xs px-4 py-2" id="dlStable">稳定版 v2.0.0</button>
-      </div>
-
-      <!-- 平台下载卡片 -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
 
-        <!-- macOS -->
         <div class="mc-slot mc-slot-hover p-6 text-center relative">
           <span class="absolute top-3 right-3 mc-badge bg-mcGrass text-white text-[10px]" style="padding:1px 6px">推荐</span>
           <svg width="40" height="40" viewBox="0 0 16 16" shape-rendering="crispEdges" class="mx-auto mb-4">
@@ -457,7 +662,6 @@
           <a id="dlMacZip" href="https://github.com/xiongmiaozai/matoga/releases/download/v2.0.0/matoga-2.0.0-arm64-mac.zip" class="text-[11px] text-gray-500 hover:text-mcGrass transition-colors">免安装 .zip</a>
         </div>
 
-        <!-- Windows -->
         <div class="mc-slot mc-slot-hover p-6 text-center relative">
           <span class="absolute top-3 right-3 mc-badge bg-mcDiamond text-black text-[10px]" style="padding:1px 6px; text-shadow:none">推荐</span>
           <svg width="40" height="40" viewBox="0 0 16 16" shape-rendering="crispEdges" class="mx-auto mb-4">
@@ -474,404 +678,109 @@
         </div>
       </div>
 
-      <!-- 系统要求 -->
-      <div class="mt-10 mc-slot p-6">
-        <h3 class="mc-title text-sm text-mcDiamond mb-4 flex items-center gap-2">
-          <svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges"><rect x="2" y="2" width="12" height="12" fill="#5bcefa" opacity=".3"/><rect x="3" y="3" width="10" height="10" fill="none" stroke="#5bcefa" stroke-width="1"/></svg>
-          系统要求
-        </h3>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-          <div>
-            <p class="text-mcGrass font-bold mb-2">最低配置</p>
-            <ul class="space-y-1 text-gray-400 text-xs">
-              <li>· 4 GB 内存</li>
-              <li>· 500 MB 磁盘空间</li>
-              <li>· WebGL 2.0 支持的显卡</li>
-              <li>· 1280×720 分辨率</li>
-            </ul>
-          </div>
-          <div>
-            <p class="text-mcGrass font-bold mb-2">推荐配置</p>
-            <ul class="space-y-1 text-gray-400 text-xs">
-              <li>· 8 GB+ 内存</li>
-              <li>· 独立显卡 (VRAM 2GB+)</li>
-              <li>· SSD 存储</li>
-              <li>· 1920×1080+ 分辨率</li>
-            </ul>
-          </div>
-          <div>
-            <p class="text-mcGrass font-bold mb-2">运行依赖</p>
-            <ul class="space-y-1 text-gray-400 text-xs">
-              <li>· Electron 44 (已内置)</li>
-              <li>· 无需额外运行时</li>
-              <li>· 首次启动自动初始化</li>
-              <li>· 在线功能需网络连接</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-
-      <!-- 安装指南 — 折叠面板 -->
-      <div class="mt-6 space-y-3">
-        <h3 class="mc-title text-sm text-mcDiamond text-center mb-4">安装指南</h3>
-
-        <!-- macOS 安装 -->
-        <details class="mc-slot group">
-          <summary class="cursor-pointer p-4 flex items-center justify-between list-none">
-            <span class="flex items-center gap-3">
-              <span class="mc-badge bg-mcStone text-white text-xs">macOS</span>
-              <span class="text-sm text-gray-300">.dmg 安装步骤 & Gatekeeper 说明</span>
-            </span>
-            <svg class="w-4 h-4 text-gray-500 transition-transform group-open:rotate-180" fill="currentColor" viewBox="0 0 16 16"><path d="M8 12L2 6h12z"/></svg>
-          </summary>
-          <div class="px-4 pb-4 space-y-3 text-sm text-gray-400">
-            <div class="flex gap-3">
-              <span class="mc-badge bg-mcGrass text-white text-[10px] flex-shrink-0" style="padding:1px 6px">1</span>
-              <p>下载 <code class="text-mcDiamond">.dmg</code> 文件，双击挂载磁盘镜像</p>
-            </div>
-            <div class="flex gap-3">
-              <span class="mc-badge bg-mcGrass text-white text-[10px] flex-shrink-0" style="padding:1px 6px">2</span>
-              <p>将 <code class="text-mcDiamond">matoga.app</code> 拖入 <code class="text-mcDiamond">Applications</code> 文件夹</p>
-            </div>
-            <div class="flex gap-3">
-              <span class="mc-badge bg-mcGrass text-white text-[10px] flex-shrink-0" style="padding:1px 6px">3</span>
-              <p>首次打开时 macOS Gatekeeper 可能拦截，前往 <code class="text-mcDiamond">系统设置 → 隐私与安全性</code>，点击"仍要打开"</p>
-            </div>
-            <div class="mc-code text-xs mt-2">
-              <span class="cmt"># 或通过终端移除隔离属性</span><br>
-              xattr -cr /Applications/matoga.app
-            </div>
-          </div>
-        </details>
-
-        <!-- Windows 安装 -->
-        <details class="mc-slot group">
-          <summary class="cursor-pointer p-4 flex items-center justify-between list-none">
-            <span class="flex items-center gap-3">
-              <span class="mc-badge bg-mcStone text-white text-xs">Windows</span>
-              <span class="text-sm text-gray-300">.exe 安装 & 便携版说明</span>
-            </span>
-            <svg class="w-4 h-4 text-gray-500 transition-transform group-open:rotate-180" fill="currentColor" viewBox="0 0 16 16"><path d="M8 12L2 6h12z"/></svg>
-          </summary>
-          <div class="px-4 pb-4 space-y-3 text-sm text-gray-400">
-            <div class="flex gap-3">
-              <span class="mc-badge bg-mcGrass text-white text-[10px] flex-shrink-0" style="padding:1px 6px">1</span>
-              <p>下载 <code class="text-mcDiamond">.exe</code> 安装程序，双击运行</p>
-            </div>
-            <div class="flex gap-3">
-              <span class="mc-badge bg-mcGrass text-white text-[10px] flex-shrink-0" style="padding:1px 6px">2</span>
-              <p>选择安装路径（默认 <code class="text-mcDiamond">C:\Program Files\matoga</code>），完成安装</p>
-            </div>
-            <div class="flex gap-3">
-              <span class="mc-badge bg-mcGrass text-white text-[10px] flex-shrink-0" style="padding:1px 6px">3</span>
-              <p>从开始菜单或桌面快捷方式启动</p>
-            </div>
-            <div class="mt-2 p-3 bg-black/20 rounded border border-gray-700/50">
-              <p class="text-xs text-gray-500">便携版 <code class="text-mcDiamond">.zip</code> 无需安装，解压后直接运行 <code class="text-mcDiamond">matoga.exe</code>，配置文件存储在同目录下</p>
-            </div>
-          </div>
-        </details>
-
-      </div>
-
-      <!-- 校验和 -->
-      <div class="mt-6 mc-slot p-6">
-        <h3 class="mc-title text-sm text-mcDiamond mb-4">校验和验证</h3>
-        <p class="text-sm text-gray-400 mb-3">下载完成后，建议验证文件完整性以确保安全：</p>
-        <div class="mc-code text-xs">
-          <span class="cmt"># macOS</span><br>
-          shasum -a 256 "matoga-2.0.0-arm64.dmg"<br><br>
-          <span class="cmt"># Windows (PowerShell)</span><br>
-          Get-FileHash "matoga Setup 2.0.0.exe" -Algorithm SHA256
-        </div>
-        <p class="text-xs text-gray-500 mt-3">校验值请对照 <a href="https://github.com/xiongmiaozai/matoga/releases" target="_blank" class="text-mcGrass hover:underline">GitHub Releases</a> 页面公布的 SHA-256 值</p>
-      </div>
-
-      <!-- 源码构建 -->
-      <div class="mt-6 mc-slot p-6">
-        <h3 class="mc-title text-sm text-mcGrass mb-4">从源码构建</h3>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <p class="text-xs text-gray-500 mb-2">前置依赖</p>
-            <ul class="space-y-1 text-sm text-gray-400">
-              <li>· Node.js 18+ & npm</li>
-              <li>· Git</li>
-              <li>· Electron 44 (devDependencies 自动安装)</li>
-            </ul>
-          </div>
-          <div>
-            <p class="text-xs text-gray-500 mb-2">构建命令</p>
-            <div class="mc-code text-xs">
-              <span class="cmt"># 克隆仓库</span><br>
-              git clone https://github.com/xiongmiaozai/matoga<br>
-              cd matoga<br><br>
-              <span class="cmt"># 安装依赖</span><br>
-              npm install<br><br>
-              <span class="cmt"># 网页开发模式</span><br>
-              npm start<br><br>
-              <span class="cmt"># 桌面开发模式</span><br>
-              npm run electron:dev<br><br>
-              <span class="cmt"># 打包 Windows 安装包</span><br>
-              npm run dist:win
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 更新提示 -->
-      <div class="mt-6 flex items-center justify-center gap-3 text-sm text-gray-500">
-        <svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges" class="text-mcGrass"><rect x="6" y="2" width="4" height="8" fill="currentColor"/><rect x="6" y="12" width="4" height="2" fill="currentColor"/></svg>
-        <span>应用支持自动更新检查，启动时自动提示新版本</span>
+      <div class="mt-10 flex flex-wrap items-center justify-center gap-6 text-sm text-gray-500">
+        <span class="flex items-center gap-2">
+          <svg width="14" height="14" viewBox="0 0 16 16" shape-rendering="crispEdges" class="text-mcGrass"><rect x="2" y="2" width="12" height="12" fill="currentColor" opacity=".3"/><rect x="3" y="3" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1"/></svg>
+          需 WebGL 2.0 · 4GB+ 内存
+        </span>
+        <span class="flex items-center gap-2">
+          <svg width="14" height="14" viewBox="0 0 16 16" shape-rendering="crispEdges" class="text-mcGrass"><rect x="6" y="2" width="4" height="8" fill="currentColor"/><rect x="6" y="12" width="4" height="2" fill="currentColor"/></svg>
+          支持自动更新检查
+        </span>
       </div>
     </div>
   </section>
 
-  <!-- MC 方块分割条 -->
   <div class="mc-divider"></div>
 
-  <!-- ═══════════════════════════════════════════════
-       文档 — 快速上手 & 快捷键
-       ═══════════════════════════════════════════════ -->
-  <section id="docs" class="py-20 md:py-28 relative z-10">
-    <div class="max-w-4xl mx-auto px-4">
-      <h2 class="mc-title text-xl md:text-2xl text-center text-mcGrass mb-4">快速上手</h2>
-      <p class="text-center text-gray-500 mb-12 text-sm">三步开始你的材质对比工作流</p>
-
-      <!-- 步骤卡片 -->
-      <div class="space-y-6">
-        <!-- 步骤 1 -->
-        <div class="mc-slot p-6 flex items-start gap-4">
-          <div class="mc-badge bg-mcGrass text-white text-sm flex-shrink-0">01</div>
-          <div>
-            <h3 class="font-bold text-mcGrass mb-2">选择文件夹</h3>
-            <p class="text-sm text-gray-400 leading-relaxed">点击左侧"选择"按钮加载基准材质包，右侧加载对比材质包。也支持拖拽文件夹到对应卡片。</p>
-          </div>
-        </div>
-        <!-- 步骤 2 -->
-        <div class="mc-slot p-6 flex items-start gap-4">
-          <div class="mc-badge bg-mcDiamond text-black text-sm flex-shrink-0" style="text-shadow:none">02</div>
-          <div>
-            <h3 class="font-bold text-mcDiamond mb-2">开始对比</h3>
-            <p class="text-sm text-gray-400 leading-relaxed">点击"开始对比"按钮，工具将自动匹配两侧贴图并生成差异报告，支持按文件夹分类、递归扫描与哈希校验。</p>
-          </div>
-        </div>
-        <!-- 步骤 3 -->
-        <div class="mc-slot p-6 flex items-start gap-4">
-          <div class="mc-badge bg-mcDirt text-white text-sm flex-shrink-0">03</div>
-          <div>
-            <h3 class="font-bold text-mcDirt mb-2">预览 & 操作</h3>
-            <p class="text-sm text-gray-400 leading-relaxed">点击表格中任意材质行，右侧面板展示 2D 贴图预览与 3D PBR 实时渲染。支持替换、删除、批量复制等操作。</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- 快捷键参考 -->
-      <h3 class="mc-title text-sm text-mcDiamond mt-12 mb-6 text-center">键盘快捷键</h3>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div class="mc-slot p-4 flex items-center justify-between">
-          <span class="text-sm text-gray-400">搜索贴图</span>
-          <kbd class="mc-badge bg-mcStoneDark text-white text-xs">⌘K / Ctrl+K</kbd>
-        </div>
-        <div class="mc-slot p-4 flex items-center justify-between">
-          <span class="text-sm text-gray-400">撤回操作</span>
-          <kbd class="mc-badge bg-mcStoneDark text-white text-xs">⌘Z / Ctrl+Z</kbd>
-        </div>
-        <div class="mc-slot p-4 flex items-center justify-between">
-          <span class="text-sm text-gray-400">表格视图</span>
-          <kbd class="mc-badge bg-mcStoneDark text-white text-xs">Ctrl+1</kbd>
-        </div>
-        <div class="mc-slot p-4 flex items-center justify-between">
-          <span class="text-sm text-gray-400">可视化视图</span>
-          <kbd class="mc-badge bg-mcStoneDark text-white text-xs">Ctrl+2</kbd>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- MC 方块分割条 -->
-  <div class="mc-divider"></div>
-
-  <!-- ═══════════════════════════════════════════════
-       API 参考 — HTTP REST + WebSocket
-       正文使用 Inter 保证可读性，标题用像素字体
-       ═══════════════════════════════════════════════ -->
-  <section id="api" class="py-20 md:py-28 relative z-10">
-    <div class="max-w-4xl mx-auto px-4">
-      <h2 class="mc-title text-xl md:text-2xl text-center text-mcGrass mb-4">API 参考</h2>
-      <p class="text-center text-gray-500 mb-12 text-sm">本地 Express 服务提供 RESTful HTTP 接口，WebSocket 用于实时进度推送</p>
-
-      <!-- HTTP 端点列表 — MC 物品槽卡片 -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-        <div class="mc-slot p-5">
-          <h3 class="mc-title text-xs text-mcDiamond mb-3">对比 / Compare</h3>
-          <ul class="space-y-1.5 text-sm text-gray-400 font-mono">
-            <li><span class="text-mcGrass">POST</span> /api/compare/scan</li>
-          </ul>
-        </div>
-        <div class="mc-slot p-5">
-          <h3 class="mc-title text-xs text-mcDiamond mb-3">配置 / Config</h3>
-          <ul class="space-y-1.5 text-sm text-gray-400 font-mono">
-            <li><span class="text-mcGrass">GET</span> /api/config · <span class="text-mcGrass">PUT</span> /api/config</li>
-            <li><span class="text-mcGrass">DELETE</span> /api/config</li>
-          </ul>
-        </div>
-        <div class="mc-slot p-5">
-          <h3 class="mc-title text-xs text-mcDiamond mb-3">文件 / File</h3>
-          <ul class="space-y-1.5 text-sm text-gray-400 font-mono">
-            <li><span class="text-mcGrass">POST</span> /api/file/hash · /copy · /backup · /delete</li>
-            <li><span class="text-mcGrass">GET</span> /api/file/raw · /thumb · /thumb-info</li>
-            <li><span class="text-mcGrass">POST</span> /api/file/thumb</li>
-          </ul>
-        </div>
-        <div class="mc-slot p-5">
-          <h3 class="mc-title text-xs text-mcDiamond mb-3">文件系统 & Shell</h3>
-          <ul class="space-y-1.5 text-sm text-gray-400 font-mono">
-            <li><span class="text-mcGrass">GET</span> /api/fs/browse · <span class="text-mcGrass">POST</span> /api/fs/create</li>
-            <li><span class="text-mcGrass">POST</span> /api/shell/open · /reveal</li>
-          </ul>
-        </div>
-        <div class="mc-slot p-5">
-          <h3 class="mc-title text-xs text-mcDiamond mb-3">HDRI 预设</h3>
-          <ul class="space-y-1.5 text-sm text-gray-400 font-mono">
-            <li><span class="text-mcGrass">GET</span> /api/hdri/list · /thumb · /thumb-info</li>
-            <li><span class="text-mcGrass">POST</span> /api/hdri/thumb</li>
-          </ul>
-        </div>
-        <div class="mc-slot p-5">
-          <h3 class="mc-title text-xs text-mcDiamond mb-3">上传 & WebSocket</h3>
-          <ul class="space-y-1.5 text-sm text-gray-400 font-mono">
-            <li><span class="text-mcGrass">POST</span> /api/upload/begin · /end</li>
-            <li><span class="text-mcGrass">PUT</span> /api/upload/file</li>
-            <li><span class="text-mcGrass">WS</span> {type:'sync'} · {type:'cancel'}</li>
-          </ul>
-        </div>
-      </div>
-
-      <!-- 配置示例 — mc-code 代码块 -->
-      <div class="mc-slot p-6 mb-6">
-        <h3 class="mc-title text-sm text-mcGrass mb-4">配置文件示例</h3>
-        <p class="text-sm text-gray-400 leading-relaxed mb-4">
-          用户配置持久化于 <code class="text-mcDiamond">config.json</code>，通过 <code class="text-mcDiamond">setConfig</code> 传入 patch 对象局部更新。
-        </p>
-        <pre class="mc-code"><span class="cmt">// config.json — 由 GET /api/config 读取，PUT /api/config 更新</span>
-{
-  <span class="str">"theme"</span>: <span class="str">"dark"</span>,
-  <span class="str">"lang"</span>: <span class="str">"zh-CN"</span>,
-  <span class="str">"ignore"</span>: [<span class="str">".DS_Store"</span>, <span class="str">"thumbs.db"</span>],
-  <span class="str">"m3d"</span>: { <span class="str">"roughness"</span>: 0.8, <span class="str">"metalness"</span>: 0.2 },
-  <span class="str">"hdri"</span>: <span class="str">"studio_soft.exr"</span>
-}</pre>
-      </div>
-
-      <!-- 命令行参数 -->
-      <div class="mc-slot p-6">
-        <h3 class="mc-title text-sm text-mcGrass mb-4">命令行参数</h3>
-        <div class="mc-code">
-          <span class="cmt"># 网页开发模式（Express 服务 + 浏览器）</span><br>
-          npm start&nbsp;&nbsp;<span class="cmt"># http://127.0.0.1:5273</span><br><br>
-          <span class="cmt"># 桌面开发模式（Electron + DevTools）</span><br>
-          npm run electron:dev<br><br>
-          <span class="cmt"># 局域网模式</span><br>
-          npm run web:lan
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- MC 方块分割条 -->
-  <div class="mc-divider"></div>
-
-  <!-- ═══════════════════════════════════════════════
-       更新日志
-       ═══════════════════════════════════════════════ -->
+  <!-- 更新日志 -->
   <section id="changelog" class="py-20 md:py-28 relative z-10">
     <div class="max-w-3xl mx-auto px-4">
       <h2 class="mc-title text-xl md:text-2xl text-center text-mcGrass mb-4">更新日志</h2>
       <p class="text-center text-gray-500 mb-12 text-sm">版本迭代记录</p>
 
-      <!-- v2.0.0 -->
-      <div class="mc-slot p-6 mb-6">
-        <div class="flex items-center gap-3 mb-4">
-          <span class="mc-badge bg-mcGrass text-white">v2.0.0</span>
-          <span class="text-xs text-gray-500">2026-10-18</span>
+      <div id="changelogAuto" aria-live="polite" data-loading="1">
+        <div class="mc-slot p-6 mb-6" data-skeleton>
+          <div class="flex items-center gap-3 mb-4">
+            <span class="mc-badge bg-mcStoneDark text-white opacity-60">v—.—.—</span>
+            <span class="text-xs text-gray-600">正在从 GitHub 同步…</span>
+          </div>
+          <ul class="space-y-2 text-sm text-gray-600">
+            <li class="flex items-start gap-2"><span class="text-mcStone flex-shrink-0">▸</span> 正在拉取版本记录</li>
+            <li class="flex items-start gap-2"><span class="text-mcStone flex-shrink-0">▸</span> <span class="inline-block w-48 h-3 bg-mcStoneDark opacity-40 rounded-sm"></span></li>
+            <li class="flex items-start gap-2"><span class="text-mcStone flex-shrink-0">▸</span> <span class="inline-block w-40 h-3 bg-mcStoneDark opacity-40 rounded-sm"></span></li>
+          </ul>
         </div>
-        <ul class="space-y-2 text-sm text-gray-400">
-          <li class="flex items-start gap-2"><span class="text-mcGrass flex-shrink-0">▸</span> 新增 Electron 桌面应用支持（Electron 44 + NSIS 安装包）</li>
-          <li class="flex items-start gap-2"><span class="text-mcGrass flex-shrink-0">▸</span> 修复打包后启动崩溃（BASE_PORT 未定义 + WebSocket error 未捕获）</li>
-          <li class="flex items-start gap-2"><span class="text-mcGrass flex-shrink-0">▸</span> 端口占用时自动重试，不再 Uncaught Exception</li>
-          <li class="flex items-start gap-2"><span class="text-mcGrass flex-shrink-0">▸</span> GitHub Actions 自动打包工作流（release-desktop）</li>
-          <li class="flex items-start gap-2"><span class="text-mcGrass flex-shrink-0">▸</span> 支持 macOS (dmg) + Windows (nsis) 双平台发布</li>
-        </ul>
       </div>
 
-      <!-- v1.0.2 -->
-      <div class="mc-slot p-6 mb-6">
-        <div class="flex items-center gap-3 mb-4">
-          <span class="mc-badge bg-mcDiamond text-black" style="text-shadow:none">v1.0.2</span>
-          <span class="text-xs text-gray-500">2026-10-16</span>
+      <div id="changelogOld" class="hidden">
+        <div class="mc-slot p-6 mb-6">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="mc-badge bg-mcDiamond text-black" style="text-shadow:none">v1.0.2</span>
+            <span class="text-xs text-gray-500">2026-10-16</span>
+          </div>
+          <ul class="space-y-2 text-sm text-gray-400">
+            <li class="flex items-start gap-2"><span class="text-mcDiamond flex-shrink-0">▸</span> 下载地址动态拉取 GitHub Releases API，新版本发布后网页自动更新</li>
+            <li class="flex items-start gap-2"><span class="text-mcDiamond flex-shrink-0">▸</span> 三平台二进制安装包（.dmg / .exe / .AppImage / .deb）</li>
+            <li class="flex items-start gap-2"><span class="text-mcDiamond flex-shrink-0">▸</span> 修复 Linux deb 构建（author email）+ release 部分成功也发布</li>
+          </ul>
         </div>
-        <ul class="space-y-2 text-sm text-gray-400">
-          <li class="flex items-start gap-2"><span class="text-mcDiamond flex-shrink-0">▸</span> 下载地址动态拉取 GitHub Releases API，新版本发布后网页自动更新</li>
-          <li class="flex items-start gap-2"><span class="text-mcDiamond flex-shrink-0">▸</span> 三平台二进制安装包（.dmg / .exe / .AppImage / .deb）</li>
-          <li class="flex items-start gap-2"><span class="text-mcDiamond flex-shrink-0">▸</span> 修复 Linux deb 构建（author email）+ release 部分成功也发布</li>
-        </ul>
+
+        <div class="mc-slot p-6 mb-6">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="mc-badge bg-mcGrass text-white">v1.0</span>
+            <span class="text-xs text-gray-500">2026-01-15</span>
+          </div>
+          <ul class="space-y-2 text-sm text-gray-400">
+            <li class="flex items-start gap-2"><span class="text-mcGrass flex-shrink-0">▸</span> 初始发布：双文件夹对比、差异可视化、3D PBR 预览</li>
+            <li class="flex items-start gap-2"><span class="text-mcGrass flex-shrink-0">▸</span> HDRI 环境光系统与程序化天空盒</li>
+            <li class="flex items-start gap-2"><span class="text-mcGrass flex-shrink-0">▸</span> 批量操作与撤回机制</li>
+            <li class="flex items-start gap-2"><span class="text-mcGrass flex-shrink-0">▸</span> 中英文双语国际化（i18n）</li>
+            <li class="flex items-start gap-2"><span class="text-mcGrass flex-shrink-0">▸</span> Minecraft 方块像素主题 UI</li>
+            <li class="flex items-start gap-2"><span class="text-mcGrass flex-shrink-0">▸</span> HTML 报告导出</li>
+          </ul>
+        </div>
+
+        <div class="mc-slot p-6 mb-6">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="mc-badge bg-mcDirt text-white">v0.9</span>
+            <span class="text-xs text-gray-500">2025-12-20</span>
+          </div>
+          <ul class="space-y-2 text-sm text-gray-400">
+            <li class="flex items-start gap-2"><span class="text-mcDirt flex-shrink-0">▸</span> HDRI 预设库与天空盒参数调节</li>
+            <li class="flex items-start gap-2"><span class="text-mcDirt flex-shrink-0">▸</span> 视差遮蔽映射与法线推算</li>
+            <li class="flex items-start gap-2"><span class="text-mcDirt flex-shrink-0">▸</span> 3D 材质渲染增强</li>
+          </ul>
+        </div>
+
+        <div class="mc-slot p-6">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="mc-badge bg-mcStoneDark text-white">v0.8</span>
+            <span class="text-xs text-gray-500">2025-11-10</span>
+          </div>
+          <ul class="space-y-2 text-sm text-gray-400">
+            <li class="flex items-start gap-2"><span class="text-mcStone flex-shrink-0">▸</span> 可视化图表视图（漏斗图/热力图/堆叠图）</li>
+            <li class="flex items-start gap-2"><span class="text-mcStone flex-shrink-0">▸</span> 统计仪表板与覆盖率分析</li>
+          </ul>
+        </div>
       </div>
 
-      <!-- v1.0 -->
-      <div class="mc-slot p-6 mb-6">
-        <div class="flex items-center gap-3 mb-4">
-          <span class="mc-badge bg-mcGrass text-white">v1.0</span>
-          <span class="text-xs text-gray-500">2026-01-15</span>
-        </div>
-        <ul class="space-y-2 text-sm text-gray-400">
-          <li class="flex items-start gap-2"><span class="text-mcGrass flex-shrink-0">▸</span> 初始发布：双文件夹对比、差异可视化、3D PBR 预览</li>
-          <li class="flex items-start gap-2"><span class="text-mcGrass flex-shrink-0">▸</span> HDRI 环境光系统与程序化天空盒</li>
-          <li class="flex items-start gap-2"><span class="text-mcGrass flex-shrink-0">▸</span> 批量操作与撤回机制</li>
-          <li class="flex items-start gap-2"><span class="text-mcGrass flex-shrink-0">▸</span> 中英文双语国际化（i18n）</li>
-          <li class="flex items-start gap-2"><span class="text-mcGrass flex-shrink-0">▸</span> Minecraft 方块像素主题 UI</li>
-          <li class="flex items-start gap-2"><span class="text-mcGrass flex-shrink-0">▸</span> HTML 报告导出</li>
-        </ul>
-      </div>
-
-      <!-- v0.9 -->
-      <div class="mc-slot p-6 mb-6">
-        <div class="flex items-center gap-3 mb-4">
-          <span class="mc-badge bg-mcDirt text-white">v0.9</span>
-          <span class="text-xs text-gray-500">2025-12-20</span>
-        </div>
-        <ul class="space-y-2 text-sm text-gray-400">
-          <li class="flex items-start gap-2"><span class="text-mcDirt flex-shrink-0">▸</span> HDRI 预设库与天空盒参数调节</li>
-          <li class="flex items-start gap-2"><span class="text-mcDirt flex-shrink-0">▸</span> 视差遮蔽映射与法线推算</li>
-          <li class="flex items-start gap-2"><span class="text-mcDirt flex-shrink-0">▸</span> 3D 材质渲染增强</li>
-        </ul>
-      </div>
-
-      <!-- v0.8 -->
-      <div class="mc-slot p-6">
-        <div class="flex items-center gap-3 mb-4">
-          <span class="mc-badge bg-mcStoneDark text-white">v0.8</span>
-          <span class="text-xs text-gray-500">2025-11-10</span>
-        </div>
-        <ul class="space-y-2 text-sm text-gray-400">
-          <li class="flex items-start gap-2"><span class="text-mcStone flex-shrink-0">▸</span> 可视化图表视图（漏斗图/热力图/堆叠图）</li>
-          <li class="flex items-start gap-2"><span class="text-mcStone flex-shrink-0">▸</span> 统计仪表板与覆盖率分析</li>
-        </ul>
+      <div class="text-center">
+        <button id="changelogToggle" class="mc-btn mc-btn-stone text-xs">
+          <span id="changelogToggleText">查看历史版本</span>
+          <svg id="changelogToggleIcon" width="12" height="12" viewBox="0 0 16 16" shape-rendering="crispEdges" fill="currentColor" class="transition-transform"><rect x="4" y="2" width="2" height="10"/><rect x="6" y="8" width="2" height="2"/><rect x="8" y="6" width="2" height="2"/><rect x="10" y="4" width="2" height="2"/></svg>
+        </button>
       </div>
     </div>
   </section>
 
-  <!-- ═══════════════════════════════════════════════
-       页脚 — 含 MC 像素小草装饰 (CC0 开源矢量素材)
-       Source: github.com/minecraft-svg-icons (CC0)
-       ═══════════════════════════════════════════════ -->
+  <!-- 页脚 -->
   <footer class="relative z-10 bg-mcDarker border-t-[3px] border-black">
-    <!-- MC 像素小草条 — 装饰性 SVG, CC0 -->
     <div class="flex justify-center overflow-hidden border-b-2 border-black" style="height:16px">
       <svg width="100%" height="16" viewBox="0 0 256 16" shape-rendering="crispEdges" preserveAspectRatio="xMidYMid slice" class="flex-shrink-0">
         <rect width="256" height="16" fill="#6b5437"/>
         <rect width="256" height="6" fill="#5a9a3e"/>
         <rect width="256" height="4" fill="#7cbd56"/>
-        <!-- 随机草丛 -->
         <rect x="8"  y="0" width="2" height="8" fill="#5a9a3e"/>
         <rect x="32" y="0" width="2" height="6" fill="#5a9a3e"/>
         <rect x="56" y="0" width="2" height="9" fill="#5a9a3e"/>
@@ -888,30 +797,18 @@
 
     <div class="max-w-6xl mx-auto px-4 py-12">
       <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
-        <!-- 项目信息 -->
         <div>
-          <div class="flex items-center gap-2 mb-4">
-            <svg width="20" height="20" viewBox="0 0 16 16" shape-rendering="crispEdges">
-              <rect width="16" height="16" fill="#5a9a3e"/>
-              <rect x="0" y="0" width="16" height="4" fill="#7cbd56"/>
-              <rect x="0" y="4" width="16" height="12" fill="#8b6f47"/>
-            </svg>
-            <span class="mc-title text-sm text-mcGrass">matoga</span>
-          </div>
+          <img src="matoga-logo-2x.png" alt="matoga" height="32" width="102" class="pixelated mb-4" />
           <p class="text-xs text-gray-500 leading-relaxed">材质贴图对比工具，为 Minecraft 材质开发者打造。</p>
         </div>
-        <!-- 链接 -->
         <div>
           <h4 class="mc-title text-xs text-mcDiamond mb-4">链接</h4>
           <ul class="space-y-2 text-sm">
             <li><a href="#features"  class="text-gray-400 hover:text-mcGrass transition-colors">功能特性</a></li>
             <li><a href="#download"  class="text-gray-400 hover:text-mcGrass transition-colors">下载安装</a></li>
-            <li><a href="#docs"      class="text-gray-400 hover:text-mcGrass transition-colors">使用文档</a></li>
-            <li><a href="#api"       class="text-gray-400 hover:text-mcGrass transition-colors">API 参考</a></li>
             <li><a href="#changelog" class="text-gray-400 hover:text-mcGrass transition-colors">更新日志</a></li>
           </ul>
         </div>
-        <!-- 源码 -->
         <div>
           <h4 class="mc-title text-xs text-mcDiamond mb-4">源码</h4>
           <ul class="space-y-2 text-sm">
@@ -922,61 +819,89 @@
         </div>
       </div>
 
-      <!-- 版权 -->
       <div class="border-t-2 border-black pt-6 flex flex-col md:flex-row items-center justify-between gap-4">
         <p class="text-xs text-gray-600">
           Copyright © 2026 芝世 (xiongmiaozai). MIT License.
-        </p>
-        <p class="text-xs text-gray-600">
-          MC 装饰素材: <a href="https://github.com/minecraft-svg-icons" target="_blank" class="text-mcStone hover:text-mcGrass transition-colors">minecraft-svg-icons (CC0)</a>
         </p>
       </div>
     </div>
   </footer>
 
-  <!-- ═══════════════════════════════════════════════
-       移动端菜单交互
-       ═══════════════════════════════════════════════ -->
   <script>
     document.getElementById('mobileMenuBtn').addEventListener('click', () => {
       document.getElementById('mobileMenu').classList.toggle('hidden')
     })
-    // 点击导航链接后关闭移动端菜单
     document.querySelectorAll('#mobileMenu a').forEach(a => {
       a.addEventListener('click', () => {
         document.getElementById('mobileMenu').classList.add('hidden')
       })
     })
-    // 下载版本切换
-    const dlStable = document.getElementById('dlStable')
-    const dlPreview = document.getElementById('dlPreview')
-    if (dlStable && dlPreview) {
-      dlStable.addEventListener('click', () => {
-        dlStable.classList.remove('opacity-60'); dlStable.classList.add('mc-btn-grass'); dlStable.classList.remove('mc-btn-stone')
-        dlPreview.classList.add('opacity-60'); dlPreview.classList.add('mc-btn-stone'); dlPreview.classList.remove('mc-btn-grass')
-      })
-      dlPreview.addEventListener('click', () => {
-        dlPreview.classList.remove('opacity-60'); dlPreview.classList.add('mc-btn-grass'); dlPreview.classList.remove('mc-btn-stone')
-        dlStable.classList.add('opacity-60'); dlStable.classList.add('mc-btn-stone'); dlStable.classList.remove('mc-btn-grass')
-      })
-    }
   </script>
 
-  <!-- 动态拉取最新 GitHub Release，自动更新下载地址/版本号/文件大小 -->
   <script>
   (async () => {
-    try {
-      const res = await fetch('https://api.github.com/repos/xiongmiaozai/matoga/releases/latest', {
-        headers: { 'Accept': 'application/vnd.github+json' }
-      })
-      if (!res.ok) return
-      const rel = await res.json()
+    const API = 'https://api.github.com/repos/xiongmiaozai/matoga/releases?per_page=30'
+    const CACHE_KEY = 'matoga:releases-cache:v1'
+    const CACHE_TTL = 10 * 60 * 1000
+    const RELEASES_PAGE = 'https://github.com/xiongmiaozai/matoga/releases'
+    const set = (id, url) => { const el = document.getElementById(id); if (el && url) el.href = url }
+    const fmtSize = (b) => b ? (b >= 1048576 ? (b / 1048576).toFixed(0) + ' MB' : (b / 1024).toFixed(0) + ' KB') : ''
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+    const majorOf = (tag) => { const m = /^v?(\d+)/.exec(tag || ''); return m ? parseInt(m[1], 10) : 0 }
+    const badgeCls = (tag) => { const mj = majorOf(tag); if (mj >= 2) return 'bg-mcGrass text-white'; if (mj === 1) return 'bg-mcDiamond text-black'; return 'bg-mcDirt text-white' }
+    const bulletCls = (tag) => { const mj = majorOf(tag); if (mj >= 2) return 'text-mcGrass'; if (mj === 1) return 'text-mcDiamond'; return 'text-mcDirt' }
+    const inlineMd = (s) => esc(s)
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener" class="text-mcGrass hover:underline">$1</a>')
+    const renderBody = (body, bc) => {
+      const lines = String(body || '').split(/\r?\n/)
+      const out = []
+      let inList = false
+      const closeList = () => { if (inList) { out.push('</ul>'); inList = false } }
+      for (const raw of lines) {
+        const line = raw.trim()
+        if (!line) { closeList(); continue }
+        if (/^#{1,6}\s/.test(line)) { closeList(); continue }
+        const m = /^[-*]\s+(.*)$/.exec(line)
+        if (m) {
+          if (!inList) { out.push('<ul class="space-y-2 text-sm text-gray-400">'); inList = true }
+          out.push('<li class="flex items-start gap-2"><span class="' + bc + ' flex-shrink-0">▸</span>' + inlineMd(m[1]) + '</li>')
+          continue
+        }
+        closeList()
+        out.push('<p class="text-sm text-gray-400">' + inlineMd(line) + '</p>')
+      }
+      closeList()
+      return out.join('')
+    }
+    const renderRelease = (rel) => {
+      const tag = rel.tag_name || 'v?'
+      const date = (rel.published_at || '').slice(0, 10)
+      const bc = bulletCls(tag)
+      const body = renderBody(rel.body, bc)
+      const bodyHtml = body || '<p class="text-sm text-gray-500"><a href="' + esc(rel.html_url) + '" target="_blank" rel="noopener" class="text-mcGrass hover:underline">详见 Release Notes →</a></p>'
+      return '<div class="mc-slot p-6 mb-6">'
+        + '<div class="flex items-center gap-3 mb-4">'
+        + '<span class="mc-badge ' + badgeCls(tag) + '">' + esc(tag) + '</span>'
+        + (date ? '<span class="text-xs text-gray-500">' + esc(date) + '</span>' : '')
+        + '</div>' + bodyHtml + '</div>'
+    }
+    const showChangelogError = () => {
+      const host = document.getElementById('changelogAuto')
+      if (host) host.innerHTML = '<div class="mc-slot p-6 mb-6"><p class="text-sm text-gray-500">版本记录加载失败，<a href="' + RELEASES_PAGE + '" target="_blank" rel="noopener" class="text-mcGrass hover:underline">查看 GitHub Releases →</a></p></div>'
+    }
+    const renderChangelog = (releases) => {
+      const host = document.getElementById('changelogAuto')
+      if (!host) return
+      const valid = releases.filter((r) => !r.draft && !r.prerelease)
+      if (!valid.length) { host.innerHTML = '<div class="mc-slot p-6 mb-6"><p class="text-sm text-gray-500">暂无版本记录，<a href="' + RELEASES_PAGE + '" target="_blank" rel="noopener" class="text-mcGrass hover:underline">查看 GitHub Releases →</a></p></div>'; return }
+      host.innerHTML = valid.map(renderRelease).join('')
+    }
+    const applyLatest = (rel) => {
+      if (!rel) return
       const tag = rel.tag_name || 'v2.0'
-      const set = (id, url) => { const el = document.getElementById(id); if (el && url) el.href = url }
-      const fmtSize = (b) => b ? (b >= 1048576 ? (b / 1048576).toFixed(0) + ' MB' : (b / 1024).toFixed(0) + ' KB') : ''
       const find = (pred) => (rel.assets || []).find(pred)
       const vEl = document.getElementById('dlVersion'); if (vEl) vEl.textContent = tag
-      const sb = document.getElementById('dlStable'); if (sb) sb.textContent = '稳定版 ' + tag
       set('dlReleaseTag', rel.html_url)
       const dmg = find(a => a.name.endsWith('.dmg'))
       const macZip = find(a => a.name.endsWith('-mac.zip'))
@@ -984,16 +909,216 @@
       set('dlMacZip', macZip && macZip.browser_download_url)
       if (dmg) { const p = document.getElementById('sizeMac'); if (p) p.textContent = fmtSize(dmg.size) + ' · macOS 11+' }
       const setup = find(a => a.name.includes('Setup') && a.name.endsWith('.exe'))
-      const portable = find(a => !a.name.includes('Setup') && a.name.endsWith('.exe'))
       set('dlWinSetup', setup && setup.browser_download_url)
-      set('dlWinPortable', portable && portable.browser_download_url)
       if (setup) { const p = document.getElementById('sizeWin'); if (p) p.textContent = fmtSize(setup.size) + ' · Win 10+' }
-      const appimg = find(a => a.name.endsWith('.AppImage'))
-      const deb = find(a => a.name.endsWith('.deb'))
-      set('dlLinuxAppimage', appimg && appimg.browser_download_url)
-      set('dlLinuxDeb', deb && deb.browser_download_url)
-      if (appimg) { const p = document.getElementById('sizeLinux'); if (p) p.textContent = fmtSize(appimg.size) + ' · Ubuntu 20.04+' }
-    } catch (e) { /* 拉取失败时保留 HTML 默认 v2.0 链接 */ }
+    }
+    const applyReleases = (releases) => { applyLatest(releases[0]); renderChangelog(releases) }
+    const readCache = () => {
+      try {
+        const raw = localStorage.getItem(CACHE_KEY)
+        if (!raw) return null
+        const obj = JSON.parse(raw)
+        if (!obj || Date.now() - obj.t > CACHE_TTL || !Array.isArray(obj.data) || !obj.data.length) return null
+        return obj.data
+      } catch (e) { return null }
+    }
+    const writeCache = (data) => { try { localStorage.setItem(CACHE_KEY, JSON.stringify({ t: Date.now(), data })) } catch (e) {} }
+
+    const cached = readCache()
+    if (cached) applyReleases(cached)
+
+    try {
+      const res = await fetch(API, { headers: { 'Accept': 'application/vnd.github+json' } })
+      if (!res.ok) { if (!cached) showChangelogError(); return }
+      const releases = await res.json()
+      if (!Array.isArray(releases) || !releases.length) { if (!cached) showChangelogError(); return }
+      writeCache(releases)
+      applyReleases(releases)
+    } catch (e) { if (!cached) showChangelogError() }
+  })()
+  </script>
+
+  <script>
+  ;(() => {
+    const wrap = document.getElementById('compareDemo')
+    const after = document.getElementById('compareAfter')
+    const handle = document.getElementById('compareHandle')
+    if (!wrap || !after || !handle) return
+    let dragging = false
+    const update = (clientX) => {
+      const rect = wrap.getBoundingClientRect()
+      let pct = ((clientX - rect.left) / rect.width) * 100
+      pct = Math.max(0, Math.min(100, pct))
+      after.style.clipPath = 'inset(0 0 0 ' + pct + '%)'
+      handle.style.left = pct + '%'
+    }
+    wrap.addEventListener('mousedown', (e) => { dragging = true; update(e.clientX) })
+    window.addEventListener('mousemove', (e) => { if (dragging) update(e.clientX) })
+    window.addEventListener('mouseup', () => { dragging = false })
+    wrap.addEventListener('touchstart', (e) => { dragging = true; update(e.touches[0].clientX) }, { passive: true })
+    wrap.addEventListener('touchmove', (e) => { if (dragging) update(e.touches[0].clientX) }, { passive: true })
+    window.addEventListener('touchend', () => { dragging = false })
+  })()
+
+  ;(() => {
+    const els = document.querySelectorAll('[data-reveal]')
+    if (!els.length) return
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) { entry.target.classList.add('revealed'); io.unobserve(entry.target) }
+      })
+    }, { threshold: 0.15 })
+    els.forEach((el) => io.observe(el))
+  })()
+
+  ;(() => {
+    const nums = document.querySelectorAll('[data-count-to]')
+    if (!nums.length) return
+    const animate = (el) => {
+      const target = parseInt(el.dataset.countTo, 10)
+      const dur = 1200, start = performance.now()
+      const step = (now) => {
+        const t = Math.min(1, (now - start) / dur)
+        el.textContent = Math.round(target * (1 - Math.pow(1 - t, 3)))
+        if (t < 1) requestAnimationFrame(step)
+      }
+      requestAnimationFrame(step)
+    }
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) { animate(entry.target); io.unobserve(entry.target) }
+      })
+    }, { threshold: 0.5 })
+    nums.forEach((el) => io.observe(el))
+  })()
+
+  ;(() => {
+    const el = document.getElementById('typewriter')
+    if (!el) return
+    const texts = ['材质贴图对比工具', 'PBR 材质实时预览', 'HDRI 环境光渲染', '双文件夹差异比对']
+    let ti = 0, ci = 0, deleting = false
+    const tick = () => {
+      const cur = texts[ti]
+      if (!deleting) {
+        ci++; el.textContent = cur.slice(0, ci)
+        if (ci === cur.length) { deleting = true; setTimeout(tick, 1800); return }
+      } else {
+        ci--; el.textContent = cur.slice(0, ci)
+        if (ci === 0) { deleting = false; ti = (ti + 1) % texts.length }
+      }
+      setTimeout(tick, deleting ? 45 : 90)
+    }
+    setTimeout(tick, 2000)
+  })()
+
+  ;(() => {
+    document.querySelectorAll('.mc-glow').forEach((card) => {
+      card.addEventListener('mousemove', (e) => {
+        const rect = card.getBoundingClientRect()
+        card.style.setProperty('--mx', ((e.clientX - rect.left) / rect.width * 100) + '%')
+        card.style.setProperty('--my', ((e.clientY - rect.top) / rect.height * 100) + '%')
+      })
+    })
+  })()
+
+  ;(() => {
+    const btn = document.getElementById('changelogToggle')
+    const old = document.getElementById('changelogOld')
+    const txt = document.getElementById('changelogToggleText')
+    const icon = document.getElementById('changelogToggleIcon')
+    if (!btn || !old || !txt) return
+    btn.addEventListener('click', () => {
+      const expanded = !old.classList.contains('hidden')
+      old.classList.toggle('hidden')
+      txt.textContent = expanded ? '查看历史版本' : '收起历史版本'
+      if (icon) icon.style.transform = expanded ? '' : 'rotate(180deg)'
+    })
+  })()
+
+  ;(() => {
+    const markers = document.querySelectorAll('.showcase-marker')
+    const cards = document.querySelectorAll('.showcase-card')
+    const setActive = (info) => {
+      markers.forEach((m) => m.classList.toggle('active', m.dataset.info === info))
+      cards.forEach((c) => c.classList.toggle('active', c.dataset.info === info))
+    }
+    const clearActive = () => { markers.forEach((m) => m.classList.remove('active')); cards.forEach((c) => c.classList.remove('active')) }
+    let locked = null
+    ;[...markers, ...cards].forEach((el) => {
+      const info = el.dataset.info
+      el.addEventListener('mouseenter', () => { if (locked === null) setActive(info) })
+      el.addEventListener('mouseleave', () => { if (locked === null) clearActive() })
+      el.addEventListener('click', (e) => {
+        e.preventDefault()
+        if (locked === info) { locked = null; clearActive() }
+        else { locked = info; setActive(info) }
+      })
+    })
+    document.addEventListener('click', (e) => {
+      if (locked === null) return
+      if (!e.target.closest('.showcase-marker, .showcase-card')) { locked = null; clearActive() }
+    })
+  })()
+
+  ;(() => {
+    const layers = document.querySelectorAll('[data-parallax]')
+    if (!layers.length) return
+    let mx = 0, my = 0, tx = 0, ty = 0
+    window.addEventListener('mousemove', (e) => {
+      mx = (e.clientX / window.innerWidth - 0.5) * 2
+      my = (e.clientY / window.innerHeight - 0.5) * 2
+    })
+    const tick = () => {
+      tx += (mx - tx) * 0.06
+      ty += (my - ty) * 0.06
+      layers.forEach((el) => {
+        const sp = parseFloat(el.dataset.parallaxSpeed) || 0.5
+        el.style.transform = 'translate(' + (tx * sp * 18).toFixed(2) + 'px,' + (ty * sp * 18).toFixed(2) + 'px)'
+      })
+      requestAnimationFrame(tick)
+    }
+    tick()
+  })()
+
+  ;(() => {
+    const demo = document.getElementById('parallaxDemo')
+    const slider = document.getElementById('parallaxSlider')
+    const readout = document.getElementById('parallaxReadout')
+    if (!demo) return
+    const layers = demo.querySelectorAll('[data-depth]')
+    const colors = ['#3a3a3e', '#4a4a4e', '#5a5a5e', '#6a6a6e', '#7a7a7e']
+    const sizes = [8, 12, 16, 20, 24]
+    layers.forEach((el, i) => {
+      const sz = sizes[i]
+      el.style.backgroundColor = colors[i]
+      el.style.backgroundImage = 'repeating-linear-gradient(0deg,transparent 0 ' + (sz - 1) + 'px,rgba(0,0,0,.5) ' + (sz - 1) + 'px ' + sz + 'px),repeating-linear-gradient(90deg,transparent 0 ' + (sz * 2 - 1) + 'px,rgba(0,0,0,.5) ' + (sz * 2 - 1) + 'px ' + (sz * 2) + 'px)'
+    })
+    let strength = 0.3, mx = 0, tmx = 0
+    if (slider) {
+      slider.addEventListener('input', () => {
+        strength = slider.value / 100
+        if (readout) readout.textContent = strength.toFixed(2)
+      })
+    }
+    demo.addEventListener('mousemove', (e) => {
+      const rect = demo.getBoundingClientRect()
+      mx = (e.clientX - rect.left) / rect.width - 0.5
+    })
+    demo.addEventListener('mouseleave', () => { mx = 0 })
+    demo.addEventListener('touchmove', (e) => {
+      const rect = demo.getBoundingClientRect()
+      mx = (e.touches[0].clientX - rect.left) / rect.width - 0.5
+    }, { passive: true })
+    demo.addEventListener('touchend', () => { mx = 0 })
+    const tick = () => {
+      tmx += (mx - tmx) * 0.1
+      layers.forEach((el) => {
+        const d = parseInt(el.dataset.depth, 10)
+        el.style.transform = 'translateX(' + (tmx * strength * (d + 1) * 14).toFixed(2) + 'px)'
+      })
+      requestAnimationFrame(tick)
+    }
+    tick()
   })()
   </script>
 </body>

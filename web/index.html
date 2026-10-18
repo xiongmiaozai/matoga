@@ -82,6 +82,7 @@
       <button id="langBtn" class="icon-btn" data-i18n-title="header.language" title="语言"><img src="assets/mc-icons/globe.png" alt="" class="mc-ico" /></button>
       <button id="themeToggle" class="icon-btn" data-i18n-title="header.theme" title="切换深色/浅色模式"><svg class="ico"><use href="#i-moon"/></svg></button>
       <button id="settingsBtn" class="icon-btn" data-i18n-title="header.settings" title="设置"><svg class="ico"><use href="#i-settings"/></svg></button>
+      <button id="pomDemoBtn" class="icon-btn" data-i18n-title="header.pomDemo" title="POM 演示"><svg class="ico"><use href="#i-depth"/></svg></button>
     </div>
   </header>
 
@@ -281,6 +282,32 @@
                     </div>
                   </div>
                   <div class="m3d-tab-pane" data-pane="parallax">
+                    <div class="m3d-upload-zone">
+                      <div class="m3d-upload-title" data-i18n="m3d.uploadTitle">贴图上传</div>
+                      <div class="m3d-upload-slots">
+                        <div class="m3d-upload-slot" data-role="main">
+                          <div class="m3d-slot-label" data-i18n="m3d.slotMain">主贴图</div>
+                          <div class="m3d-slot-drop" id="m3dSlotMain">
+                            <div class="m3d-slot-hint" data-i18n="m3d.slotHint">点击或拖拽</div>
+                          </div>
+                          <button class="m3d-slot-clear" data-role="main" data-i18n-title="common.clear" title="清除"><svg class="ico ico-sm"><use href="#i-x"/></svg></button>
+                        </div>
+                        <div class="m3d-upload-slot" data-role="normal">
+                          <div class="m3d-slot-label" data-i18n="m3d.slotNormal">法线 _n</div>
+                          <div class="m3d-slot-drop" id="m3dSlotNormal">
+                            <div class="m3d-slot-hint" data-i18n="m3d.slotHint">点击或拖拽</div>
+                          </div>
+                          <button class="m3d-slot-clear" data-role="normal" data-i18n-title="common.clear" title="清除"><svg class="ico ico-sm"><use href="#i-x"/></svg></button>
+                        </div>
+                        <div class="m3d-upload-slot" data-role="specular">
+                          <div class="m3d-slot-label" data-i18n="m3d.slotSpecular">高光 _s</div>
+                          <div class="m3d-slot-drop" id="m3dSlotSpecular">
+                            <div class="m3d-slot-hint" data-i18n="m3d.slotHint">点击或拖拽</div>
+                          </div>
+                          <button class="m3d-slot-clear" data-role="specular" data-i18n-title="common.clear" title="清除"><svg class="ico ico-sm"><use href="#i-x"/></svg></button>
+                        </div>
+                      </div>
+                    </div>
                     <div class="m3d-parallax-status">
                       <div class="m3d-parallax-status-bar"><div class="m3d-parallax-status-fill" id="m3dParallaxStatusFill"></div></div>
                       <div class="m3d-height-status" id="m3dHeightStatus" data-i18n="m3d.heightNotDetected">未检测</div>

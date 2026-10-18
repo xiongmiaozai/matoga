@@ -62,6 +62,16 @@
       })
     },
 
+    async uploadOneFile(file) {
+      try {
+        const begin = await call('POST', '/api/upload/begin')
+        await putRaw(begin.uploadId, file.name, file)
+        await call('POST', '/api/upload/end?uploadId=' + begin.uploadId)
+        const sep = begin.rootPath.includes('\\') && !begin.rootPath.includes('/') ? '\\' : '/'
+        return { fullPath: begin.rootPath + sep + file.name, name: file.name }
+      } catch { return null }
+    },
+
     async dropToTemp(dataTransfer) {
       try {
         const begin = await call('POST', '/api/upload/begin')
