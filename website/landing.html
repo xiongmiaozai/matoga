@@ -288,9 +288,9 @@
       <div class="text-center max-w-3xl mx-auto">
         <!-- MC 边角装饰 — 左上方块簇 (CC0) -->
         <div class="flex items-center justify-center gap-2 mb-6">
-          <span class="mc-badge bg-mcGrass text-white">v1.0</span>
+          <span class="mc-badge bg-mcGrass text-white">v2.0</span>
           <span class="mc-badge bg-mcDiamond text-black" style="text-shadow:none">MIT</span>
-          <span class="mc-badge bg-mcDirt text-white">Electron</span>
+          <span class="mc-badge bg-mcDirt text-white">Electron 44</span>
         </div>
 
         <h1 class="mc-title text-3xl md:text-5xl text-mcGrass mb-4">matoga</h1>
@@ -431,16 +431,15 @@
   <section id="download" class="py-20 md:py-28 relative z-10">
     <div class="max-w-5xl mx-auto px-4">
       <h2 class="mc-title text-xl md:text-2xl text-center text-mcGrass mb-4">下载安装</h2>
-      <p class="text-center text-gray-500 mb-12 text-sm">选择你的平台，开箱即用 · 当前版本 <span class="text-mcGrass font-bold" id="dlVersion">v1.0.2</span></p>
+      <p class="text-center text-gray-500 mb-12 text-sm">选择你的平台，开箱即用 · 当前版本 <span class="text-mcGrass font-bold" id="dlVersion">v2.0.0</span></p>
 
       <!-- 版本选择标签 -->
       <div class="flex items-center justify-center gap-3 mb-10">
-        <button class="mc-btn mc-btn-grass text-xs px-4 py-2" id="dlStable">稳定版 v1.0</button>
-        <button class="mc-btn mc-btn-stone text-xs px-4 py-2 opacity-60" id="dlPreview">预览版 v1.1-β</button>
+        <button class="mc-btn mc-btn-grass text-xs px-4 py-2" id="dlStable">稳定版 v2.0.0</button>
       </div>
 
       <!-- 平台下载卡片 -->
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
 
         <!-- macOS -->
         <div class="mc-slot mc-slot-hover p-6 text-center relative">
@@ -453,13 +452,14 @@
           </svg>
           <h3 class="mc-title text-sm text-mcDiamond mb-2">macOS</h3>
           <p class="text-xs text-gray-500 mb-1">Apple Silicon (arm64) · 未签名</p>
-          <p class="text-xs text-gray-500 mb-4" id="sizeMac">106 MB · macOS 11+</p>
-          <a id="dlMacDmg" href="https://github.com/xiongmiaozai/matoga/releases/download/v1.0.2/matoga-1.0.2-arm64.dmg" class="mc-btn mc-btn-grass text-xs w-full justify-center mb-2">下载 .dmg</a>
-          <a id="dlMacZip" href="https://github.com/xiongmiaozai/matoga/releases/download/v1.0.2/matoga-1.0.2-arm64-mac.zip" class="text-[11px] text-gray-500 hover:text-mcGrass transition-colors">免安装 .zip</a>
+          <p class="text-xs text-gray-500 mb-4" id="sizeMac">~120 MB · macOS 11+</p>
+          <a id="dlMacDmg" href="https://github.com/xiongmiaozai/matoga/releases/download/v2.0.0/matoga-2.0.0-arm64.dmg" class="mc-btn mc-btn-grass text-xs w-full justify-center mb-2">下载 .dmg</a>
+          <a id="dlMacZip" href="https://github.com/xiongmiaozai/matoga/releases/download/v2.0.0/matoga-2.0.0-arm64-mac.zip" class="text-[11px] text-gray-500 hover:text-mcGrass transition-colors">免安装 .zip</a>
         </div>
 
         <!-- Windows -->
-        <div class="mc-slot mc-slot-hover p-6 text-center">
+        <div class="mc-slot mc-slot-hover p-6 text-center relative">
+          <span class="absolute top-3 right-3 mc-badge bg-mcDiamond text-black text-[10px]" style="padding:1px 6px; text-shadow:none">推荐</span>
           <svg width="40" height="40" viewBox="0 0 16 16" shape-rendering="crispEdges" class="mx-auto mb-4">
             <rect x="1" y="1" width="6" height="6" fill="#5bcefa"/>
             <rect x="9" y="1" width="6" height="6" fill="#5bcefa"/>
@@ -467,28 +467,10 @@
             <rect x="9" y="9" width="6" height="6" fill="#5bcefa"/>
           </svg>
           <h3 class="mc-title text-sm text-mcDiamond mb-2">Windows</h3>
-          <p class="text-xs text-gray-500 mb-1">x64 安装程序 · 便携版 · 未签名</p>
-          <p class="text-xs text-gray-500 mb-4" id="sizeWin">86 MB · Win 10+</p>
-          <a id="dlWinSetup" href="https://github.com/xiongmiaozai/matoga/releases/download/v1.0.2/matoga.Setup.1.0.2.exe" class="mc-btn mc-btn-grass text-xs w-full justify-center mb-2">下载 .exe</a>
-          <a id="dlWinPortable" href="https://github.com/xiongmiaozai/matoga/releases/download/v1.0.2/matoga.1.0.2.exe" class="text-[11px] text-gray-500 hover:text-mcGrass transition-colors">便携版 .exe</a>
-        </div>
-
-        <!-- Linux -->
-        <div class="mc-slot mc-slot-hover p-6 text-center">
-          <svg width="40" height="40" viewBox="0 0 16 16" shape-rendering="crispEdges" class="mx-auto mb-4">
-            <rect x="3" y="2" width="10" height="12" fill="#8b6f47"/>
-            <rect x="3" y="2" width="10" height="2" fill="#a8865a"/>
-            <rect x="5" y="6" width="6" height="6" fill="#7cbd56" opacity=".7"/>
-          </svg>
-          <h3 class="mc-title text-sm text-mcDiamond mb-2">Linux</h3>
-          <p class="text-xs text-gray-500 mb-1">AppImage · deb · 未签名</p>
-          <p class="text-xs text-gray-500 mb-4" id="sizeLinux">117 MB · Ubuntu 20.04+</p>
-          <a id="dlLinuxAppimage" href="https://github.com/xiongmiaozai/matoga/releases/download/v1.0.2/matoga-1.0.2.AppImage" class="mc-btn mc-btn-grass text-xs w-full justify-center mb-2">下载 .AppImage</a>
-          <div class="flex gap-2 justify-center">
-            <a id="dlLinuxDeb" href="https://github.com/xiongmiaozai/matoga/releases/download/v1.0.2/matoga_1.0.2_amd64.deb" class="text-[11px] text-gray-500 hover:text-mcGrass transition-colors">.deb</a>
-            <span class="text-gray-700">·</span>
-            <a id="dlReleaseTag" href="https://github.com/xiongmiaozai/matoga/releases/tag/v1.0.2" class="text-[11px] text-gray-500 hover:text-mcGrass transition-colors">Release</a>
-          </div>
+          <p class="text-xs text-gray-500 mb-1">x64 NSIS 安装程序 · 未签名</p>
+          <p class="text-xs text-gray-500 mb-4" id="sizeWin">118 MB · Win 10+</p>
+          <a id="dlWinSetup" href="https://github.com/xiongmiaozai/matoga/releases/download/v2.0.0/matoga Setup 2.0.0.exe" class="mc-btn mc-btn-grass text-xs w-full justify-center mb-2">下载 .exe</a>
+          <a id="dlReleaseTag" href="https://github.com/xiongmiaozai/matoga/releases/tag/v2.0.0" class="text-[11px] text-gray-500 hover:text-mcGrass transition-colors">查看 Release</a>
         </div>
       </div>
 
@@ -520,7 +502,7 @@
           <div>
             <p class="text-mcGrass font-bold mb-2">运行依赖</p>
             <ul class="space-y-1 text-gray-400 text-xs">
-              <li>· Electron 28+ (已内置)</li>
+              <li>· Electron 44 (已内置)</li>
               <li>· 无需额外运行时</li>
               <li>· 首次启动自动初始化</li>
               <li>· 在线功能需网络连接</li>
@@ -590,33 +572,6 @@
           </div>
         </details>
 
-        <!-- Linux 安装 -->
-        <details class="mc-slot group">
-          <summary class="cursor-pointer p-4 flex items-center justify-between list-none">
-            <span class="flex items-center gap-3">
-              <span class="mc-badge bg-mcStone text-white text-xs">Linux</span>
-              <span class="text-sm text-gray-300">AppImage / deb / rpm 安装</span>
-            </span>
-            <svg class="w-4 h-4 text-gray-500 transition-transform group-open:rotate-180" fill="currentColor" viewBox="0 0 16 16"><path d="M8 12L2 6h12z"/></svg>
-          </summary>
-          <div class="px-4 pb-4 space-y-3 text-sm text-gray-400">
-            <p class="text-mcGrass font-bold text-xs">AppImage（推荐）</p>
-            <div class="mc-code text-xs">
-              <span class="cmt"># 添加执行权限并运行</span><br>
-              chmod +x matoga-1.0.AppImage<br>
-              ./matoga-1.0.AppImage
-            </div>
-            <p class="text-mcGrass font-bold text-xs mt-3">deb (Debian/Ubuntu)</p>
-            <div class="mc-code text-xs">
-              sudo dpkg -i matoga-1.0.deb<br>
-              sudo apt install -f  <span class="cmt"># 修复依赖</span>
-            </div>
-            <p class="text-mcGrass font-bold text-xs mt-3">rpm (Fedora/RHEL)</p>
-            <div class="mc-code text-xs">
-              sudo rpm -i matoga-1.0.rpm
-            </div>
-          </div>
-        </details>
       </div>
 
       <!-- 校验和 -->
@@ -624,10 +579,10 @@
         <h3 class="mc-title text-sm text-mcDiamond mb-4">校验和验证</h3>
         <p class="text-sm text-gray-400 mb-3">下载完成后，建议验证文件完整性以确保安全：</p>
         <div class="mc-code text-xs">
-          <span class="cmt"># macOS / Linux</span><br>
-          shasum -a 256 matoga-1.0.2-arm64.dmg<br><br>
+          <span class="cmt"># macOS</span><br>
+          shasum -a 256 "matoga-2.0.0-arm64.dmg"<br><br>
           <span class="cmt"># Windows (PowerShell)</span><br>
-          Get-FileHash matoga.Setup.1.0.2.exe -Algorithm SHA256
+          Get-FileHash "matoga Setup 2.0.0.exe" -Algorithm SHA256
         </div>
         <p class="text-xs text-gray-500 mt-3">校验值请对照 <a href="https://github.com/xiongmiaozai/matoga/releases" target="_blank" class="text-mcGrass hover:underline">GitHub Releases</a> 页面公布的 SHA-256 值</p>
       </div>
@@ -641,7 +596,7 @@
             <ul class="space-y-1 text-sm text-gray-400">
               <li>· Node.js 18+ & npm</li>
               <li>· Git</li>
-              <li>· C++ 编译工具链（用于原生模块编译）</li>
+              <li>· Electron 44 (devDependencies 自动安装)</li>
             </ul>
           </div>
           <div>
@@ -652,10 +607,12 @@
               cd matoga<br><br>
               <span class="cmt"># 安装依赖</span><br>
               npm install<br><br>
-              <span class="cmt"># 开发模式运行</span><br>
-              npm run dev<br><br>
-              <span class="cmt"># 打包发布</span><br>
-              npm run build
+              <span class="cmt"># 网页开发模式</span><br>
+              npm start<br><br>
+              <span class="cmt"># 桌面开发模式</span><br>
+              npm run electron:dev<br><br>
+              <span class="cmt"># 打包 Windows 安装包</span><br>
+              npm run dist:win
             </div>
           </div>
         </div>
@@ -735,48 +692,57 @@
   <div class="mc-divider"></div>
 
   <!-- ═══════════════════════════════════════════════
-       API 参考 — IPC 桥 & 配置
+       API 参考 — HTTP REST + WebSocket
        正文使用 Inter 保证可读性，标题用像素字体
        ═══════════════════════════════════════════════ -->
   <section id="api" class="py-20 md:py-28 relative z-10">
     <div class="max-w-4xl mx-auto px-4">
       <h2 class="mc-title text-xl md:text-2xl text-center text-mcGrass mb-4">API 参考</h2>
-      <p class="text-center text-gray-500 mb-12 text-sm">渲染进程可通过 <code class="text-mcDiamond">window.api</code> 访问主进程 IPC 桥</p>
+      <p class="text-center text-gray-500 mb-12 text-sm">本地 Express 服务提供 RESTful HTTP 接口，WebSocket 用于实时进度推送</p>
 
-      <!-- IPC 方法列表 — MC 物品槽卡片 -->
+      <!-- HTTP 端点列表 — MC 物品槽卡片 -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
         <div class="mc-slot p-5">
-          <h3 class="mc-title text-xs text-mcDiamond mb-3">文件夹 / Folder</h3>
+          <h3 class="mc-title text-xs text-mcDiamond mb-3">对比 / Compare</h3>
           <ul class="space-y-1.5 text-sm text-gray-400 font-mono">
-            <li><span class="text-mcGrass">selectFolder</span>(side)</li>
-            <li><span class="text-mcGrass">readEntries</span>(path, ignore)</li>
-            <li><span class="text-mcGrass">readRecursive</span>(path, ignore)</li>
-            <li><span class="text-mcGrass">pickFolder</span>() · <span class="text-mcGrass">createFolder</span>(path)</li>
+            <li><span class="text-mcGrass">POST</span> /api/compare/scan</li>
+          </ul>
+        </div>
+        <div class="mc-slot p-5">
+          <h3 class="mc-title text-xs text-mcDiamond mb-3">配置 / Config</h3>
+          <ul class="space-y-1.5 text-sm text-gray-400 font-mono">
+            <li><span class="text-mcGrass">GET</span> /api/config · <span class="text-mcGrass">PUT</span> /api/config</li>
+            <li><span class="text-mcGrass">DELETE</span> /api/config</li>
           </ul>
         </div>
         <div class="mc-slot p-5">
           <h3 class="mc-title text-xs text-mcDiamond mb-3">文件 / File</h3>
           <ul class="space-y-1.5 text-sm text-gray-400 font-mono">
-            <li><span class="text-mcGrass">hashFile</span>(path) · <span class="text-mcGrass">copyFile</span>(src, dest)</li>
-            <li><span class="text-mcGrass">backupFile</span>(path) · <span class="text-mcGrass">deleteFile</span>(path)</li>
-            <li><span class="text-mcGrass">selectFile</span>() · <span class="text-mcGrass">selectHDRFile</span>()</li>
+            <li><span class="text-mcGrass">POST</span> /api/file/hash · /copy · /backup · /delete</li>
+            <li><span class="text-mcGrass">GET</span> /api/file/raw · /thumb · /thumb-info</li>
+            <li><span class="text-mcGrass">POST</span> /api/file/thumb</li>
           </ul>
         </div>
         <div class="mc-slot p-5">
-          <h3 class="mc-title text-xs text-mcDiamond mb-3">Shell & 配置</h3>
+          <h3 class="mc-title text-xs text-mcDiamond mb-3">文件系统 & Shell</h3>
           <ul class="space-y-1.5 text-sm text-gray-400 font-mono">
-            <li><span class="text-mcGrass">openPath</span>(p) · <span class="text-mcGrass">showInFolder</span>(p)</li>
-            <li><span class="text-mcGrass">getPathForFile</span>(file)</li>
-            <li><span class="text-mcGrass">getConfig</span>() · <span class="text-mcGrass">setConfig</span>(patch)</li>
-            <li><span class="text-mcGrass">clearConfig</span>()</li>
+            <li><span class="text-mcGrass">GET</span> /api/fs/browse · <span class="text-mcGrass">POST</span> /api/fs/create</li>
+            <li><span class="text-mcGrass">POST</span> /api/shell/open · /reveal</li>
           </ul>
         </div>
         <div class="mc-slot p-5">
           <h3 class="mc-title text-xs text-mcDiamond mb-3">HDRI 预设</h3>
           <ul class="space-y-1.5 text-sm text-gray-400 font-mono">
-            <li><span class="text-mcGrass">listHdrPresets</span>()</li>
-            <li><span class="text-mcGrass">hdrThumbInfo</span>(fullPath)</li>
-            <li><span class="text-mcGrass">saveHdrThumb</span>(fullPath, dataUrl)</li>
+            <li><span class="text-mcGrass">GET</span> /api/hdri/list · /thumb · /thumb-info</li>
+            <li><span class="text-mcGrass">POST</span> /api/hdri/thumb</li>
+          </ul>
+        </div>
+        <div class="mc-slot p-5">
+          <h3 class="mc-title text-xs text-mcDiamond mb-3">上传 & WebSocket</h3>
+          <ul class="space-y-1.5 text-sm text-gray-400 font-mono">
+            <li><span class="text-mcGrass">POST</span> /api/upload/begin · /end</li>
+            <li><span class="text-mcGrass">PUT</span> /api/upload/file</li>
+            <li><span class="text-mcGrass">WS</span> {type:'sync'} · {type:'cancel'}</li>
           </ul>
         </div>
       </div>
@@ -787,7 +753,7 @@
         <p class="text-sm text-gray-400 leading-relaxed mb-4">
           用户配置持久化于 <code class="text-mcDiamond">config.json</code>，通过 <code class="text-mcDiamond">setConfig</code> 传入 patch 对象局部更新。
         </p>
-        <pre class="mc-code"><span class="cmt">// config.json — 由 getConfig() / setConfig(patch) 读写</span>
+        <pre class="mc-code"><span class="cmt">// config.json — 由 GET /api/config 读取，PUT /api/config 更新</span>
 {
   <span class="str">"theme"</span>: <span class="str">"dark"</span>,
   <span class="str">"lang"</span>: <span class="str">"zh-CN"</span>,
@@ -801,10 +767,12 @@
       <div class="mc-slot p-6">
         <h3 class="mc-title text-sm text-mcGrass mb-4">命令行参数</h3>
         <div class="mc-code">
-          <span class="cmt"># 开发模式（启用 DevTools + 热重载）</span><br>
-          npm run dev&nbsp;&nbsp;<span class="cmt"># 等价于 electron . --dev</span><br><br>
-          <span class="cmt"># 生产模式</span><br>
-          npm start
+          <span class="cmt"># 网页开发模式（Express 服务 + 浏览器）</span><br>
+          npm start&nbsp;&nbsp;<span class="cmt"># http://127.0.0.1:5273</span><br><br>
+          <span class="cmt"># 桌面开发模式（Electron + DevTools）</span><br>
+          npm run electron:dev<br><br>
+          <span class="cmt"># 局域网模式</span><br>
+          npm run web:lan
         </div>
       </div>
     </div>
@@ -820,6 +788,21 @@
     <div class="max-w-3xl mx-auto px-4">
       <h2 class="mc-title text-xl md:text-2xl text-center text-mcGrass mb-4">更新日志</h2>
       <p class="text-center text-gray-500 mb-12 text-sm">版本迭代记录</p>
+
+      <!-- v2.0.0 -->
+      <div class="mc-slot p-6 mb-6">
+        <div class="flex items-center gap-3 mb-4">
+          <span class="mc-badge bg-mcGrass text-white">v2.0.0</span>
+          <span class="text-xs text-gray-500">2026-10-18</span>
+        </div>
+        <ul class="space-y-2 text-sm text-gray-400">
+          <li class="flex items-start gap-2"><span class="text-mcGrass flex-shrink-0">▸</span> 新增 Electron 桌面应用支持（Electron 44 + NSIS 安装包）</li>
+          <li class="flex items-start gap-2"><span class="text-mcGrass flex-shrink-0">▸</span> 修复打包后启动崩溃（BASE_PORT 未定义 + WebSocket error 未捕获）</li>
+          <li class="flex items-start gap-2"><span class="text-mcGrass flex-shrink-0">▸</span> 端口占用时自动重试，不再 Uncaught Exception</li>
+          <li class="flex items-start gap-2"><span class="text-mcGrass flex-shrink-0">▸</span> GitHub Actions 自动打包工作流（release-desktop）</li>
+          <li class="flex items-start gap-2"><span class="text-mcGrass flex-shrink-0">▸</span> 支持 macOS (dmg) + Windows (nsis) 双平台发布</li>
+        </ul>
+      </div>
 
       <!-- v1.0.2 -->
       <div class="mc-slot p-6 mb-6">
@@ -988,7 +971,7 @@
       })
       if (!res.ok) return
       const rel = await res.json()
-      const tag = rel.tag_name || 'v1.0.2'
+      const tag = rel.tag_name || 'v2.0'
       const set = (id, url) => { const el = document.getElementById(id); if (el && url) el.href = url }
       const fmtSize = (b) => b ? (b >= 1048576 ? (b / 1048576).toFixed(0) + ' MB' : (b / 1024).toFixed(0) + ' KB') : ''
       const find = (pred) => (rel.assets || []).find(pred)
@@ -1010,7 +993,7 @@
       set('dlLinuxAppimage', appimg && appimg.browser_download_url)
       set('dlLinuxDeb', deb && deb.browser_download_url)
       if (appimg) { const p = document.getElementById('sizeLinux'); if (p) p.textContent = fmtSize(appimg.size) + ' · Ubuntu 20.04+' }
-    } catch (e) { /* 拉取失败时保留 HTML 默认 v1.0.2 链接 */ }
+    } catch (e) { /* 拉取失败时保留 HTML 默认 v2.0 链接 */ }
   })()
   </script>
 </body>
