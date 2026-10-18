@@ -38,3 +38,9 @@ config.json
 # 临时文件
 *.tmp
 *~
+# 工具索引
+.codegraph/
+
+# 运行时数据 / 文档输出
+data/
+output/

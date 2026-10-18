@@ -1,75 +1,49 @@
 {
   "name": "matoga",
-  "version": "1.0.2",
-  "description": "文件夹对比工具 - 对比左右两个文件夹中的内容",
-  "main": "main.js",
+  "version": "2.0.0",
+  "description": "材质贴图对比工具 - 本地 Web 服务版（B/S 架构）",
+  "main": "server/index.js",
   "scripts": {
-    "start": "unset ELECTRON_RUN_AS_NODE && electron .",
-    "dev": "unset ELECTRON_RUN_AS_NODE && electron . --dev",
-    "dist": "electron-builder",
-    "dist:mac": "electron-builder --mac",
-    "dist:win": "electron-builder --win",
-    "dist:linux": "electron-builder --linux"
+    "start": "node server/index.js",
+    "web": "node server/index.js",
+    "web:lan": "node server/index.js --lan",
+    "test": "node --test \"test/unit/**/*.test.js\"",
+    "test:smoke": "node test/smoke/api-smoke.mjs && node test/smoke/ws-sync.test.mjs",
+    "build:win": "pkg server/index.js --target node18-win-x64 --output dist/matoga-win-x64.exe"
   },
   "keywords": [
     "folder",
     "compare",
-    "diff"
+    "diff",
+    "texture",
+    "material",
+    "pbr",
+    "web"
   ],
   "author": {
     "name": "芝世 (xiongmiaozai)",
     "email": "2720596091@qq.com"
   },
   "license": "MIT",
-  "devDependencies": {
-    "electron": "^31.7.7",
-    "electron-builder": "^25.1.8"
-  },
   "dependencies": {
-    "three": "^0.186.1"
+    "express": "^5.3.0",
+    "three": "^0.186.1",
+    "ws": "^8.22.0"
   },
-  "build": {
-    "appId": "com.xiongmiaozai.matoga",
-    "productName": "matoga",
-    "directories": {
-      "output": "dist"
-    },
-    "files": [
-      "**/*",
-      "!dist/**",
-      "!releases/**",
-      "!docs/**",
-      "!.github/**",
-      "!website/**",
-      "!README.md",
-      "!AGENTS.md",
-      "!HDRI预设/**",
-      "!材质包/**"
+  "engines": {
+    "node": ">=18"
+  },
+  "pkg": {
+    "assets": [
+      "web/**/*",
+      "node_modules/three/build/three.module.js"
     ],
-    "extraResources": [
-      { "from": "HDRI预设", "to": "HDRI预设" },
-      { "from": "材质包", "to": "材质包" }
+    "targets": [
+      "node18-win-x64"
     ],
-    "mac": {
-      "target": [
-        "dmg",
-        "zip"
-      ],
-      "category": "public.app-category.developer-tools",
-      "identity": null
-    },
-    "win": {
-      "target": [
-        "nsis",
-        "portable"
-      ]
-    },
-    "linux": {
-      "target": [
-        "AppImage",
-        "deb"
-      ],
-      "category": "Development"
-    }
+    "outputPath": "dist"
+  },
+  "devDependencies": {
+    "@yao-pkg/pkg": "^6.23.0"
   }
 }

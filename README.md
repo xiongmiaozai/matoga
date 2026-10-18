@@ -1,6 +1,6 @@
 # matoga · 材质贴图对比工具
 
-一个基于 Electron + Three.js 的桌面应用，用于对比两个文件夹中的材质贴图内容，并提供 3D 实时预览。
+一个基于 Node.js + Express + Three.js 的本地 Web 服务应用，用于对比两个文件夹中的材质贴图内容，并提供 3D 实时预览。浏览器访问 `localhost:5273` 即可使用。
 
 ## 功能特性
 
@@ -31,44 +31,53 @@
 
 ### 文件操作
 - 复制 / 备份 / 删除文件
-- 批量同步到左 / 右侧
+- 批量同步到左 / 右侧（WebSocket 实时进度 + 可取消）
 - 撤销操作
 - 在系统文件管理器中打开
 
 ### 其他
 - 对比结果导出（HTML）
 - 深色 / 浅色主题切换
-- 窗口尺寸与配置持久化
+- 中 / 英文界面切换
+- 配置持久化
 
 ## 技术栈
-- **Electron 31** — 桌面应用框架（主进程 + preload + 渲染进程）
+- **Node.js + Express 5** — 本地 HTTP 服务端（REST API + 静态资源）
+- **WebSocket (ws 8)** — 批量复制实时进度推送与取消
 - **Three.js 0.186** — 3D 渲染与 PBR 材质
 - **原生 JavaScript（ES Modules）** — 无构建工具、无前端框架
 
 ## 目录结构
 ```
 matoga/
-├── main.js              # Electron 主进程（IPC、文件操作、对话框、配置）
-├── preload.js           # 预加载脚本（contextBridge 安全暴露 API）
-├── renderer.js          # 渲染进程入口
-├── electron.html         # 主界面（Electron 渲染）
-├── index.html            # 项目官网（GitHub Pages 落地页）
-├── styles.css           # 样式
-├── package.json
-├── src/
-│   ├── core.js          # 全局状态、常量、DOM 引用
-│   ├── utils.js         # 工具函数
-│   ├── compare.js       # 对比逻辑
-│   ├── render.js        # 列表渲染
-│   ├── actions.js       # 用户操作（复制/删除/批量/撤销等）
-│   ├── layout.js        # 布局管理
-│   ├── settings.js      # 设置面板
-│   ├── preview2d.js     # 2D 贴图预览
-│   ├── material3d.js    # 3D 材质预览（Three.js / PBR / 视差）
-│   └── hdr-loader.js    # HDR 环境贴图加载器
-├── amethyst_block_n.png # 示例法线贴图
-├── 优化方案.md
-└── 界面设计方案.md
+├── server/                # 后端服务
+│   ├── index.js           # 入口（启动 HTTP + WS 服务）
+│   ├── app.js             # Express 应用（路由挂载、静态资源）
+│   ├── ws.js              # WebSocket 服务（批量复制进度）
+│   ├── config/            # 配置存储（原子读写、schema）
+│   ├── middleware/        # 中间件（日志、错误、鉴权、校验）
+│   ├── services/          # 业务服务（scan、file、hdri、upload、sync）
+│   └── routes/            # REST 路由（fs、compare、file、hdri、config、shell、upload）
+├── shared/                # 共享错误定义
+├── web/                   # 前端（浏览器端，静态资源根）
+│   ├── index.html         # 主界面
+│   ├── renderer.js        # 渲染入口
+│   ├── styles.css         # 主样式
+│   ├── mc-theme.css       # Minecraft 主题样式
+│   ├── assets/            # 静态资源（svg 图标、logo、字体、mc-icons）
+│   ├── api/               # API 适配层
+│   │   ├── api-client.js  # window.api 实现（HTTP + WS）
+│   │   └── folder-tree.js # 目录树模态框（替代系统对话框）
+│   └── src/               # 业务逻辑（对比、渲染、3D 预览等）
+├── test/                  # 测试
+│   ├── unit/              # 单元测试（node:test）
+│   └── smoke/             # 冒烟 + WebSocket 集成测试
+├── docs/                  # 设计与算法文档
+├── archive/electron/      # 已归档的 Electron 版（main.js / preload.js / electron.html）
+├── HDRI预设/              # HDR 环境贴图预设
+├── 材质包/                # 默认 MC 材质包目录（配置占位）
+├── website/               # GitHub Pages 官网（独立）
+└── package.json
 ```
 
 ## 安装与运行
@@ -76,19 +85,26 @@ matoga/
 # 安装依赖
 npm install
 
-# 启动应用
+# 启动本地 Web 服务（默认 127.0.0.1:5273）
 npm start
 
-# 开发模式（自动打开 DevTools）
-npm run dev
+# 局域网模式（0.0.0.0 + token 鉴权）
+npm run web:lan
+
+# 运行测试
+npm test
+npm run test:smoke
 ```
 
+启动后在浏览器打开 `http://localhost:5273/` 即可使用。
+
 ## 使用说明
-1. 启动后点击左侧 / 右侧文件夹卡片，分别选择要对比的两个文件夹
-2. 点击「对比」按钮，生成差异列表
-3. 点击列表项查看 2D / 3D 预览
-4. 在 3D 预览面板可调整材质参数、光照、几何体，并加载 HDR 环境贴图
-5. 可对缺失文件执行复制 / 批量同步操作
+1. 启动服务后在浏览器打开 `http://localhost:5273/`
+2. 点击左侧 / 右侧文件夹卡片，分别选择要对比的两个文件夹
+3. 点击「对比」按钮，生成差异列表
+4. 点击列表项查看 2D / 3D 预览
+5. 在 3D 预览面板可调整材质参数、光照、几何体，并加载 HDR 环境贴图
+6. 可对缺失文件执行复制 / 批量同步操作（批量复制时显示实时进度，可取消）
 
 ## 贴图约定
 | 后缀 | 角色 | 说明 |

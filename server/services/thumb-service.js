@@ -1,0 +1,47 @@
+/**
+ * matoga - 材质贴图对比工具
+ * Copyright (c) 2026 芝世 (xiongmiaozai). All rights reserved.
+ * SPDX-License-Identifier: MIT
+ */
+
+const fs = require('fs')
+const path = require('path')
+const crypto = require('crypto')
+const { DATA_ROOT } = require('../paths')
+
+const THUMB_DIR = path.join(DATA_ROOT, 'data', 'thumbs')
+
+function thumbPathFor(filePath) {
+  const hash = crypto.createHash('md5').update(path.normalize(filePath).toLowerCase()).digest('hex')
+  return path.join(THUMB_DIR, hash + '.jpg')
+}
+
+async function thumbInfo(fullPath) {
+  const thumbPath = thumbPathFor(fullPath)
+  const srcStat = await fs.promises.stat(fullPath)
+  let exists = false, stale = true, mtime = 0
+  try {
+    const tStat = await fs.promises.stat(thumbPath)
+    exists = true
+    mtime = tStat.mtimeMs
+    stale = tStat.mtimeMs < srcStat.mtimeMs
+  } catch {}
+  const thumbUrl = '/api/file/thumb?path=' + encodeURIComponent(fullPath)
+  return { exists, stale, thumbUrl, mtime }
+}
+
+async function saveThumb(fullPath, dataUrl) {
+  await fs.promises.mkdir(THUMB_DIR, { recursive: true })
+  const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, '')
+  if (!base64 || base64.length > 10 * 1024 * 1024) return { success: false, error: 'invalid thumb data' }
+  await fs.promises.writeFile(thumbPathFor(fullPath), Buffer.from(base64, 'base64'))
+  const thumbUrl = '/api/file/thumb?path=' + encodeURIComponent(fullPath)
+  return { success: true, thumbUrl }
+}
+
+function invalidate(fullPath) {
+  if (!fullPath) return
+  try { fs.promises.unlink(thumbPathFor(fullPath)).catch(() => {}) } catch {}
+}
+
+module.exports = { thumbInfo, saveThumb, thumbPathFor, invalidate, THUMB_DIR }
