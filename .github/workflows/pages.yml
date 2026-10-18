@@ -4,8 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'website/landing.html'
-      - 'assets/**'
+      - 'website/**'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -32,24 +31,24 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           # 暂存 main 分支待部署文件
-          mkdir -p /tmp/deploy/assets
+          mkdir -p /tmp/deploy
           cp website/landing.html /tmp/deploy/index.html
           cp website/matoga-logo-2x.png /tmp/deploy/
           cp website/app-screenshot.png /tmp/deploy/
-          if [ -d web/assets ]; then cp -r web/assets/. /tmp/deploy/assets/; fi
 
           # 切换到 gh-pages 分支（远端已存在）
           git checkout gh-pages
 
-          # 覆盖更新（先清空 assets 再拷入，保证删除的文件被同步）
+          # 清理旧 assets 目录（新版 landing 页不再引用 assets 资源）
           rm -rf assets
-          mkdir -p assets
+
+          # 覆盖更新 landing 页与图片资源
           cp /tmp/deploy/index.html .
           cp /tmp/deploy/matoga-logo-2x.png .
           cp /tmp/deploy/app-screenshot.png .
-          cp -r /tmp/deploy/assets/. assets/
 
-          git add index.html matoga-logo-2x.png app-screenshot.png assets
+          git add -A assets
+          git add index.html matoga-logo-2x.png app-screenshot.png
           if git diff --cached --quiet; then
             echo "::notice::没有变更，跳过部署"
           else
