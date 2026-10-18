@@ -21,8 +21,11 @@ yarn-error.log*
 # 运行时 / 构建产物
 dist/
 out/
-build/
 release/
+# build/ = electron-builder buildResources 目录：打包脚本需提交，产物类文件忽略
+build/*
+!build/license.txt
+!build/installer.nsh
 
 # Electron 打包产物
 *.app

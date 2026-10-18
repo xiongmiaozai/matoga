@@ -64,6 +64,19 @@
         "portable"
       ]
     },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "license": "build/license.txt",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "matoga",
+      "uninstallDisplayName": "matoga (Minecraft 材质贴图对比工具)",
+      "deleteAppDataOnUninstall": false,
+      "include": "build/installer.nsh"
+    },
     "linux": {
       "target": [
         "AppImage",
