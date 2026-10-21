@@ -1,0 +1,2211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>matoga · 节点画布</title>
+<script type="importmap">
+  { "imports": { "three": "/vendor/three/three.module.js" } }
+</script>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="mc-theme.css">
+<style>
+/* ════════════════════════════════════════════════════════════
+   matoga Node Canvas — 无限画布节点编辑器
+   主题：Minecraft 像素风 × Linear 精致深色
+   ════════════════════════════════════════════════════════════ */
+:root{
+  --bg:#1a1a1e; --bg-2:#141418;
+  --panel:#2a2a2e; --panel-2:#333338; --panel-3:#3a3a40;
+  --border:#4a4a52; --border-soft:#3a3a40;
+  --text:#e8e8e8; --text-muted:#9a9a9a; --text-dim:#6a6a6a;
+  --primary:#7cbd56; --primary-hover:#8fd468; --primary-soft:#2a3a22;
+  --accent:#5bcefa; --accent-soft:#1a2a3a;
+  --danger:#c63a3a; --warn:#f5a623; --extra:#c084fc;
+  --type-number:#7cbd56; --type-color:#c084fc; --type-texture:#f5a623;
+  --type-material:#5bcefa; --type-env:#f5a623; --type-any:#9a9a9a;
+  --type-vector:#e8e8e8;
+  --grid:#262629; --grid-2:#1e1e22;
+  --shadow:0 4px 0 0 rgba(0,0,0,.5), 0 0 0 1px var(--border);
+  --ease:cubic-bezier(.2,.7,.2,1);
+  --lib-w:208px;
+}
+*{box-sizing:border-box; margin:0; padding:0}
+html,body{height:100%; overflow:hidden; background:var(--bg); color:var(--text);
+  font-family:'Inter',system-ui,-apple-system,sans-serif; font-size:13px;
+  -webkit-font-smoothing:antialiased; user-select:none}
+button{font-family:inherit; font-size:inherit; color:inherit; background:none; border:none; cursor:pointer}
+input{font-family:inherit}
+
+/* ── 顶栏 ───────────────────────────────────── */
+.topbar{position:fixed; top:0; left:0; right:0; height:44px; z-index:100;
+  display:flex; align-items:center; gap:8px; padding:0 12px;
+  background:linear-gradient(180deg,var(--panel) 0%,var(--bg) 100%);
+  border-bottom:1px solid var(--border); backdrop-filter:blur(8px)}
+.topbar .logo{display:flex; align-items:center; gap:8px; font-weight:700; letter-spacing:.5px}
+.topbar .logo .dot{width:10px; height:10px; background:var(--primary);
+  box-shadow:0 0 8px var(--primary); image-rendering:pixelated}
+.topbar .logo .sub{color:var(--text-muted); font-weight:400; font-size:11px; margin-left:4px}
+.topbar .spacer{flex:1}
+.tbtn{height:28px; padding:0 12px; display:inline-flex; align-items:center; gap:6px;
+  background:var(--panel-2); border:1px solid var(--border-soft); color:var(--text);
+  transition:all .12s var(--ease)}
+.tbtn:hover{background:var(--panel-3); border-color:var(--primary); color:var(--primary-hover)}
+.tbtn:active{transform:translateY(1px)}
+.tbtn.danger:hover{border-color:var(--danger); color:var(--danger)}
+.tbtn .k{color:var(--text-dim); font-size:10px; margin-left:4px;
+  padding:1px 4px; background:var(--bg); border:1px solid var(--border-soft)}
+.zoom-pill{height:28px; padding:0 10px; display:inline-flex; align-items:center; gap:8px;
+  background:var(--bg-2); border:1px solid var(--border-soft); color:var(--text-muted);
+  font-variant-numeric:tabular-nums; min-width:90px; justify-content:center}
+.zoom-pill button{width:18px; height:18px; display:inline-flex; align-items:center; justify-content:center;
+  color:var(--text-muted); font-size:14px}
+.zoom-pill button:hover{color:var(--primary)}
+
+/* ── 左侧节点库 ─────────────────────────────── */
+.library{position:fixed; top:44px; left:0; bottom:0; width:var(--lib-w); z-index:90;
+  background:var(--panel); border-right:1px solid var(--border);
+  display:flex; flex-direction:column; overflow:hidden; transition:transform .2s var(--ease)}
+.library.collapsed{transform:translateX(calc(-1 * var(--lib-w)))}
+.library-head{height:28px; flex:none; display:flex; align-items:center; gap:6px;
+  padding:0 8px; border-bottom:1px solid var(--border); background:var(--panel-2)}
+.library-title{font-size:11px; font-weight:600; letter-spacing:.5px; color:var(--text);
+  text-transform:uppercase; flex:1}
+.library-close{width:20px; height:20px; display:inline-flex; align-items:center; justify-content:center;
+  background:none; border:none; color:var(--text-muted); font-size:14px; cursor:pointer;
+  border-radius:4px; transition:all .12s var(--ease)}
+.library-close:hover{color:var(--danger); background:var(--panel-3)}
+.library-body{flex:1; overflow-y:auto; padding:4px 0}
+.lib-resize{position:absolute; right:-3px; top:0; bottom:0; width:6px; cursor:ew-resize; z-index:91;
+  background:transparent; transition:background .12s var(--ease)}
+.lib-resize:hover{background:var(--primary)}
+.library h3{font-size:10px; text-transform:uppercase; letter-spacing:1.5px;
+  color:var(--text-dim); padding:10px 12px 6px; font-weight:600}
+.lib-item{display:flex; align-items:center; gap:8px; padding:6px 12px; cursor:pointer;
+  border-left:2px solid transparent; transition:all .1s var(--ease)}
+.lib-item:hover{background:var(--panel-2); border-left-color:var(--primary)}
+.lib-item .ic{width:14px; height:14px; flex:none; opacity:.9}
+.lib-item .nm{flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.lib-item .tg{font-size:9px; padding:1px 4px; background:var(--bg); color:var(--text-dim);
+  border:1px solid var(--border-soft)}
+.lib-sep{height:1px; background:var(--border-soft); margin:6px 8px}
+
+/* ── 画布 ───────────────────────────────────── */
+.canvas-wrap{position:fixed; top:44px; left:var(--lib-w); right:0; bottom:28px;
+  background:var(--bg-2); overflow:hidden; cursor:grab}
+.canvas-wrap.panning{cursor:grabbing}
+.canvas-wrap.connecting{cursor:crosshair}
+.canvas-wrap.library-collapsed{left:0}
+.canvas-wrap.minimized{height:28px; bottom:auto}
+.canvas-head{position:absolute; top:0; left:0; right:0; height:28px; z-index:5;
+  display:flex; align-items:center; gap:6px; padding:0 8px; pointer-events:none;
+  background:linear-gradient(180deg,var(--panel) 0%,rgba(42,42,46,.55) 100%);
+  border-bottom:1px solid var(--border)}
+.canvas-title{font-size:11px; font-weight:600; letter-spacing:.5px; color:var(--text);
+  text-transform:uppercase; flex:1; pointer-events:none}
+.canvas-close{width:20px; height:20px; display:inline-flex; align-items:center; justify-content:center;
+  background:none; border:none; color:var(--text-muted); font-size:14px; cursor:pointer;
+  border-radius:4px; transition:all .12s var(--ease); pointer-events:auto}
+.canvas-close:hover{color:var(--danger); background:var(--panel-3)}
+.world{position:absolute; top:0; left:0; width:0; height:0; transform-origin:0 0;
+  will-change:transform}
+.grid-bg{position:absolute; top:0; left:0; width:100%; height:100%;
+  pointer-events:none; background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px),
+    linear-gradient(var(--grid-2) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-2) 1px, transparent 1px);
+  background-size:24px 24px, 24px 24px, 120px 120px, 120px 120px;
+  opacity:.7}
+.edges{position:absolute; top:0; left:0; overflow:visible; pointer-events:none;
+  width:1px; height:1px}
+.edges .edge{fill:none; stroke-width:2.5; pointer-events:stroke; cursor:pointer;
+  transition:stroke-width .1s}
+.edges .edge-hit{fill:none; stroke:transparent; stroke-width:14; pointer-events:stroke; cursor:pointer}
+.edges .edge.selected{stroke-width:3.5}
+.edge-temp{fill:none; stroke:var(--primary); stroke-width:2.5; stroke-dasharray:4 3;
+  pointer-events:none}
+
+/* ── 节点 ───────────────────────────────────── */
+.node{position:absolute; width:200px; background:var(--panel);
+  border:1px solid var(--border); box-shadow:var(--shadow);
+  pointer-events:auto; transition:border-color .1s, box-shadow .1s}
+.node.selected{border-color:var(--primary); box-shadow:0 4px 0 0 rgba(0,0,0,.5), 0 0 0 1px var(--primary), 0 0 16px rgba(124,189,86,.25)}
+.node.dragging{opacity:.92}
+.node-head{display:flex; align-items:center; gap:6px; height:28px; padding:0 8px;
+  background:var(--panel-2); border-bottom:1px solid var(--border-soft);
+  cursor:grab; position:relative}
+.node-head::before{content:''; position:absolute; top:0; left:0; bottom:0; width:3px;
+  background:var(--node-color, var(--text-dim))}
+.node-head .title{flex:1; font-weight:600; font-size:12px; padding-left:4px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.node-head .badge{width:8px; height:8px; background:var(--node-color, var(--text-dim));
+  image-rendering:pixelated}
+.node-head .x{width:18px; height:18px; display:inline-flex; align-items:center; justify-content:center;
+  color:var(--text-dim); opacity:0; transition:opacity .1s}
+.node:hover .node-head .x{opacity:1}
+.node-head .x:hover{color:var(--danger); background:var(--panel-3)}
+.node-body{padding:6px 0}
+.port-row{display:flex; align-items:center; height:22px; padding:0 8px; position:relative}
+.port-row.in{justify-content:flex-start}
+.port-row.out{justify-content:flex-end}
+.port{width:11px; height:11px; background:var(--panel); border:2px solid var(--port-color, var(--text-dim));
+  position:absolute; top:50%; transform:translateY(-50%); cursor:crosshair;
+  transition:background .1s, transform .1s; z-index:2}
+.port.in{left:-6px}
+.port.out{right:-6px}
+.port:hover, .port.active{background:var(--port-color); transform:translateY(-50%) scale(1.25)}
+.port.linked{background:var(--port-color)}
+.port-label{font-size:11px; color:var(--text-muted); padding:0 6px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:120px}
+.port-row.in .port-label{padding-left:10px}
+.port-row.out .port-label{padding-right:10px; text-align:right}
+
+/* widget 区 */
+.widget{padding:6px 10px; border-top:1px solid var(--border-soft)}
+.widget:first-child{border-top:none}
+.w-label{font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px;
+  margin-bottom:4px}
+.w-num{display:flex; align-items:center; gap:8px}
+.w-num input[type=range]{flex:1; height:4px; -webkit-appearance:none; appearance:none;
+  background:var(--bg); border:1px solid var(--border-soft); outline:none}
+.w-num input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; appearance:none;
+  width:10px; height:14px; background:var(--primary); cursor:pointer; border:none}
+.w-num input[type=range]::-moz-range-thumb{width:10px; height:14px; background:var(--primary);
+  cursor:pointer; border:none}
+.w-num .val{font-variant-numeric:tabular-nums; font-size:11px; color:var(--primary);
+  min-width:42px; text-align:right}
+.w-color{display:flex; align-items:center; gap:8px}
+.w-color input[type=color]{width:28px; height:22px; border:1px solid var(--border-soft);
+  background:none; cursor:pointer; padding:0}
+.w-color input[type=color]::-webkit-color-swatch{border:none}
+.w-color input[type=color]::-webkit-color-swatch-wrapper{padding:0}
+.w-color .hex{font-variant-numeric:tabular-nums; font-size:11px; color:var(--text-muted);
+  font-family:'JetBrains Mono',ui-monospace,monospace}
+.w-text{width:100%; height:22px; padding:0 6px; background:var(--bg);
+  border:1px solid var(--border-soft); color:var(--text); font-size:11px; outline:none}
+.w-text:focus{border-color:var(--primary)}
+.w-select{width:100%; height:22px; padding:0 6px; background:var(--bg);
+  border:1px solid var(--border-soft); color:var(--text); font-size:11px; outline:none;
+  cursor:pointer}
+.w-select:focus{border-color:var(--primary)}
+.w-preview{width:100%; height:64px; background:var(--bg); border:1px solid var(--border-soft);
+  display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden;
+  image-rendering:pixelated}
+.w-preview .pv-text{font-size:10px; color:var(--text-muted); font-family:ui-monospace,monospace;
+  text-align:center; padding:4px; word-break:break-all; line-height:1.4}
+.w-preview .pv-swatch{position:absolute; inset:0}
+.w-preview .pv-empty{color:var(--text-dim); font-size:10px}
+.w-tex{display:flex; align-items:center; gap:6px}
+.w-tex .thumb{width:32px; height:32px; background:var(--bg); border:1px solid var(--border-soft);
+  image-rendering:pixelated; flex:none; overflow:hidden}
+.w-tex .thumb img{width:100%; height:100%; object-fit:cover; display:block}
+.w-tex .info{flex:1; min-width:0}
+.w-tex .info .fn{font-size:10px; color:var(--text-muted); white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis}
+.w-tex .info .btn{font-size:10px; color:var(--accent); padding:2px 0; cursor:pointer}
+.w-tex .info .btn:hover{color:var(--primary)}
+
+/* ── 右键菜单 ───────────────────────────────── */
+.ctx-menu{position:fixed; z-index:200; min-width:180px; background:var(--panel);
+  border:1px solid var(--border); box-shadow:0 8px 0 0 rgba(0,0,0,.5), 0 0 0 1px var(--border);
+  padding:4px 0; max-height:60vh; overflow-y:auto}
+.ctx-menu .grp{font-size:9px; text-transform:uppercase; letter-spacing:1.5px;
+  color:var(--text-dim); padding:8px 10px 4px; font-weight:600}
+.ctx-menu .item{display:flex; align-items:center; gap:8px; padding:5px 10px; cursor:pointer;
+  border-left:2px solid transparent}
+.ctx-menu .item:hover{background:var(--panel-2); border-left-color:var(--primary)}
+.ctx-menu .item .ic{width:10px; height:10px; flex:none}
+.ctx-menu .item .nm{flex:1}
+.ctx-menu .item .sc{font-size:10px; color:var(--text-dim)}
+.ctx-menu .sep{height:1px; background:var(--border-soft); margin:4px 0}
+.ctx-menu .item.danger:hover{border-left-color:var(--danger); color:var(--danger)}
+
+/* ── 底栏 ───────────────────────────────────── */
+.statusbar{position:fixed; bottom:0; left:var(--lib-w); right:0; height:28px; z-index:90;
+  display:flex; align-items:center; gap:16px; padding:0 12px;
+  background:var(--panel); border-top:1px solid var(--border);
+  font-size:11px; color:var(--text-muted); transition:left .2s var(--ease)}
+.statusbar.library-collapsed{left:0}
+.statusbar .seg{display:inline-flex; align-items:center; gap:6px}
+.statusbar .seg b{color:var(--text); font-variant-numeric:tabular-nums}
+.statusbar .seg .dot{width:6px; height:6px; background:var(--primary)}
+.statusbar .spacer{flex:1}
+.statusbar .hint{color:var(--text-dim); font-size:10px}
+.statusbar .hint .k{padding:1px 4px; background:var(--bg); border:1px solid var(--border-soft);
+  color:var(--text-muted); margin:0 1px}
+
+/* ── toast ─────────────────────────────────── */
+.toast{position:fixed; bottom:48px; left:50%; transform:translateX(-50%) translateY(20px);
+  z-index:300; background:var(--panel-2); border:1px solid var(--primary); color:var(--text);
+  padding:8px 16px; font-size:12px; opacity:0; pointer-events:none;
+  transition:all .25s var(--ease); box-shadow:0 4px 0 0 rgba(0,0,0,.5)}
+.toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+
+/* 滚动条 */
+::-webkit-scrollbar{width:8px; height:8px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border-soft); border:1px solid var(--bg)}
+::-webkit-scrollbar-thumb:hover{background:var(--border)}
+
+/* 像素角标 */
+.pixel{image-rendering:pixelated; -ms-interpolation-mode:nearest-neighbor}
+
+/* ── 右侧预览面板（3D/2D 联动）────────────── */
+.preview-pane{position:fixed; top:44px; right:0; bottom:28px; width:680px; z-index:80;
+  background:var(--panel); border-left:1px solid var(--border);
+  display:flex; flex-direction:column; transition:transform .2s var(--ease)}
+.preview-pane.hidden{transform:translateX(680px)}
+/* node-editor 不支持面板浮动：强制覆盖 styles.css 的 .panel.floating，
+   即使残留 .floating class 也不会脱离 .preview-pane 变成独立悬浮窗 */
+#previewPanelWrap.floating{
+  position:static !important; z-index:auto !important;
+  width:auto !important; height:auto !important;
+  resize:none !important; box-shadow:none !important;
+  border:0 !important; border-radius:0 !important;
+}
+/* 覆盖外链 styles.css 的 .panel 双重边框/阴影（.preview-pane 已有边框） */
+#previewPanelWrap{
+  border:none !important; box-shadow:none !important; border-radius:0 !important;
+  background:transparent !important;
+}
+.preview-pane .pp-head{height:32px; display:flex; align-items:center; gap:6px; padding:0 10px;
+  background:var(--panel-2); border-bottom:1px solid var(--border-soft)}
+.preview-pane .pp-tabs{display:flex; gap:2px}
+.preview-pane .pp-tab{height:22px; padding:0 10px; display:inline-flex; align-items:center;
+  background:var(--bg); border:1px solid var(--border-soft); color:var(--text-muted);
+  font-size:11px; transition:all .1s}
+.preview-pane .pp-tab.active{color:var(--primary); background:var(--primary-soft); border-color:var(--primary)}
+.preview-pane .pp-spacer{flex:1}
+.preview-pane .pp-icbtn{width:22px; height:22px; display:inline-flex; align-items:center; justify-content:center;
+  background:var(--bg); border:1px solid var(--border-soft); color:var(--text-muted); font-size:12px}
+.preview-pane .pp-icbtn:hover{color:var(--primary); border-color:var(--primary)}
+.preview-pane .pp-icbtn.active{color:var(--primary); border-color:var(--primary)}
+.pp-body{flex:1; position:relative; overflow:hidden; background:#1a1a2e}
+.pp-body .pp-content{position:absolute; inset:0; display:none}
+.pp-body .pp-content.active{display:block}
+#material3dContainer{width:100%; height:100%; position:relative; overflow:hidden}
+#material3dContainer canvas{width:100%!important; height:100%!important; display:block}
+#preview2dContainer{width:100%; height:100%; overflow:auto; padding:10px;
+  display:flex; flex-direction:column; gap:8px; background:var(--panel-2)}
+.pv2-card{background:var(--panel); border:1px solid var(--border-soft); padding:6px}
+.pv2-card .lbl{font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px}
+.pv2-card .imgwrap{width:100%; min-height:80px; background:var(--bg); display:flex; align-items:center; justify-content:center; image-rendering:pixelated}
+.pv2-card .imgwrap img{max-width:100%; max-height:220px; display:block}
+.pv2-card .empty{color:var(--text-dim); font-size:11px; padding:20px 0}
+.pv2-color-card{display:flex; align-items:center; gap:8px}
+.pv2-color-card .sw{width:40px; height:40px; border:1px solid var(--border-soft); image-rendering:pixelated}
+.pv2-color-card .hx{font-family:ui-monospace,monospace; font-size:11px; color:var(--text-muted)}
+.pp-foot{height:26px; display:flex; align-items:center; gap:8px; padding:0 10px;
+  background:var(--panel-2); border-top:1px solid var(--border-soft); font-size:10px; color:var(--text-dim)}
+.pp-foot .seg{display:inline-flex; align-items:center; gap:4px}
+.pp-foot .seg b{color:var(--text); font-variant-numeric:tabular-nums}
+.m3d-ctrl{position:absolute; top:8px; right:8px; z-index:5; display:flex; gap:4px; flex-wrap:wrap; justify-content:flex-end; max-width:180px}
+.m3d-ctrl select, .m3d-ctrl button{height:22px; background:rgba(20,20,30,.85); border:1px solid var(--border);
+  color:var(--text); font-size:10px; padding:0 6px; backdrop-filter:blur(4px)}
+.m3d-ctrl select:hover, .m3d-ctrl button:hover{border-color:var(--primary); color:var(--primary)}
+.m3d-ctrl button.active{color:var(--primary); border-color:var(--primary)}
+.m3d-badge{position:absolute; top:8px; left:8px; z-index:5; padding:3px 8px;
+  background:rgba(20,20,30,.85); border:1px solid var(--border-soft); color:var(--text-dim);
+  font-size:10px; backdrop-filter:blur(4px)}
+.m3d-badge.ok{color:var(--primary); border-color:var(--primary)}
+.m3d-badge.err{color:var(--danger); border-color:var(--danger)}
+/* 画布缩窄给预览腾位 */
+  .canvas-wrap.has-preview{right:680px}
+  .statusbar.has-preview{right:680px}
+}
+/* 导入对话框（带遮罩模态框） */
+.import-overlay{position:fixed;inset:0;z-index:1000;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);backdrop-filter:blur(2px)}
+.import-overlay.open{display:flex}
+.import-dlg{width:760px;max-width:92vw;max-height:82vh;background:var(--panel);border:1px solid var(--border);border-radius:8px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 12px 48px rgba(0,0,0,.6)}
+.import-dlg-head{height:42px;padding:0 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border-soft);font-weight:700;font-size:13px;user-select:none}
+.import-dlg-head .x{cursor:pointer;color:var(--text-muted);font-size:16px}
+.import-dlg-head .x:hover{color:var(--danger)}
+.import-dlg-body{flex:1;overflow:auto;padding:12px 16px}
+.import-side{margin-bottom:18px}
+.import-side h4{font-size:12px;color:var(--text-muted);margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.import-side h4 .tag{font-size:10px;padding:1px 6px;background:var(--bg);border:1px solid var(--border-soft);border-radius:3px;color:var(--text-dim);max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.import-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:8px}
+.import-card{background:var(--bg);border:1px solid var(--border-soft);border-radius:4px;padding:6px;cursor:pointer;transition:all .15s}
+.import-card:hover{border-color:var(--primary)}
+.import-card.selected{border-color:var(--primary);background:var(--primary-soft);box-shadow:0 0 0 1px var(--primary)}
+.import-card .thumb{width:100%;height:80px;background:var(--bg-2);display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:4px;image-rendering:pixelated;border-radius:3px}
+.import-card .thumb img{width:100%;height:100%;object-fit:cover}
+.import-card .nm{font-size:10px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.import-card .roles{font-size:9px;color:var(--text-dim);margin-top:3px;display:flex;gap:3px}
+.import-card .roles .r{padding:1px 4px;border-radius:2px;font-weight:600}
+.import-card .roles .r.main{background:var(--primary-soft);color:var(--primary)}
+.import-card .roles .r.normal{background:var(--accent-soft);color:var(--accent)}
+.import-card .roles .r.specular{background:#3a2a1a;color:var(--warn)}
+.import-dlg-foot{height:50px;padding:0 16px;display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--border-soft);gap:12px}
+.import-dlg-foot .info{font-size:11px;color:var(--text-muted);flex:1}
+.import-dlg-foot .btns{display:flex;gap:8px}
+.import-dlg-foot button{height:28px;padding:0 14px;border:1px solid var(--border);background:var(--panel-2);color:var(--text);border-radius:4px;cursor:pointer;font-size:12px}
+.import-dlg-foot button:hover{border-color:var(--primary);color:var(--primary)}
+.import-dlg-foot button.primary{background:var(--primary);border-color:var(--primary);color:#1a1a1e;font-weight:600}
+.import-dlg-foot button.primary:hover{background:var(--primary-hover);border-color:var(--primary-hover)}
+.import-dlg-toolbar{display:flex;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid var(--border-soft);background:var(--panel-2);flex-wrap:wrap}
+.import-search{flex:1;min-width:180px;height:28px;padding:0 10px;background:var(--bg);border:1px solid var(--border-soft);border-radius:4px;color:var(--text);font-size:12px}
+.import-search:focus{outline:none;border-color:var(--primary)}
+.import-seg{display:inline-flex;gap:2px}
+.import-seg button{height:24px;padding:0 8px;background:var(--bg);border:1px solid var(--border-soft);color:var(--text-muted);font-size:11px;cursor:pointer;border-radius:3px}
+.import-seg button:hover{color:var(--text);border-color:var(--border)}
+.import-seg button.active{color:var(--primary);background:var(--primary-soft);border-color:var(--primary)}
+.import-mini-btn{height:24px;padding:0 8px;background:var(--bg);border:1px solid var(--border-soft);color:var(--text-muted);font-size:11px;cursor:pointer;border-radius:3px}
+.import-mini-btn:hover{color:var(--primary);border-color:var(--primary)}
+.import-count{font-size:11px;color:var(--text-dim);margin-left:auto;white-space:nowrap}
+.import-side.collapsed .import-grid{display:none}
+.import-side h4{cursor:pointer;user-select:none}
+.import-side h4 .caret{display:inline-block;width:10px;color:var(--text-dim);transition:transform .15s}
+.import-side.collapsed h4 .caret{transform:rotate(-90deg)}
+.import-empty{padding:32px;text-align:center;color:var(--text-dim);font-size:12px}
+.import-loading{padding:32px;text-align:center;color:var(--text-muted);font-size:12px}
+
+/* ── embed 模式：被主页 iframe 嵌入时隐藏顶栏、左侧节点库、右侧预览 ── */
+body.embed .topbar{display:none}
+body.embed .library{display:none}
+body.embed .preview-pane{display:none}
+body.embed .canvas-wrap{top:0; left:0}
+body.embed .canvas-wrap.library-collapsed{left:0}
+body.embed .canvas-wrap.has-preview{right:0}
+body.embed .statusbar{left:0}
+body.embed .statusbar.library-collapsed{left:0}
+body.embed .statusbar.has-preview{right:0}
+</style>
+</head>
+<body>
+  <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+    <symbol id="i-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="12" r="6"/><circle cx="15" cy="12" r="6"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></symbol>
+    <symbol id="i-image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></symbol>
+    <symbol id="i-cube" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96L12 12.01l8.73-5.05M12 22.08V12"/></symbol>
+    <symbol id="i-clipboard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></symbol>
+    <symbol id="i-maximize" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></symbol>
+    <symbol id="i-chevron-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></symbol>
+    <symbol id="i-chevron-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></symbol>
+    <symbol id="i-chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></symbol>
+    <symbol id="i-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-7.7"/></symbol>
+    <symbol id="i-swap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3l4 4-4 4M4 7h16M8 21l-4-4 4-4M20 17H4"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></symbol>
+    <symbol id="i-compare" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M6 8v8a4 4 0 0 0 4 4h4M18 16V8a4 4 0 0 0-4-4h-4"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></symbol>
+    <symbol id="i-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></symbol>
+    <symbol id="i-pie" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.21A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
+    <symbol id="i-depth" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20l6-8 4 5 3-4 7 7"/><path d="M2 20h20"/><circle cx="17" cy="6" r="2"/></symbol>
+    <symbol id="i-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-metal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12l3 6-9 12L3 9z"/><path d="M3 9h18M9 3l3 18M15 3l-3 18"/></symbol>
+    <symbol id="i-plastic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C8 8 6 11 6 14a6 6 0 0 0 12 0c0-3-2-6-6-12z"/></symbol>
+    <symbol id="i-glass" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2h8l-1 8a3 3 0 0 1-6 0z"/><path d="M12 13v8M8 21h8"/></symbol>
+    <symbol id="i-fabric" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h18v18H3z"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></symbol>
+    <symbol id="i-sphere" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="9" ry="3.5"/></symbol>
+    <symbol id="i-plane" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l9-9 9 9-9 4z"/></symbol>
+    <symbol id="i-torus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="9" ry="5"/><ellipse cx="12" cy="12" rx="4" ry="2"/></symbol>
+    <symbol id="i-cylinder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="7" ry="2.5"/><path d="M5 5v14M19 5v14"/><ellipse cx="12" cy="19" rx="7" ry="2.5"/></symbol>
+    <symbol id="i-capsule" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="7"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></symbol>
+    <symbol id="i-node" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8.5 6h7M7.2 8.2l3.6 7.6M16.8 8.2l-3.6 7.6"/></symbol>
+  </svg>
+
+
+<!-- 顶栏 -->
+<div class="topbar">
+  <div class="logo"><a href="index.html" style="color:inherit;text-decoration:none;display:flex;align-items:center;gap:8px"><span class="dot pixel"></span>matoga</a><span class="sub">/ 节点画布</span></div>
+  <button class="tbtn" id="btn-add">+ 添加节点</button>
+  <button class="tbtn" id="btn-import">↧ 导入贴图</button>
+  <button class="tbtn" id="btn-fit">适应 <span class="k">F</span></button>
+  <button class="tbtn" id="btn-layout">自动布局</button>
+  <button class="tbtn danger" id="btn-clear">清空</button>
+  <div class="spacer"></div>
+  <button class="tbtn" id="btn-preview">◀ 实时预览</button>
+  <div class="zoom-pill">
+    <button id="zoom-out">−</button>
+    <span id="zoom-label">100%</span>
+    <button id="zoom-in">+</button>
+  </div>
+  <button class="tbtn" id="btn-lib">◀ 节点库</button>
+</div>
+
+<!-- 左侧节点库 -->
+<div class="library" id="library">
+  <div class="library-head">
+    <span class="library-title">节点库</span>
+    <button class="library-close" id="library-close" title="关闭">✕</button>
+  </div>
+  <div class="library-body" id="library-body"></div>
+  <div class="lib-resize" id="lib-resize"></div>
+</div>
+
+<!-- 画布 -->
+<div class="canvas-wrap has-preview" id="canvas-wrap">
+  <div class="canvas-head">
+    <span class="canvas-title">画布</span>
+    <button class="canvas-close" id="canvas-close" title="最小化">✕</button>
+  </div>
+  <div class="grid-bg" id="grid-bg"></div>
+  <div class="world" id="world">
+    <svg class="edges" id="edges" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <filter id="edge-glow">
+          <feGaussianBlur stdDeviation="2" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+    </svg>
+    <div id="nodes-layer"></div>
+  </div>
+</div>
+
+<!-- 右侧实时预览面板 -->
+<div class="preview-pane" id="previewPane">
+      <div class="panel" id="previewPanelWrap" data-panel="preview">
+        <div class="panel-head">
+          <div class="pv-tabs">
+            <button class="active" data-pv-tab="2d"><svg class="ico ico-sm"><use href="#i-image"/></svg> <span data-i18n="preview.2d">2D</span></button>
+            <button data-pv-tab="3d"><svg class="ico ico-sm"><use href="#i-cube"/></svg> <span data-i18n="preview.3d">3D</span></button>
+          </div>
+          <div class="panel-tools">
+            <button class="panel-tool" data-panel-action="float" data-i18n-title="preview.float" title="浮动" hidden><svg class="ico ico-sm"><use href="#i-external"/></svg></button>
+            <button class="panel-tool" data-panel-action="collapse" data-i18n-title="sidebar.collapseRight" title="折叠右栏"><svg class="ico ico-sm"><use href="#i-chevron-right"/></svg></button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="pv-content active" data-pv-content="2d">
+            <div class="pv-toolbar">
+              <div class="m3d-segment" id="pvChannelSeg">
+                <button class="active" data-ch="all" data-i18n="common.all">全部</button>
+                <button data-ch="r">R</button>
+                <button data-ch="g">G</button>
+                <button data-ch="b">B</button>
+                <button data-ch="a">A</button>
+              </div>
+              <label class="pv-zoom"><span data-i18n="preview.zoom">缩放</span><input type="range" id="pvZoom" min="50" max="300" step="10" value="100" /><span class="pv-zoom-val" id="pvZoomVal">100%</span></label>
+              <label class="pv-split-toggle"><input type="checkbox" id="pvSplit" /> <span data-i18n="preview.splitToggle">对比滑块</span></label>
+              <div class="m3d-segment" id="pvFilterSeg">
+                <button class="active" data-pvf="nearest" data-i18n="preview.filterNearest">邻近</button>
+                <button data-pvf="bilinear" data-i18n="preview.filterBilinear">双线性</button>
+                <button data-pvf="trilinear" data-i18n="preview.filterTrilinear">三线性</button>
+                <button data-pvf="anisotropic" data-i18n="preview.filterAniso">各向异性</button>
+              </div>
+            </div>
+            <div class="preview-panel" id="previewPanel">
+              <div class="pv-hint" data-i18n="preview.hint">点击表格中的材质查看预览</div>
+            </div>
+          </div>
+          <div class="pv-content" data-pv-content="3d">
+            <div class="material3d-container" id="material3dContainer">
+              <div class="m3d-badge" id="m3dBadge"></div>
+              <div class="m3d-loading" id="m3dLoading"><div class="m3d-loading-text" data-i18n="m3d.loading">处理法线贴图...</div><div class="m3d-loading-bar"><div class="m3d-loading-fill"></div></div></div>
+              <div class="m3d-hud-bar">
+                <div class="m3d-segment" id="m3dGeoSeg">
+                  <button data-geo="sphere" data-i18n-title="m3d.geoSphere" title="球"><svg class="ico ico-sm"><use href="#i-sphere"/></svg></button>
+                  <button class="active" data-geo="cube" data-i18n-title="m3d.geoCube" title="方"><svg class="ico ico-sm"><use href="#i-cube"/></svg></button>
+                  <button data-geo="plane" data-i18n-title="m3d.geoPlane" title="面"><svg class="ico ico-sm"><use href="#i-plane"/></svg></button>
+                  <button data-geo="torus" data-i18n-title="m3d.geoTorus" title="环"><svg class="ico ico-sm"><use href="#i-torus"/></svg></button>
+                  <button data-geo="cylinder" data-i18n-title="m3d.geoCylinder" title="柱"><svg class="ico ico-sm"><use href="#i-cylinder"/></svg></button>
+                  <button data-geo="capsule" data-i18n-title="m3d.geoCapsule" title="囊"><svg class="ico ico-sm"><use href="#i-capsule"/></svg></button>
+                </div>
+                <div class="m3d-segment" id="m3dSrcSeg">
+                  <button data-src="left" data-i18n="common.left">左</button>
+                  <button class="active" data-src="dual" data-i18n="m3d.srcDual">双</button>
+                  <button data-src="right" data-i18n="common.right">右</button>
+                </div>
+                <div class="m3d-hud-spacer"></div>
+                <button class="m3d-hud-btn" id="m3dShotBtn" data-i18n-title="m3d.shot" title="截图"><svg class="ico ico-sm"><use href="#i-camera"/></svg></button>
+                <button class="m3d-hud-btn" id="m3dFullscreenBtn" data-i18n-title="m3d.fullscreen" title="全屏"><svg class="ico ico-sm"><use href="#i-maximize"/></svg></button>
+                <button class="m3d-hud-btn" id="m3dParamsBtn" data-i18n-title="m3d.params" title="参数"><svg class="ico ico-sm"><use href="#i-sliders"/></svg></button>
+              </div>
+              <div class="m3d-params-overlay" id="m3dParamsOverlay">
+                <div class="m3d-params-drag" id="m3dParamsDrag">
+                  <span class="m3d-params-title" data-i18n="m3d.params">参数</span>
+                  <button class="m3d-params-close" id="m3dParamsClose" data-i18n-title="common.close" title="关闭"><svg class="ico ico-sm"><use href="#i-x"/></svg></button>
+                </div>
+                <div class="m3d-tabs">
+                  <button class="active" data-tab="material" data-i18n-title="m3d.tabMaterial" title="材质"><svg class="ico ico-sm"><use href="#i-layers"/></svg></button>
+                  <button data-tab="parallax" data-i18n-title="m3d.tabParallax" title="视差"><svg class="ico ico-sm"><use href="#i-depth"/></svg></button>
+                  <button data-tab="opacity" data-i18n-title="m3d.tabOpacity" title="透明"><svg class="ico ico-sm"><use href="#i-opacity"/></svg></button>
+                  <button data-tab="env" data-i18n-title="m3d.tabEnv" title="环境"><svg class="ico ico-sm"><use href="#i-globe"/></svg></button>
+                  <button data-tab="advanced" data-i18n-title="m3d.tabAdvanced" title="高级"><svg class="ico ico-sm"><use href="#i-sliders"/></svg></button>
+                </div>
+                <div class="m3d-tab-panes">
+                  <div class="m3d-tab-pane active" data-pane="material">
+                    <div class="m3d-presets">
+                      <button data-preset="metal" data-i18n-title="m3d.presetMetal" title="金属"><svg class="ico ico-sm"><use href="#i-metal"/></svg></button>
+                      <button data-preset="plastic" data-i18n-title="m3d.presetPlastic" title="塑料"><svg class="ico ico-sm"><use href="#i-plastic"/></svg></button>
+                      <button data-preset="glass" data-i18n-title="m3d.presetGlass" title="玻璃"><svg class="ico ico-sm"><use href="#i-glass"/></svg></button>
+                      <button data-preset="fabric" data-i18n-title="m3d.presetFabric" title="织物"><svg class="ico ico-sm"><use href="#i-fabric"/></svg></button>
+                      <button data-preset="emissive" data-i18n-title="m3d.presetEmissive" title="自发光"><svg class="ico ico-sm"><use href="#i-sun"/></svg></button>
+                    </div>
+                    <div class="m3d-ctrl-group">
+                      <label class="m3d-slider"><span data-i18n="m3d.metalness">金属度</span><input type="range" id="m3dMetalness" min="0" max="1" step="0.01" value="0.1" /><span class="m3d-val" id="m3dMetalnessVal">0.10</span></label>
+                      <label class="m3d-slider"><span data-i18n="m3d.roughness">粗糙度</span><input type="range" id="m3dRoughness" min="0" max="1" step="0.01" value="0.5" /><span class="m3d-val" id="m3dRoughnessVal">0.50</span></label>
+                      <label class="m3d-slider"><span data-i18n="m3d.normal">法线</span><input type="range" id="m3dNormal" min="0" max="2" step="0.01" value="1" /><span class="m3d-val" id="m3dNormalVal">1.00</span></label>
+                      <label class="m3d-slider"><span data-i18n="m3d.emissive">自发光</span><input type="range" id="m3dEmissive" min="0" max="5" step="0.1" value="1" /><span class="m3d-val" id="m3dEmissiveVal">1.0</span></label>
+                    </div>
+                  </div>
+                  <div class="m3d-tab-pane" data-pane="parallax">
+
+                    <div class="m3d-ctrl-group">
+                      <label class="m3d-checkbox"><input type="checkbox" id="m3dParallaxEnable" checked /> <span data-i18n="m3d.parallaxEnable">启用视差</span></label>
+                    </div>
+                    <div class="m3d-ctrl-group">
+                      <span class="m3d-light-label" data-i18n="m3d.algorithm">算法</span>
+                      <div class="m3d-segment" id="m3dParallaxModeSeg">
+                        <button data-mode="0" data-i18n="m3d.parallaxBasic">基础</button>
+                        <button data-mode="1" data-i18n="m3d.parallaxSteep">陡峭</button>
+                        <button class="active" data-mode="2">POM</button>
+                        <button data-mode="3">Relief</button>
+                      </div>
+                    </div>
+                    <div class="m3d-ctrl-group">
+                      <label class="m3d-slider"><span data-i18n="m3d.parallaxScale">视差强度</span><input type="range" id="m3dParallax" min="-1" max="1" step="0.01" value="0.05" /><span class="m3d-val" id="m3dParallaxVal">0.05</span></label>
+                      <label class="m3d-slider"><span data-i18n="m3d.parallaxSteps">视差步数</span><input type="range" id="m3dParallaxSteps" min="8" max="64" step="1" value="32" /><span class="m3d-val" id="m3dParallaxStepsVal">32</span></label>
+                      <label class="m3d-checkbox"><input type="checkbox" id="m3dParallaxAdaptive" checked /><span data-i18n="m3d.parallaxAdaptive">自适应层数</span></label>
+                      <label class="m3d-checkbox"><input type="checkbox" id="m3dParallaxShadow" /><span data-i18n="m3d.parallaxShadow">自阴影</span></label>
+                      <label class="m3d-slider"><span data-i18n="m3d.parallaxShadowStr">阴影强度</span><input type="range" id="m3dParallaxShadowStr" min="0" max="1" step="0.05" value="0.5" disabled /><span class="m3d-val" id="m3dParallaxShadowStrVal">0.5</span></label>
+                    </div>
+                  </div>
+                  <div class="m3d-tab-pane" data-pane="opacity">
+                    <div class="m3d-ctrl-group">
+                      <div class="m3d-segment" id="m3dOpacityModeSeg">
+                        <button class="active" data-mode="auto" data-i18n="m3d.opaAuto">自动</button>
+                        <button data-mode="cutout" data-i18n="m3d.opaCutout">裁剪</button>
+                        <button data-mode="blend" data-i18n="m3d.opaBlend">半透</button>
+                        <button data-mode="glass" data-i18n="m3d.opaGlass">玻璃</button>
+                      </div>
+                    </div>
+                    <div class="m3d-ctrl-group">
+                      <label class="m3d-slider"><span data-i18n="m3d.opacity">不透明</span><input type="range" id="m3dOpacity" min="0" max="1" step="0.01" value="1" /><span class="m3d-val" id="m3dOpacityVal">1.00</span></label>
+                      <label class="m3d-slider"><span data-i18n="m3d.transmission">透射</span><input type="range" id="m3dTransmission" min="0" max="1" step="0.01" value="0" /><span class="m3d-val" id="m3dTransmissionVal">0.00</span></label>
+                      <label class="m3d-slider"><span data-i18n="m3d.ior">折射率</span><input type="range" id="m3dIOR" min="1" max="2.33" step="0.01" value="1.5" /><span class="m3d-val" id="m3dIORVal">1.50</span></label>
+                      <label class="m3d-slider"><span data-i18n="m3d.clearcoat">清漆</span><input type="range" id="m3dClearcoat" min="0" max="1" step="0.01" value="0" /><span class="m3d-val" id="m3dClearcoatVal">0.00</span></label>
+                    </div>
+                  </div>
+                  <div class="m3d-tab-pane" data-pane="env">
+                    <div class="m3d-ctrl-group">
+                      <span class="m3d-light-label" data-i18n="m3d.env">环境</span>
+                      <div class="m3d-segment" id="m3dEnvModeSeg">
+                        <button class="active" data-envmode="custom" data-i18n="m3d.envCustom">自定义灯光</button>
+                        <button data-envmode="sky" data-i18n="m3d.envSky">程序化天空</button>
+                        <button data-envmode="hdri" data-i18n="m3d.envHdri">HDRI</button>
+                      </div>
+                    </div>
+                    <div class="m3d-env-subpane active" data-envpane="custom">
+                      <div class="m3d-ctrl-group">
+                        <span class="m3d-light-label" data-i18n="m3d.light">光照</span>
+                        <div class="m3d-segment" id="m3dLightSeg">
+                          <button class="active" data-light="studio" data-i18n="m3d.lightStudio">工作室</button>
+                          <button data-light="outdoor" data-i18n="m3d.lightOutdoor">户外</button>
+                          <button data-light="soft" data-i18n="m3d.lightSoft">柔和</button>
+                          <button data-light="warm" data-i18n="m3d.lightWarm">暖光</button>
+                          <button data-light="cool" data-i18n="m3d.lightCool">冷光</button>
+                        </div>
+                      </div>
+                      <div class="m3d-ctrl-group">
+                        <span class="m3d-light-label" data-i18n="m3d.lightAmbient">环境光</span>
+                        <input type="color" id="m3dAmbientColor" class="m3d-color-input" value="#ffffff" />
+                        <label class="m3d-slider"><span data-i18n="m3d.lightAmbientInt">强度</span><input type="range" id="m3dAmbientIntensity" min="0" max="2" step="0.01" value="0.25" /><span class="m3d-val" id="m3dAmbientIntensityVal">0.25</span></label>
+                      </div>
+                      <div id="m3dLightList"></div>
+                      <div class="m3d-ctrl-group">
+                        <button id="m3dAddLight" class="btn btn-ghost btn-sm" data-i18n="m3d.lightAdd">+ 添加灯光</button>
+                      </div>
+                      <div class="m3d-ctrl-group">
+                        <span class="m3d-light-label" data-i18n="m3d.lightBg">背景色</span>
+                        <input type="color" id="m3dBgColor" class="m3d-color-input" value="#1a1a2e" />
+                      </div>
+                      <div class="m3d-ctrl-group m3d-light-save-row">
+                        <input type="text" id="m3dLightPresetName" class="m3d-light-name-input" placeholder="预设名称" data-i18n-placeholder="m3d.lightPresetNamePh" maxlength="20">
+                        <button class="m3d-light-save-btn" id="m3dLightSaveBtn" data-i18n="m3d.lightSavePreset">保存</button>
+                      </div>
+                      <div class="m3d-ctrl-group m3d-light-custom-list" id="m3dLightCustomList"></div>
+                    </div>
+                     <div class="m3d-env-subpane" data-envpane="sky">
+                      <div class="m3d-ctrl-group">
+                        <div class="m3d-segment" id="m3dSkyPresetSeg">
+                          <button data-preset="noon" data-i18n="m3d.skyNoon">正午</button>
+                          <button data-preset="sunset" data-i18n="m3d.skySunset">日落</button>
+                          <button data-preset="overcast" data-i18n="m3d.skyOvercast">阴天</button>
+                          <button data-preset="night" data-i18n="m3d.skyNight">夜晚</button>
+                        </div>
+                      </div>
+                      <div class="m3d-ctrl-group m3d-sky-save-row">
+                        <input type="text" id="m3dSkyPresetName" class="m3d-sky-name-input" placeholder="预设名称" data-i18n-placeholder="m3d.skyPresetNamePh" maxlength="20" />
+                        <button class="m3d-sky-save-btn" id="m3dSkySaveBtn" data-i18n="m3d.skySavePreset">保存</button>
+                      </div>
+                      <div class="m3d-ctrl-group m3d-sky-custom-list" id="m3dSkyCustomList"></div>
+                      <div class="m3d-ctrl-group">
+                        <label class="m3d-slider"><span data-i18n="m3d.skyElevation">太阳高度</span><input type="range" id="m3dSkyElevation" min="-10" max="89" step="1" value="15" /><span class="m3d-val" id="m3dSkyElevationVal">15°</span></label>
+                        <label class="m3d-slider"><span data-i18n="m3d.skyAzimuth">方位角</span><input type="range" id="m3dSkyAzimuth" min="0" max="360" step="1" value="180" /><span class="m3d-val" id="m3dSkyAzimuthVal">180°</span></label>
+                      </div>
+                      <div class="m3d-ctrl-group">
+                        <label class="m3d-slider"><span data-i18n="m3d.skyTurbidity">浑浊度</span><input type="range" id="m3dSkyTurbidity" min="0" max="20" step="0.1" value="3" /><span class="m3d-val" id="m3dSkyTurbidityVal">3.0</span></label>
+                        <label class="m3d-slider"><span data-i18n="m3d.skyRayleigh">瑞利</span><input type="range" id="m3dSkyRayleigh" min="0" max="30" step="0.01" value="2.5" /><span class="m3d-val" id="m3dSkyRayleighVal">2.50</span></label>
+                      </div>
+                      <div class="m3d-ctrl-group">
+                        <label class="m3d-slider"><span data-i18n="m3d.skyMie">Mie系数</span><input type="range" id="m3dSkyMie" min="0" max="0.1" step="0.001" value="0.005" /><span class="m3d-val" id="m3dSkyMieVal">0.005</span></label>
+                        <label class="m3d-slider"><span data-i18n="m3d.skyMieG">Mie方向</span><input type="range" id="m3dSkyMieG" min="0" max="0.999" step="0.001" value="0.8" /><span class="m3d-val" id="m3dSkyMieGVal">0.800</span></label>
+                      </div>
+                      <div class="m3d-ctrl-group">
+
+                        <span class="m3d-light-label" data-i18n="m3d.skyTint">天空色调</span>
+                        <input type="color" id="m3dSkyTint" value="#a0c0ff" data-i18n-title="m3d.skyTintTitle" title="天空整体色调，白色=物理结果" />
+                      </div>
+                    </div>
+                    <div class="m3d-env-subpane" data-envpane="hdri">
+                      <div class="m3d-ctrl-group">
+                        <button id="m3dHdrBtn" class="btn btn-ghost btn-sm"><svg class="ico ico-sm"><use href="#i-globe"/></svg> <span data-i18n="m3d.loadHdr">加载HDR</span></button>
+                        <button id="m3dHdrClearBtn" class="btn btn-ghost btn-sm" data-i18n="m3d.clearHdr">清除HDR</button>
+                        <button id="m3dHdrRefreshBtn" class="btn btn-ghost btn-sm"><svg class="ico ico-sm"><use href="#i-refresh"/></svg> <span data-i18n="m3d.refresh">刷新</span></button>
+                      </div>
+                      <div class="m3d-ctrl-group">
+                        <div class="m3d-segment" id="m3dHdrUsageSeg">
+                          <button class="active" data-hdruage="both" data-i18n="m3d.hdrUsageBoth">环境+背景</button>
+                          <button data-hdruage="env" data-i18n="m3d.hdrUsageEnv">仅环境</button>
+                          <button data-hdruage="bg" data-i18n="m3d.hdrUsageBg">仅背景</button>
+                        </div>
+                      </div>
+                      <div class="m3d-ctrl-group">
+                        <label class="m3d-slider"><span data-i18n="m3d.hdrRotation">旋转</span><input type="range" id="m3dHdrRotation" min="0" max="360" step="1" value="0" /><span class="m3d-val" id="m3dHdrRotationVal">0°</span></label>
+
+                      </div>
+                      <div class="m3d-hdr-info" id="m3dHdrInfo"></div>
+                      <div class="m3d-ctrl-group">
+                        <input type="text" id="m3dHdrSearch" class="m3d-hdr-search" data-i18n-placeholder="m3d.hdrSearchPh" placeholder="搜索预设..." />
+                      </div>
+                      <div class="hdri-thumb-progress" id="m3dHdrThumbProgress"><div class="hdri-thumb-progress-bar"></div><span class="hdri-thumb-progress-text"></span></div>
+                      <div class="hdri-preset-grid" id="m3dHdrPresetGrid"></div>
+                    </div>
+                    <div class="m3d-ctrl-group">
+                      <label class="m3d-slider"><span data-i18n="m3d.envIntensity">环境</span><input type="range" id="m3dEnvIntensity" min="0" max="3" step="0.01" value="0.5" /><span class="m3d-val" id="m3dEnvIntensityVal">0.50</span></label>
+                      <label class="m3d-slider"><span data-i18n="m3d.exposure">曝光</span><input type="range" id="m3dExposure" min="0" max="3" step="0.01" value="2.2" /><span class="m3d-val" id="m3dExposureVal">2.20</span></label>
+                      <label class="m3d-checkbox"><input type="checkbox" id="m3dGround" checked /> <span data-i18n="m3d.ground">地面</span></label>
+                      <label class="m3d-checkbox"><input type="checkbox" id="m3dAutoRotate" checked /> <span data-i18n="m3d.autoRotate">自转</span></label>
+                      <label class="m3d-checkbox"><input type="checkbox" id="m3dWireframe" /><span data-i18n="m3d.wireframe">线框</span></label>
+                    </div>
+                  </div>
+                  <div class="m3d-tab-pane" data-pane="advanced">
+                    <div class="m3d-ctrl-group m3d-advanced-row">
+                      <span class="m3d-light-label" data-i18n="m3d.format">材质格式</span>
+                      <select id="m3dFormat" class="input-select input-select-sm">
+                        <option value="auto" data-i18n="m3d.formatAuto">自动检测</option>
+                        <option value="labpbr">labPBR</option>
+                        <option value="old" data-i18n="m3d.formatOld">旧版 PBR</option>
+                      </select>
+                      <span class="m3d-format-detected" id="m3dFormatDetected"></span>
+                    </div>
+                    <div class="m3d-ctrl-group">
+
+                      <span class="m3d-light-label" data-i18n="m3d.texFilter">纹理过滤</span>
+                      <div class="m3d-segment" id="m3dFilterSeg">
+                        <button class="active" data-filter="nearest" data-i18n="preview.filterNearest">邻近</button>
+                        <button data-filter="bilinear" data-i18n="preview.filterBilinear">双线性</button>
+                        <button data-filter="trilinear" data-i18n="preview.filterTrilinear">三线性</button>
+                        <button data-filter="anisotropic" data-i18n="preview.filterAniso">各向异性</button>
+                      </div>
+                    </div>
+                    <div class="m3d-ctrl-group">
+                      <label class="m3d-slider"><span data-i18n="m3d.anisoLevel">各向异性</span><input type="range" id="m3dAniso" min="1" max="16" step="1" value="4" /><span class="m3d-val" id="m3dAnisoVal">4</span></label>
+                      <label class="m3d-checkbox"><input type="checkbox" id="m3dMipmaps" checked /> Mipmap</label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+<!-- 底栏 -->
+<div class="statusbar has-preview" id="statusbar">
+  <span class="seg"><span class="dot pixel"></span>就绪</span>
+  <span class="seg">节点 <b id="stat-nodes">0</b></span>
+  <span class="seg">连线 <b id="stat-edges">0</b></span>
+  <span class="seg">缩放 <b id="stat-zoom">100%</b></span>
+  <span class="spacer"></span>
+  <span class="hint">
+    <span class="k">右键</span>添加 ·
+    <span class="k">拖拽空白</span>平移 ·
+    <span class="k">滚轮</span>缩放 ·
+    <span class="k">Del</span>删除 ·
+    <span class="k">F</span>适应
+  </span>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="/api/api-client.js"></script>
+<script type="module">
+'use strict';
+/* ════════════════════════════════════════════════════════════
+   matoga Node Canvas — JS 引擎
+   ════════════════════════════════════════════════════════════ */
+
+/* ── 预览面板公共模块（i18n + 2D + 3D 参数面板）────────── */
+import('./src/i18n.js').then(m=>m.initI18n())
+  .then(()=>import('./src/preview2d.js')).then(m=>m.initPreview2D())
+  .then(()=>import('./src/preview-panel.js')).then(m=>m.initPreviewPanel())
+  .catch(e=>console.warn('preview panel init failed', e));
+
+/* ── 动态加载原项目 3D 材质模块（联动）────────── */
+let m3d = null;  // material3d.js 模块命名空间
+const m3dBadge = document.getElementById('m3dBadge');
+function setBadge(text, kind){ if(!m3dBadge) return; m3dBadge.textContent=text;
+  m3dBadge.className='m3d-badge'+(kind?(' '+kind):''); }
+import('./src/material3d.js').then(mod=>{
+  m3d = mod;
+  setBadge('初始化中…','');
+  const container = document.getElementById('material3dContainer');
+  try {
+    mod.initMaterial3D(container);
+    setBadge('3D 就绪','ok');
+    evaluate();  // 用当前节点图刷新一次
+  } catch(e){ setBadge('3D 错误: '+e.message,'err'); console.error(e); }
+}).catch(err=>{
+  setBadge('离线模式（需 npm start）','err');
+  console.warn('material3d.js 加载失败，3D 联动不可用。请通过 `npm start` 后访问 http://localhost:PORT/node-editor.html', err);
+});
+
+const $ = (s) => document.querySelector(s);
+const NS = 'http://www.w3.org/2000/svg';
+
+/* ── 节点类型定义 ───────────────────────────── */
+const NODE_DEFS = {
+  // 输入
+  number: { title:'数值', group:'输入', color:'var(--type-number)',
+    inputs:[], outputs:[{n:'value',t:'number'}],
+    widget:(n)=>numWidget(n,'value',0,1,0.01), eval:()=>null },
+  color: { title:'颜色', group:'输入', color:'var(--type-color)',
+    inputs:[], outputs:[{n:'color',t:'color'}],
+    widget:(n)=>colorWidget(n,'color'), eval:()=>null },
+  texture: { title:'纹理', group:'输入', color:'var(--type-texture)',
+    inputs:[], outputs:[{n:'tex',t:'texture'}],
+    widget:(n)=>textureWidget(n,'tex'), eval:()=>null },
+  vector2: { title:'向量2', group:'输入', color:'var(--type-vector)',
+    inputs:[], outputs:[{n:'v',t:'vector'}],
+    widget:(n)=>vecWidget(n,['x','y'],0,1,0.01), eval:()=>null },
+
+  // 运算
+  add: { title:'加法 (a+b)', group:'运算', color:'var(--type-number)',
+    inputs:[{n:'a',t:'number'},{n:'b',t:'number'}], outputs:[{n:'out',t:'number'}],
+    eval:(i)=>({out:(num(i.a)+num(i.b))}) },
+  sub: { title:'减法 (a-b)', group:'运算', color:'var(--type-number)',
+    inputs:[{n:'a',t:'number'},{n:'b',t:'number'}], outputs:[{n:'out',t:'number'}],
+    eval:(i)=>({out:(num(i.a)-num(i.b))}) },
+  mul: { title:'乘法 (a×b)', group:'运算', color:'var(--type-number)',
+    inputs:[{n:'a',t:'number'},{n:'b',t:'number'}], outputs:[{n:'out',t:'number'}],
+    eval:(i)=>({out:(num(i.a)*num(i.b))}) },
+  div: { title:'除法 (a÷b)', group:'运算', color:'var(--type-number)',
+    inputs:[{n:'a',t:'number'},{n:'b',t:'number'}], outputs:[{n:'out',t:'number'}],
+    eval:(i)=>({out:(num(i.b)===0?0:num(i.a)/num(i.b))}) },
+  mix: { title:'混合 mix(a,b,t)', group:'运算', color:'var(--type-number)',
+    inputs:[{n:'a',t:'number'},{n:'b',t:'number'},{n:'t',t:'number'}], outputs:[{n:'out',t:'number'}],
+    eval:(i)=>{const t=clamp(num(i.t),0,1); return {out:num(i.a)*(1-t)+num(i.b)*t}} },
+  clamp: { title:'钳制', group:'运算', color:'var(--type-number)',
+    inputs:[{n:'v',t:'number'},{n:'min',t:'number'},{n:'max',t:'number'}], outputs:[{n:'out',t:'number'}],
+    eval:(i)=>({out:clamp(num(i.v),num(i.min),num(i.max))}) },
+  colorMix: { title:'颜色混合', group:'运算', color:'var(--type-color)',
+    inputs:[{n:'a',t:'color'},{n:'b',t:'color'},{n:'t',t:'number'}], outputs:[{n:'out',t:'color'}],
+    eval:(i)=>{const t=clamp(num(i.t),0,1); const a=col(i.a),b=col(i.b);
+      return {out:[a[0]*(1-t)+b[0]*t, a[1]*(1-t)+b[1]*t, a[2]*(1-t)+b[2]*t]}} },
+
+  // 材质
+  pbr: { title:'PBR 材质', group:'材质', color:'var(--type-material)',
+    inputs:[{n:'baseColor',t:'color'},{n:'roughness',t:'number'},{n:'metallic',t:'number'},{n:'normal',t:'texture'}],
+    outputs:[{n:'material',t:'material'}],
+    eval:(i)=>({material:{baseColor:col(i.baseColor),roughness:clamp(num(i.roughness),0,1),
+      metallic:clamp(num(i.metallic),0,1),normal:i.normal}}) },
+  sample: { title:'贴图采样', group:'材质', color:'var(--type-texture)',
+    inputs:[{n:'tex',t:'texture'},{n:'uv',t:'vector'}], outputs:[{n:'color',t:'color'}],
+    eval:(i)=>({color:col(i.tex||[0.5,0.5,0.5])}) },
+  hdr: { title:'HDR 环境', group:'材质', color:'var(--type-env)',
+    inputs:[], outputs:[{n:'env',t:'environment'}],
+    widget:(n)=>selectWidget(n,'preset',['studio','forest','sunset','night','courtyard']),
+    eval:()=>null },
+  normalMap: { title:'法线生成', group:'材质', color:'var(--type-texture)',
+    inputs:[{n:'tex',t:'texture'},{n:'strength',t:'number'}], outputs:[{n:'normal',t:'texture'}],
+    eval:(i)=>({normal:i.tex}) },
+
+  // 输出
+  preview: { title:'预览', group:'输出', color:'var(--primary)',
+    inputs:[{n:'in',t:'any'}], outputs:[],
+    widget:(n)=>previewWidget(n,'in'), eval:()=>null },
+  output: { title:'主输出', group:'输出', color:'var(--primary)',
+    inputs:[{n:'material',t:'material'}], outputs:[],
+    widget:(n)=>previewWidget(n,'material'), eval:()=>null },
+};
+
+/* ── 工具 ───────────────────────────────────── */
+const num = (v)=> (typeof v==='number')?v : (Array.isArray(v)?v[0]:0);
+const clamp = (v,a,b)=> Math.max(a, Math.min(b, v));
+const col = (v)=> Array.isArray(v)&&v.length>=3 ? [v[0],v[1],v[2]] : (v?col([0.6,0.6,0.6]):[0.6,0.6,0.6]);
+const rgbToHex = (r,g,b)=> '#'+[r,g,b].map(x=>Math.round(clamp(x,0,1)*255).toString(16).padStart(2,'0')).join('');
+const hexToRgb = (h)=> {h=h.replace('#',''); return [parseInt(h.slice(0,2),16)/255,parseInt(h.slice(2,4),16)/255,parseInt(h.slice(4,6),16)/255];};
+const uid = ()=> 'n'+Math.random().toString(36).slice(2,9);
+
+/* ── 状态 ───────────────────────────────────── */
+const state = {
+  nodes: new Map(),     // id -> {id, type, x, y, props, el}
+  edges: new Map(),     // id -> {id, from:{node,port}, to:{node,port}}
+  selected: new Set(),  // node ids
+  selectedEdge: null,
+  viewport: {x:0, y:0, zoom:1},
+  dragging: null,       // {kind:'node'|'pan'|'edge', ...}
+  tempEdge: null,
+};
+
+/* ── 视口 ───────────────────────────────────── */
+const canvasWrap = $('#canvas-wrap');
+const world = $('#world');
+const gridBg = $('#grid-bg');
+
+function applyViewport(){
+  const {x,y,zoom} = state.viewport;
+  world.style.transform = `translate(${x}px,${y}px) scale(${zoom})`;
+  // 网格随缩放平移
+  const g = 24*zoom, G = 120*zoom;
+  gridBg.style.backgroundSize = `${g}px ${g}px, ${g}px ${g}px, ${G}px ${G}px, ${G}px ${G}px`;
+  gridBg.style.backgroundPosition = `${x}px ${y}px, ${x}px ${y}px, ${x}px ${y}px, ${x}px ${y}px`;
+  const pct = Math.round(zoom*100)+'%';
+  $('#zoom-label').textContent = pct;
+  $('#stat-zoom').textContent = pct;
+}
+function screenToWorld(sx, sy){
+  const r = canvasWrap.getBoundingClientRect();
+  const {x,y,zoom} = state.viewport;
+  return {x:(sx-r.left-x)/zoom, y:(sy-r.top-y)/zoom};
+}
+function setZoom(z, cx, cy){
+  z = clamp(z, 0.2, 3);
+  const r = canvasWrap.getBoundingClientRect();
+  cx = (cx??r.left+r.width/2) - r.left;
+  cy = (cy??r.top+r.height/2) - r.top;
+  const {x,y,zoom} = state.viewport;
+  const wx = (cx-x)/zoom, wy = (cy-y)/zoom;
+  state.viewport.zoom = z;
+  state.viewport.x = cx - wx*z;
+  state.viewport.y = cy - wy*z;
+  applyViewport();
+}
+
+/* ── 节点创建/渲染 ─────────────────────────── */
+const nodesLayer = $('#nodes-layer');
+
+function createNode(type, x, y){
+  const def = NODE_DEFS[type];
+  if(!def) return null;
+  const id = uid();
+  const props = defaultProps(type);
+  const node = {id, type, x, y, props, el:null};
+  state.nodes.set(id, node);
+  renderNode(node);
+  updateStats();
+  evaluate();
+  return node;
+}
+function defaultProps(type){
+  const def = NODE_DEFS[type];
+  const p = {};
+  if(type==='number') p.value = 0.5;
+  else if(type==='color') p.color = '#7cbd56';
+  else if(type==='texture') p.tex = '';
+  else if(type==='vector2'){p.x=0.5; p.y=0.5;}
+  else if(type==='hdr') p.preset = 'studio';
+  return p;
+}
+function renderNode(node){
+  const def = NODE_DEFS[node.type];
+  const el = document.createElement('div');
+  el.className = 'node';
+  el.style.left = node.x+'px';
+  el.style.top = node.y+'px';
+  el.style.setProperty('--node-color', def.color);
+  el.dataset.id = node.id;
+
+  // 头
+  const head = document.createElement('div');
+  head.className = 'node-head';
+  head.innerHTML = `<span class="badge pixel"></span><span class="title">${def.title}</span><button class="x" title="删除">✕</button>`;
+  head.querySelector('.x').addEventListener('mousedown', e=>e.stopPropagation());
+  head.querySelector('.x').addEventListener('click', e=>{e.stopPropagation(); deleteNode(node.id);});
+  el.appendChild(head);
+
+  // body
+  const body = document.createElement('div');
+  body.className = 'node-body';
+
+  // 输入端口
+  def.inputs.forEach((p,i)=>{
+    const row = document.createElement('div');
+    row.className = 'port-row in';
+    row.innerHTML = `<span class="port in" data-node="${node.id}" data-port="${p.n}" data-dir="in" data-type="${p.t}" style="--port-color:var(--type-${p.t})"></span><span class="port-label">${p.n}</span>`;
+    body.appendChild(row);
+  });
+  // 输出端口
+  def.outputs.forEach((p,i)=>{
+    const row = document.createElement('div');
+    row.className = 'port-row out';
+    row.innerHTML = `<span class="port-label">${p.n}</span><span class="port out" data-node="${node.id}" data-port="${p.n}" data-dir="out" data-type="${p.t}" style="--port-color:var(--type-${p.t})"></span>`;
+    body.appendChild(row);
+  });
+
+  // widget
+  if(def.widget){
+    const w = document.createElement('div');
+    w.className = 'widget';
+    w.appendChild(def.widget(node));
+    body.appendChild(w);
+  }
+  el.appendChild(body);
+  nodesLayer.appendChild(el);
+  node.el = el;
+
+  // 拖拽
+  head.addEventListener('mousedown', (e)=>{
+    if(e.button!==0) return;
+    e.stopPropagation();
+    selectNode(node.id, e.shiftKey);
+    const sx = e.clientX, sy = e.clientY;
+    const moving = new Set(state.selected);
+    if(!moving.has(node.id)) moving.add(node.id);
+    el.classList.add('dragging');
+    const baselines = new Map();
+    moving.forEach(id=>{
+      const n = state.nodes.get(id);
+      if(n){ baselines.set(id, {x:n.x, y:n.y}); n.el.classList.add('dragging'); }
+    });
+    state.dragging = {kind:'node', sx, sy, moving, baselines};
+  });
+
+  // 选中
+  el.addEventListener('mousedown', (e)=>{
+    if(e.target.classList.contains('port')) return;
+    e.stopPropagation();
+    selectNode(node.id, e.shiftKey);
+  });
+  // 端口
+  el.querySelectorAll('.port').forEach(p=>{
+    p.addEventListener('mousedown', (e)=>{
+      e.stopPropagation();
+      e.preventDefault();
+      startEdge(p, e);
+    });
+  });
+}
+function deleteNode(id){
+  if(!state.nodes.has(id)) return;
+  const n = state.nodes.get(id);
+  // 删除相关连线
+  for(const [eid,e] of state.edges){
+    if(e.from.node===id||e.to.node===id) state.edges.delete(eid);
+  }
+  n.el.remove();
+  state.nodes.delete(id);
+  state.selected.delete(id);
+  renderEdges();
+  updateStats();
+  evaluate();
+}
+function selectNode(id, additive){
+  if(additive){
+    if(state.selected.has(id)) state.selected.delete(id);
+    else state.selected.add(id);
+  } else {
+    state.selected.clear();
+    state.selected.add(id);
+    state.selectedEdge = null;
+  }
+  refreshSelection();
+}
+function refreshSelection(){
+  state.nodes.forEach((n,id)=>{
+    n.el.classList.toggle('selected', state.selected.has(id));
+  });
+  document.querySelectorAll('.edges .edge').forEach(p=>{
+    p.classList.toggle('selected', p.dataset.id===state.selectedEdge);
+  });
+}
+
+/* ── widgets ───────────────────────────────── */
+function numWidget(node, key, min, max, step){
+  const box = document.createElement('div');
+  box.className='w-num';
+  const inp = document.createElement('input');
+  inp.type='range'; inp.min=min; inp.max=max; inp.step=step; inp.value=node.props[key];
+  const val = document.createElement('span'); val.className='val';
+  val.textContent = (+node.props[key]).toFixed(2);
+  inp.addEventListener('input', ()=>{
+    node.props[key] = +inp.value;
+    val.textContent = (+inp.value).toFixed(2);
+    evaluate();
+  });
+  // 双击可输入
+  val.addEventListener('dblclick', ()=>{
+    const v = prompt('输入数值:', node.props[key]);
+    if(v!==null && !isNaN(+v)){ node.props[key]=clamp(+v,min,max); inp.value=node.props[key];
+      val.textContent=(+node.props[key]).toFixed(2); evaluate(); }
+  });
+  box.appendChild(inp); box.appendChild(val);
+  return box;
+}
+function colorWidget(node, key){
+  const box = document.createElement('div');
+  box.className='w-color';
+  const inp = document.createElement('input');
+  inp.type='color'; inp.value=node.props[key];
+  const hex = document.createElement('span'); hex.className='hex'; hex.textContent=node.props[key];
+  inp.addEventListener('input', ()=>{
+    node.props[key]=inp.value; hex.textContent=inp.value; evaluate();
+  });
+  box.appendChild(inp); box.appendChild(hex);
+  return box;
+}
+function vecWidget(node, keys, min, max, step){
+  const box = document.createElement('div');
+  keys.forEach(k=>{
+    const row = document.createElement('div');
+    row.className='w-num';
+    row.style.marginBottom='4px';
+    const lbl=document.createElement('span'); lbl.className='w-label';
+    lbl.style.margin='0 6px 0 0'; lbl.textContent=k+':';
+    lbl.style.textTransform='none'; lbl.style.letterSpacing='0';
+    const inp=document.createElement('input'); inp.type='range';
+    inp.min=min; inp.max=max; inp.step=step; inp.value=node.props[k];
+    const val=document.createElement('span'); val.className='val';
+    val.textContent=(+node.props[k]).toFixed(2);
+    inp.addEventListener('input',()=>{node.props[k]=+inp.value; val.textContent=(+inp.value).toFixed(2); evaluate();});
+    row.appendChild(lbl); row.appendChild(inp); row.appendChild(val);
+    box.appendChild(row);
+  });
+  return box;
+}
+function textureWidget(node, key){
+  const box = document.createElement('div');
+  box.className='w-tex';
+  const thumb=document.createElement('div'); thumb.className='thumb';
+  const info=document.createElement('div'); info.className='info';
+  const fn=document.createElement('div'); fn.className='fn'; fn.textContent='未选择';
+  const btn=document.createElement('div'); btn.className='btn'; btn.textContent='选择图片…';
+  info.appendChild(fn); info.appendChild(btn);
+  box.appendChild(thumb); box.appendChild(info);
+  if(node.props[key]){
+    thumb.innerHTML=`<img src="${node.props[key]}" alt="">`;
+    fn.textContent = (node.props._name || node.props[key].split('/').pop()).slice(0,20);
+  }
+  btn.addEventListener('click', ()=>{
+    const f = document.createElement('input'); f.type='file'; f.accept='image/*';
+    f.addEventListener('change', ()=>{
+      const file=f.files[0]; if(!file) return;
+      const r=new FileReader();
+      r.onload=()=>{ node.props[key]=r.result; node.props._name=file.name;
+        thumb.innerHTML=`<img src="${r.result}" alt="">`;
+        fn.textContent=file.name.slice(0,20); evaluate(); };
+      r.readAsDataURL(file);
+    });
+    f.click();
+  });
+  return box;
+}
+function selectWidget(node, key, options){
+  const box=document.createElement('div');
+  const sel=document.createElement('select'); sel.className='w-select';
+  options.forEach(o=>{
+    const op=document.createElement('option'); op.value=o; op.textContent=o;
+    if(o===node.props[key]) op.selected=true;
+    sel.appendChild(op);
+  });
+  sel.addEventListener('change',()=>{node.props[key]=sel.value; evaluate();});
+  box.appendChild(sel);
+  return box;
+}
+function previewWidget(node, key){
+  const box=document.createElement('div');
+  box.className='w-preview';
+  box.innerHTML=`<div class="pv-empty">无输入</div>`;
+  box.dataset.preview = key;
+  node._previewEl = box;
+  return box;
+}
+
+/* ── 连线 ───────────────────────────────────── */
+const edgesSvg = $('#edges');
+function startEdge(portEl, e){
+  const dir = portEl.dataset.dir;
+  const node = portEl.dataset.node;
+  const port = portEl.dataset.port;
+  const dataType = portEl.dataset.type;
+  const startWorld = portCenterWorld(portEl);
+  state.dragging = {
+    kind:'edge', dir, node, port, dataType, startWorld,
+    portEl,
+  };
+  portEl.classList.add('active');
+  canvasWrap.classList.add('connecting');
+}
+function portCenterWorld(portEl){
+  const r = portEl.getBoundingClientRect();
+  const cx = r.left + r.width/2, cy = r.top + r.height/2;
+  return screenToWorld(cx, cy);
+}
+function renderEdges(){
+  // 清空（保留 defs）
+  const defs = edgesSvg.querySelector('defs');
+  edgesSvg.innerHTML='';
+  edgesSvg.appendChild(defs);
+  state.edges.forEach((e,id)=>{
+    const fromN = state.nodes.get(e.from.node);
+    const toN = state.nodes.get(e.to.node);
+    if(!fromN||!toN) return;
+    const fromEl = fromN.el.querySelector(`.port.out[data-port="${e.from.port}"]`);
+    const toEl = toN.el.querySelector(`.port.in[data-port="${e.to.port}"]`);
+    if(!fromEl||!toEl) return;
+    const a = portCenterWorld(fromEl);
+    const b = portCenterWorld(toEl);
+    const color = typeColor(fromEl.dataset.type);
+    // hit
+    const hit = document.createElementNS(NS,'path');
+    hit.setAttribute('class','edge-hit');
+    hit.setAttribute('d', edgePath(a,b));
+    hit.dataset.id = id;
+    hit.addEventListener('mousedown', (ev)=>{ev.stopPropagation(); selectEdge(id);});
+    hit.addEventListener('dblclick', (ev)=>{ev.stopPropagation(); state.edges.delete(id); renderEdges(); updateStats(); evaluate();});
+    edgesSvg.appendChild(hit);
+    // visible
+    const path = document.createElementNS(NS,'path');
+    path.setAttribute('class','edge');
+    path.setAttribute('d', edgePath(a,b));
+    path.setAttribute('stroke', color);
+    path.dataset.id = id;
+    if(state.selectedEdge===id) path.classList.add('selected');
+    path.addEventListener('mousedown', (ev)=>{ev.stopPropagation(); selectEdge(id);});
+    path.addEventListener('dblclick', (ev)=>{ev.stopPropagation(); state.edges.delete(id); renderEdges(); updateStats(); evaluate();});
+    edgesSvg.appendChild(path);
+    // 标记端口已连接
+    fromEl.classList.add('linked'); toEl.classList.add('linked');
+  });
+  // 清理 linked 标记
+  document.querySelectorAll('.port.linked').forEach(p=>p.classList.remove('linked'));
+  state.edges.forEach(e=>{
+    const fN=state.nodes.get(e.from.node), tN=state.nodes.get(e.to.node);
+    if(!fN||!tN) return;
+    const f=fN.el.querySelector(`.port.out[data-port="${e.from.port}"]`);
+    const t=tN.el.querySelector(`.port.in[data-port="${e.to.port}"]`);
+    if(f) f.classList.add('linked');
+    if(t) t.classList.add('linked');
+  });
+}
+function typeColor(t){
+  return {number:'#7cbd56',color:'#c084fc',texture:'#f5a623',material:'#5bcefa',
+    environment:'#f5a623',any:'#9a9a9a',vector:'#e8e8e8'}[t]||'#9a9a9a';
+}
+function edgePath(a,b){
+  const dx = Math.max(40, Math.abs(b.x-a.x)*0.5);
+  return `M ${a.x} ${a.y} C ${a.x+dx} ${a.y}, ${b.x-dx} ${b.y}, ${b.x} ${b.y}`;
+}
+function selectEdge(id){
+  state.selected.clear();
+  state.selectedEdge = id;
+  refreshSelection();
+}
+function canConnect(fromType, toType){
+  if(fromType==='any'||toType==='any') return true;
+  return fromType===toType;
+}
+function finishEdge(endPortEl){
+  const d = state.dragging;
+  if(!d||d.kind!=='edge') return;
+  const endDir = endPortEl.dataset.dir;
+  // 必须 out -> in
+  let from, to;
+  if(d.dir==='out' && endDir==='in'){
+    from = {node:d.node, port:d.port};
+    to = {node:endPortEl.dataset.node, port:endPortEl.dataset.port};
+  } else if(d.dir==='in' && endDir==='out'){
+    from = {node:endPortEl.dataset.node, port:endPortEl.dataset.port};
+    to = {node:d.node, port:d.port};
+  } else { cleanupEdgeDrag(); return; }
+  // 类型检查
+  const fromDef = NODE_DEFS[state.nodes.get(from.node).type];
+  const toDef = NODE_DEFS[state.nodes.get(to.node).type];
+  const fromP = fromDef.outputs.find(p=>p.n===from.port);
+  const toP = toDef.inputs.find(p=>p.n===to.port);
+  if(!fromP||!toP){ cleanupEdgeDrag(); return; }
+  if(!canConnect(fromP.t, toP.t)){ toast('类型不匹配: '+fromP.t+' → '+toP.t); cleanupEdgeDrag(); return; }
+  // 防止重复连接到同一输入
+  for(const [eid,e] of state.edges){
+    if(e.to.node===to.node && e.to.port===to.port) state.edges.delete(eid);
+  }
+  // 防止环（简单检查：from 不能依赖 to）
+  if(createsCycle(from.node, to.node)){ toast('会形成循环依赖'); cleanupEdgeDrag(); return; }
+  const eid = 'e'+Math.random().toString(36).slice(2,9);
+  state.edges.set(eid, {id:eid, from, to});
+  cleanupEdgeDrag();
+  renderEdges();
+  updateStats();
+  evaluate();
+}
+function createsCycle(fromId, toId){
+  // 检查 fromId 是否（间接）依赖 toId
+  const visited = new Set();
+  function dep(nid){
+    if(nid===toId) return true;
+    if(visited.has(nid)) return false;
+    visited.add(nid);
+    for(const e of state.edges.values()){
+      if(e.from.node===nid && dep(e.to.node)) return true;
+    }
+    return false;
+  }
+  return dep(fromId);
+}
+function cleanupEdgeDrag(){
+  if(state.dragging && state.dragging.portEl) state.dragging.portEl.classList.remove('active');
+  state.dragging = null;
+  state.tempEdge = null;
+  const t = edgesSvg.querySelector('.edge-temp');
+  if(t) t.remove();
+  canvasWrap.classList.remove('connecting');
+}
+
+/* ── 求值引擎 ───────────────────────────────── */
+function evaluate(){
+  // 拓扑排序
+  const ids = [...state.nodes.keys()];
+  const indeg = new Map();
+  const deps = new Map(); // nodeId -> [inputNodeIds]
+  ids.forEach(id=>{indeg.set(id,0); deps.set(id,[]);});
+  state.edges.forEach(e=>{
+    if(state.nodes.has(e.from.node) && state.nodes.has(e.to.node)){
+      indeg.set(e.to.node, indeg.get(e.to.node)+1);
+      deps.get(e.to.node).push(e.from.node);
+    }
+  });
+  const queue = ids.filter(id=>indeg.get(id)===0);
+  const order = [];
+  const seen = new Set();
+  while(queue.length){
+    const id = queue.shift();
+    if(seen.has(id)) continue;
+    seen.add(id); order.push(id);
+    // 找出以此节点为输入的边
+    state.edges.forEach(e=>{
+      if(e.from.node===id){
+        indeg.set(e.to.node, indeg.get(e.to.node)-1);
+        if(indeg.get(e.to.node)===0) queue.push(e.to.node);
+      }
+    });
+  }
+  // 计算
+  const results = new Map(); // nodeId -> {portName: value}
+  order.forEach(id=>{
+    const node = state.nodes.get(id);
+    const def = NODE_DEFS[node.type];
+    const inputs = {};
+    def.inputs.forEach(p=>{
+      // 找到连入此端口的边
+      let val = undefined;
+      for(const e of state.edges.values()){
+        if(e.to.node===id && e.to.port===p.n){
+          const r = results.get(e.from.node);
+          if(r) val = r[e.from.port];
+        }
+      }
+      inputs[p.n] = val;
+    });
+    let out = {};
+    if(def.eval){
+      try { out = def.eval(inputs) || {}; } catch(err){ out = {}; }
+    }
+    // 输入类节点：直接从 props 取
+    if(node.type==='number') out.value = +node.props.value;
+    else if(node.type==='color') out.color = hexToRgb(node.props.color);
+    else if(node.type==='texture') out.tex = node.props.tex || null;
+    else if(node.type==='vector2') out.v = [+node.props.x, +node.props.y];
+    else if(node.type==='hdr') out.env = node.props.preset;
+    results.set(id, out);
+    // 更新预览
+    if(node._previewEl){
+      updatePreview(node, inputs, results);
+    }
+  });
+  state._results = results;
+  syncToPreview(results);
+}
+/* ── 联动：把求值结果推送到 3D/2D 预览 ─────── */
+function syncToPreview(results){
+  // 收集所有 pbr / output 节点的材质结果
+  let mat = null, mainTex = null, normalTex = null, hdrPreset = null;
+  state.nodes.forEach((node,id)=>{
+    const r = results.get(id);
+    if(!r) return;
+    if(node.type==='pbr' && r.material) mat = r.material;
+    if(node.type==='output' && r.material) mat = r.material;
+    if(node.type==='texture' && node.props.tex){
+      // 第一个 texture 节点作为主贴图候选
+      if(!mainTex) mainTex = node.props.tex;
+    }
+    if(node.type==='normalMap' && r.normal) normalTex = r.normal;
+    if(node.type==='hdr' && node.props.preset) hdrPreset = node.props.preset;
+  });
+  // 构建材质参数（iframe 内 3D 与主页预览共用）
+  const p = {};
+  if(mat){
+    if(mat.baseColor) p.baseColor = mat.baseColor;
+    if(typeof mat.roughness==='number') p.roughness = mat.roughness;
+    if(typeof mat.metallic==='number') p.metallic = mat.metallic;
+    if(mat.normal) normalTex = mat.normal;
+  }
+  if(mainTex) p.mainTextureUrl = mainTex;
+  if(normalTex) p.normalMapUrl = normalTex;
+  if(hdrPreset) p.lightPreset = hdrPreset;
+  // 3D 联动（iframe 内）
+  if(m3d && m3d.isMaterial3DReady && m3d.isMaterial3DReady()){
+    try { m3d.applyNodePBR(p); } catch(e){ console.warn('applyNodePBR 失败', e); }
+     // 更新底栏
+     if(mat && mat.baseColor){
+       const [r2,g2,b2]=mat.baseColor;
+       const fc=document.getElementById('ft-color'), fr=document.getElementById('ft-rough'), fm=document.getElementById('ft-metal');
+       if(fc) fc.textContent = rgbToHex(r2,g2,b2);
+       if(fr) fr.textContent = (mat.roughness??0).toFixed(2);
+       if(fm) fm.textContent = (mat.metallic??0).toFixed(2);
+     }
+  }
+  // embed 模式：推送材质参数到主窗口预览面板（跨 iframe 联动）
+  if(document.body.classList.contains('embed') && window.parent && window.parent !== window){
+    try { window.parent.postMessage({type:'nodeMaterial', params: p}, '*'); } catch(e){}
+  }
+  // 2D 预览联动
+  sync2D(results, {mainTex, normalTex, mat});
+}
+function sync2D(results, info){
+  const c = document.getElementById('previewPanel');
+  if(!c) return;
+  // 收集要展示的 2D 卡片
+  const cards = [];
+  // 主贴图
+  if(info.mainTex){
+    cards.push({lbl:'主贴图 (Albedo)', img: info.mainTex});
+  }
+  // 法线
+  if(info.normalTex){
+    cards.push({lbl:'法线贴图 (Normal)', img: info.normalTex});
+  }
+  // 所有 texture 节点
+  state.nodes.forEach(node=>{
+    if(node.type==='texture' && node.props.tex){
+      const def = NODE_DEFS[node.type];
+      cards.push({lbl: '纹理: '+def.title, img: node.props.tex});
+    }
+  });
+  // 颜色节点
+  state.nodes.forEach(node=>{
+    if(node.type==='color' && node.props.color){
+      cards.push({lbl:'颜色: '+node.props.color, color: node.props.color});
+    }
+  });
+  // 基础色（来自 pbr/output）
+  if(info.mat && info.mat.baseColor){
+    const [r,g,b]=info.mat.baseColor;
+    const hx = rgbToHex(r,g,b);
+    cards.push({lbl:'PBR 基础色', color: hx});
+  }
+  // 渲染（去重）
+  const seen = new Set();
+  const uniq = cards.filter(c=>{
+    const k = c.img||c.color;
+    if(seen.has(k)) return false; seen.add(k); return true;
+  });
+  c.innerHTML = '';
+  if(uniq.length===0){
+    c.innerHTML = '<div style="color:var(--text-dim);font-size:11px;padding:20px;text-align:center">无贴图/颜色输入节点<br>添加「纹理」「颜色」节点即可在此预览</div>';
+    return;
+  }
+  uniq.forEach(card=>{
+    const el = document.createElement('div'); el.className='pv2-card';
+    const lbl=document.createElement('div'); lbl.className='lbl'; lbl.textContent=card.lbl;
+    el.appendChild(lbl);
+    if(card.img){
+      const w=document.createElement('div'); w.className='imgwrap';
+      const img=document.createElement('img'); img.src=card.img; img.alt='';
+      w.appendChild(img); el.appendChild(w);
+    } else if(card.color){
+      const row=document.createElement('div'); row.className='pv2-color-card';
+      const sw=document.createElement('div'); sw.className='sw'; sw.style.background=card.color;
+      const hx=document.createElement('div'); hx.className='hx'; hx.textContent=card.color;
+      row.appendChild(sw); row.appendChild(hx); el.appendChild(row);
+    }
+    c.appendChild(el);
+  });
+}
+function updatePreview(node, inputs, results){
+  const el = node._previewEl;
+  const key = el.dataset.preview;
+  const val = inputs[key];
+  el.innerHTML='';
+  if(val===undefined || val===null){
+    el.innerHTML=`<div class="pv-empty">无输入</div>`;
+    return;
+  }
+  if(typeof val==='number'){
+    const t=document.createElement('div'); t.className='pv-text';
+    t.textContent='number\n'+val.toFixed(4);
+    t.style.whiteSpace='pre';
+    el.appendChild(t);
+  } else if(Array.isArray(val) && val.length>=3){
+    const sw=document.createElement('div'); sw.className='pv-swatch';
+    sw.style.background=rgbToHex(val[0],val[1],val[2]);
+    el.appendChild(sw);
+    const t=document.createElement('div'); t.className='pv-text';
+    t.style.position='absolute'; t.style.bottom='2px'; t.style.left='2px';
+    t.style.background='rgba(0,0,0,.6)'; t.style.padding='1px 4px';
+    t.textContent=rgbToHex(val[0],val[1],val[2]);
+    el.appendChild(t);
+  } else if(typeof val==='object'){
+    if(val.baseColor){
+      // material
+      const sw=document.createElement('div'); sw.className='pv-swatch';
+      sw.style.background=rgbToHex(val.baseColor[0],val.baseColor[1],val.baseColor[2]);
+      el.appendChild(sw);
+      const t=document.createElement('div'); t.className='pv-text';
+      t.style.position='absolute'; t.style.bottom='2px'; t.style.left='2px';
+      t.style.background='rgba(0,0,0,.7)'; t.style.padding='1px 4px';
+      t.textContent=`r${val.roughness?.toFixed(2)} m${val.metallic?.toFixed(2)}`;
+      el.appendChild(t);
+    } else if(typeof val==='string' && val.startsWith('data:')){
+      el.innerHTML=`<img src="${val}" style="width:100%;height:100%;object-fit:cover">`;
+    } else {
+      const t=document.createElement('div'); t.className='pv-text';
+      t.textContent=JSON.stringify(val).slice(0,60);
+      el.appendChild(t);
+    }
+  } else if(typeof val==='string'){
+    const t=document.createElement('div'); t.className='pv-text';
+    t.textContent=val;
+    el.appendChild(t);
+  }
+}
+
+/* ── 全局事件 ───────────────────────────────── */
+canvasWrap.addEventListener('mousedown', (e)=>{
+  if(e.target===canvasWrap || e.target===gridBg || e.target===world || e.target===nodesLayer){
+    if(e.button===2) return; // 右键菜单
+    if(e.button===0){
+      state.selected.clear(); state.selectedEdge=null; refreshSelection();
+      state.dragging = {kind:'pan', sx:e.clientX, sy:e.clientY,
+        ox:state.viewport.x, oy:state.viewport.y};
+      canvasWrap.classList.add('panning');
+    }
+  }
+});
+window.addEventListener('mousemove', (e)=>{
+  const d = state.dragging;
+  if(!d) return;
+  if(d.kind==='pan'){
+    state.viewport.x = d.ox + (e.clientX-d.sx);
+    state.viewport.y = d.oy + (e.clientY-d.sy);
+    applyViewport();
+  } else if(d.kind==='node'){
+    const dx = (e.clientX-d.sx)/state.viewport.zoom;
+    const dy = (e.clientY-d.sy)/state.viewport.zoom;
+    d.baselines.forEach((base,id)=>{
+      const n = state.nodes.get(id);
+      if(!n) return;
+      n.x = base.x + dx; n.y = base.y + dy;
+      n.el.style.left = n.x+'px';
+      n.el.style.top = n.y+'px';
+    });
+    renderEdges();
+  } else if(d.kind==='edge'){
+    const cur = screenToWorld(e.clientX, e.clientY);
+    let a = d.startWorld, b = cur;
+    if(d.dir==='in'){ a = cur; b = d.startWorld; }
+    let t = edgesSvg.querySelector('.edge-temp');
+    if(!t){
+      t = document.createElementNS(NS,'path');
+      t.setAttribute('class','edge-temp');
+      edgesSvg.appendChild(t);
+    }
+    t.setAttribute('d', edgePath(a,b));
+    t.setAttribute('stroke', typeColor(d.dataType));
+  }
+});
+window.addEventListener('mouseup', (e)=>{
+  const d = state.dragging;
+  if(d && d.kind==='edge'){
+    // 检查是否落在端口上
+    const target = document.elementFromPoint(e.clientX, e.clientY);
+    if(target && target.classList.contains('port')){
+      finishEdge(target);
+    } else {
+      cleanupEdgeDrag();
+    }
+  }
+  if(d && d.kind==='node'){
+    d.moving.forEach(id=>{
+      const n=state.nodes.get(id);
+      if(n) n.el.classList.remove('dragging');
+    });
+  }
+  state.dragging = null;
+  canvasWrap.classList.remove('panning');
+});
+
+
+// 滚轮缩放
+canvasWrap.addEventListener('wheel', (e)=>{
+  e.preventDefault();
+  const factor = e.deltaY<0 ? 1.1 : 1/1.1;
+  setZoom(state.viewport.zoom*factor, e.clientX, e.clientY);
+}, {passive:false});
+
+// 右键菜单
+canvasWrap.addEventListener('contextmenu', (e)=>{
+  e.preventDefault();
+  if(e.target.classList && e.target.classList.contains('node-head')){
+    // 节点右键
+    showNodeMenu(e);
+  } else {
+    showCanvasMenu(e);
+  }
+});
+
+// 键盘
+window.addEventListener('keydown', (e)=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT') return;
+  // 导入对话框打开时，仅 Escape 关闭，屏蔽其他快捷键
+  if(importOverlay.classList.contains('open')){
+    if(e.key==='Escape') importOverlay.classList.remove('open');
+    return;
+  }
+  if(e.key==='Delete'||e.key==='Backspace'){
+    if(state.selectedEdge){ state.edges.delete(state.selectedEdge); state.selectedEdge=null; renderEdges(); updateStats(); evaluate(); }
+    state.selected.forEach(id=>deleteNode(id));
+  } else if(e.key==='f'||e.key==='F'){ fitView(); }
+  else if(e.key==='Escape'){
+    const hdrModal = document.getElementById('hdrPreviewModal');
+    const paramsOv = document.getElementById('m3dParamsOverlay');
+    if(hdrModal && hdrModal.classList.contains('show')){ hdrModal.classList.remove('show'); return; }
+    if(paramsOv && paramsOv.classList.contains('show')){ paramsOv.classList.remove('show'); return; }
+    cleanupEdgeDrag(); state.selected.clear(); state.selectedEdge=null; refreshSelection(); closeCtxMenu();
+  }
+});
+
+/* ── 右键菜单 ───────────────────────────────── */
+let ctxMenuEl = null;
+function closeCtxMenu(){ if(ctxMenuEl){ctxMenuEl.remove(); ctxMenuEl=null;} }
+function showCanvasMenu(e){
+  closeCtxMenu();
+  const wp = screenToWorld(e.clientX, e.clientY);
+  const m = document.createElement('div');
+  m.className='ctx-menu';
+  m.style.left=e.clientX+'px'; m.style.top=e.clientY+'px';
+  const groups = {};
+  Object.entries(NODE_DEFS).forEach(([k,d])=>{
+    (groups[d.group]=groups[d.group]||[]).push([k,d]);
+  });
+  Object.entries(groups).forEach(([g,items])=>{
+    const grp=document.createElement('div'); grp.className='grp'; grp.textContent=g;
+    m.appendChild(grp);
+    items.forEach(([k,d])=>{
+      const it=document.createElement('div'); it.className='item';
+      it.innerHTML=`<span class="ic" style="background:${d.color}"></span><span class="nm">${d.title}</span>`;
+      it.addEventListener('click', ()=>{
+        createNode(k, wp.x-100, wp.y-14);
+        closeCtxMenu();
+      });
+      m.appendChild(it);
+    });
+    const sep=document.createElement('div'); sep.className='sep'; m.appendChild(sep);
+  });
+  document.body.appendChild(m);
+  ctxMenuEl = m;
+  adjustMenu(m, e.clientX, e.clientY);
+}
+function showNodeMenu(e){
+  closeCtxMenu();
+  const nodeEl = e.target.closest('.node');
+  const id = nodeEl?.dataset.id;
+  if(!id) return;
+  const m=document.createElement('div'); m.className='ctx-menu';
+  m.style.left=e.clientX+'px'; m.style.top=e.clientY+'px';
+  m.innerHTML=`
+    <div class="item" data-act="dup"><span class="nm">复制节点</span><span class="sc">Ctrl+D</span></div>
+    <div class="item danger" data-act="del"><span class="nm">删除节点</span><span class="sc">Del</span></div>
+  `;
+  m.addEventListener('click',(ev)=>{
+    const act = ev.target.closest('.item')?.dataset.act;
+    if(act==='dup') duplicateNode(id);
+    else if(act==='del') deleteNode(id);
+    closeCtxMenu();
+  });
+  document.body.appendChild(m); ctxMenuEl=m;
+  adjustMenu(m, e.clientX, e.clientY);
+}
+function adjustMenu(m, x, y){
+  const r = m.getBoundingClientRect();
+  if(x+r.width>window.innerWidth) m.style.left=(window.innerWidth-r.width-8)+'px';
+  if(y+r.height>window.innerHeight) m.style.top=(window.innerHeight-r.height-8)+'px';
+}
+window.addEventListener('click', (e)=>{ if(ctxMenuEl && !ctxMenuEl.contains(e.target)) closeCtxMenu(); });
+window.addEventListener('resize', ()=>{ applyViewport(); });
+
+function duplicateNode(id){
+  const n = state.nodes.get(id); if(!n) return;
+  const nn = createNode(n.type, n.x+20, n.y+20);
+  nn.props = JSON.parse(JSON.stringify(n.props));
+  // 重新渲染以应用 props
+  nn.el.remove(); renderNode(nn); renderEdges(); evaluate();
+}
+
+/* ── 节点库面板 ─────────────────────────────── */
+const libraryEl = $('#library');
+const libraryBody = $('#library-body');
+function buildLibrary(){
+  const groups = {};
+  Object.entries(NODE_DEFS).forEach(([k,d])=>{
+    (groups[d.group]=groups[d.group]||[]).push([k,d]);
+  });
+  Object.entries(groups).forEach(([g,items])=>{
+    const h=document.createElement('h3'); h.textContent=g; libraryBody.appendChild(h);
+    items.forEach(([k,d])=>{
+      const it=document.createElement('div'); it.className='lib-item';
+      it.innerHTML=`<span class="ic" style="background:${d.color}"></span><span class="nm">${d.title}</span>`;
+      it.addEventListener('click', ()=>{
+        const r = canvasWrap.getBoundingClientRect();
+        const wp = screenToWorld(r.left+r.width/2, r.top+r.height/2);
+        createNode(k, wp.x-100, wp.y-30);
+      });
+      libraryBody.appendChild(it);
+    });
+    const sep=document.createElement('div'); sep.className='lib-sep'; libraryBody.appendChild(sep);
+  });
+}
+
+/* ── 工具栏 ─────────────────────────────────── */
+$('#btn-add').addEventListener('click', (e)=>{
+  const r = canvasWrap.getBoundingClientRect();
+  showCanvasMenu({clientX:r.left+40, clientY:r.top+60, preventDefault:()=>{}});
+});
+$('#btn-fit').addEventListener('click', fitView);
+$('#btn-clear').addEventListener('click', ()=>{
+  if(state.nodes.size===0) return;
+  if(!confirm('清空所有节点？')) return;
+  state.nodes.forEach(n=>n.el.remove());
+  state.nodes.clear(); state.edges.clear(); state.selected.clear();
+  renderEdges(); updateStats(); evaluate();
+});
+$('#btn-layout').addEventListener('click', autoLayout);
+$('#zoom-in').addEventListener('click', ()=>setZoom(state.viewport.zoom*1.2));
+$('#zoom-out').addEventListener('click', ()=>setZoom(state.viewport.zoom/1.2));
+$('#btn-lib').addEventListener('click', ()=>{
+  libraryEl.classList.toggle('collapsed');
+  canvasWrap.classList.toggle('library-collapsed');
+  $('#statusbar').classList.toggle('library-collapsed');
+  $('#btn-lib').textContent = libraryEl.classList.contains('collapsed') ? '节点库 ▶' : '◀ 节点库';
+});
+$('#library-close').addEventListener('click', ()=>$('#btn-lib').click());
+(()=>{
+  const handle=$('#lib-resize'); let dragging=false, sx=0, sw=0;
+  handle.addEventListener('mousedown',(e)=>{
+    dragging=true; sx=e.clientX;
+    sw=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--lib-w'))||208;
+    document.documentElement.style.cursor='ew-resize'; e.preventDefault();
+  });
+  window.addEventListener('mousemove',(e)=>{
+    if(!dragging) return;
+    const w=Math.min(360,Math.max(160,sw+e.clientX-sx));
+    document.documentElement.style.setProperty('--lib-w',w+'px');
+  });
+  window.addEventListener('mouseup',()=>{ if(dragging){ dragging=false; document.documentElement.style.cursor=''; } });
+})();
+$('#canvas-close').addEventListener('click', ()=>{
+  const m = canvasWrap.classList.toggle('minimized');
+  $('#canvas-close').textContent = m ? '▢' : '✕';
+  $('#canvas-close').title = m ? '展开' : '最小化';
+});
+
+/* ── 预览面板交互 ───────────────────────────── */
+const previewPane = $('#previewPane');
+$('#btn-preview').addEventListener('click', ()=>{
+  const hidden = previewPane.classList.toggle('hidden');
+  canvasWrap.classList.toggle('has-preview', !hidden);
+  $('#statusbar').classList.toggle('has-preview', !hidden);
+  $('#btn-preview').textContent = hidden ? '▶ 实时预览' : '◀ 实时预览';
+  // 触发 3D resize
+  if(!hidden && m3d){ setTimeout(()=>{ if(m3d.isMaterial3DReady && m3d.isMaterial3DReady()) evaluate(); }, 250); }
+});
+
+// 折叠右栏按钮 → 同 btn-preview（layout.js 未引入，手动绑定）
+// 同时清理 .floating 残留，避免悬浮窗与右侧壳冲突导致"关闭后还有窗口"
+document.querySelectorAll('[data-panel-action="collapse"]').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    const wrap = document.getElementById('previewPanelWrap');
+    if (wrap && wrap.classList.contains('floating')) {
+      wrap.classList.remove('floating');
+      wrap.style.left = wrap.style.top = wrap.style.width = wrap.style.height = '';
+    }
+    $('#btn-preview').click();
+  });
+});
+
+function fitView(){
+  if(state.nodes.size===0){
+    state.viewport={x:0,y:0,zoom:1}; applyViewport(); return;
+  }
+  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  state.nodes.forEach(n=>{
+    const r = n.el.getBoundingClientRect();
+    const a = screenToWorld(r.left, r.top);
+    const b = screenToWorld(r.right, r.bottom);
+    minX=Math.min(minX,a.x); minY=Math.min(minY,a.y);
+    maxX=Math.max(maxX,b.x); maxY=Math.max(maxY,b.y);
+  });
+  const pad = 60;
+  const w = maxX-minX+pad*2, h = maxY-minY+pad*2;
+  const r = canvasWrap.getBoundingClientRect();
+  const z = clamp(Math.min(r.width/w, r.height/h), 0.2, 3);
+  state.viewport.zoom = z;
+  state.viewport.x = (r.width - (maxX+minX)*z)/2;
+  state.viewport.y = (r.height - (maxY+minY)*z)/2;
+  applyViewport();
+}
+function autoLayout(){
+  // 简单分层布局：按拓扑层级
+  const indeg = new Map();
+  state.nodes.forEach((n,id)=>indeg.set(id,0));
+  state.edges.forEach(e=>{ if(state.nodes.has(e.from.node)&&state.nodes.has(e.to.node)) indeg.set(e.to.node, indeg.get(e.to.node)+1); });
+  const layer = new Map();
+  const q = [...state.nodes.keys()].filter(id=>indeg.get(id)===0);
+  q.forEach(id=>layer.set(id,0));
+  while(q.length){
+    const id=q.shift();
+    state.edges.forEach(e=>{
+      if(e.from.node===id){
+        const nl = (layer.get(id)||0)+1;
+        if(!layer.has(e.to.node) || layer.get(e.to.node)<nl){
+          layer.set(e.to.node, nl);
+        }
+        indeg.set(e.to.node, indeg.get(e.to.node)-1);
+        if(indeg.get(e.to.node)===0) q.push(e.to.node);
+      }
+    });
+  }
+  // 按层排列
+  const byLayer = {};
+  layer.forEach((l,id)=>{ (byLayer[l]=byLayer[l]||[]).push(id); });
+  Object.entries(byLayer).forEach(([l,ids])=>{
+    ids.forEach((id,i)=>{
+      const n=state.nodes.get(id);
+      n.x = +l*260 - 400; n.y = i*180 - 200;
+      n.el.style.left=n.x+'px'; n.el.style.top=n.y+'px';
+    });
+  });
+  renderEdges();
+  setTimeout(fitView, 50);
+}
+
+/* ── 状态/Toast ─────────────────────────────── */
+function updateStats(){
+  $('#stat-nodes').textContent = state.nodes.size;
+  $('#stat-edges').textContent = state.edges.size;
+}
+let toastTimer=null;
+function toast(msg){
+  const t=$('#toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.classList.remove('show'), 2000);
+}
+
+/* ── 初始化示例 ─────────────────────────────── */
+function initExample(){
+  const r = canvasWrap.getBoundingClientRect();
+  state.viewport.x = r.width/2 - 200;
+  state.viewport.y = r.height/2 - 100;
+  applyViewport();
+
+  const num1 = createNode('number', -380, -120);
+  num1.props.value = 0.8;
+  const num2 = createNode('number', -380, 60);
+  num2.props.value = 0.3;
+  const color1 = createNode('color', -380, 220);
+  color1.props.color = '#7cbd56';
+  const mix = createNode('mix', -100, 0);
+  const pbr = createNode('pbr', 160, 40);
+  pbr.props; // 默认
+  const out = createNode('output', 420, 60);
+
+  // 重新渲染以应用 props
+  [num1,num2,color1,mix,pbr,out].forEach(n=>{ n.el.remove(); renderNode(n); });
+
+  // 连线
+  function conn(fn,fp,tn,tp){
+    const eid='e'+Math.random().toString(36).slice(2,9);
+    state.edges.set(eid,{id:eid,from:{node:fn,port:fp},to:{node:tn,port:tp}});
+  }
+  conn(num1.id,'value',mix.id,'a');
+  conn(num2.id,'value',mix.id,'b');
+  conn(num1.id,'value',mix.id,'t');
+  conn(color1.id,'color',pbr.id,'baseColor');
+  conn(mix.id,'out',pbr.id,'roughness');
+  conn(pbr.id,'material',out.id,'material');
+
+  renderEdges(); updateStats(); evaluate();
+  setTimeout(fitView, 100);
+}
+
+/* ── 导入贴图 ─────────────────────────────────── */
+const importOverlay = $('#importOverlay');
+const importBody = $('#importBody');
+const importInfo = $('#importInfo');
+const IMG_EXTS_IMP = new Set(['jpg','jpeg','png','gif','bmp','webp','svg','ico','tif','tiff','avif']);
+const TEX_SUF_IMP = [['_n','normal'],['_s','specular']];
+
+function buildTexGroups(entries){
+  const groups = new Map();
+  for(const e of entries){
+    if(e.isDirectory) continue;
+    const name = e.name;
+    const dot = name.lastIndexOf('.');
+    if(dot < 0) continue;
+    if(!IMG_EXTS_IMP.has(name.slice(dot+1).toLowerCase())) continue;
+    const base = name.slice(0, dot);
+    let key = base, role = 'main';
+    for(const [suf, r] of TEX_SUF_IMP){
+      if(base.endsWith(suf)){ key = base.slice(0, -suf.length); role = r; break; }
+    }
+    if(!groups.has(key)) groups.set(key, {});
+    groups.get(key)[role] = e;
+  }
+  return groups;
+}
+
+function texUrl(fullPath){ return `/api/file/raw?path=${encodeURIComponent(fullPath)}`; }
+
+async function openImportDlg(){
+
+  importOverlay.classList.add('open');
+  importInfo.textContent = '加载中…';
+  importBody.innerHTML = '<div class="import-loading">正在读取配置与扫描文件…</div>';
+  try {
+    const cfgRes = await fetch('/api/config').then(r => r.json());
+    const cfg = (cfgRes && cfgRes.data) || {};
+    const sides = [];
+    if(cfg.leftPath) sides.push({ side:'left', label:cfg.leftPath, path:cfg.leftPath });
+    if(cfg.rightPath) sides.push({ side:'right', label:cfg.rightPath, path:cfg.rightPath });
+    if(sides.length === 0){
+      importBody.innerHTML = '<div class="import-empty">未设置左右路径。请先在主页面选择左右文件夹后再来导入。</div>';
+      importInfo.textContent = '无可用路径';
+      return;
+    }
+    importBody.innerHTML = '';
+    let totalGroups = 0;
+    for(const s of sides){
+      const sideEl = document.createElement('div');
+      sideEl.className = 'import-side';
+      const h4 = document.createElement('h4');
+      h4.innerHTML = `<span class="caret">▾</span>${s.side==='left'?'◀ 左侧':'▶ 右侧'} <span class="tag">${s.label}</span>`;
+      h4.addEventListener('click', () => sideEl.classList.toggle('collapsed'));
+      sideEl.appendChild(h4);
+      try {
+        const scanRes = await fetch('/api/compare/scan', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ path:s.path, recursive:true })
+        }).then(r => r.json());
+        const entries = (scanRes && scanRes.data && scanRes.data.entries) || [];
+        const groups = buildTexGroups(entries);
+        if(groups.size === 0){
+          sideEl.insertAdjacentHTML('beforeend', '<div class="import-empty">未发现贴图文件</div>');
+          importBody.appendChild(sideEl);
+          continue;
+        }
+        totalGroups += groups.size;
+        const grid = document.createElement('div');
+        grid.className = 'import-grid';
+        groups.forEach((g, key) => {
+          const card = document.createElement('div');
+          card.className = 'import-card';
+          const previewEntry = g.main || g.normal || g.specular;
+          const roleTags = [];
+          if(g.main) roleTags.push('<span class="r main">M</span>');
+          if(g.normal) roleTags.push('<span class="r normal">N</span>');
+          if(g.specular) roleTags.push('<span class="r specular">S</span>');
+          card.innerHTML = `<div class="thumb">${previewEntry?`<img src="${texUrl(previewEntry.fullPath)}" alt="" loading="lazy">`:''}</div><div class="nm" title="${key}">${key}</div><div class="roles">${roleTags.join('')}</div>`;
+          card._group = g;
+          card._key = key;
+          card.addEventListener('click', () => {
+            card.classList.toggle('selected');
+            updateImportInfo();
+          });
+          grid.appendChild(card);
+        });
+        sideEl.appendChild(grid);
+      } catch(err) {
+        sideEl.insertAdjacentHTML('beforeend', `<div class="import-empty">扫描失败：${err.message}</div>`);
+      }
+      importBody.appendChild(sideEl);
+    }
+    applyImportFilter();
+  } catch(e){
+    importBody.innerHTML = `<div class="import-empty">加载失败：${e.message}</div>`;
+    importInfo.textContent = '加载失败';
+  }
+}
+
+let importSearchTerm = '';
+let importRoleFilter = 'all';
+let importSort = 'name-asc';
+function applyImportFilter(){
+  const term = importSearchTerm.trim().toLowerCase();
+  const cards = importOverlay.querySelectorAll('.import-card');
+  let visible = 0, total = 0;
+  cards.forEach(card => {
+    total++;
+    const key = (card._key || '').toLowerCase();
+    const g = card._group || {};
+    let roleOk = true;
+    if(importRoleFilter === 'main') roleOk = !!g.main;
+    else if(importRoleFilter === 'normal') roleOk = !!g.normal;
+    else if(importRoleFilter === 'specular') roleOk = !!g.specular;
+    const searchOk = !term || key.includes(term);
+    const show = roleOk && searchOk;
+    card.style.display = show ? '' : 'none';
+    if(show) visible++;
+  });
+  const desc = importSort === 'name-desc';
+  importOverlay.querySelectorAll('.import-grid').forEach(grid => {
+    const arr = [...grid.children];
+    arr.sort((a,b) => {
+      const r = (a._key||'').localeCompare(b._key||'', 'zh');
+      return desc ? -r : r;
+    });
+    arr.forEach(c => grid.appendChild(c));
+  });
+  const cnt = document.getElementById('importCount');
+  if(cnt) cnt.textContent = total ? `共 ${total} 组 · 匹配 ${visible}` : '';
+  updateImportInfo();
+}
+
+function updateImportInfo(){
+  const n = importOverlay.querySelectorAll('.import-card.selected').length;
+  importInfo.textContent = n > 0 ? `已选择 ${n} 个贴图组，点击"导入所选"创建节点。` : '点击贴图组卡片选择，再次点击取消。';
+}
+
+function doImport(){
+  const cards = importOverlay.querySelectorAll('.import-card.selected');
+  if(cards.length === 0) return;
+  const r = canvasWrap.getBoundingClientRect();
+  const wp = screenToWorld(r.left + r.width/2, r.top + r.height/2);
+  let col = 0, row = 0, count = 0;
+  const COLS = Math.min(cards.length, 4);
+  cards.forEach(card => {
+    const g = card._group;
+    ['main','normal','specular'].forEach(role => {
+      if(!g[role]) return;
+      const entry = g[role];
+      const node = createNode('texture', wp.x - 100 + col * 230, wp.y - 30 + row * 180);
+      if(node){
+        node.props.tex = texUrl(entry.fullPath);
+        node.props._name = entry.name;
+        const thumb = node.el.querySelector('.w-tex .thumb');
+        const fn = node.el.querySelector('.w-tex .fn');
+        if(thumb) thumb.innerHTML = `<img src="${node.props.tex}" alt="">`;
+        if(fn) fn.textContent = entry.name.slice(0, 20);
+        count++;
+      }
+    });
+    col++;
+    if(col >= COLS){ col = 0; row++; }
+  });
+  importOverlay.classList.remove('open');
+  if(count > 0) toast(`已导入 ${count} 个贴图节点`);
+}
+
+document.getElementById('importSearch').addEventListener('input', e => { importSearchTerm = e.target.value; applyImportFilter(); });
+document.querySelectorAll('#importRoleSeg button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('#importRoleSeg button').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active'); importRoleFilter = b.dataset.role; applyImportFilter();
+}));
+document.querySelectorAll('#importSortSeg button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('#importSortSeg button').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active'); importSort = b.dataset.sort; applyImportFilter();
+}));
+document.getElementById('importSelectAll').addEventListener('click', () => {
+  importOverlay.querySelectorAll('.import-card').forEach(c => { if(c.style.display !== 'none') c.classList.add('selected'); });
+  updateImportInfo();
+});
+document.getElementById('importClearAll').addEventListener('click', () => {
+  importOverlay.querySelectorAll('.import-card.selected').forEach(c => c.classList.remove('selected'));
+  updateImportInfo();
+});
+$('#btn-import').addEventListener('click', openImportDlg);
+$('#importClose').addEventListener('click', () => importOverlay.classList.remove('open'));
+$('#importCancel').addEventListener('click', () => importOverlay.classList.remove('open'));
+$('#importOk').addEventListener('click', doImport);
+
+// 点击遮罩区域关闭导入对话框
+importOverlay.addEventListener('click', e => { if(e.target === importOverlay) importOverlay.classList.remove('open'); });
+
+buildLibrary();
+initExample();
+toast('节点画布就绪 · 右侧实时预览联动原项目 3D 材质引擎');
+
+/* ── embed 模式 + 主页 postMessage 联动 ── */
+(function(){
+  if (new URLSearchParams(location.search).get('embed')) {
+    document.body.classList.add('embed');
+  }
+
+  // 供 loadPreset / postMessage 使用的连边辅助
+  function addEdge(fromNode, fromPort, toNode, toPort){
+    const eid = 'e'+Math.random().toString(36).slice(2,9);
+    state.edges.set(eid, {id:eid, from:{node:fromNode,port:fromPort}, to:{node:toNode,port:toPort}});
+  }
+
+  // 在画布中心附近放置一组节点
+  function centerXY(offsetX, offsetY){
+    const r = canvasWrap.getBoundingClientRect();
+    const wp = screenToWorld(r.left + r.width/2, r.top + r.height/2);
+    return { x: wp.x + (offsetX||0), y: wp.y + (offsetY||0) };
+  }
+
+  // 构建材质预设节点图
+  function buildMaterialPreset(baseColor, roughness, metallic){
+    const c = centerXY(-220, -40);
+    const colorNode = createNode('color', c.x, c.y);
+    if(colorNode) colorNode.props.color = baseColor;
+    const roughNode = createNode('number', c.x, c.y + 80);
+    if(roughNode) roughNode.props.value = roughness;
+    const metalNode = createNode('number', c.x + 120, c.y + 80);
+    if(metalNode) metalNode.props.value = metallic;
+    const p = centerXY(20, -20);
+    const pbrNode = createNode('pbr', p.x, p.y);
+    const outNode = createNode('output', p.x + 220, p.y);
+    if(colorNode) renderNode(colorNode);
+    if(roughNode) renderNode(roughNode);
+    if(metalNode) renderNode(metalNode);
+    if(pbrNode) renderNode(pbrNode);
+    if(outNode) renderNode(outNode);
+    if(colorNode && pbrNode) addEdge(colorNode.id, 'color', pbrNode.id, 'baseColor');
+    if(roughNode && pbrNode) addEdge(roughNode.id, 'value', pbrNode.id, 'roughness');
+    if(metalNode && pbrNode) addEdge(metalNode.id, 'value', pbrNode.id, 'metallic');
+    if(pbrNode && outNode) addEdge(pbrNode.id, 'material', outNode.id, 'material');
+    renderEdges(); updateStats(); evaluate();
+  }
+
+  const PRESET_RECIPES = {
+    metal:    () => buildMaterialPreset('#c8c8d0', 0.25, 1.0),
+    plastic:  () => buildMaterialPreset('#e0e0e0', 0.5, 0.0),
+    glass:    () => buildMaterialPreset('#e0eef5', 0.05, 0.0),
+    fabric:   () => buildMaterialPreset('#b39880', 0.9, 0.0),
+    emissive: () => buildMaterialPreset('#fff3c0', 0.5, 0.0),
+  };
+
+  function loadPreset(name){
+    const fn = PRESET_RECIPES[name];
+    if(!fn){ toast('未知预设: '+name); return; }
+    fn();
+    toast('已加载预设: '+name);
+  }
+
+  window.addEventListener('message', (ev) => {
+    const d = ev.data;
+    if(!d || typeof d !== 'object') return;
+    try {
+      switch(d.type){
+        case 'ping': ev.source && ev.source.postMessage({type:'pong'}, '*'); break;
+        case 'addNode': {
+          const c = centerXY(0, 0);
+          createNode(d.nodeType, d.x != null ? d.x : c.x, d.y != null ? d.y : c.y);
+          break;
+        }
+        case 'addTexture': {
+          const c = centerXY(0, 0);
+          const node = createNode('texture', d.x != null ? d.x : c.x, d.y != null ? d.y : c.y);
+          if(node){
+            node.props.tex = texUrl(d.path);
+            node.props._name = d.name || '';
+            const thumb = node.el.querySelector('.w-tex .thumb');
+            const fn = node.el.querySelector('.w-tex .fn');
+            if(thumb) thumb.innerHTML = `<img src="${node.props.tex}" alt="">`;
+            if(fn) fn.textContent = (d.name||'').slice(0, 20);
+            evaluate();
+          }
+          break;
+        }
+        case 'loadPreset': loadPreset(d.preset); break;
+      }
+    } catch(e){ console.warn('[embed] message handler error', e); }
+  });
+
+  // 通知父窗口已就绪
+  if (window.parent && window.parent !== window) {
+    window.parent.postMessage({type:'nodeEditorReady'}, '*');
+  }
+})();
+
+</script>
+
+<!-- HDR 预览模态框（preview-panel.js 需要） -->
+<div id="hdrPreviewModal" class="hdr-preview-modal">
+  <div class="hdr-preview-inner">
+    <button id="hdrPreviewClose" class="preview-close" data-i18n-title="common.close" title="关闭"><svg class="ico"><use href="#i-x"/></svg></button>
+    <canvas id="hdrPreviewCanvas" class="hdr-preview-canvas"></canvas>
+    <div class="hdr-preview-controls">
+      <label class="m3d-slider"><span data-i18n="m3d.hdrPreviewExposure">预览曝光</span><input type="range" id="hdrPreviewExposure" min="-3" max="3" step="0.1" value="0" /><span class="m3d-val" id="hdrPreviewExposureVal">0.0</span></label>
+      <div class="hdr-preview-info" id="hdrPreviewInfo"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 导入贴图对话框 -->
+<div class="import-overlay" id="importOverlay">
+  <div class="import-dlg">
+    <div class="import-dlg-head">
+      <span>导入贴图为节点</span>
+      <span class="x" id="importClose">✕</span>
+    </div>
+    <div class="import-dlg-toolbar">
+      <input type="text" id="importSearch" class="import-search" placeholder="搜索贴图名称…">
+      <div class="import-seg" id="importRoleSeg">
+        <button class="active" data-role="all">全部</button>
+        <button data-role="main">仅主</button>
+        <button data-role="normal">含法线</button>
+        <button data-role="specular">含高光</button>
+      </div>
+      <div class="import-seg" id="importSortSeg">
+        <button class="active" data-sort="name-asc">名↑</button>
+        <button data-sort="name-desc">名↓</button>
+      </div>
+      <button id="importSelectAll" class="import-mini-btn">全选</button>
+      <button id="importClearAll" class="import-mini-btn">清空</button>
+      <span class="import-count" id="importCount"></span>
+    </div>
+    <div class="import-dlg-body" id="importBody"></div>
+    <div class="import-dlg-foot">
+      <span class="info" id="importInfo">点击贴图组卡片选择，再次点击取消。选中后点"导入"创建纹理节点。</span>
+      <div class="btns">
+        <button id="importCancel">取消</button>
+        <button class="primary" id="importOk">导入所选</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -345,9 +345,11 @@
                      <div class="m3d-env-subpane" data-envpane="sky">
                       <div class="m3d-ctrl-group">
                         <div class="m3d-segment" id="m3dSkyPresetSeg">
-                          <button data-preset="noon" data-i18n="m3d.skyNoon">正午</button>
-                          <button data-preset="sunset" data-i18n="m3d.skySunset">日落</button>
+                          <button data-preset="clear" data-i18n="m3d.skyClear">晴天</button>
+                          <button data-preset="partly" data-i18n="m3d.skyPartly">多云</button>
                           <button data-preset="overcast" data-i18n="m3d.skyOvercast">阴天</button>
+                          <button data-preset="dawn" data-i18n="m3d.skyDawn">朝霞</button>
+                          <button data-preset="dusk" data-i18n="m3d.skyDusk">晚霞</button>
                           <button data-preset="night" data-i18n="m3d.skyNight">夜晚</button>
                         </div>
                       </div>
@@ -362,24 +364,14 @@
                       </div>
                       <div class="m3d-ctrl-group">
                         <label class="m3d-slider"><span data-i18n="m3d.skyTurbidity">浑浊度</span><input type="range" id="m3dSkyTurbidity" min="0" max="20" step="0.1" value="3" /><span class="m3d-val" id="m3dSkyTurbidityVal">3.0</span></label>
-                        <label class="m3d-slider"><span data-i18n="m3d.skyRayleigh">瑞利</span><input type="range" id="m3dSkyRayleigh" min="0" max="4" step="0.01" value="2.5" /><span class="m3d-val" id="m3dSkyRayleighVal">2.50</span></label>
+                        <label class="m3d-slider"><span data-i18n="m3d.skyRayleigh">瑞利</span><input type="range" id="m3dSkyRayleigh" min="0" max="30" step="0.01" value="2.5" /><span class="m3d-val" id="m3dSkyRayleighVal">2.50</span></label>
                       </div>
                       <div class="m3d-ctrl-group">
                         <label class="m3d-slider"><span data-i18n="m3d.skyMie">Mie系数</span><input type="range" id="m3dSkyMie" min="0" max="0.1" step="0.001" value="0.005" /><span class="m3d-val" id="m3dSkyMieVal">0.005</span></label>
                         <label class="m3d-slider"><span data-i18n="m3d.skyMieG">Mie方向</span><input type="range" id="m3dSkyMieG" min="0" max="0.999" step="0.001" value="0.8" /><span class="m3d-val" id="m3dSkyMieGVal">0.800</span></label>
                       </div>
                       <div class="m3d-ctrl-group">
-                        <label class="m3d-slider"><span data-i18n="m3d.skyCloudCov">云量</span><input type="range" id="m3dSkyCloudCov" min="0" max="1" step="0.01" value="0.4" /><span class="m3d-val" id="m3dSkyCloudCovVal">0.40</span></label>
-                        <label class="m3d-slider"><span data-i18n="m3d.skyCloudDen">云密度</span><input type="range" id="m3dSkyCloudDen" min="0" max="1" step="0.01" value="0.4" /><span class="m3d-val" id="m3dSkyCloudDenVal">0.40</span></label>
-                      </div>
-                      <div class="m3d-ctrl-group">
-                        <label class="m3d-slider"><span data-i18n="m3d.skyCloudScale">云尺度</span><input type="range" id="m3dSkyCloudScale" min="0.00005" max="0.001" step="0.00001" value="0.0002" /><span class="m3d-val" id="m3dSkyCloudScaleVal">0.00020</span></label>
-                        <label class="m3d-slider"><span data-i18n="m3d.skyCloudSpeed">云速度</span><input type="range" id="m3dSkyCloudSpeed" min="0" max="0.0002" step="0.000002" value="0.00002" /><span class="m3d-val" id="m3dSkyCloudSpeedVal">0.000020</span></label>
-                      </div>
-                      <div class="m3d-ctrl-group">
-                        <label class="m3d-slider"><span data-i18n="m3d.skyCloudElev">云高度</span><input type="range" id="m3dSkyCloudElev" min="0" max="1" step="0.01" value="0.5" /><span class="m3d-val" id="m3dSkyCloudElevVal">0.50</span></label>
-                      </div>
-                      <div class="m3d-ctrl-group">
+
                         <span class="m3d-light-label" data-i18n="m3d.skyTint">天空色调</span>
                         <input type="color" id="m3dSkyTint" value="#a0c0ff" data-i18n-title="m3d.skyTintTitle" title="天空整体色调，白色=物理结果" />
                       </div>
@@ -394,7 +386,7 @@
                     </div>
                     <div class="m3d-ctrl-group">
                       <label class="m3d-slider"><span data-i18n="m3d.envIntensity">环境</span><input type="range" id="m3dEnvIntensity" min="0" max="3" step="0.01" value="0.5" /><span class="m3d-val" id="m3dEnvIntensityVal">0.50</span></label>
-                      <label class="m3d-slider"><span data-i18n="m3d.exposure">曝光</span><input type="range" id="m3dExposure" min="0" max="3" step="0.01" value="0.3" /><span class="m3d-val" id="m3dExposureVal">0.30</span></label>
+                      <label class="m3d-slider"><span data-i18n="m3d.exposure">曝光</span><input type="range" id="m3dExposure" min="0" max="3" step="0.01" value="2.2" /><span class="m3d-val" id="m3dExposureVal">2.20</span></label>
                       <label class="m3d-checkbox"><input type="checkbox" id="m3dGround" checked /> <span data-i18n="m3d.ground">地面</span></label>
                       <label class="m3d-checkbox"><input type="checkbox" id="m3dAutoRotate" checked /> <span data-i18n="m3d.autoRotate">自转</span></label>
                       <label class="m3d-checkbox"><input type="checkbox" id="m3dWireframe" /><span data-i18n="m3d.wireframe">线框</span></label>

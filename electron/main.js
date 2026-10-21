@@ -14,6 +14,7 @@ const net = require('net')
 
 let mainWindow = null
 let server = null
+let wss = null
 const PREFERRED_PORT = 5273
 const MAX_ATTEMPTS = 10
 
@@ -48,7 +49,7 @@ async function startServer() {
   uploadService.cleanup()
   server = http.createServer(createApp())
   const port = await listen(server, PREFERRED_PORT, 0)
-  wsSetup.setup(server)
+  wss = wsSetup.setup(server)
   logger.info('electron', `local server on http://127.0.0.1:${port}`)
   return port
 }
@@ -101,10 +102,11 @@ app.whenReady().then(async () => {
 })
 
 function shutdown() {
-  if (server) {
-    try { server.close() } catch {}
-    server = null
-  }
+  if (!server && !wss) return
+  const { gracefulShutdown } = require('../server/shutdown')
+  gracefulShutdown({ server, wss, exit: false })
+  server = null
+  wss = null
 }
 
 app.on('window-all-closed', () => {

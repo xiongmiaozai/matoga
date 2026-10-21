@@ -9,14 +9,18 @@ const path = require('path')
 const crypto = require('crypto')
 const configStore = require('../config/config-store')
 const { DATA_ROOT } = require('../paths')
+const { generateThumb } = require('./thumb-encode')
 
 const THUMB_DIR = path.join(DATA_ROOT, 'data', 'hdri-thumbs')
+const THUMB_W = 480
+const THUMB_H = 240
+const THUMB_VERSION = 2
 
 const LIST_CACHE = new Map()
 
 function thumbPathFor(filePath) {
   const hash = crypto.createHash('md5').update(path.normalize(filePath).toLowerCase()).digest('hex')
-  return path.join(THUMB_DIR, hash + '.jpg')
+  return path.join(THUMB_DIR, hash + '.png')
 }
 
 async function list() {
@@ -50,16 +54,24 @@ function invalidateList(dir) {
 
 async function thumbInfo(fullPath) {
   const thumbPath = thumbPathFor(fullPath)
+  const metaPath = thumbPath + '.json'
   const hdrStat = await fs.promises.stat(fullPath)
-  let exists = false, stale = true, mtime = 0
+  let exists = false, stale = true, mtime = 0, blurhash = null
   try {
     const tStat = await fs.promises.stat(thumbPath)
     exists = true
     mtime = tStat.mtimeMs
     stale = tStat.mtimeMs < hdrStat.mtimeMs
   } catch {}
+  if (exists && !stale) {
+    try {
+      const meta = JSON.parse(await fs.promises.readFile(metaPath, 'utf8'))
+      if (meta.version === THUMB_VERSION) blurhash = meta.blurhash
+      else stale = true
+    } catch {}
+  }
   const thumbUrl = '/api/hdri/thumb?path=' + encodeURIComponent(fullPath)
-  return { exists, stale, thumbUrl, mtime }
+  return { exists, stale, thumbUrl, mtime, blurhash }
 }
 
 async function saveThumb(fullPath, dataUrl) {
@@ -71,4 +83,51 @@ async function saveThumb(fullPath, dataUrl) {
   return { success: true, thumbUrl }
 }
 
-module.exports = { list, invalidateList, thumbInfo, saveThumb, thumbPathFor, THUMB_DIR }
+async function ensureThumb(fullPath) {
+  const thumbPath = thumbPathFor(fullPath)
+  const metaPath = thumbPath + '.json'
+  const hdrStat = await fs.promises.stat(fullPath)
+  let needGen = true
+  try {
+    const tStat = await fs.promises.stat(thumbPath)
+    if (tStat.mtimeMs >= hdrStat.mtimeMs) {
+      try {
+        const meta = JSON.parse(await fs.promises.readFile(metaPath, 'utf8'))
+        if (meta.version === THUMB_VERSION) needGen = false
+      } catch {}
+    }
+  } catch {}
+  if (needGen) {
+    const buf = await fs.promises.readFile(fullPath)
+    const ext = path.extname(fullPath).slice(1)
+    const { png, blurhash } = generateThumb(buf, ext, THUMB_W, THUMB_H)
+    await fs.promises.mkdir(THUMB_DIR, { recursive: true })
+    await fs.promises.writeFile(thumbPath, png)
+    await fs.promises.writeFile(metaPath, JSON.stringify({ version: THUMB_VERSION, blurhash, mtime: hdrStat.mtimeMs }))
+  }
+  return thumbPath
+}
+
+async function cleanupOrphans() {
+  const cfg = configStore.get()
+  const dir = cfg.hdriPresetPath
+  const valid = new Set()
+  try {
+    const names = await fs.promises.readdir(dir)
+    for (const name of names) {
+      const ext = path.extname(name).toLowerCase()
+      if (ext === '.hdr' || ext === '.exr') valid.add(path.basename(thumbPathFor(path.join(dir, name))))
+    }
+  } catch {}
+  let removed = 0
+  try {
+    const files = await fs.promises.readdir(THUMB_DIR)
+    for (const f of files) {
+      const base = f.endsWith('.json') ? f.slice(0, -5) : f
+      if (!valid.has(base)) { await fs.promises.unlink(path.join(THUMB_DIR, f)).catch(() => {}); removed++ }
+    }
+  } catch {}
+  return { removed, valid: valid.size }
+}
+
+module.exports = { list, invalidateList, thumbInfo, saveThumb, ensureThumb, cleanupOrphans, thumbPathFor, THUMB_DIR, THUMB_W, THUMB_H }

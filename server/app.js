@@ -19,6 +19,8 @@ function createApp() {
 
   app.use(express.json({ limit: '12mb' }))
 
+  app.use('/api/health', require('./routes/health'))
+
   app.use('/api', auth)
 
   const api = express.Router()
@@ -27,13 +29,20 @@ function createApp() {
   api.use('/file', require('./routes/file'))
   api.use('/hdri', require('./routes/hdri'))
   api.use('/config', require('./routes/config'))
+  api.use('/workspace', require('./routes/workspace'))
+  api.use('/asset', require('./routes/asset'))
   api.use('/shell', require('./routes/shell'))
   api.use('/upload', require('./routes/upload'))
   app.use('/api', api)
 
 
   app.use('/vendor/three', express.static(path.join(ROOT, 'node_modules', 'three', 'build')))
-  app.use(express.static(path.join(ROOT, 'web'), { index: 'index.html' }))
+  app.use('/vendor/golden-layout', express.static(path.join(ROOT, 'node_modules', 'golden-layout', 'dist', 'esm'), { extensions: ['js'], setHeaders: (res) => res.set('Cache-Control', 'no-store') }))
+  app.use('/vendor/golden-layout-css', express.static(path.join(ROOT, 'node_modules', 'golden-layout', 'dist', 'css'), { setHeaders: (res) => res.set('Cache-Control', 'no-store') }))
+  app.use(express.static(path.join(ROOT, 'web'), {
+    index: 'index.html',
+    setHeaders: (res) => res.set('Cache-Control', 'no-store')
+  }))
 
   app.use('/api', (req, res) => fail(res, 'ERR_INVALID_PARAM', 'unknown API endpoint'))
   app.use((req, res) => res.status(404).send('Not Found'))

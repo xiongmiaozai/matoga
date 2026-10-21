@@ -11,7 +11,7 @@ import {
 	HalfFloatType,
 	LinearFilter,
 	LinearSRGBColorSpace
-} from 'three'
+} from '/vendor/three/three.module.js'
 
 class HDRLoader extends DataTextureLoader {
 	constructor( manager ) {

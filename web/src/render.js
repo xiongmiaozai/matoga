@@ -16,7 +16,7 @@ import {
   openPreview, relPath, joinPath
 } from './utils.js'
 import { sortResult } from './compare.js'
-import { copySingleFile, replaceWithExternalFile, deleteTexture, handleAction, showPixelDiff } from './actions.js'
+import { replaceWithExternalFile, deleteTexture, handleAction, showPixelDiff } from './actions.js'
 import { initMaterial3D, updateMaterial3D } from './material3d.js'
 import { enhancePreview } from './preview2d.js'
 import { observeThumbs } from './thumb-loader.js'
@@ -138,29 +138,7 @@ export function appendSubRows(frag, g) {
     sub.className = 'sub-row row-' + sk
     const subName = `<span class="sub-name">${ROLE_LABEL[role]}</span>`
     const se = le || re
-    const actionTd = document.createElement('td')
-    actionTd.className = 'sub-actions'
-    if (le && !le.isDirectory && state.rightPath) {
-      const rel = relPath(state.leftPath, le.fullPath)
-      const dest = joinPath(state.rightPath, rel)
-      const btn = document.createElement('button')
-      btn.className = 'sub-replace-btn'
-      btn.textContent = t('render.toRight')
-      btn.addEventListener('click', (ev) => { ev.stopPropagation(); copySingleFile(le.fullPath, dest, re && !re.isDirectory ? re.fullPath : null) })
-      actionTd.appendChild(btn)
-    }
-    if (re && !re.isDirectory && state.leftPath) {
-      const rel = relPath(state.rightPath, re.fullPath)
-      const dest = joinPath(state.leftPath, rel)
-      const btn = document.createElement('button')
-      btn.className = 'sub-replace-btn'
-      btn.textContent = t('render.toLeft')
-      btn.addEventListener('click', (ev) => { ev.stopPropagation(); copySingleFile(re.fullPath, dest, le && !le.isDirectory ? le.fullPath : null) })
-      actionTd.appendChild(btn)
-    }
     sub.innerHTML = `<td>${statusBadge(sk)}</td><td class="preview-cell">${renderThumbPair(le, re)}</td><td>${subName}</td><td></td><td>${formatSize(se.size)}</td><td>${formatDate(se.mtime)}</td><td>${le ? '<span class="cell-yes">✓</span>' : '<span class="cell-empty">—</span>'}</td><td>${re ? '<span class="cell-yes">✓</span>' : '<span class="cell-no">✗</span>'}</td>`
-    const emptyTd = sub.children[3]
-    emptyTd.replaceWith(actionTd)
     sub.addEventListener('click', () => { state.selected = g; renderSidebar() })
     frag.appendChild(sub)
   }
@@ -456,7 +434,7 @@ export function initViewTabs() {
     })
   })
   document.addEventListener('keydown', (e) => {
-    if (e.ctrlKey && (e.key === '1' || e.key === '2')) {
+    if ((e.metaKey || e.ctrlKey) && (e.key === '1' || e.key === '2')) {
       const idx = e.key === '1' ? 0 : 1
       if (tabs[idx]) tabs[idx].click()
       e.preventDefault()

@@ -9,11 +9,22 @@ const { AppError } = require('../../shared/errors')
 
 const trustedRoots = new Set()
 
+function stripQuotes(s) {
+  if (s.length >= 2) {
+    const a = s[0], b = s[s.length - 1]
+    if ((a === '"' && b === '"') || (a === "'" && b === "'") || (a === '`' && b === '`')) return s.slice(1, -1)
+  }
+  return s
+}
+
 function normalize(p) {
   if (typeof p !== 'string' || !p.trim() || p.includes('\0')) {
     throw new AppError('ERR_INVALID_PARAM', 'invalid path')
   }
-  return path.normalize(p)
+  let s = p.replace(/^[\u200B-\u200D\u2060\u180E\uFEFF]+|[\u200B-\u200D\u2060\u180E\uFEFF]+$/g, '').trim()
+  s = stripQuotes(s).replace(/^[\u200B-\u200D\u2060\u180E\uFEFF]+|[\u200B-\u200D\u2060\u180E\uFEFF]+$/g, '').trim()
+  if (!s) throw new AppError('ERR_INVALID_PARAM', 'invalid path')
+  return path.normalize(s)
 }
 
 function guardRead(p) {

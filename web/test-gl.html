@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: blob:" />
+  <script type="importmap">
+    { "imports": { "golden-layout": "/vendor/golden-layout/index.js" } }
+  </script>
+  <link rel="stylesheet" href="/vendor/golden-layout-css/goldenlayout-base.css" />
+  <link rel="stylesheet" href="/vendor/golden-layout-css/themes/goldenlayout-light-theme.css" />
+  <style>body { margin: 0; font-family: sans-serif; } #root { width: 100vw; height: 100vh; }</style>
+</head>
+<body>
+  <div id="root"></div>
+  <div id="status" style="position:fixed;top:10px;left:10px;padding:12px 20px;border-radius:8px;font-size:14px;z-index:9999;background:#444;color:#fff">加载中…</div>
+  <script type="module">
+    const status = document.getElementById('status')
+    try {
+      const { GoldenLayout } = await import('golden-layout')
+      status.textContent = 'GL 模块加载成功'
+      status.style.background = '#1a7f37'
+      const gl = new GoldenLayout(document.getElementById('root'))
+      status.textContent = 'GL 实例创建成功, isInitialised=' + gl.isInitialised
+      gl.registerComponentFactoryFunction('test', (container) => {
+        container.element.innerHTML = '<div style="padding:20px"><h2>面板内容</h2><p>如果你能看到这个，说明 Golden-Layout 工作正常。</p></div>'
+      })
+      gl.loadLayout({ root: { type: 'row', content: [
+        { type: 'stack', content: [{ type: 'component', componentType: 'test', title: '测试面板1' }] },
+        { type: 'column', size: '1fr', content: [
+          { type: 'stack', content: [{ type: 'component', componentType: 'test', title: '测试面板2' }] },
+          { type: 'stack', content: [{ type: 'component', componentType: 'test', title: '测试面板3' }] },
+        ] }
+      ] } })
+      status.textContent = 'GL 布局加载成功！拖拽面板标题栏测试。'
+      status.style.background = '#1a7f37'
+    } catch (e) {
+      status.textContent = 'GL 失败: ' + e.message
+      status.style.background = '#d73a49'
+      console.error('GL test failed', e)
+    }
+  </script>
+</body>
+</html>

@@ -58,4 +58,9 @@ function cancel(jobId) {
   return false
 }
 
-module.exports = { execute, cancel, jobs }
+function cancelAll() {
+  for (const c of jobs.values()) c.cancelled = true
+  return jobs.size
+}
+
+module.exports = { execute, cancel, cancelAll, jobs }

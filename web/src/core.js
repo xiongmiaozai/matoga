@@ -17,6 +17,7 @@ export const state = {
   sortDir: 'asc',
   searchText: '',
   selected: null,
+  copySource: null,
   expandedKeys: new Set(),
   viewMode: 'all',
   collapsedFolders: new Set(),

@@ -9,7 +9,7 @@ import { $ } from './core.js'
 let channel = 'all'
 let zoom = 100
 let split = false
-let filter2d = 'bilinear'
+let filter2d = 'nearest'
 
 function applyFilter2d(img) {
   if (filter2d === 'nearest') img.style.imageRendering = 'pixelated'

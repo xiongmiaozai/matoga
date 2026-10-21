@@ -181,6 +181,7 @@
         return { success: true, thumbUrl: d.thumbUrl }
       } catch (e) { return { success: false, error: e.message } }
     },
+    cleanupHdrThumbs: () => call('POST', '/api/hdri/cleanup').catch(() => ({})),
 
     thumbInfo: (fullPath) => call('GET', '/api/file/thumb-info?path=' + encodeURIComponent(fullPath))
       .catch(e => ({ exists: false, stale: true, thumbUrl: null, error: e.message })),

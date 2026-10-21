@@ -54,7 +54,7 @@ async function main() {
 
   const server = http.createServer(createApp())
   const port = await listen(server, requestedPort, host, 0)
-  wsSetup.setup(server)
+  const wss = wsSetup.setup(server)
   const display = lan ? localIp() : 'localhost'
   const url = `http://${display}:${port}/${token ? '?token=' + token : ''}`
   console.log('')
@@ -63,12 +63,22 @@ async function main() {
   if (lan) console.log('  （LAN 模式：请将含 token 的完整地址发给局域网内其他设备）')
   console.log('')
   if (PKG) openBrowser(url)
+
+  const { gracefulShutdown } = require('./shutdown')
+  process.on('SIGTERM', () => gracefulShutdown({ server, wss, signal: 'SIGTERM', exit: true }))
+  process.on('SIGINT', () => gracefulShutdown({ server, wss, signal: 'SIGINT', exit: true }))
 }
 
 function openBrowser(url) {
   try {
     const { spawn } = require('child_process')
-    spawn('cmd', ['/c', 'start', '', url], { detached: true, stdio: 'ignore' }).unref()
+    if (process.platform === 'win32') {
+      spawn('cmd', ['/c', 'start', '', url], { detached: true, stdio: 'ignore' }).unref()
+    } else if (process.platform === 'darwin') {
+      spawn('open', [url], { detached: true, stdio: 'ignore' }).unref()
+    } else {
+      spawn('xdg-open', [url], { detached: true, stdio: 'ignore' }).unref()
+    }
   } catch (e) {
     logger.warn('server', 'open browser failed: ' + e.message)
   }

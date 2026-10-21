@@ -7,6 +7,7 @@
 import * as THREE from 'three'
 import { fileUrl, isImageFile } from './utils.js'
 import { HDRLoader } from './hdr-loader.js'
+import { loadEnvTexture, extFromUrl } from './hdr-env-loader.js'
 import { Sky } from './sky.js'
 import { t as _t } from './i18n.js'
 
@@ -20,7 +21,7 @@ let meshLeft, meshRight, labelLeft, labelRight
 let groundMesh, gridHelper, lightGroup
 let container = null
 let initialized = false
-let currentGeo = 'sphere'
+let currentGeo = 'cube'
 let emissiveIntensity = 1.0
 let normalScale = 1.0
 let materialFormat = 'auto'
@@ -39,6 +40,12 @@ let currentEnvMode = 'custom'
 let groundVisible = true
 let envIntensity = 0.5
 let hdrTexture = null
+let hdrTextureOriginal = null
+let hdrTextureRotated = null
+let hdrRotation = 0
+let hdrUsage = 'both'
+let hdrInfo = null
+let hdrRotateTimer = null
 let skyMesh = null
 let skyEnvTexture = null
 let skySunLight = null
@@ -48,12 +55,7 @@ let skyMieCoefficient = 0.005
 let skyMieDirectionalG = 0.8
 let skySunElevation = 15
 let skySunAzimuth = 180
-let skyCloudCoverage = 0.4
-let skyCloudScale = 0.0002
-let skyCloudSpeed = 0.00002
-let skyCloudDensity = 0.4
-let skyCloudElevation = 0.5
-let skyClock = null
+
 let skyTintHex = 0xa0c0ff
 let skyBakeTimer = null
 const _skyTint = new THREE.Color()
@@ -62,7 +64,7 @@ let opacityValue = 1.0
 let transmissionValue = 0.0
 let iorValue = 1.5
 let clearcoatValue = 0.0
-let textureFilter = 'trilinear'
+let textureFilter = 'nearest'
 let mipmapsEnabled = true
 let anisotropyLevel = 4
 let maxAnisotropy = 1
@@ -225,14 +227,20 @@ function createEnvTexture(presetKey) {
   return tex
 }
 
-function applyLightPreset(presetKey) {
-  if (!initialized || !LIGHT_PRESETS[presetKey]) return
-  currentLightPreset = presetKey
-  const preset = LIGHT_PRESETS[presetKey]
-  if (lightGroup) { while (lightGroup.children.length) lightGroup.remove(lightGroup.children[0]) }
-  const ambient = new THREE.AmbientLight(preset.ambient.color, preset.ambient.intensity)
+function cloneLightConfig(config) {
+  return {
+    ambient: { color: config.ambient.color, intensity: config.ambient.intensity },
+    lights: config.lights.map(l => ({ color: l.color, intensity: l.intensity, pos: [l.pos[0], l.pos[1], l.pos[2]] })),
+    bg: config.bg
+  }
+}
+
+function rebuildLights(config) {
+  if (!lightGroup) return
+  while (lightGroup.children.length) lightGroup.remove(lightGroup.children[0])
+  const ambient = new THREE.AmbientLight(config.ambient.color, config.ambient.intensity)
   lightGroup.add(ambient)
-  for (const l of preset.lights) {
+  for (const l of config.lights) {
     const dir = new THREE.DirectionalLight(l.color, l.intensity)
     dir.position.set(l.pos[0], l.pos[1], l.pos[2])
     dir.castShadow = true
@@ -242,6 +250,16 @@ function applyLightPreset(presetKey) {
     dir.shadow.camera.near = 0.1; dir.shadow.camera.far = 15
     lightGroup.add(dir)
   }
+}
+
+let customLightConfig = null
+
+function applyLightPreset(presetKey) {
+  if (!initialized || !LIGHT_PRESETS[presetKey]) return
+  currentLightPreset = presetKey
+  const preset = LIGHT_PRESETS[presetKey]
+  customLightConfig = cloneLightConfig(preset)
+  rebuildLights(preset)
   if (currentEnvMode === 'custom') {
     if (envTexture) envTexture.dispose()
     envTexture = createEnvTexture(presetKey)
@@ -250,7 +268,17 @@ function applyLightPreset(presetKey) {
     scene.environment = pmremTexture.texture
     scene.background = new THREE.Color(preset.bg)
   }
-  for (const m of [meshLeft, meshRight]) { if (m) m.material.envMapIntensity = envIntensity }
+  if (scene) scene.environmentIntensity = envIntensity; for (const m of [meshLeft, meshRight]) { if (m) m.material.envMapIntensity = envIntensity }
+}
+
+function applyCustomLightConfig(config) {
+  if (!initialized || !config || !config.ambient || !Array.isArray(config.lights)) return
+  customLightConfig = cloneLightConfig(config)
+  rebuildLights(customLightConfig)
+  if (currentEnvMode === 'custom') {
+    scene.background = new THREE.Color(customLightConfig.bg)
+  }
+  if (scene) scene.environmentIntensity = envIntensity; for (const m of [meshLeft, meshRight]) { if (m) m.material.envMapIntensity = envIntensity }
 }
 
 function updateSkySunPosition() {
@@ -266,11 +294,7 @@ function updateSkySunPosition() {
   u.rayleigh.value = skyRayleigh
   u.mieCoefficient.value = skyMieCoefficient
   u.mieDirectionalG.value = skyMieDirectionalG
-  u.cloudCoverage.value = skyCloudCoverage
-  u.cloudScale.value = skyCloudScale
-  u.cloudSpeed.value = skyCloudSpeed
-  u.cloudDensity.value = skyCloudDensity
-  u.cloudElevation.value = skyCloudElevation
+
   _skyTint.setHex(skyTintHex)
   u.skyTint.value.set(_skyTint.r, _skyTint.g, _skyTint.b)
   if (skySunLight) {
@@ -294,7 +318,7 @@ function bakeSkyEnvironment() {
   skyScene.remove(skyMesh)
   scene.add(skyMesh)
   u.showSunDisc.value = prevSunDisc
-  for (const m of [meshLeft, meshRight]) { if (m) m.material.envMapIntensity = envIntensity }
+  if (scene) scene.environmentIntensity = envIntensity; for (const m of [meshLeft, meshRight]) { if (m) m.material.envMapIntensity = envIntensity }
 }
 
 function scheduleSkyBake() {
@@ -342,15 +366,64 @@ function applyHDREnvMode() {
   if (lightGroup) { while (lightGroup.children.length) lightGroup.remove(lightGroup.children[0]) }
   const ambient = new THREE.AmbientLight(0xffffff, 0.1)
   lightGroup.add(ambient)
-  if (hdrTexture) {
-    scene.environment = hdrTexture
-    scene.background = hdrTexture
+  if (scene) scene.environmentRotation.set(0, 0, 0)
+  if (hdrTextureOriginal) {
+    const src = hdrTextureRotated || hdrTextureOriginal
+    hdrTexture = src
+    if (hdrUsage === 'env' || hdrUsage === 'both') scene.environment = src
+    else scene.environment = null
+    if (hdrUsage === 'bg' || hdrUsage === 'both') {
+      scene.background = src
+    } else {
+      scene.background = new THREE.Color(0x1a1a2e)
+    }
   } else {
+    hdrTexture = null
     scene.environment = null
     scene.background = new THREE.Color(0x1a1a2e)
   }
-  for (const m of [meshLeft, meshRight]) { if (m) m.material.envMapIntensity = envIntensity }
+  if (scene) scene.environmentIntensity = envIntensity; for (const m of [meshLeft, meshRight]) { if (m) m.material.envMapIntensity = envIntensity }
 }
+
+function ensureRotatedTexture() {
+  if (hdrTextureRotated) { hdrTextureRotated.dispose(); hdrTextureRotated = null }
+  if (hdrTextureOriginal && (hdrRotation % 360)) {
+    hdrTextureRotated = rotateTextureData(hdrTextureOriginal, hdrRotation)
+  }
+}
+
+function rotateTextureData(tex, angleDeg) {
+  const img = tex && tex.image
+  if (!img) return tex
+  const src = img.data
+  const srcW = img.width, srcH = img.height
+  if (!src || !srcW || !srcH) return tex
+  const n = ((angleDeg % 360) + 360) % 360
+  const shift = Math.round(n / 360 * srcW)
+  if (shift === 0 || shift === srcW) return tex
+  const stride = src.length / (srcW * srcH)
+  const newData = new src.constructor(src.length)
+  newData.set(src)
+  for (let y = 0; y < srcH; y++) {
+    const rowStart = y * srcW * stride
+    for (let x = 0; x < srcW; x++) {
+      const dst = rowStart + x * stride
+      const s = rowStart + ((x - shift + srcW * 100) % srcW) * stride
+      newData[dst] = src[s]
+      newData[dst + 1] = src[s + 1]
+      newData[dst + 2] = src[s + 2]
+      newData[dst + 3] = src[s + 3]
+    }
+  }
+  const newTex = new THREE.DataTexture(newData, srcW, srcH)
+  newTex.mapping = THREE.EquirectangularReflectionMapping
+  newTex.type = tex.type
+  newTex.colorSpace = tex.colorSpace
+  newTex.flipY = tex.flipY
+  newTex.needsUpdate = true
+  return newTex
+}
+
 
 function setEnvMode(mode) {
   if (!initialized || !['custom', 'sky', 'hdri'].includes(mode)) return
@@ -781,12 +854,12 @@ export function initMaterial3D(containerEl) {
   isWebGL2 = renderer.capabilities.isWebGL2
   maxAnisotropy = renderer.capabilities.getMaxAnisotropy() || 1
   renderer.setSize(width, height); renderer.setPixelRatio(window.devicePixelRatio)
-  renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.3
+  renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 2.2
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap
   container.appendChild(renderer.domElement)
   pmrem = new THREE.PMREMGenerator(renderer)
   lightGroup = new THREE.Group(); scene.add(lightGroup)
-  const geo = geometries.sphere()
+  const geo = geometries[currentGeo]()
   meshLeft = new THREE.Mesh(geo, makeMaterial()); meshLeft.castShadow = true; meshLeft.receiveShadow = true; scene.add(meshLeft)
   meshRight = new THREE.Mesh(geo.clone(), makeMaterial()); meshRight.castShadow = true; meshRight.receiveShadow = true; scene.add(meshRight)
   labelLeft = createLabel(_t('common.left'), '#2b6cff'); labelRight = createLabel(_t('common.right'), '#d97706')
@@ -799,6 +872,7 @@ export function initMaterial3D(containerEl) {
   setupControls(); new ResizeObserver(handleResize).observe(container); animate(); initialized = true
   applyLightPreset('studio')
   applySourceSide()
+  document.dispatchEvent(new CustomEvent('material3d:ready'))
 }
 
 function applySourceSide() {
@@ -845,11 +919,7 @@ function animate() {
   rotX += (targetRotX - rotX) * 0.1; rotY += (targetRotY - rotY) * 0.1; camDist += (targetCamDist - camDist) * 0.1
   meshLeft.rotation.x = rotX; meshLeft.rotation.y = rotY
   meshRight.rotation.x = rotX; meshRight.rotation.y = rotY
-  if (skyMesh && currentEnvMode === 'sky' && skyCloudSpeed > 0) {
-    const now = performance.now() * 0.001
-    if (skyClock > 0) skyMesh.material.uniforms.time.value += now - skyClock
-    skyClock = now
-  } else { skyClock = 0 }
+
   camera.position.z = camDist
   camera.updateMatrixWorld()
   if (parallaxShadow > 0.0) {
@@ -884,7 +954,9 @@ export function setParallaxAdaptive(val) { parallaxAdaptive = val; if (initializ
 export function setParallaxEnabled(on) { parallaxEnabled = on; if (initialized) { for (const m of [meshLeft, meshRight]) { if (m && m.material && m.material.userData.shaderRefs) { const ht = m.material.userData.shaderRefs.heightMap.value; m.material.userData.shaderRefs.hasHeightMap.value = (ht && on) ? 1.0 : 0.0; if (ht) { ht.needsUpdate = true; m.material.needsUpdate = true } } } } }
 export function setParallaxShadow(val) { parallaxShadow = val; if (initialized) { for (const m of [meshLeft, meshRight]) { if (m && m.material && m.material.userData.shaderRefs) m.material.userData.shaderRefs.parallaxShadow.value = val } } }
 export function setLightPreset(presetKey) { applyLightPreset(presetKey); if (currentEnvMode !== 'custom') setEnvMode('custom') }
-export function setEnvIntensity(val) { envIntensity = val; if (initialized) { for (const m of [meshLeft, meshRight]) { if (m) m.material.envMapIntensity = val } } }
+export function getCustomLightConfig() { return customLightConfig ? cloneLightConfig(customLightConfig) : null }
+export function applyCustomLightConfigExport(config) { if (currentEnvMode !== 'custom') setEnvMode('custom'); applyCustomLightConfig(config) }
+export function setEnvIntensity(val) { envIntensity = val; if (initialized) { if (scene) scene.environmentIntensity = val; for (const m of [meshLeft, meshRight]) { if (m) m.material.envMapIntensity = val } } }
 export function setExposure(val) { if (initialized && renderer) renderer.toneMappingExposure = val }
 export function toggleGround(visible) { groundVisible = visible; if (initialized) { if (groundMesh) groundMesh.visible = visible; if (gridHelper) gridHelper.visible = visible } }
 export function setAutoRotate(on) { autoRotate = on }
@@ -911,37 +983,65 @@ export function toggleFullscreen() {
   container.classList.toggle('fullscreen')
   setTimeout(handleResize, 50)
 }
-export function loadHDREnv(filePath) {
+export async function loadHDREnv(filePath) {
   if (!initialized || !filePath) return
-  const loader = new HDRLoader()
-  loader.load(filePath, (tex) => {
+  try {
+    const tex = await loadEnvTexture(filePath, extFromUrl(filePath))
     tex.mapping = THREE.EquirectangularReflectionMapping
-    if (hdrTexture) hdrTexture.dispose()
+    if (hdrTextureOriginal) { hdrTextureOriginal.dispose(); hdrTextureOriginal = null }
+    if (hdrTextureRotated) { hdrTextureRotated.dispose(); hdrTextureRotated = null }
+
     if (envTexture) { envTexture.dispose(); envTexture = null }
+    hdrTextureOriginal = tex
     hdrTexture = tex
+    hdrInfo = {
+      width: tex.image.width || 0,
+      height: tex.image.height || 0,
+      format: tex._srcFormat || 'HDR (RGBE)',
+      size: tex.image.data ? tex.image.data.byteLength : 0
+    }
+    ensureRotatedTexture()
     currentEnvMode = 'hdri'
     applyHDREnvMode()
-  })
+    window.dispatchEvent(new CustomEvent('material3d:hdrLoaded', { detail: hdrInfo }))
+  } catch (e) {
+    window.dispatchEvent(new CustomEvent('material3d:hdrLoadFailed', { detail: { message: e.message } }))
+  }
 }
 export function clearHDREnv() {
-  if (hdrTexture) { hdrTexture.dispose(); hdrTexture = null }
+  if (hdrTextureOriginal) { hdrTextureOriginal.dispose(); hdrTextureOriginal = null }
+  if (hdrTextureRotated) { hdrTextureRotated.dispose(); hdrTextureRotated = null }
+
+  hdrTexture = null
+  hdrInfo = null
+  if (scene) scene.environmentRotation.set(0, 0, 0)
   if (currentEnvMode === 'hdri') setEnvMode('custom')
   else applyHDREnvMode()
 }
 export function getCurrentLightPreset() { return currentLightPreset }
 export function getCurrentEnvMode() { return currentEnvMode }
 export function setEnvModeExport(mode) { setEnvMode(mode) }
+export function setHdrRotation(val) {
+  hdrRotation = val
+  if (hdrRotateTimer) clearTimeout(hdrRotateTimer)
+  hdrRotateTimer = setTimeout(() => {
+    hdrRotateTimer = null
+    if (initialized && currentEnvMode === 'hdri') {
+      ensureRotatedTexture()
+      applyHDREnvMode()
+    }
+  }, 30)
+}
+
+export function setHdrUsage(mode) { if (!['both', 'env', 'bg'].includes(mode)) return; hdrUsage = mode; if (initialized && currentEnvMode === 'hdri') applyHDREnvMode() }
+export function getHdrInfo() { return hdrInfo }
 export function setSkyTurbidity(val) { skyTurbidity = val; if (initialized && currentEnvMode === 'sky') { updateSkySunPosition(); scheduleSkyBake() } }
 export function setSkyRayleigh(val) { skyRayleigh = val; if (initialized && currentEnvMode === 'sky') { updateSkySunPosition(); scheduleSkyBake() } }
 export function setSkyMieCoefficient(val) { skyMieCoefficient = val; if (initialized && currentEnvMode === 'sky') { updateSkySunPosition(); scheduleSkyBake() } }
 export function setSkyMieDirectionalG(val) { skyMieDirectionalG = val; if (initialized && currentEnvMode === 'sky') { updateSkySunPosition(); scheduleSkyBake() } }
 export function setSkySunElevation(val) { skySunElevation = val; if (initialized && currentEnvMode === 'sky') { updateSkySunPosition(); scheduleSkyBake() } }
 export function setSkySunAzimuth(val) { skySunAzimuth = val; if (initialized && currentEnvMode === 'sky') { updateSkySunPosition(); scheduleSkyBake() } }
-export function setSkyCloudCoverage(val) { skyCloudCoverage = val; if (initialized && currentEnvMode === 'sky') { updateSkySunPosition(); scheduleSkyBake() } }
-export function setSkyCloudScale(val) { skyCloudScale = val; if (initialized && currentEnvMode === 'sky') { updateSkySunPosition(); scheduleSkyBake() } }
-export function setSkyCloudSpeed(val) { skyCloudSpeed = val; if (initialized && currentEnvMode === 'sky') { updateSkySunPosition() } }
-export function setSkyCloudDensity(val) { skyCloudDensity = val; if (initialized && currentEnvMode === 'sky') { updateSkySunPosition(); scheduleSkyBake() } }
-export function setSkyCloudElevation(val) { skyCloudElevation = val; if (initialized && currentEnvMode === 'sky') { updateSkySunPosition(); scheduleSkyBake() } }
+
 export function setSkyTint(hex) { const n = parseInt(hex.slice(1), 16); if (Number.isNaN(n)) return; skyTintHex = n; if (initialized && currentEnvMode === 'sky') { updateSkySunPosition(); scheduleSkyBake() } }
 
 function disposeTexture(tex) { if (tex && tex.dispose) tex.dispose() }
@@ -1021,15 +1121,138 @@ export function updateMaterial3D(group) {
 
 export function clearMaterial3D() { updateMaterial3D(null) }
 
+/* ════════════════════════════════════════════════════════════
+   节点编辑器联动 API
+   ════════════════════════════════════════════════════════════ */
+export function isMaterial3DReady() { return initialized }
+export function setBaseColor(rgb) {
+  if (!initialized || !Array.isArray(rgb)) return
+  const r = clamp01(rgb[0]), g = clamp01(rgb[1]), b = clamp01(rgb[2])
+  meshLeft.material.color.setRGB(r, g, b)
+  meshRight.material.color.setRGB(r, g, b)
+  meshLeft.material.needsUpdate = meshRight.material.needsUpdate = true
+}
+export function setEmissiveColor(rgb) {
+  if (!initialized || !Array.isArray(rgb)) return
+  const r = clamp01(rgb[0]), g = clamp01(rgb[1]), b = clamp01(rgb[2])
+  meshLeft.material.emissive.setRGB(r, g, b)
+  meshRight.material.emissive.setRGB(r, g, b)
+  meshLeft.material.needsUpdate = meshRight.material.needsUpdate = true
+}
+function clamp01(v) { return Math.max(0, Math.min(1, v)) }
+export function setMainTextureFromUrl(url) {
+  if (!initialized || !url) return
+  const loader = new THREE.TextureLoader()
+  for (const m of [meshLeft, meshRight]) {
+    loader.load(url, (tex) => {
+      tex.colorSpace = THREE.SRGBColorSpace
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping
+      disposeTexture(m.material.map)
+      m.material.map = tex
+      applyTextureFilter(tex)
+      m.material.needsUpdate = true
+    })
+  }
+}
+export function setNormalMapFromUrl(url) {
+  if (!initialized || !url) return
+  const loader = new THREE.TextureLoader()
+  for (const m of [meshLeft, meshRight]) {
+    loader.load(url, (tex) => {
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping
+      disposeTexture(m.material.normalMap)
+      m.material.normalMap = tex
+      m.material.normalScale.set(normalScale, normalScale)
+      applyTextureFilter(tex)
+      m.material.needsUpdate = true
+    })
+  }
+}
+export function clearMainTexture() {
+  if (!initialized) return
+  for (const m of [meshLeft, meshRight]) {
+    disposeTexture(m.material.map); m.material.map = null; m.material.needsUpdate = true
+  }
+}
+export function clearNormalMap() {
+  if (!initialized) return
+  for (const m of [meshLeft, meshRight]) {
+    disposeTexture(m.material.normalMap); m.material.normalMap = null; m.material.needsUpdate = true
+  }
+}
+export function applyNodePBR(p) {
+  if (!initialized || !p) return
+  if (p.baseColor) setBaseColor(p.baseColor)
+  if (typeof p.roughness === 'number') setRoughness(clamp01(p.roughness))
+  if (typeof p.metallic === 'number') setMetalness(clamp01(p.metallic))
+  if (typeof p.normalScale === 'number') setNormalScale(p.normalScale)
+  if (typeof p.envIntensity === 'number') setEnvIntensity(p.envIntensity)
+  if (typeof p.exposure === 'number') setExposure(p.exposure)
+  if (typeof p.opacity === 'number') setOpacity(p.opacity)
+  if (p.emissive) setEmissiveColor(p.emissive)
+  if (p.mainTextureUrl) setMainTextureFromUrl(p.mainTextureUrl)
+  else if (p.mainTextureUrl === null) clearMainTexture()
+  if (p.normalMapUrl) setNormalMapFromUrl(p.normalMapUrl)
+  else if (p.normalMapUrl === null) clearNormalMap()
+  if (p.lightPreset) setLightPreset(p.lightPreset)
+  if (p.geometry) setGeometry(p.geometry)
+}
+export function applyNodePBRSide(p, side) {
+  if (!initialized || !p) return
+  const mesh = side === 'left' ? meshLeft : meshRight
+  if (!mesh) return
+  const mat = mesh.material
+  if (p.baseColor && Array.isArray(p.baseColor)) {
+    mat.color.setRGB(clamp01(p.baseColor[0]), clamp01(p.baseColor[1]), clamp01(p.baseColor[2])); mat.needsUpdate = true
+  }
+  if (typeof p.roughness === 'number') mat.roughness = clamp01(p.roughness)
+  if (typeof p.metallic === 'number') mat.metalness = clamp01(p.metallic)
+  if (typeof p.normalScale === 'number') mat.normalScale.set(p.normalScale, p.normalScale)
+  if (typeof p.opacity === 'number') { opacityValue = p.opacity; applyOpacityMode(mat) }
+  if (p.emissive && Array.isArray(p.emissive)) {
+    mat.emissive.setRGB(clamp01(p.emissive[0]), clamp01(p.emissive[1]), clamp01(p.emissive[2])); mat.needsUpdate = true
+  }
+  if (p.mainTextureUrl) {
+    const loader = new THREE.TextureLoader()
+    loader.load(p.mainTextureUrl, (tex) => {
+      tex.colorSpace = THREE.SRGBColorSpace; tex.wrapS = tex.wrapT = THREE.RepeatWrapping
+      disposeTexture(mat.map); mat.map = tex; applyTextureFilter(tex); mat.needsUpdate = true
+    })
+  } else if (p.mainTextureUrl === null) { disposeTexture(mat.map); mat.map = null; mat.needsUpdate = true }
+  if (p.normalMapUrl) {
+    const loader = new THREE.TextureLoader()
+    loader.load(p.normalMapUrl, (tex) => {
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping
+      disposeTexture(mat.normalMap); mat.normalMap = tex; mat.normalScale.set(normalScale, normalScale); applyTextureFilter(tex); mat.needsUpdate = true
+    })
+  } else if (p.normalMapUrl === null) { disposeTexture(mat.normalMap); mat.normalMap = null; mat.needsUpdate = true }
+  if (typeof p.envIntensity === 'number') setEnvIntensity(p.envIntensity)
+  if (typeof p.exposure === 'number') setExposure(p.exposure)
+  if (p.lightPreset) setLightPreset(p.lightPreset)
+  if (p.geometry) setGeometry(p.geometry)
+}
+export function getMaterial3DInfo() {
+  if (!initialized) return null
+  const m = meshLeft.material
+  return {
+    color: [m.color.r, m.color.g, m.color.b],
+    roughness: m.roughness, metalness: m.metalness,
+    normalScale, emissiveIntensity, envIntensity,
+    hasMap: !!m.map, hasNormalMap: !!m.normalMap
+  }
+}
+
 export function disposeMaterial3D() {
   if (animationId) cancelAnimationFrame(animationId)
   if (skyBakeTimer) { clearTimeout(skyBakeTimer); skyBakeTimer = null }
+  if (hdrRotateTimer) { clearTimeout(hdrRotateTimer); hdrRotateTimer = null }
   for (const m of [meshLeft, meshRight]) { if (m) { if (m.material) { disposeAllMaterialTextures(m.material); m.material.dispose() }; if (m.geometry) m.geometry.dispose() } }
   if (groundMesh) { groundMesh.geometry.dispose(); groundMesh.material.dispose() }
   if (gridHelper) { gridHelper.geometry.dispose(); gridHelper.material.dispose() }
   if (envTexture) envTexture.dispose()
   if (pmremTexture) pmremTexture.dispose()
-  if (hdrTexture) hdrTexture.dispose()
+  if (hdrTextureOriginal) hdrTextureOriginal.dispose()
+  if (hdrTextureRotated) hdrTextureRotated.dispose()
   if (skyEnvTexture) skyEnvTexture.dispose()
   if (skyMesh) { skyMesh.geometry.dispose(); skyMesh.material.dispose(); skyMesh = null }
   if (pmrem) pmrem.dispose(); if (renderer) renderer.dispose()

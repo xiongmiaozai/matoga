@@ -31,9 +31,8 @@ router.get('/thumb-info', wrap(async (req, res) => {
 
 router.get('/thumb', wrap(async (req, res) => {
   const p = guardRead(req.query.path)
-  const info = await hdriService.thumbInfo(p)
-  if (!info.exists) return fail(res, 'ERR_FS_NOT_FOUND', 'thumbnail not generated yet')
-  res.sendFile(hdriService.thumbPathFor(p))
+  const thumbPath = await hdriService.ensureThumb(p)
+  res.sendFile(thumbPath)
 }))
 
 router.post('/thumb', wrap(async (req, res) => {
@@ -43,6 +42,10 @@ router.post('/thumb', wrap(async (req, res) => {
     return fail(res, 'ERR_INVALID_PARAM', 'invalid dataUrl')
   }
   ok(res, await hdriService.saveThumb(p, dataUrl))
+}))
+
+router.post('/cleanup', wrap(async (req, res) => {
+  ok(res, await hdriService.cleanupOrphans())
 }))
 
 module.exports = router

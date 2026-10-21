@@ -10,10 +10,13 @@
     "test": "node --test \"test/unit/**/*.test.js\"",
     "test:smoke": "node test/smoke/api-smoke.mjs && node test/smoke/ws-sync.test.mjs",
     "build:win": "pkg server/index.js --target node22-win-x64 --output dist/matoga-win-x64.exe",
+    "build:mac": "pkg server/index.js --target node22-macos-arm64 --output dist/matoga-macos-arm64",
+    "build:linux": "pkg server/index.js --target node22-linux-x64 --output dist/matoga-linux-x64",
     "electron": "node electron/launch.js",
     "electron:dev": "node electron/launch.js --dev",
     "dist:win": "electron-builder --win",
-    "dist:mac": "electron-builder --mac"
+    "dist:mac": "electron-builder --mac",
+    "dist:linux": "electron-builder --linux"
   },
   "keywords": [
     "folder",
@@ -31,6 +34,7 @@
   "license": "MIT",
   "dependencies": {
     "express": "^5.3.0",
+    "golden-layout": "^2.6.0",
     "three": "^0.186.1",
     "ws": "^8.22.0"
   },
@@ -40,10 +44,13 @@
   "pkg": {
     "assets": [
       "web/**/*",
-      "node_modules/three/build/three.module.js"
+      "node_modules/three/build/three.module.js",
+      "node_modules/golden-layout/dist/**/*"
     ],
     "targets": [
-      "node22-win-x64"
+      "node22-win-x64",
+      "node22-macos-arm64",
+      "node22-linux-x64"
     ],
     "outputPath": "dist"
   },
@@ -61,19 +68,36 @@
       "package.json"
     ],
     "extraResources": [
-      { "from": "HDRI预设", "to": "HDRI预设" },
-      { "from": "材质包", "to": "材质包" }
+      {
+        "from": "HDRI预设",
+        "to": "HDRI预设"
+      },
+      {
+        "from": "材质包",
+        "to": "材质包"
+      }
     ],
     "win": {
-      "target": ["nsis"]
+      "target": [
+        "nsis"
+      ]
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
     },
     "mac": {
-      "target": ["dmg"],
+      "target": [
+        "dmg"
+      ],
       "category": "public.app-category.utilities"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Utility"
     }
   },
   "devDependencies": {

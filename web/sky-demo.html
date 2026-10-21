@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>matoga · 程序化天空演示（SIGGRAPH2015 体积云）</title>
+<script type="importmap">
+  { "imports": { "three": "/vendor/three/three.module.js" } }
+</script>
+<style>
+:root {
+  --panel-bg: rgba(16, 18, 28, 0.86);
+  --panel-line: rgba(120, 140, 200, 0.18);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #0a0c14; color: #cfd6ea; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: 12px; }
+#app { position: fixed; inset: 0; }
+#app canvas { display: block; width: 100%; height: 100%; }
+
+#hud { position: absolute; left: 12px; top: 12px; background: var(--panel-bg); border: 1px solid var(--panel-line); border-radius: 6px; padding: 8px 12px; backdrop-filter: blur(6px); line-height: 1.7; z-index: 5; }
+#hud b { color: #8fd0ff; }
+
+#panel { position: absolute; right: 12px; top: 12px; width: 300px; max-height: calc(100vh - 24px); overflow-y: auto; background: var(--panel-bg); border: 1px solid var(--panel-line); border-radius: 6px; backdrop-filter: blur(6px); z-index: 10; padding: 10px 12px; }
+#panel::-webkit-scrollbar { width: 6px; }
+#panel::-webkit-scrollbar-thumb { background: rgba(120,140,200,.3); border-radius: 3px; }
+
+.group { margin-bottom: 10px; border-bottom: 1px dashed var(--panel-line); padding-bottom: 8px; }
+.group:last-child { border-bottom: none; }
+.group h4 { margin: 2px 0 6px; font-size: 11px; color: #7fb7ff; letter-spacing: .5px; text-transform: uppercase; }
+.row { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
+.row label { flex: 0 0 74px; color: #9aa6c4; }
+.row input[type=range] { flex: 1; }
+.row input[type=color] { width: 26px; height: 20px; border: none; background: none; }
+.row .val { flex: 0 0 34px; text-align: right; color: #cfe0ff; }
+
+.btn-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.btn { flex: 1; min-width: 56px; border: 1px solid var(--panel-line); background: rgba(120,140,200,.12); color: #e6ecff; padding: 4px 2px; border-radius: 4px; cursor: pointer; font: inherit; }
+.btn:hover { background: rgba(140,170,255,.25); }
+.btn.active { background: rgba(110,180,255,.35); border-color: #4d9fff; }
+
+.toggle { display: inline-flex; align-items: center; gap: 4px; margin-right: 8px; margin-top: 4px; cursor: pointer; }
+.toggle input { accent-color: #4d9fff; }
+
+.col { display: inline-flex; align-items: center; gap: 4px; margin-right: 6px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="hud">
+  <div>云 GPU: <b id="statCloud">-- ms</b></div>
+  <div>帧耗时: <b id="statFrame">-- ms</b></div>
+  <div>步数档: <b id="statSteps">64/128</b> · 降级档: <b id="statQ">Q0</b></div>
+</div>
+
+<div id="panel">
+  <div class="group">
+    <h4>时间</h4>
+    <div class="row"><label>时刻 dayTime</label><input type="range" id="slDayTime" min="0" max="1" step="0.001" value="0.35" /><span class="val" id="vDayTime">0.35</span></div>
+    <div class="row"><label>纬度/经度</label><input type="range" id="slLat" min="-85" max="85" step="1" value="30" /><span class="val" id="vLat">30</span><input type="range" id="slLon" min="-180" max="180" step="1" value="120" /><span class="val" id="vLon">120</span></div>
+    <div class="row"><label>算法</label>
+      <div class="btn-row">
+        <button class="btn active" id="btnSimple">简化球面</button>
+        <button class="btn" id="btnNOAA">NOAA高精度</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="group">
+    <h4>天气</h4>
+    <div class="btn-row">
+      <button class="btn" data-weather="clear">晴天</button>
+      <button class="btn active" data-weather="cloudy">多云</button>
+      <button class="btn" data-weather="overcast">阴天</button>
+      <button class="btn" data-weather="storm">暴雨</button>
+    </div>
+    <div class="row"><label>过渡秒</label><input type="range" id="slBlend" min="0.5" max="20" step="0.5" value="8" /><span class="val" id="vBlend">8</span></div>
+    <label class="toggle"><input type="checkbox" id="chkDrift" checked /> 随机漂移</label>
+  </div>
+
+  <div class="group">
+    <h4>云全局</h4>
+    <div class="row"><label>覆盖率</label><input type="range" id="slCoverage" min="0" max="1" step="0.01" value="0.55" /><span class="val" id="vCov">0.55</span></div>
+    <div class="row"><label>云型</label><input type="range" id="slType" min="0" max="2" step="0.01" value="1.2" /><span class="val" id="vType">1.2</span></div>
+    <div class="row"><label>降水</label><input type="range" id="slPrecip" min="0" max="1" step="0.01" value="0.0" /><span class="val" id="vPrecip">0.00</span></div>
+    <div class="row"><label>风速</label><input type="range" id="slWind" min="0" max="1" step="0.01" value="0.4" /><span class="val" id="vWind">0.40</span></div>
+    <div class="row"><label>风向角</label><input type="range" id="slWindDir" min="0" max="360" step="1" value="30" /><span class="val" id="vWindDir">30°</span></div>
+  </div>
+
+  <div class="group">
+    <h4>云光照</h4>
+    <div class="row"><label>吸收系数</label><input type="range" id="slAbs" min="0" max="3" step="0.05" value="2.0" /><span class="val" id="vAbs">2.00</span></div>
+    <div class="row"><label>HG g</label><input type="range" id="slG" min="-1" max="1" step="0.01" value="0.6" /><span class="val" id="vG">0.60</span></div>
+    <div class="row"><label>Powder</label><input type="range" id="slPowder" min="0" max="2" step="0.05" value="1.5" /><span class="val" id="vPowder">1.50</span></div>
+    <div class="row"><label>环境光</label><input type="range" id="slAmb" min="0" max="1" step="0.01" value="0.15" /><span class="val" id="vAmb">0.15</span></div>
+    <div class="row"><label>月光亮</label><input type="range" id="slMoonB" min="0" max="0.5" step="0.01" value="0.12" /><span class="val" id="vMoonB">0.12</span></div>
+  </div>
+
+  <div class="group">
+    <h4>大气</h4>
+    <div class="row"><label>太阳强度</label><input type="range" id="slSunI" min="0" max="3" step="0.05" value="1.2" /><span class="val" id="vSunI">1.20</span></div>
+    <div class="row"><label>地平线色</label><span class="col"><input type="color" id="ckHorizon" value="#d9ad8c" /></span><span class="col"><input type="color" id="ckSun" value="#ffedd9" /></span></div>
+  </div>
+
+  <div class="group">
+    <h4>性能降级</h4>
+    <label class="toggle"><input type="checkbox" id="chkPowderOff" /> 关闭Powder</label>
+    <label class="toggle"><input type="checkbox" id="chkHalfSteps" /> 减半步数</label>
+    <label class="toggle"><input type="checkbox" id="chkSingleLight" /> 单次光采样</label>
+    <label class="toggle"><input type="checkbox" id="chkLowResTex" /> 低分辨率纹理</label>
+    <label class="toggle"><input type="checkbox" id="chkHalfRes" /> 半分辨率渲染</label>
+  </div>
+</div>
+
+<script type="module" src="/src/sky/demo.js"></script>
+</body>
+</html>

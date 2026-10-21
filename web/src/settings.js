@@ -41,6 +41,7 @@ export function initSettings() {
   const toggle = $('themeToggle')
   if (toggle) toggle.addEventListener('click', toggleTheme)
 
+
   initLanguageSettings()
   initPathSettings()
 }

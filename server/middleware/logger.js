@@ -49,4 +49,11 @@ const logger = {
   error: (tag, msg) => write('error', tag, msg)
 }
 
-module.exports = { logger }
+function close() {
+  if (state.stream) {
+    try { state.stream.end() } catch {}
+    state.stream = null
+  }
+}
+
+module.exports = { logger, close }

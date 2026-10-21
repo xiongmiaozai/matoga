@@ -8,7 +8,7 @@ import { $ } from './core.js'
 
 const MIN_LEFT = 240, MAX_LEFT = 560
 const MIN_RIGHT = 320, MAX_RIGHT = 680
-let layoutState = { leftW: 360, rightW: 460, collapsedLeft: false, panels: {} }
+let layoutState = { leftW: 360, rightW: 460, collapsedLeft: false, collapsedRight: false, panels: {} }
 
 function saveLayout() {
   window.api.setConfig({ layout: layoutState })
@@ -69,6 +69,25 @@ function setupLeftCollapse() {
   })
 }
 
+function toggleRightCollapse() {
+  const sidebar = $('sidebarRight')
+  if (!sidebar) return
+  sidebar.classList.toggle('collapsed')
+  layoutState.collapsedRight = sidebar.classList.contains('collapsed')
+  if (layoutState.collapsedRight) {
+    sidebar.style.width = ''
+  } else {
+    sidebar.style.width = layoutState.rightW + 'px'
+  }
+  saveLayout()
+}
+
+function setupRightCollapse() {
+  const btn = $('collapseRightBtn')
+  if (!btn) return
+  btn.addEventListener('click', toggleRightCollapse)
+}
+
 function makePanelFloatable(panel) {
   const head = panel.querySelector('.panel-head')
   if (!head) return
@@ -94,27 +113,82 @@ function makePanelFloatable(panel) {
   })
 }
 
+function attachResizeHandle(panel) {
+  if (panel.querySelector('.panel-resize-handle')) return
+  const h = document.createElement('div')
+  h.className = 'panel-resize-handle'
+  panel.appendChild(h)
+  h.addEventListener('mousedown', (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const sx = e.clientX, sy = e.clientY
+    const sw = panel.offsetWidth, sh = panel.offsetHeight
+    document.body.style.cursor = 'nwse-resize'
+    document.body.style.userSelect = 'none'
+    const onMove = (ev) => {
+      panel.style.width = Math.max(300, sw + ev.clientX - sx) + 'px'
+      panel.style.height = Math.max(220, sh + ev.clientY - sy) + 'px'
+    }
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      saveLayout()
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  })
+}
+
 function setupPanelActions(panel) {
   const key = panel.dataset.panel
   panel.querySelectorAll('.panel-tool').forEach(btn => {
     btn.addEventListener('click', () => {
       const act = btn.dataset.panelAction
-      if (act === 'collapse') {
-        panel.classList.toggle('collapsed')
-        layoutState.panels[key] = layoutState.panels[key] || {}
-        layoutState.panels[key].collapsed = panel.classList.contains('collapsed')
-        saveLayout()
+      if (act === 'close') {
+        if (panel.classList.contains('floating')) {
+          panel.classList.remove('floating')
+          panel.style.left = ''
+          panel.style.top = ''
+          panel.style.width = ''
+          panel.style.height = ''
+          const h = panel.querySelector('.panel-resize-handle')
+          if (h) h.remove()
+          layoutState.panels[key] = layoutState.panels[key] || {}
+          layoutState.panels[key].floating = false
+          saveLayout()
+        } else if (key === 'preview') {
+          toggleRightCollapse()
+        } else {
+          panel.classList.add('collapsed')
+          layoutState.panels[key] = layoutState.panels[key] || {}
+          layoutState.panels[key].collapsed = true
+          saveLayout()
+        }
+      } else if (act === 'collapse') {
+        if (key === 'preview') {
+          toggleRightCollapse()
+        } else {
+          panel.classList.toggle('collapsed')
+          layoutState.panels[key] = layoutState.panels[key] || {}
+          layoutState.panels[key].collapsed = panel.classList.contains('collapsed')
+          saveLayout()
+        }
       } else if (act === 'float') {
         panel.classList.toggle('floating')
         if (panel.classList.contains('floating')) {
           const r = panel.getBoundingClientRect()
           panel.style.left = Math.max(20, r.left) + 'px'
           panel.style.top = Math.max(20, r.top) + 'px'
+          attachResizeHandle(panel)
         } else {
           panel.style.left = ''
           panel.style.top = ''
           panel.style.width = ''
           panel.style.height = ''
+          const h = panel.querySelector('.panel-resize-handle')
+          if (h) h.remove()
         }
         layoutState.panels[key] = layoutState.panels[key] || {}
         layoutState.panels[key].floating = panel.classList.contains('floating')
@@ -187,10 +261,18 @@ export async function initLayout() {
       left.style.width = layoutState.leftW + 'px'
     }
   }
-  if (right) right.style.width = layoutState.rightW + 'px'
+  if (right) {
+    if (layoutState.collapsedRight) {
+      right.classList.add('collapsed')
+      right.style.width = ''
+    } else {
+      right.style.width = layoutState.rightW + 'px'
+    }
+  }
 
   document.querySelectorAll('.resizer').forEach(r => setupResizer(r, r.dataset.resize))
   setupLeftCollapse()
+  setupRightCollapse()
 
 
   document.querySelectorAll('.panel[data-panel]').forEach(panel => {
@@ -200,7 +282,7 @@ export async function initLayout() {
     const ps = layoutState.panels[key]
     if (ps) {
       if (ps.collapsed) panel.classList.add('collapsed')
-      if (ps.floating) { panel.classList.add('floating'); panel.style.left = '40px'; panel.style.top = '80px' }
+      if (ps.floating) { panel.classList.add('floating'); panel.style.left = '40px'; panel.style.top = '80px'; attachResizeHandle(panel) }
     }
   })
   setupPanelReorder()
