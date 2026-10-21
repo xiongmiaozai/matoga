@@ -33,6 +33,10 @@ import { initHdrPreset, refreshHdrPreset, clearHdrPresetSelection, filterHdrPres
 import { t, initI18n } from './src/i18n.js'
 import { initPreviewPanel } from './src/preview-panel.js'
 import { initNodeCanvas, refreshNodePreview } from './src/node-canvas.js'
+import { initNodeRel } from './src/node-rel.js'
+import { initNodePreview } from './src/node-preview.js'
+import { initPackPickers } from './src/pack-picker.js'
+import { toggleWindow } from './src/floating-window.js'
 import { initAssetLibrary } from './src/asset-library.js'
 
 import {
@@ -40,8 +44,19 @@ import {
   clearMemBtn, batchRightBtn, batchLeftBtn, undoBtn,
   compareBtn2, swapBtn2,
   recursiveChk, onlyMissingChk, hashChk, ignoreChk, ignoreInput,
-  searchInput, resultBody, leftCard, rightCard
+  searchInput, resultBody, leftPathEl, rightPathEl
 } from './src/core.js'
+
+{
+  const nrBtn = document.getElementById('nodeRelBtn')
+  const npBtn = document.getElementById('nodePreviewBtn')
+  if (nrBtn) nrBtn.addEventListener('click', () => toggleWindow('nodeRel'))
+  if (npBtn) npBtn.addEventListener('click', () => toggleWindow('nodePreview'))
+  document.addEventListener('fw:toggle', (e) => {
+    const btn = e.detail.id === 'nodeRel' ? nrBtn : (e.detail.id === 'nodePreview' ? npBtn : null)
+    if (btn) btn.classList.toggle('fw-active', !!e.detail.open)
+  })
+}
 
 leftBtn.addEventListener('click', () => loadFolder('left'))
 rightBtn.addEventListener('click', () => loadFolder('right'))
@@ -85,12 +100,12 @@ document.querySelectorAll('.result-table th[data-key]').forEach(th => {
 })
 updateSortIndicators()
 
-;[['left', leftCard], ['right', rightCard]].forEach(([side, card]) => {
-  card.addEventListener('dragover', (e) => { e.preventDefault(); card.classList.add('drag-over') })
-  card.addEventListener('dragleave', () => card.classList.remove('drag-over'))
-  card.addEventListener('drop', async (e) => {
+;[['left', leftPathEl], ['right', rightPathEl]].forEach(([side, box]) => {
+  box.addEventListener('dragover', (e) => { e.preventDefault(); box.classList.add('drag-over') })
+  box.addEventListener('dragleave', () => box.classList.remove('drag-over'))
+  box.addEventListener('drop', async (e) => {
     e.preventDefault()
-    card.classList.remove('drag-over')
+    box.classList.remove('drag-over')
     const dt = e.dataTransfer
     if ((!dt || !dt.files || !dt.files.length) && (!dt || !dt.items || !dt.items.length)) return
     let p = null
@@ -107,11 +122,22 @@ updateSortIndicators()
 $('previewModal').addEventListener('click', closePreview)
 $('previewClose').addEventListener('click', (e) => { e.stopPropagation(); closePreview() })
 
-document.querySelectorAll('.filter-btn').forEach(btn => {
+document.querySelectorAll('.status-filter-btn').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'))
+    document.querySelectorAll('.status-filter-btn').forEach(b => b.classList.remove('active'))
     btn.classList.add('active')
     state.statusFilter = btn.dataset.filter
+    state.renderLimit = 200
+    saveOptions()
+    renderResult()
+  })
+})
+
+document.querySelectorAll('.type-filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.type-filter-btn').forEach(b => b.classList.remove('active'))
+    btn.classList.add('active')
+    state.typeFilter = btn.dataset.typeFilter
     state.renderLimit = 200
     saveOptions()
     renderResult()
@@ -303,7 +329,10 @@ function initCtxMenu() {
   await step('initPreview2D', () => initPreview2D())
   await step('initPreviewPanel', () => initPreviewPanel())
   await step('initNodeCanvas', () => initNodeCanvas())
+  await step('initNodeRel', () => initNodeRel())
+  await step('initNodePreview', () => initNodePreview())
   await step('initAssetLibrary', () => initAssetLibrary())
+  await step('initPackPickers', () => initPackPickers())
   await step('initViewTabs', () => initViewTabs())
   await step('initCtxMenu', () => initCtxMenu())
 
@@ -325,8 +354,14 @@ function initCtxMenu() {
   if (cfg.sortDir) state.sortDir = cfg.sortDir
   if (cfg.statusFilter) {
     state.statusFilter = cfg.statusFilter
-    document.querySelectorAll('.filter-btn').forEach(b => {
+    document.querySelectorAll('.status-filter-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.filter === cfg.statusFilter)
+    })
+  }
+  if (cfg.typeFilter) {
+    state.typeFilter = cfg.typeFilter
+    document.querySelectorAll('.type-filter-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.typeFilter === cfg.typeFilter)
     })
   }
   updateSortIndicators()

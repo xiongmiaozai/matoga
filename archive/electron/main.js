@@ -26,8 +26,8 @@ function saveConfig(c) {
 function defaultPaths() {
   const base = app.isPackaged ? process.resourcesPath : app.getAppPath()
   return {
-    hdriPresetPath: path.join(base, 'HDRI预设'),
-    mcPacksPath: path.join(base, '材质包')
+    hdriPresetPath: path.join(base, 'hdri-presets'),
+    mcPacksPath: path.join(base, 'mc-packs')
   }
 }
 

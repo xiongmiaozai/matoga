@@ -38,7 +38,7 @@ test('savePreset + get: 读回', async () => {
   const data = store.get()
   assert.ok(data.presets.A)
   assert.deepEqual(data.presets.A.config, { root: { type: 'row' } })
-  assert.equal(data.presets.A.builtin, false)
+  assert.equal(data.presets.A.builtin, undefined)
   assert.ok(typeof data.presets.A.updatedAt === 'number')
 })
 
@@ -81,7 +81,7 @@ test('deletePreset: 删除预设', async () => {
   assert.equal(data.presets.A, undefined)
 })
 
-test('deletePreset: builtin 预设不可删', async () => {
+test('deletePreset: 旧数据含 builtin 标志也可删除', async () => {
   clean()
   await store.savePreset('固定', { v: 1 })
   const idx = JSON.parse(fs.readFileSync(INDEX_FILE, 'utf8'))
@@ -89,7 +89,7 @@ test('deletePreset: builtin 预设不可删', async () => {
   fs.writeFileSync(path.join(DIR, fn), JSON.stringify({ name: '固定', config: { v: 1 }, builtin: true, updatedAt: 1 }))
   await store.deletePreset('固定')
   const data = store.get()
-  assert.ok(data.presets['固定'], 'builtin 仍存在')
+  assert.equal(data.presets['固定'], undefined)
 })
 
 test('renamePreset: 重命名', async () => {
@@ -169,6 +169,7 @@ test('migrate: 旧单文件迁移到多文件', () => {
   assert.deepEqual(Object.keys(data.presets).sort(), ['A', 'B'])
   assert.equal(data.active, 'A')
   assert.deepEqual(data.presets.A.config, { x: 1 })
+  assert.equal(data.presets.A.builtin, undefined)
 })
 
 test('文件名冲突: "a/b" 和 "a_b" 共存', async () => {

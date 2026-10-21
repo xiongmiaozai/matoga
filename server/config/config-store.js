@@ -26,7 +26,8 @@ const SCHEMA = {
   viewMode: 'all',
   sortKey: 'status',
   sortDir: 'asc',
-  statusFilter: 'all'
+  statusFilter: 'all',
+  typeFilter: 'all'
 }
 
 let writeQueue = Promise.resolve()
@@ -49,8 +50,10 @@ function atomicWrite(cfg) {
 
 function get() {
   const cfg = { ...SCHEMA, ...readRaw() }
-  if (!cfg.hdriPresetPath) cfg.hdriPresetPath = path.join(PRESET, 'HDRI预设')
-  if (!cfg.mcPacksPath) cfg.mcPacksPath = path.join(PRESET, '材质包')
+  if (!cfg.hdriPresetPath) cfg.hdriPresetPath = path.join(PRESET, 'hdri-presets')
+  if (!cfg.mcPacksPath) cfg.mcPacksPath = path.join(PRESET, 'mc-packs')
+  if (!cfg.officialPacksPath) cfg.officialPacksPath = path.join(PRESET, 'official-packs')
+  if (!cfg.userPacksPath) cfg.userPacksPath = path.join(DATA_DIR, 'user-packs')
   return cfg
 }
 

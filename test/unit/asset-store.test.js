@@ -27,6 +27,7 @@ const goodItem = { key: 'tex:/a.png', name: 'a', type: 'tex', path: '/a.png', mt
 const presetItem = { key: 'preset:metal', name: '金属', type: 'preset', path: null, color: '#ccc' }
 const hdriItem = { key: 'hdri:/b.hdr', name: 'b', type: 'hdri', path: '/b.hdr' }
 const mcItem = { key: 'mc:/c.png', name: 'c', type: 'mc', path: '/c.png' }
+const officialItem = { key: 'official:/packs/1.21', name: '1.21', type: 'official', path: '/packs/1.21', badge: '1.21 – 1.21.1' }
 
 test('setFavorites: 写入后可读回', async () => {
   await store.setFavorites([goodItem, presetItem])
@@ -124,6 +125,7 @@ test('detectType: 从 key 提取类型', () => {
   assert.equal(store.detectType('tex:/a.png'), 'tex')
   assert.equal(store.detectType('hdri:/b.hdr'), 'hdri')
   assert.equal(store.detectType('mc:/c.png'), 'mc')
+  assert.equal(store.detectType('official:/p/1.21'), 'official')
   assert.equal(store.detectType('preset:metal'), 'preset')
   assert.equal(store.detectType('bad:/x'), null)
   assert.equal(store.detectType('noColon'), null)
@@ -134,6 +136,7 @@ test('detectType: 从 key 提取类型', () => {
 test('isValidKey: 校验 key 格式', () => {
   assert.equal(store.isValidKey('tex:/a.png'), true)
   assert.equal(store.isValidKey('preset:metal'), true)
+  assert.equal(store.isValidKey('official:/p/1.21'), true)
   assert.equal(store.isValidKey('bad:/x'), false)
   assert.equal(store.isValidKey('noColon'), false)
   assert.equal(store.isValidKey(''), false)
@@ -141,13 +144,14 @@ test('isValidKey: 校验 key 格式', () => {
 
 test('classifyByType: 按类型分组', () => {
   const groups = store.classifyByType([
-    goodItem, presetItem, hdriItem, mcItem,
+    goodItem, presetItem, hdriItem, mcItem, officialItem,
     { key: 'tex:/d.png', type: 'tex', name: 'd' },
     null, { key: 'bad', type: 'x' },
   ])
   assert.equal(groups.tex.length, 2)
   assert.equal(groups.hdri.length, 1)
   assert.equal(groups.mc.length, 1)
+  assert.equal(groups.official.length, 1)
   assert.equal(groups.preset.length, 1)
 })
 
@@ -182,12 +186,22 @@ test('sanitize: 保留 role 与 color 可选字段', async () => {
   assert.equal(d.favorites[0].color, '#fff')
 })
 
-test('VALID_TYPES: 包含四种类型', () => {
+test('sanitize: official 类型保留 badge 版本徽标', async () => {
+  await store.setFavorites([officialItem])
+  const d = store.get()
+  assert.equal(d.favorites.length, 1)
+  assert.equal(d.favorites[0].type, 'official')
+  assert.equal(d.favorites[0].badge, '1.21 – 1.21.1')
+})
+
+test('VALID_TYPES: 包含六种类型', () => {
   assert.ok(store.VALID_TYPES.has('tex'))
   assert.ok(store.VALID_TYPES.has('hdri'))
   assert.ok(store.VALID_TYPES.has('mc'))
+  assert.ok(store.VALID_TYPES.has('official'))
   assert.ok(store.VALID_TYPES.has('preset'))
-  assert.equal(store.VALID_TYPES.size, 4)
+  assert.ok(store.VALID_TYPES.has('project'))
+  assert.equal(store.VALID_TYPES.size, 6)
 })
 
 test('teardown: 恢复真实 favorites/recent', () => {

@@ -33,6 +33,7 @@ export function computeCounts() {
 
 export async function compare() {
   if (!state.leftPath || !state.rightPath) return
+  try { window.matogaCore && window.matogaCore.clearHashCache() } catch {}
   const leftGroups = buildGroups(state.leftEntries)
   const rightGroups = buildGroups(state.rightEntries)
   const allKeys = new Set([...leftGroups.keys(), ...rightGroups.keys()])

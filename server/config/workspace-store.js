@@ -90,7 +90,7 @@ function migrateIfNeeded() {
       writePresetFileAtomic(filename, {
         name,
         config: preset.config,
-        builtin: !!preset.builtin,
+
         updatedAt: preset.updatedAt || Date.now()
       })
       items[name] = filename
@@ -111,7 +111,7 @@ function get() {
   for (const [name, filename] of Object.entries(idx.items)) {
     const p = readPresetFile(filename)
     if (p && p.config !== undefined) {
-      presets[name] = { config: p.config, builtin: !!p.builtin, updatedAt: p.updatedAt || null }
+      presets[name] = { config: p.config, updatedAt: p.updatedAt || null }
     }
   }
   return { presets, active: idx.active || null }
@@ -124,7 +124,7 @@ function savePreset(name, config) {
     try {
       const idx = readIndex()
       const filename = allocFilename(name, idx.items, name)
-      writePresetFileAtomic(filename, { name, config, builtin: false, updatedAt: Date.now() })
+      writePresetFileAtomic(filename, { name, config, updatedAt: Date.now() })
       idx.items[name] = filename
       writeIndexAtomic(idx)
     } catch (e) { logger.error('workspace', 'savePreset failed: ' + e.message) }
@@ -139,8 +139,7 @@ function deletePreset(name) {
       const idx = readIndex()
       const filename = idx.items[name]
       if (!filename) return
-      const p = readPresetFile(filename)
-      if (p && p.builtin) return
+
       try { fs.rmSync(path.join(DIR, filename), { force: true }) } catch {}
       delete idx.items[name]
       if (idx.active === name) idx.active = null
@@ -167,7 +166,7 @@ function renamePreset(oldName, newName) {
       writePresetFileAtomic(newFilename, {
         name: newName,
         config: oldPreset.config,
-        builtin: !!oldPreset.builtin,
+
         updatedAt: oldPreset.updatedAt || Date.now()
       })
       if (newFilename !== oldFilename) {

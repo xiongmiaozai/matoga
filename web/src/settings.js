@@ -72,7 +72,9 @@ function initLanguageSettings() {
 function initPathSettings() {
   const items = [
     { inputId: 'hdriPresetPathInput', pickId: 'hdriPresetPickBtn', createId: 'hdriPresetCreateBtn', openId: 'hdriPresetOpenBtn', cfgKey: 'hdriPresetPath' },
-    { inputId: 'mcPacksPathInput', pickId: 'mcPacksPickBtn', createId: 'mcPacksCreateBtn', openId: 'mcPacksOpenBtn', cfgKey: 'mcPacksPath' }
+    { inputId: 'mcPacksPathInput', pickId: 'mcPacksPickBtn', createId: 'mcPacksCreateBtn', openId: 'mcPacksOpenBtn', cfgKey: 'mcPacksPath' },
+    { inputId: 'userPacksPathInput', pickId: 'userPacksPickBtn', createId: 'userPacksCreateBtn', openId: 'userPacksOpenBtn', cfgKey: 'userPacksPath' },
+    { inputId: 'officialPacksPathInput', pickId: 'officialPacksPickBtn', createId: 'officialPacksCreateBtn', openId: 'officialPacksOpenBtn', cfgKey: 'officialPacksPath' }
   ]
   window.api.getConfig().then(cfg => {
     items.forEach(it => {

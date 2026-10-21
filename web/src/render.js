@@ -7,11 +7,11 @@
 import {
   state, $, ROLE_LABEL, KIND_TEXT,
   leftBtn, rightBtn, onlyMissingChk, summaryEl, resultBody,
-  leftPathEl, rightPathEl, leftStatEl, rightStatEl, leftListEl, rightListEl,
+  leftPathEl, rightPathEl,
   searchInput
 } from './core.js'
 import {
-  typeIcon, formatSize, formatDate, isImageFile, fileUrl, escAttr,
+  formatSize, formatDate, isImageFile, fileUrl, escAttr,
   folderOf, mainEntryOf, hasAny, leftRoles, rightRoles, subKind,
   openPreview, relPath, joinPath
 } from './utils.js'
@@ -20,39 +20,18 @@ import { replaceWithExternalFile, deleteTexture, handleAction, showPixelDiff } f
 import { initMaterial3D, updateMaterial3D } from './material3d.js'
 import { enhancePreview } from './preview2d.js'
 import { observeThumbs } from './thumb-loader.js'
-import { t } from './i18n.js'
+import { t, onLocaleChange } from './i18n.js'
 
-export function renderEntryList(container, entries) {
-  container.innerHTML = ''
-  if (entries.length === 0) {
-    container.innerHTML = `<div class="entry-item" style="color:var(--text-muted);justify-content:center;">${t('render.emptyFolder')}</div>`
-    return
-  }
-  const sorted = entries.slice().sort((a, b) => {
-    if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1
-    return a.name.localeCompare(b.name, 'zh')
-  })
-  const frag = document.createDocumentFragment()
-  for (const e of sorted) {
-    const div = document.createElement('div')
-    div.className = 'entry-item' + (e.isDirectory ? ' dir' : '')
-    div.innerHTML = `<span class="ico">${typeIcon(e.isDirectory)}</span><span class="nm" title="${e.name}">${e.name}</span>`
-    frag.appendChild(div)
-  }
-  container.appendChild(frag)
-}
-
-export function renderStat(el, entries, pathLabel) {
-  if (!pathLabel) { el.textContent = ''; return }
-  const dirs = entries.filter(e => e.isDirectory).length
-  const files = entries.length - dirs
-  el.textContent = t('render.entryCount', { n: entries.length, dirs, files })
-}
+onLocaleChange(() => {
+  leftPathEl.textContent = state.leftPath || t('common.empty')
+  rightPathEl.textContent = state.rightPath || t('common.empty')
+})
 
 export function setLoading(side, on) {
-  const stat = side === 'left' ? leftStatEl : rightStatEl
+  const path = side === 'left' ? leftPathEl : rightPathEl
   const btn = side === 'left' ? leftBtn : rightBtn
-  stat.textContent = on ? t('render.loading') : ''
+  if (on) path.textContent = t('render.loading')
+  else path.textContent = (side === 'left' ? state.leftPath : state.rightPath) || t('common.empty')
   btn.disabled = on
 }
 
@@ -60,13 +39,9 @@ export function applyEntries(side, folderPath, entries) {
   if (side === 'left') {
     state.leftPath = folderPath; state.leftEntries = entries
     leftPathEl.textContent = folderPath
-    renderStat(leftStatEl, entries, folderPath)
-    renderEntryList(leftListEl, entries)
   } else {
     state.rightPath = folderPath; state.rightEntries = entries
     rightPathEl.textContent = folderPath
-    renderStat(rightStatEl, entries, folderPath)
-    renderEntryList(rightListEl, entries)
   }
 }
 
@@ -152,6 +127,10 @@ export function renderResult() {
   if (sf === 'missing') filtered = filtered.filter(g => g.kind === 'miss' || g.kind === 'partial')
   else if (sf === 'diff') filtered = filtered.filter(g => g.kind === 'diff')
   else if (sf === 'extra') filtered = filtered.filter(g => g.kind === 'extra')
+  const tf = state.typeFilter
+  if (tf === 'material') filtered = filtered.filter(g => g.isMaterial)
+  else if (tf === 'image') filtered = filtered.filter(g => !g.isMaterial && !g.isDir)
+  else if (tf === 'folder') filtered = filtered.filter(g => g.isDir)
   const q = state.searchText.trim().toLowerCase()
   if (q) filtered = filtered.filter(g => g.key.toLowerCase().includes(q))
   sortResult(filtered)
@@ -200,6 +179,7 @@ export function renderResult() {
       ? t('render.dragHint')
       : result.length === 0 ? t('render.bothEmpty')
       : q ? t('render.noMatch')
+      : (tf !== 'all' && result.some(g => tf === 'material' ? g.isMaterial : tf === 'image' ? (!g.isMaterial && !g.isDir) : g.isDir)) ? t('render.noTypeMatch')
       : (onlyDiff ? t('render.allConsistent') : t('render.noData'))
     resultBody.innerHTML = `<tr class="empty-row"><td colspan="8">${msg}</td></tr>`
     return

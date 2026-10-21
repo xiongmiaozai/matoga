@@ -33,7 +33,9 @@ test('get: hdriPresetPath 和 mcPacksPath 有默认值', () => {
   const cfg = store.get()
   assert.ok(cfg.hdriPresetPath && cfg.hdriPresetPath.length > 0)
   assert.ok(cfg.mcPacksPath && cfg.mcPacksPath.length > 0)
-  assert.ok(cfg.hdriPresetPath.includes('HDRI'))
+  assert.ok(cfg.hdriPresetPath.endsWith(path.join('hdri-presets')))
+  assert.ok(cfg.mcPacksPath.endsWith(path.join('mc-packs')))
+  assert.ok(cfg.officialPacksPath.endsWith(path.join('official-packs')))
 })
 
 test('put: 写入 patch 后 get 可读回', async () => {

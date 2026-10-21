@@ -1180,6 +1180,33 @@ export function clearNormalMap() {
     disposeTexture(m.material.normalMap); m.material.normalMap = null; m.material.needsUpdate = true
   }
 }
+/* 高光/镜面贴图（-s）：R 通道反转→粗糙度，G 通道→金属度（与 labpbr 格式一致） */
+function applySpecTextureToMaterial(mat, url) {
+  if (!mat || !url) return
+  const specImg = new Image()
+  specImg.crossOrigin = 'anonymous'
+  specImg.onload = () => {
+    disposeTexture(mat.roughnessMap); disposeTexture(mat.metalnessMap)
+    mat.roughnessMap = extractRoughness(specImg)
+    mat.metalnessMap = extractMetalness(specImg)
+    applyTextureFilter(mat.roughnessMap); applyTextureFilter(mat.metalnessMap)
+    mat.needsUpdate = true
+  }
+  specImg.src = url
+}
+function clearSpecTexture(mat) {
+  if (!mat) return
+  disposeTexture(mat.roughnessMap); disposeTexture(mat.metalnessMap)
+  mat.roughnessMap = null; mat.metalnessMap = null; mat.needsUpdate = true
+}
+export function setSpecularFromUrl(url) {
+  if (!initialized || !url) return
+  for (const m of [meshLeft, meshRight]) applySpecTextureToMaterial(m.material, url)
+}
+export function clearSpecularTexture() {
+  if (!initialized) return
+  for (const m of [meshLeft, meshRight]) clearSpecTexture(m.material)
+}
 export function applyNodePBR(p) {
   if (!initialized || !p) return
   if (p.baseColor) setBaseColor(p.baseColor)
@@ -1194,6 +1221,8 @@ export function applyNodePBR(p) {
   else if (p.mainTextureUrl === null) clearMainTexture()
   if (p.normalMapUrl) setNormalMapFromUrl(p.normalMapUrl)
   else if (p.normalMapUrl === null) clearNormalMap()
+  if (p.specTextureUrl) setSpecularFromUrl(p.specTextureUrl)
+  else if (p.specTextureUrl === null) clearSpecularTexture()
   if (p.lightPreset) setLightPreset(p.lightPreset)
   if (p.geometry) setGeometry(p.geometry)
 }
@@ -1226,6 +1255,9 @@ export function applyNodePBRSide(p, side) {
       disposeTexture(mat.normalMap); mat.normalMap = tex; mat.normalScale.set(normalScale, normalScale); applyTextureFilter(tex); mat.needsUpdate = true
     })
   } else if (p.normalMapUrl === null) { disposeTexture(mat.normalMap); mat.normalMap = null; mat.needsUpdate = true }
+  if (p.specTextureUrl) {
+    applySpecTextureToMaterial(mat, p.specTextureUrl)
+  } else if (p.specTextureUrl === null) { clearSpecTexture(mat) }
   if (typeof p.envIntensity === 'number') setEnvIntensity(p.envIntensity)
   if (typeof p.exposure === 'number') setExposure(p.exposure)
   if (p.lightPreset) setLightPreset(p.lightPreset)

@@ -8,7 +8,7 @@
     "web": "node server/index.js",
     "web:lan": "node server/index.js --lan",
     "test": "node --test \"test/unit/**/*.test.js\"",
-    "test:smoke": "node test/smoke/api-smoke.mjs && node test/smoke/ws-sync.test.mjs",
+    "test:smoke": "node test/smoke/run.mjs",
     "build:win": "pkg server/index.js --target node22-win-x64 --output dist/matoga-win-x64.exe",
     "build:mac": "pkg server/index.js --target node22-macos-arm64 --output dist/matoga-macos-arm64",
     "build:linux": "pkg server/index.js --target node22-linux-x64 --output dist/matoga-linux-x64",
@@ -69,12 +69,16 @@
     ],
     "extraResources": [
       {
-        "from": "HDRI预设",
-        "to": "HDRI预设"
+        "from": "hdri-presets",
+        "to": "hdri-presets"
       },
       {
-        "from": "材质包",
-        "to": "材质包"
+        "from": "mc-packs",
+        "to": "mc-packs"
+      },
+      {
+        "from": "official-packs",
+        "to": "official-packs"
       }
     ],
     "win": {

@@ -3,8 +3,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 
-const base = 'http://127.0.0.1:5273'
-const wsUrl = 'ws://127.0.0.1:5273/ws'
+const base = process.env.SMOKE_BASE || 'http://127.0.0.1:5273'
+const wsUrl = base.replace(/^http/, 'ws') + '/ws'
 const TMP = path.join(os.tmpdir(), 'matoga-ws-test-' + process.pid)
 
 let pass = 0, fail = 0

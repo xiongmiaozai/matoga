@@ -376,7 +376,7 @@ img, canvas, .pv-cell img, .preview-img, .thumb {
 
 /* Path box — MC sign style */
 .path-box {
-  margin: 0 12px 8px;
+  margin: 0 12px 10px;
   padding: 6px 10px;
   font-family: 'Courier New', monospace;
   font-size: 11px;
@@ -386,18 +386,6 @@ img, canvas, .pv-cell img, .preview-img, .thumb {
   box-shadow: inset 2px 2px 0 0 rgba(0,0,0,.6);
 }
 
-.stat-box { padding: 0 12px 8px; font-size: 11px; color: var(--text-muted); }
-
-/* Entry items */
-.entry-item {
-  padding: 4px 12px;
-  margin: 0 4px;
-  border: 1px solid transparent;
-}
-.entry-item:hover {
-  background: var(--row-hover);
-  border-color: var(--mc-grass);
-}
 
 /* ═══════════════════════════════════════════════
    SIDEBAR — MC panel style

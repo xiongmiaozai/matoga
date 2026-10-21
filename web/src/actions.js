@@ -7,7 +7,7 @@
 import {
   state, showToast, undoBtn, compareBtn2, swapBtn2,
   recursiveChk, hashChk, onlyMissingChk, ignoreChk, ignoreInput,
-  leftPathEl, rightPathEl, leftStatEl, rightStatEl, leftListEl, rightListEl,
+  leftPathEl, rightPathEl,
   KIND_TEXT
 } from './core.js'
 import {
@@ -15,8 +15,9 @@ import {
   leftRoles, rightRoles, mainEntryOf, getIgnorePatterns, relPath, joinPath
 } from './utils.js'
 import { compare } from './compare.js'
-import { applyEntries, setLoading, renderResult, renderSidebar, renderStat, renderEntryList } from './render.js'
+import { applyEntries, setLoading, renderResult, renderSidebar } from './render.js'
 import { t, getLocale } from './i18n.js'
+import { uiConfirm } from './ui-dialog.js'
 
 const ROLES = ['main', 'normal', 'specular']
 
@@ -93,7 +94,8 @@ export function saveOptions() {
     viewMode: state.viewMode,
     sortKey: state.sortKey,
     sortDir: state.sortDir,
-    statusFilter: state.statusFilter
+    statusFilter: state.statusFilter,
+    typeFilter: state.typeFilter
   })
 }
 
@@ -122,7 +124,7 @@ export async function copyToSide(g, destSide) {
   const willBackup = pairs.filter(p => p.backup).length
   const backupMsg = willBackup ? t('confirm.hasBackup', { n: willBackup }) : t('confirm.noBackup')
   const msg = t('confirm.replaceSingle', { n: pairs.length, src: t('common.' + srcSide), dest: t('common.' + destSide), backup: backupMsg })
-  if (!window.confirm(msg)) return
+  if (!await uiConfirm({ title: '确认操作', message: msg })) return
   const r = await executeCopy(pairs)
   if (r.cancelled) showToast(t('toast.copyCancelled'))
   else showToast(r.fail ? t('toast.replacedWithFail', { n: r.ok, fail: r.fail }) : t('toast.replaced', { n: r.ok }))
@@ -245,7 +247,7 @@ export async function replaceWithExternalFile(currentPath) {
 }
 
 export async function deleteTexture(filePath) {
-  if (!window.confirm(t('confirm.deleteTex'))) return
+  if (!await uiConfirm({ title: '确认操作', message: t('confirm.deleteTex'), danger: true })) return
   const bk = await window.api.backupFile(filePath)
   if (!bk.success) { showToast(t('toast.backupFailCancel2')); return }
   const r = await window.api.deleteFile(filePath)
@@ -268,7 +270,7 @@ export async function batchCopyToSide(destSide) {
   const willBackup = allPairs.filter(p => p.backup).length
   const backupMsg = willBackup ? t('confirm.hasBackup', { n: willBackup }) : t('confirm.noBackup')
   const msg = t('confirm.batchReplace', { n: allPairs.length, src: t('common.' + srcSide), dest: t('common.' + destSide), backup: backupMsg })
-  if (!window.confirm(msg)) return
+  if (!await uiConfirm({ title: t('common.batchCopy'), message: msg })) return
   const r = await executeCopy(allPairs)
   if (r.cancelled) showToast(t('toast.copyCancelled'))
   else showToast(r.fail ? t('toast.batchReplacedWithFail', { n: r.ok, fail: r.fail }) : t('toast.batchReplaced', { n: r.ok }))
@@ -470,10 +472,7 @@ export function swapFolders() {
   state.rightPath = tp; state.rightEntries = te
   leftPathEl.textContent = state.leftPath || t('common.empty')
   rightPathEl.textContent = state.rightPath || t('common.empty')
-  renderStat(leftStatEl, state.leftEntries, state.leftPath)
-  renderStat(rightStatEl, state.rightEntries, state.rightPath)
-  renderEntryList(leftListEl, state.leftEntries)
-  renderEntryList(rightListEl, state.rightEntries)
+
   updateCompareButton()
   if (state.leftPath && state.rightPath) compare()
   showToast(t('toast.swapped'))

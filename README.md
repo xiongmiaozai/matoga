@@ -74,8 +74,9 @@ matoga/
 │   └── smoke/             # 冒烟 + WebSocket 集成测试
 ├── docs/                  # 设计与算法文档
 ├── archive/electron/      # 已归档的 Electron 版（main.js / preload.js / electron.html）
-├── HDRI预设/              # HDR 环境贴图预设
-├── 材质包/                # 默认 MC 材质包目录（配置占位）
+├── hdri-presets/           # HDR 环境贴图预设
+├── mc-packs/               # 默认 MC 材质包目录（配置占位）
+├── official-packs/         # MC 官方材质包目录（各版本官方资源包）
 ├── website/               # GitHub Pages 官网（独立）
 └── package.json
 ```

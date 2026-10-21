@@ -22,7 +22,6 @@ export function formatDate(ms) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
-export function typeIcon(isDir) { return isDir ? '📁' : '📄' }
 
 export function isImageFile(name) {
   const dot = name.lastIndexOf('.')

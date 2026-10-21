@@ -22,6 +22,7 @@ export const state = {
   viewMode: 'all',
   collapsedFolders: new Set(),
   statusFilter: 'all',
+  typeFilter: 'all',
   history: [],
   renderLimit: 200
 }
@@ -49,14 +50,10 @@ export const searchInput = $('searchInput')
 
 export const leftPathEl = $('leftPath')
 export const rightPathEl = $('rightPath')
-export const leftStatEl = $('leftStat')
-export const rightStatEl = $('rightStat')
-export const leftListEl = $('leftList')
-export const rightListEl = $('rightList')
+
 export const summaryEl = $('summary')
 export const resultBody = $('resultBody')
-export const leftCard = $('leftCard')
-export const rightCard = $('rightCard')
+export const folderCard = $('folderCard')
 
 export const IMG_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'ico', 'tif', 'tiff', 'avif'])
 export const TEX_SUFFIXES = [['_n', 'normal'], ['_s', 'specular']]

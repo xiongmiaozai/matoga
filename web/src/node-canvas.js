@@ -6,6 +6,7 @@
 /* 复用主页 material3d 模块；若未初始化则在此主动 initMaterial3D（幂等） */
 import * as m3d from './material3d.js';
 import { enhancePreview } from './preview2d.js';
+import { uiPrompt, uiConfirm } from './ui-dialog.js';
 
 
 let _initialized = false;
@@ -82,10 +83,24 @@ const NODE_DEFS = {
       const strength = clamp(num(i.strength),0,2);
       return {normal: tex ? {src:tex, strength} : null};
     } },
+  rgbaMerge: { title:'RGBA 合并', group:'材质', color:'var(--type-texture)',
+    inputs:[{n:'r',t:'any'},{n:'g',t:'any'},{n:'b',t:'any'},{n:'a',t:'any'}],
+    outputs:[{n:'tex',t:'texture'}],
+    widget:(n)=>rgbaMergeWidget(n),
+    eval:(i,n)=>{
+      const size = Math.max(16, Math.round(+(n.props.size ?? 256) || 256));
+      const rr = _rgbaIn(i.r, n.props.r, 0);
+      const gg = _rgbaIn(i.g, n.props.g, 1);
+      const bb = _rgbaIn(i.b, n.props.b, 2);
+      const aa = _rgbaIn(i.a, n.props.a, 3);
+      const url = _rgbaMerge(rr, gg, bb, aa, size);
+      n._rgbaUrl = url || null;
+      return {tex: url || null};
+    } },
 
   // 程序化纹理
   noise: { title:'噪声 (Perlin)', group:'纹理', color:'var(--type-number)',
-    inputs:[{n:'uv',t:'vector'}], outputs:[{n:'out',t:'number'}],
+    inputs:[{n:'uv',t:'vector'}], outputs:[{n:'out',t:'number'},{n:'tex',t:'texture'}],
     widget:(n)=>noiseWidget(n),
     eval:(i,n)=>{
       const uv = Array.isArray(i.uv) ? i.uv : [0.5,0.5];
@@ -93,17 +108,17 @@ const NODE_DEFS = {
       const seed = Math.round(+(n.props.seed ?? 0));
       const octaves = Math.round(+(n.props.octaves ?? 4));
       const v = _fbm2D(uv[0]*scale, uv[1]*scale, seed, octaves);
-      return {out:clamp(v,0,1)};
+      return {out:clamp(v,0,1), tex:_noiseTexUrl(n)};
     } },
   voronoi: { title:'Voronoi', group:'纹理', color:'var(--type-number)',
-    inputs:[{n:'uv',t:'vector'}], outputs:[{n:'out',t:'number'}],
+    inputs:[{n:'uv',t:'vector'}], outputs:[{n:'out',t:'number'},{n:'tex',t:'texture'}],
     widget:(n)=>voronoiWidget(n),
     eval:(i,n)=>{
       const uv = Array.isArray(i.uv) ? i.uv : [0.5,0.5];
       const scale = +(n.props.scale ?? 5);
       const seed = Math.round(+(n.props.seed ?? 0));
       const v = _voronoi2D(uv[0]*scale, uv[1]*scale, seed);
-      return {out:clamp(v,0,1)};
+      return {out:clamp(v,0,1), tex:_noiseTexUrl(n)};
     } },
   gradient: { title:'渐变', group:'纹理', color:'var(--type-color)',
     inputs:[{n:'colorA',t:'color'},{n:'colorB',t:'color'},{n:'t',t:'number'}],
@@ -119,7 +134,7 @@ const NODE_DEFS = {
       return {out:[_lerp(a[0],b[0],tt), _lerp(a[1],b[1],tt), _lerp(a[2],b[2],tt)]};
     } },
   simplex: { title:'Simplex 噪声', group:'纹理', color:'var(--type-number)',
-    inputs:[{n:'uv',t:'vector'}], outputs:[{n:'out',t:'number'}],
+    inputs:[{n:'uv',t:'vector'}], outputs:[{n:'out',t:'number'},{n:'tex',t:'texture'}],
     widget:(n)=>noiseWidget(n),
     eval:(i,n)=>{
       const uv = Array.isArray(i.uv) ? i.uv : [0.5,0.5];
@@ -127,10 +142,10 @@ const NODE_DEFS = {
       const seed = Math.round(+(n.props.seed ?? 0));
       const octaves = Math.round(+(n.props.octaves ?? 4));
       const v = _simplexFbm2D(uv[0]*scale, uv[1]*scale, seed, octaves);
-      return {out:clamp(v*0.5+0.5,0,1)};
+      return {out:clamp(v*0.5+0.5,0,1), tex:_noiseTexUrl(n)};
     } },
   ridge: { title:'山脊噪声', group:'纹理', color:'var(--type-number)',
-    inputs:[{n:'uv',t:'vector'}], outputs:[{n:'out',t:'number'}],
+    inputs:[{n:'uv',t:'vector'}], outputs:[{n:'out',t:'number'},{n:'tex',t:'texture'}],
     widget:(n)=>noiseWidget(n),
     eval:(i,n)=>{
       const uv = Array.isArray(i.uv) ? i.uv : [0.5,0.5];
@@ -138,10 +153,10 @@ const NODE_DEFS = {
       const seed = Math.round(+(n.props.seed ?? 0));
       const octaves = Math.round(+(n.props.octaves ?? 4));
       const v = _ridged2D(uv[0]*scale, uv[1]*scale, seed, octaves);
-      return {out:clamp(v,0,1)};
+      return {out:clamp(v,0,1), tex:_noiseTexUrl(n)};
     } },
   warp: { title:'域扭曲', group:'纹理', color:'var(--type-number)',
-    inputs:[{n:'uv',t:'vector'}], outputs:[{n:'out',t:'number'}],
+    inputs:[{n:'uv',t:'vector'}], outputs:[{n:'out',t:'number'},{n:'tex',t:'texture'}],
     widget:(n)=>warpWidget(n),
     eval:(i,n)=>{
       const uv = Array.isArray(i.uv) ? i.uv : [0.5,0.5];
@@ -153,36 +168,73 @@ const NODE_DEFS = {
       const qx = x + amount*_simplex2D(x+2.7, y+1.3, seed);
       const qy = y + amount*_simplex2D(x-1.7, y+2.1, seed+31);
       const v = _simplexFbm2D(qx, qy, seed+13, octaves);
-      return {out:clamp(v*0.5+0.5,0,1)};
+      return {out:clamp(v*0.5+0.5,0,1), tex:_noiseTexUrl(n)};
     } },
 
-  // 输出
-  preview: { title:'预览', group:'输出', color:'var(--primary)',
+  // 输出（hidden：不显示在节点库/添加菜单，仅供程序内部创建）
+  preview: { title:'预览', group:'输出', color:'var(--primary)', hidden:true,
     inputs:[{n:'in',t:'any'}], outputs:[],
     widget:(n)=>previewWidget(n,'in'), eval:()=>null },
-  output: { title:'主输出', group:'输出', color:'var(--primary)',
+  output: { title:'主输出', group:'输出', color:'var(--primary)', hidden:true,
     inputs:[{n:'baseColor',t:'color'},{n:'roughness',t:'number'},{n:'metallic',t:'number'},{n:'normal',t:'texture'}],
     outputs:[],
     widget:(n)=>previewWidget(n,'__mat__'),
     eval:(i)=>({material:{baseColor:col(i.baseColor),roughness:clamp(num(i.roughness),0,1),
       metallic:clamp(num(i.metallic),0,1),normal:i.normal}}) },
-  outputLeft: { title:'左输出', group:'输出', color:'#2b6cff',
+  outputLeft: { title:'左输出', group:'输出', color:'#2b6cff', hidden:true,
     inputs:[{n:'baseColor',t:'color'},{n:'roughness',t:'number'},{n:'metallic',t:'number'},{n:'normal',t:'texture'}],
     outputs:[],
     widget:(n)=>previewWidget(n,'__mat__'),
     eval:(i)=>({material:{baseColor:col(i.baseColor),roughness:clamp(num(i.roughness),0,1),
       metallic:clamp(num(i.metallic),0,1),normal:i.normal}}) },
-  outputRight: { title:'右输出', group:'输出', color:'#d97706',
+  outputRight: { title:'右输出', group:'输出', color:'#d97706', hidden:true,
     inputs:[{n:'baseColor',t:'color'},{n:'roughness',t:'number'},{n:'metallic',t:'number'},{n:'normal',t:'texture'}],
     outputs:[],
     widget:(n)=>previewWidget(n,'__mat__'),
     eval:(i)=>({material:{baseColor:col(i.baseColor),roughness:clamp(num(i.roughness),0,1),
       metallic:clamp(num(i.metallic),0,1),normal:i.normal}}) },
+
+  // 贴图输出节点（可从节点库添加；左/右对应 3D 预览两个球，直接驱动对应材质槽）
+  // 输入端口 tex 接收 texture/mainTex/rgbaMerge/normalMap 节点的贴图链接（PNG dataURL，含 RGBA 通道）
+  mainTexOutLeft: { title:'主贴图输出 (左)', group:'输出', color:'#2b6cff',
+    inputs:[{n:'tex',t:'texture'}], outputs:[],
+    widget:(n)=>previewWidget(n,'tex'),
+    eval:(i)=>({mainTextureUrl:_texUrl(i.tex)}) },
+  mainTexOutRight: { title:'主贴图输出 (右)', group:'输出', color:'#d97706',
+    inputs:[{n:'tex',t:'texture'}], outputs:[],
+    widget:(n)=>previewWidget(n,'tex'),
+    eval:(i)=>({mainTextureUrl:_texUrl(i.tex)}) },
+  normalOutLeft: { title:'法线输出 -n (左)', group:'输出', color:'#2b6cff',
+    inputs:[{n:'tex',t:'texture'}], outputs:[],
+    widget:(n)=>previewWidget(n,'tex'),
+    eval:(i)=>{ const out={normalMapUrl:_texUrl(i.tex)};
+      if(i.tex && typeof i.tex==='object' && typeof i.tex.strength==='number') out.normalScale=i.tex.strength;
+      return out; } },
+  normalOutRight: { title:'法线输出 -n (右)', group:'输出', color:'#d97706',
+    inputs:[{n:'tex',t:'texture'}], outputs:[],
+    widget:(n)=>previewWidget(n,'tex'),
+    eval:(i)=>{ const out={normalMapUrl:_texUrl(i.tex)};
+      if(i.tex && typeof i.tex==='object' && typeof i.tex.strength==='number') out.normalScale=i.tex.strength;
+      return out; } },
+  specOutLeft: { title:'高光输出 -s (左)', group:'输出', color:'#2b6cff',
+    inputs:[{n:'tex',t:'texture'}], outputs:[],
+    widget:(n)=>previewWidget(n,'tex'),
+    eval:(i)=>({specTextureUrl:_texUrl(i.tex)}) },
+  specOutRight: { title:'高光输出 -s (右)', group:'输出', color:'#d97706',
+    inputs:[{n:'tex',t:'texture'}], outputs:[],
+    widget:(n)=>previewWidget(n,'tex'),
+    eval:(i)=>({specTextureUrl:_texUrl(i.tex)}) },
 };
 
 /* ── 工具 ───────────────────────────────────── */
 const num = (v)=> (typeof v==='number')?v : (Array.isArray(v)?v[0]:0);
 const clamp = (v,a,b)=> Math.max(a, Math.min(b, v));
+/* 从贴图链接值取 URL：兼容 PNG dataURL 字符串与 normalMap 节点的 {src,strength} 对象 */
+const _texUrl = (v)=>{
+  if(typeof v==='string' && v) return v;
+  if(v && typeof v==='object' && typeof v.src==='string' && v.src) return v.src;
+  return null;
+};
 const col = (v)=> {
   if(Array.isArray(v) && v.length>=3) return [v[0],v[1],v[2]];
   if(typeof v==='number') return [v,v,v];
@@ -241,6 +293,77 @@ function _texAlpha(url){
   img.onerror = ()=>{ _texAlphaCache.set(url, 1); };
   img.src = url;
   return 1;
+}
+
+/* ── RGBA 通道合并 → PNG（供 rgbaMerge 节点用）── */
+const _rgbaMergeCache = new Map();
+function _loadImg(url){
+  return new Promise(res=>{
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = ()=>res(img);
+    img.onerror = ()=>res(null);
+    img.src = url;
+  });
+}
+function _rgbaIn(v, def, chIdx){
+  if(typeof v==='string' && v) return v;
+  if(typeof v==='number' && isFinite(v)) return clamp(v,0,1);
+  if(Array.isArray(v)) return clamp(+(v[chIdx] ?? [0,0,0,1][chIdx]),0,1);
+  return clamp(+(def ?? [0,0,0,1][chIdx]),0,1);
+}
+async function _rgbaMergeCompose(rr, gg, bb, aa, size, cb){
+  try{
+    const srcs = [rr, gg, bb, aa];
+    const imgs = await Promise.all(srcs.map(s =>
+      (typeof s==='string' && s) ? _loadImg(s) : Promise.resolve(null)));
+    const valid = imgs.filter(Boolean);
+    let W = size, H = size;
+    if(valid.length){
+      W = Math.max(...valid.map(im => im.naturalWidth || 1));
+      H = Math.max(...valid.map(im => im.naturalHeight || 1));
+    }
+    W = Math.max(1, Math.round(W)); H = Math.max(1, Math.round(H));
+
+    const chans = srcs.map((s, idx)=>{
+      const img = imgs[idx];
+      if(typeof s==='number') return {k: Math.round(clamp(s,0,1)*255)};
+      if(img){
+        const c = document.createElement('canvas');
+        c.width = W; c.height = H;
+        const ctx = c.getContext('2d', {willReadFrequently:true});
+        ctx.drawImage(img, 0, 0, W, H);
+        const d = ctx.getImageData(0, 0, W, H).data;
+        const arr = new Uint8ClampedArray(W*H);
+        for(let i=0;i<W*H;i++) arr[i] = d[i*4];
+        return {arr};
+      }
+      return {k: 0};
+    });
+    const out = new ImageData(W, H);
+    const od = out.data;
+    const get = (ch,i)=> ch.arr ? ch.arr[i] : ch.k;
+    for(let i=0;i<W*H;i++){
+      od[i*4]   = get(chans[0],i);
+      od[i*4+1] = get(chans[1],i);
+      od[i*4+2] = get(chans[2],i);
+      od[i*4+3] = get(chans[3],i);
+    }
+    const c2 = document.createElement('canvas');
+    c2.width = W; c2.height = H;
+    c2.getContext('2d').putImageData(out, 0, 0);
+    cb(c2.toDataURL('image/png'));
+  }catch(e){ cb(null); }
+}
+function _rgbaMerge(rr, gg, bb, aa, size){
+  const key = JSON.stringify([rr, gg, bb, aa, size]);
+  if(_rgbaMergeCache.has(key)) return _rgbaMergeCache.get(key);
+  if(_rgbaMergeCache.size > 32) _rgbaMergeCache.clear();
+  _rgbaMergeCompose(rr, gg, bb, aa, size, (url)=>{
+    _rgbaMergeCache.set(key, url || '');
+    evaluate();
+  });
+  return null;
 }
 
 /* ── 程序化噪声算法 ───────────────────────── */
@@ -322,6 +445,74 @@ function _ridged2D(x, y, seed, octaves){
   return val/max;
 }
 
+/* ── 噪波节点预览图（对 [0,1]² 域整图采样，算法与各节点 eval 一致）── */
+const _NOISE_PV_TYPES = new Set(['noise','voronoi','simplex','ridge','warp']);
+const _noisePvCache = new Map();
+function _noiseSample(type, u, v, p){
+  const scale = +(p.scale ?? 4);
+  const seed = Math.round(+(p.seed ?? 0));
+  const octaves = Math.round(+(p.octaves ?? 4));
+  const x = u*scale, y = v*scale;
+  if(type==='noise')    return clamp(_fbm2D(x, y, seed, octaves), 0, 1);
+  if(type==='voronoi')  return clamp(_voronoi2D(x, y, seed), 0, 1);
+  if(type==='simplex')  return clamp(_simplexFbm2D(x, y, seed, octaves)*0.5+0.5, 0, 1);
+  if(type==='ridge')    return clamp(_ridged2D(x, y, seed, octaves), 0, 1);
+  const amount = +(p.amount ?? 1);
+  const qx = x + amount*_simplex2D(x+2.7, y+1.3, seed);
+  const qy = y + amount*_simplex2D(x-1.7, y+2.1, seed+31);
+  return clamp(_simplexFbm2D(qx, qy, seed+13, octaves)*0.5+0.5, 0, 1);
+}
+function _noisePreviewUrl(node, S){
+  S = Math.max(8, Math.round(+(S ?? 96)));
+  const p = node.props;
+  const key = JSON.stringify([node.type, +p.scale, Math.round(+(p.seed??0)), Math.round(+(p.octaves??4)), +(p.amount??1), S]);
+  if(_noisePvCache.has(key)) return _noisePvCache.get(key);
+  const c = document.createElement('canvas');
+  c.width = S; c.height = S;
+  const ctx = c.getContext('2d');
+  const img = ctx.createImageData(S, S);
+  const d = img.data;
+  for(let py=0;py<S;py++){
+    const v = py/S;
+    for(let px=0;px<S;px++){
+      const b = Math.round(_noiseSample(node.type, px/S, v, p)*255);
+      const i = (py*S+px)*4;
+      d[i]=b; d[i+1]=b; d[i+2]=b; d[i+3]=255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  let url = null;
+  try { url = c.toDataURL('image/png'); } catch(e){ url = null; }
+  if(_noisePvCache.size > 32) _noisePvCache.clear();
+  _noisePvCache.set(key, url);
+  return url;
+}
+/* ── 噪波纹理输出：对 [0,1]² 域整图采样生成灰度 PNG（供 tex 输出端口用）── */
+const _NOISE_TEX_SIZE = 256;
+function _noiseTexUrl(node){
+  const url = _noisePreviewUrl(node, _NOISE_TEX_SIZE);
+  return (typeof url === 'string' && url) ? url : null;
+}
+function _renderNoisePreview(node, val){
+  const el = node._outPreviewEl;
+  if(!el) return;
+  const label = el.querySelector('.pv-label');
+  el.innerHTML='';
+  if(label) el.appendChild(label);
+  const url = _noisePreviewUrl(node);
+  if(!url){
+    const e=document.createElement('div'); e.className='pv-empty';
+    e.textContent='预览生成失败'; el.appendChild(e); return;
+  }
+  const box=document.createElement('div'); box.className='pv-imgbox';
+  const img=document.createElement('img'); img.src=url; img.alt='';
+  box.appendChild(img); el.appendChild(box);
+  if(typeof val==='number'){
+    const t=document.createElement('div'); t.className='pv-tag';
+    t.textContent = val.toFixed(4); el.appendChild(t);
+  }
+}
+
 /* ── 状态 ───────────────────────────────────── */
 const state = {
   nodes: new Map(),     // id -> {id, type, x, y, props, el}
@@ -397,7 +588,11 @@ function defaultProps(type){
   else if(type==='ridge'){p.scale=4; p.seed=0; p.octaves=4;}
   else if(type==='warp'){p.scale=3; p.seed=0; p.octaves=4; p.amount=1;}
   else if(type==='gradient'){p.colorA='#7cbd56'; p.colorB='#c084fc'; p.mode='linear';}
+  else if(type==='rgbaMerge'){p.r=0; p.g=0; p.b=0; p.a=1; p.size=null;}
   return p;
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 function renderNode(node){
   const def = NODE_DEFS[node.type];
@@ -412,7 +607,7 @@ function renderNode(node){
   const head = document.createElement('div');
   head.className = 'node-head';
   const titleText = node.title || def.title;
-  head.innerHTML = `<span class="badge pixel"></span><span class="title${node.title?' renamed':''}">${titleText}</span><button class="collapse" title="折叠/展开">${node.collapsed?'▸':'▾'}</button><button class="x" title="删除">✕</button>`;
+  head.innerHTML = `<span class="badge pixel"></span><span class="title${node.title?' renamed':''}">${escapeHtml(titleText)}</span><button class="collapse" title="折叠/展开">${node.collapsed?'▸':'▾'}</button><button class="x" title="删除">✕</button>`;
   if(node.collapsed) el.classList.add('collapsed');
   head.querySelector('.x').addEventListener('pointerdown', e=>e.stopPropagation());
   head.querySelector('.x').addEventListener('click', e=>{e.stopPropagation(); deleteNode(node.id);});
@@ -528,6 +723,15 @@ function refreshSelection(){
   document.querySelectorAll('.edges .edge').forEach(p=>{
     p.classList.toggle('selected', p.dataset.id===state.selectedEdge);
   });
+  _notifySelected();
+}
+function _notifySelected(){
+  try{
+    const first = state.selected.size > 0 ? [...state.selected][0] : null;
+    document.dispatchEvent(new CustomEvent('nodegraph:selected', {
+      detail: { id: first, count: state.selected.size },
+    }));
+  }catch(e){}
 }
 
 /* ── widgets ───────────────────────────────── */
@@ -542,12 +746,13 @@ function numWidget(node, key, min, max, step){
     node.props[key] = +inp.value;
     val.textContent = (+inp.value).toFixed(2);
     evaluate();
+    _markDirty();
   });
   // 双击可输入
-  val.addEventListener('dblclick', ()=>{
-    const v = prompt('输入数值:', node.props[key]);
+  val.addEventListener('dblclick', async ()=>{
+    const v = await uiPrompt({ title:'输入数值', label:node.props[key]+'' , value:node.props[key]+'' });
     if(v!==null && !isNaN(+v)){ node.props[key]=clamp(+v,min,max); inp.value=node.props[key];
-      val.textContent=(+node.props[key]).toFixed(2); evaluate(); }
+      val.textContent=(+node.props[key]).toFixed(2); evaluate(); _markDirty(); }
   });
   box.appendChild(inp); box.appendChild(val);
   return box;
@@ -559,7 +764,7 @@ function colorWidget(node, key){
   inp.type='color'; inp.value=node.props[key];
   const hex = document.createElement('span'); hex.className='hex'; hex.textContent=node.props[key];
   inp.addEventListener('input', ()=>{
-    node.props[key]=inp.value; hex.textContent=inp.value; evaluate();
+    node.props[key]=inp.value; hex.textContent=inp.value; evaluate(); _markDirty();
   });
   box.appendChild(inp); box.appendChild(hex);
   return box;
@@ -577,7 +782,7 @@ function vecWidget(node, keys, min, max, step){
     inp.min=min; inp.max=max; inp.step=step; inp.value=node.props[k];
     const val=document.createElement('span'); val.className='val';
     val.textContent=(+node.props[k]).toFixed(2);
-    inp.addEventListener('input',()=>{node.props[k]=+inp.value; val.textContent=(+inp.value).toFixed(2); evaluate();});
+    inp.addEventListener('input',()=>{node.props[k]=+inp.value; val.textContent=(+inp.value).toFixed(2); evaluate(); _markDirty();});
     row.appendChild(lbl); row.appendChild(inp); row.appendChild(val);
     box.appendChild(row);
   });
@@ -603,10 +808,54 @@ function textureWidget(node, key){
       const r=new FileReader();
       r.onload=()=>{ node.props[key]=r.result; node.props._name=file.name;
         thumb.innerHTML=`<img src="${r.result}" alt="">`;
-        fn.textContent=file.name.slice(0,20); evaluate(); };
+        fn.textContent=file.name.slice(0,20); evaluate(); _markDirty(); };
       r.readAsDataURL(file);
     });
     f.click();
+  });
+  return box;
+}
+function rgbaMergeWidget(node){
+  const box = document.createElement('div');
+  box.className='w-multi';
+  const hint = document.createElement('div');
+  hint.style.cssText='font-size:10px;color:var(--text-dim);margin-bottom:4px;line-height:1.4;';
+  hint.textContent='连线贴图 / 噪波 tex 输入时取图像通道，常量仅作未连线兜底';
+  box.appendChild(hint);
+  box.appendChild(_labeledRow('R 常量', numWidget(node,'r',0,1,0.01)));
+  box.appendChild(_labeledRow('G 常量', numWidget(node,'g',0,1,0.01)));
+  box.appendChild(_labeledRow('B 常量', numWidget(node,'b',0,1,0.01)));
+  box.appendChild(_labeledRow('A 常量', numWidget(node,'a',0,1,0.01)));
+  const sizeInp = document.createElement('input');
+  sizeInp.type='number'; sizeInp.className='w-text';
+  sizeInp.min=16; sizeInp.step=64; sizeInp.placeholder='自动/自定义';
+  sizeInp.value = node.props.size ?? '';
+  sizeInp.title = '留空=自动（取输入纹理尺寸）；可输入任意值，如 4096';
+  sizeInp.addEventListener('change', ()=>{
+    const raw = sizeInp.value.trim();
+    if(raw===''){ node.props.size = null; }
+    else {
+      const v = Math.max(16, Math.round(+raw));
+      if(!isFinite(v)){ sizeInp.value=''; node.props.size = null; return; }
+      node.props.size = v; sizeInp.value = v;
+    }
+    evaluate();
+    _markDirty();
+  });
+  box.appendChild(_labeledRow('尺寸', sizeInp));
+  const actions = document.createElement('div');
+  actions.className='w-tex';
+  actions.style.marginTop='4px';
+  const info = document.createElement('div'); info.className='info';
+  const btn=document.createElement('div'); btn.className='btn'; btn.textContent='保存 PNG';
+  info.appendChild(btn); actions.appendChild(info);
+  box.appendChild(actions);
+  btn.addEventListener('click', ()=>{
+    const url = node._rgbaUrl;
+    if(!url){ toast('RGBA 尚未合成（等待输入或常量求值）'); return; }
+    const a=document.createElement('a');
+    a.href=url; a.download='matoga-rgba.png';
+    a.click();
   });
   return box;
 }
@@ -618,7 +867,7 @@ function selectWidget(node, key, options){
     if(o===node.props[key]) op.selected=true;
     sel.appendChild(op);
   });
-  sel.addEventListener('change',()=>{node.props[key]=sel.value; evaluate();});
+  sel.addEventListener('change',()=>{node.props[key]=sel.value; evaluate(); _markDirty();});
   box.appendChild(sel);
   return box;
 }
@@ -885,7 +1134,11 @@ function evaluate(){
     }
     if(node._outPreviewEl){
       const _on = def.outputs[0] ? def.outputs[0].n : null;
-      _renderPreviewVal(node._outPreviewEl, _on ? out[_on] : undefined);
+      if(_NOISE_PV_TYPES.has(node.type)){
+        _renderNoisePreview(node, _on ? out[_on] : undefined);
+      } else {
+        _renderPreviewVal(node._outPreviewEl, _on ? out[_on] : undefined);
+      }
     }
   });
   state._results = results;
@@ -895,6 +1148,9 @@ function evaluate(){
 function syncToPreview(results){
   // 收集所有 output 节点的材质结果
   let mat = null, matLeft = null, matRight = null, mainTex = null, normalTex = null, hdrPreset = null;
+  // 贴图输出节点（主贴图/法线-n/高光-s × 左/右）：null=已放置未连线，undefined=未放置
+  const texOutL = { main:undefined, normal:undefined, spec:undefined };
+  const texOutR = { main:undefined, normal:undefined, spec:undefined };
   state.nodes.forEach((node,id)=>{
     const r = results.get(id);
     if(!r) return;
@@ -907,10 +1163,24 @@ function syncToPreview(results){
     }
     if(node.type==='normalMap' && r.normal && r.normal.src) normalTex = r.normal.src;
     if(node.type==='hdr' && node.props.preset) hdrPreset = node.props.preset;
+    if(r.mainTextureUrl!==undefined){
+      if(node.type==='mainTexOutLeft') texOutL.main = r.mainTextureUrl;
+      else if(node.type==='mainTexOutRight') texOutR.main = r.mainTextureUrl;
+    }
+    if(r.normalMapUrl!==undefined){
+      if(node.type==='normalOutLeft') texOutL.normal = r.normalMapUrl;
+      else if(node.type==='normalOutRight') texOutR.normal = r.normalMapUrl;
+    }
+    if(r.specTextureUrl!==undefined){
+      if(node.type==='specOutLeft') texOutL.spec = r.specTextureUrl;
+      else if(node.type==='specOutRight') texOutR.spec = r.specTextureUrl;
+    }
   });
+  const hasTexOutL = texOutL.main!==undefined || texOutL.normal!==undefined || texOutL.spec!==undefined;
+  const hasTexOutR = texOutR.main!==undefined || texOutR.normal!==undefined || texOutR.spec!==undefined;
   // 3D 联动
   if(m3d && m3d.isMaterial3DReady && m3d.isMaterial3DReady()){
-    const buildP = (m)=>{
+    const buildP = (m, side)=>{
       const p = {};
       let nTex = normalTex;
       if(m){
@@ -919,14 +1189,19 @@ function syncToPreview(results){
         if(typeof m.metallic==='number') p.metallic = m.metallic;
         if(m.normal && m.normal.src) nTex = m.normal.src;
       }
-      if(mainTex) p.mainTextureUrl = mainTex;
-      if(nTex) p.normalMapUrl = nTex;
+      // 左右专用贴图输出节点优先于全局纹理候选（null=显式清除该槽位）
+      const o = side==='left' ? texOutL : texOutR;
+      if(o.main!==undefined) p.mainTextureUrl = o.main;
+      else if(mainTex) p.mainTextureUrl = mainTex;
+      if(o.normal!==undefined) p.normalMapUrl = o.normal;
+      else if(nTex) p.normalMapUrl = nTex;
+      if(o.spec!==undefined) p.specTextureUrl = o.spec;
       if(hdrPreset) p.lightPreset = hdrPreset;
       return p;
     };
     const effLeft = matLeft || mat, effRight = matRight || mat;
-    if(effLeft){ try { m3d.applyNodePBRSide(buildP(effLeft), 'left'); } catch(e){ console.warn('applyNodePBRSide 失败', e); } }
-    if(effRight){ try { m3d.applyNodePBRSide(buildP(effRight), 'right'); } catch(e){ console.warn('applyNodePBRSide 失败', e); } }
+    if(effLeft || hasTexOutL){ try { m3d.applyNodePBRSide(buildP(effLeft,'left'), 'left'); } catch(e){ console.warn('applyNodePBRSide 失败', e); } }
+    if(effRight || hasTexOutR){ try { m3d.applyNodePBRSide(buildP(effRight,'right'), 'right'); } catch(e){ console.warn('applyNodePBRSide 失败', e); } }
      // 更新底栏
      const barMat = mat || matLeft || matRight;
      if(barMat && barMat.baseColor){
@@ -938,44 +1213,39 @@ function syncToPreview(results){
      }
   }
   // 2D 预览联动
-  sync2D(results, {mainTex, normalTex, mat, matLeft, matRight});
+  sync2D(results, {mainTex, normalTex, mat, matLeft, matRight, texOutL, texOutR});
+}
+/* 2D 预览仅承载主贴图/法线/高光三种材质槽位；纹理、噪波、颜色等在节点自身预览（widget / out-preview）中查看 */
+export function buildPreview2DRows(info){
+  const effLeft = info.matLeft || info.mat, effRight = info.matRight || info.mat;
+  const texOutL = info.texOutL || {}, texOutR = info.texOutR || {};
+  const rows = [];
+  // 主贴图：左右贴图输出节点优先，回退全局纹理候选
+  const mainL = texOutL.main!==undefined ? texOutL.main : info.mainTex;
+  const mainR = texOutR.main!==undefined ? texOutR.main : info.mainTex;
+  if(mainL || mainR) rows.push({role:'主贴图 (Albedo)', left:mainL?{img:mainL}:null, right:mainR?{img:mainR}:null});
+  let ln = effLeft&&effLeft.normal&&effLeft.normal.src?effLeft.normal.src:null;
+  let rn = effRight&&effRight.normal&&effRight.normal.src?effRight.normal.src:null;
+  if(texOutL.normal!==undefined) ln = texOutL.normal;
+  if(texOutR.normal!==undefined) rn = texOutR.normal;
+  if(ln||rn) rows.push({role:'法线 (Normal)', left:ln?{img:ln}:null, right:rn?{img:rn}:null});
+  const ls = texOutL.spec!==undefined ? texOutL.spec : null;
+  const rs = texOutR.spec!==undefined ? texOutR.spec : null;
+  if(ls||rs) rows.push({role:'高光 (-s)', left:ls?{img:ls}:null, right:rs?{img:rs}:null});
+  return rows;
 }
 function sync2D(results, info){
   const c = document.getElementById('previewPanel');
   if(!c) return;
-  const effLeft = info.matLeft || info.mat, effRight = info.matRight || info.mat;
-  const rows = [];
-  if(info.mainTex) rows.push({role:'主贴图 (Albedo)', left:{img:info.mainTex}, right:{img:info.mainTex}});
-  const ln = effLeft&&effLeft.normal&&effLeft.normal.src?effLeft.normal.src:null;
-  const rn = effRight&&effRight.normal&&effRight.normal.src?effRight.normal.src:null;
-  if(ln||rn) rows.push({role:'法线 (Normal)', left:ln?{img:ln}:null, right:rn?{img:rn}:null});
-  const lc = effLeft&&effLeft.baseColor?rgbToHex(effLeft.baseColor[0],effLeft.baseColor[1],effLeft.baseColor[2]):null;
-  const rc = effRight&&effRight.baseColor?rgbToHex(effRight.baseColor[0],effRight.baseColor[1],effRight.baseColor[2]):null;
-  if(lc||rc) rows.push({role:'基础色 (Base)', left:lc?{color:lc}:null, right:rc?{color:rc}:null});
-  const _roleLabel = { main:'主贴图 (Albedo)', normal:'法线 (-n)', specular:'高光 (-s)' };
-  const _roleOrder = { main:0, normal:1, specular:2 };
-  const _texNodes = [];
-  state.nodes.forEach(node=>{ if((node.type==='texture' || node.type==='mainTex') && node.props.tex) _texNodes.push(node); });
-  _texNodes.sort((a,b)=>((_roleOrder[a.props._role]??3)-(_roleOrder[b.props._role]??3)));
-  _texNodes.forEach(node=>{
-    const rl = node.props._role;
-    const label = rl ? _roleLabel[rl] : ('纹理: '+(node.props._name||NODE_DEFS[node.type].title));
-    rows.push({role:label, left:{img:node.props.tex}, right:{img:node.props.tex}});
-  });
-  state.nodes.forEach(node=>{
-    if(node.type==='color' && node.props.color){
-      rows.push({role:'颜色: '+node.props.color, left:{color:node.props.color}, right:{color:node.props.color}});
-    }
-  });
+  const rows = buildPreview2DRows(info);
   c.innerHTML = '';
   if(rows.length===0){
-    c.innerHTML = '<div style="color:var(--text-dim);font-size:11px;padding:20px;text-align:center">无贴图/颜色输入节点<br>添加「纹理」「颜色」节点即可在此预览</div>';
+    c.innerHTML = '<div style="color:var(--text-dim);font-size:11px;padding:20px;text-align:center">暂无主贴图 / 法线 / 高光输出<br>连线「主贴图输出」「法线输出 -n」「高光输出 -s」节点即可在此预览<br>其他贴图请在各节点预览中查看</div>';
     return;
   }
   const cell = (data, side)=>{
     if(!data) return `<div class="pv-cell"><span class="pv-tag">${side}</span><span class="pv-empty">—</span></div>`;
-    if(data.img) return `<div class="pv-cell"><span class="pv-tag">${side}</span><img src="${data.img}" alt=""></div>`;
-    return `<div class="pv-cell"><span class="pv-tag">${side}</span><div class="pv2-color-card"><div class="sw" style="background:${data.color}"></div><div class="hx">${data.color}</div></div></div>`;
+    return `<div class="pv-cell"><span class="pv-tag">${side}</span><img src="${data.img}" alt=""></div>`;
   };
   rows.forEach(r=>{
     const row = document.createElement('div'); row.className='pv-row';
@@ -993,9 +1263,7 @@ function _renderPreviewVal(el, val){
     e.textContent='无输入'; el.appendChild(e); return;
   }
   if(typeof val==='number'){
-    const t=document.createElement('div'); t.className='pv-text';
-    t.textContent='number\n'+val.toFixed(4);
-    t.style.whiteSpace='pre'; el.appendChild(t);
+    _renderNumViz(el, val);
   } else if(Array.isArray(val) && val.length>=3){
     const sw=document.createElement('div'); sw.className='pv-swatch';
     sw.style.background=rgbToHex(val[0],val[1],val[2]); el.appendChild(sw);
@@ -1010,19 +1278,46 @@ function _renderPreviewVal(el, val){
       t.textContent=`r${val.roughness?.toFixed(2)} m${val.metallic?.toFixed(2)}`;
       el.appendChild(t);
     } else if(val.src){
-      el.insertAdjacentHTML('beforeend',`<img src="${val.src}" style="width:100%;height:100%;object-fit:cover">`);
+      _renderPreviewImg(el, val.src);
     } else {
       const t=document.createElement('div'); t.className='pv-text';
       t.textContent=JSON.stringify(val).slice(0,60); el.appendChild(t);
     }
   } else if(typeof val==='string'){
     if(val.startsWith('data:')||val.startsWith('/')){
-      el.insertAdjacentHTML('beforeend',`<img src="${val}" style="width:100%;height:100%;object-fit:cover">`);
+      _renderPreviewImg(el, val);
     } else {
       const t=document.createElement('div'); t.className='pv-text';
       t.textContent=val; el.appendChild(t);
     }
   }
+}
+function _renderPreviewImg(el, url){
+  const box=document.createElement('div'); box.className='pv-imgbox';
+  const img=document.createElement('img'); img.src=url; img.alt='';
+  box.appendChild(img); el.appendChild(box);
+  const fillDim=()=>{
+    if(!img.naturalWidth) return;
+    if(box.querySelector('.pv-dim')) return;
+    const d=document.createElement('span'); d.className='pv-dim';
+    d.textContent=img.naturalWidth+'×'+img.naturalHeight;
+    box.appendChild(d);
+  };
+  if(img.complete) fillDim();
+  else img.addEventListener('load', fillDim);
+}
+function _renderNumViz(el, val){
+  const box=document.createElement('div'); box.className='pv-numviz';
+  const inRange = val>=0 && val<=1;
+  const pct = clamp(val,0,1)*100;
+  const bar=document.createElement('div'); bar.className='bar'+(inRange?'':' out');
+  const mark=document.createElement('div'); mark.className='mark'; mark.style.left=pct+'%';
+  bar.appendChild(mark);
+  const sc=document.createElement('div'); sc.className='scale';
+  sc.innerHTML='<span>0</span><span>1</span>';
+  const v=document.createElement('span'); v.className='val'; v.textContent=val.toFixed(4);
+  box.appendChild(bar); box.appendChild(sc); box.appendChild(v);
+  el.appendChild(box);
 }
 function updatePreview(node, inputs, results){
   const el = node._previewEl;
@@ -1181,6 +1476,7 @@ window.addEventListener('pointerup', (e)=>{
       const n=state.nodes.get(id);
       if(n) n.el.classList.remove('dragging');
     });
+    _markDirty();
   }
   if(d && d.kind==='box' && d.moved){
     const cur = screenToWorld(e.clientX, e.clientY);
@@ -1283,6 +1579,7 @@ function showCanvasMenu(e){
 
   const groups = {};
   Object.entries(NODE_DEFS).forEach(([k,d])=>{
+    if(d.hidden) return;
     (groups[d.group]=groups[d.group]||[]).push([k,d]);
   });
   const groupEls = [];
@@ -1331,7 +1628,7 @@ function showCanvasMenu(e){
     {nm:'自动布局', sc:'L', act:'layout'},
     {nm:'适应视图', sc:'F', act:'fit'},
     {sep:true},
-    {nm:'保存图', sc:'Ctrl+S', act:'save'},
+    {nm:'保存项目', sc:'Ctrl+S', act:'save'},
     {nm:'加载图', act:'load'},
     {nm:'清空画布', act:'clear', danger:true}
   ];
@@ -1350,11 +1647,15 @@ function showCanvasMenu(e){
       else if(op.act==='load') loadGraph();
       else if(op.act==='clear'){
         if(state.nodes.size===0) return;
-        if(!confirm('清空所有节点？')) return;
-        pushHistory();
-        state.nodes.forEach(n=>n.el.remove());
-        state.nodes.clear(); state.edges.clear(); state.selected.clear();
-        renderEdges(); updateStats(); evaluate();
+        (async()=>{
+          if(!await uiConfirm({ title:'清空画布', message:'清空所有节点？', danger:true })) return;
+          pushHistory();
+          state.nodes.forEach(n=>n.el.remove());
+          state.nodes.clear(); state.edges.clear(); state.selected.clear();
+          _currentProject = null;
+          renderEdges(); updateStats(); evaluate();
+          _resetSavedState();
+        })();
       }
       closeCtxMenu();
     });
@@ -1432,17 +1733,19 @@ function toggleCollapse(id){
   const btn = n.el.querySelector('.collapse');
   if(btn) btn.textContent = n.collapsed ? '▸' : '▾';
   renderEdges();
+  _markDirty();
 }
-function renameNode(id){
+async function renameNode(id){
   const n = state.nodes.get(id); if(!n) return;
   const def = NODE_DEFS[n.type];
-  const v = prompt('节点名称:', n.title || def.title);
+  const v = await uiPrompt({ title:'节点重命名', label:'节点名称:', value:n.title || def.title });
   if(v===null) return;
   pushHistory();
   const t = v.trim();
   n.title = (t && t!==def.title) ? t : null;
   const titleEl = n.el.querySelector('.title');
   if(titleEl){ titleEl.textContent = n.title || def.title; titleEl.classList.toggle('renamed', !!n.title); }
+  _notifyGraphChanged();
 }
 function disconnectNode(id){
   const n = state.nodes.get(id); if(!n) return;
@@ -1504,6 +1807,7 @@ function filterLibrary(term){
   existing.forEach(el=>el.remove());
   const groups = {};
   Object.entries(NODE_DEFS).forEach(([k,d])=>{
+    if(d.hidden) return;
     if(term && !d.title.toLowerCase().includes(term) && !k.toLowerCase().includes(term) && !d.group.toLowerCase().includes(term)) return;
     (groups[d.group]=groups[d.group]||[]).push([k,d]);
   });
@@ -1539,11 +1843,15 @@ $('#btn-add').addEventListener('click', (e)=>{
 $('#btn-fit').addEventListener('click', fitView);
 $('#btn-clear').addEventListener('click', ()=>{
   if(state.nodes.size===0) return;
-  if(!confirm('清空所有节点？')) return;
-  pushHistory();
-  state.nodes.forEach(n=>n.el.remove());
-  state.nodes.clear(); state.edges.clear(); state.selected.clear();
-  renderEdges(); updateStats(); evaluate();
+  (async()=>{
+    if(!await uiConfirm({ title:'清空画布', message:'清空所有节点？', danger:true })) return;
+    pushHistory();
+    state.nodes.forEach(n=>n.el.remove());
+    state.nodes.clear(); state.edges.clear(); state.selected.clear();
+    _currentProject = null;
+    _rememberProject(null);
+    renderEdges(); updateStats(); evaluate();
+  })();
 });
 $('#btn-layout').addEventListener('click', autoLayout);
 $('#btn-save').addEventListener('click', saveGraph);
@@ -1847,16 +2155,19 @@ function _graphToComfy(){
 function serializeGraph(){
   return JSON.stringify(_graphToComfy(), null, 2);
 }
-function saveGraph(){
-  const json = serializeGraph();
-  const blob = new Blob([json], {type:'application/json'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'node-graph.json';
-  a.click();
-  URL.revokeObjectURL(url);
-  toast('图已保存');
+async function saveGraph(){
+  if(state.nodes.size===0){ toast('画布为空'); return; }
+  let name = _currentProject ? _currentProject.name : null;
+  if(!name){
+    const input = await uiPrompt({ title:'保存到节点项目', label:'项目名称', value:'未命名材质图' });
+    if(input===null) return;
+    name = input.trim();
+    if(!name){ toast('项目名不能为空'); return; }
+  }
+  try {
+    const data = await saveNodeProject(name, _currentProject ? _currentProject.id : undefined);
+    toast('已保存到节点项目: ' + name + '（' + (data.dir || data.id) + '）');
+  } catch(e){ toast('保存失败: ' + e.message); }
 }
 
 function _applyComfy(data){
@@ -1882,11 +2193,19 @@ function loadGraphJSON(json){
     if(!data || !Array.isArray(data.nodes)) throw new Error('格式无效');
     pushHistory();
     _history.suspend = true;
+    _suspendAutoSave = true;
+    _currentProject = null;
     if(Array.isArray(data.links)) _applyComfy(data);
     else _restore({nodes:data.nodes, edges:data.edges||[]});
     _history.suspend = false;
+    _suspendAutoSave = false;
+    _resetSavedState();
     toast(`已加载 ${data.nodes.length} 个节点`);
-  } catch(e){ toast('加载失败: '+e.message); }
+  } catch(e){
+    _history.suspend = false;
+    _suspendAutoSave = false;
+    toast('加载失败: '+e.message);
+  }
 }
 function loadGraph(){
   const f = document.createElement('input');
@@ -1906,6 +2225,11 @@ function loadGraph(){
 function updateStats(){
   $('#stat-nodes').textContent = state.nodes.size;
   $('#stat-edges').textContent = state.edges.size;
+  _notifyGraphChanged();
+}
+function _notifyGraphChanged(){
+  _markDirty();
+  try{ document.dispatchEvent(new CustomEvent('nodegraph:changed')); }catch(e){}
 }
 let toastTimer=null;
 function toast(msg){
@@ -1928,10 +2252,9 @@ function initExample(){
   const color1 = createNode('color', -380, 220);
   color1.props.color = '#7cbd56';
   const mix = createNode('mix', -100, 0);
-  const out = createNode('output', 220, 40);
 
   // 重新渲染以应用 props
-  [num1,num2,color1,mix,out].forEach(n=>{ n.el.remove(); renderNode(n); });
+  [num1,num2,color1,mix].forEach(n=>{ n.el.remove(); renderNode(n); });
 
   // 连线
   function conn(fn,fp,tn,tp){
@@ -1941,8 +2264,6 @@ function initExample(){
   conn(num1.id,'value',mix.id,'a');
   conn(num2.id,'value',mix.id,'b');
   conn(num1.id,'value',mix.id,'t');
-  conn(color1.id,'color',out.id,'baseColor');
-  conn(mix.id,'out',out.id,'roughness');
 
   renderEdges(); updateStats(); evaluate();
   setTimeout(fitView, 100);
@@ -2142,7 +2463,396 @@ $('#importOk').addEventListener('click', doImport);
 importOverlay.addEventListener('click', e => { if(e.target === importOverlay) importOverlay.classList.remove('open'); });
 
 /* ── 对外暴露：供节点库 / 资产库面板直接调用 ─────────── */
-export { createNode };
+function _defColorHex(def){
+  const c = def && def.color;
+  if(!c) return '#9a9a9a';
+  const m = /var\(--type-([\w-]+)\)/.exec(c);
+  if(m) return typeColor(m[1]);
+  if(c.startsWith('var(')){
+    const name = c.slice(4, -1).trim();
+    try{ return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#9a9a9a'; }
+    catch(e){ return '#9a9a9a'; }
+  }
+  return c;
+}
+export function getGraphInfo(){
+  const nodes = [];
+  state.nodes.forEach(n => nodes.push({ id:n.id, type:n.type, title:n.title||null }));
+  const edges = [];
+  state.edges.forEach(e => edges.push({
+    id:e.id,
+    from:{ node:e.from.node, port:e.from.port },
+    to:{ node:e.to.node, port:e.to.port },
+  }));
+  const defs = {};
+  state.nodes.forEach(n => {
+    if(defs[n.type]) return;
+    const d = NODE_DEFS[n.type];
+    if(!d) return;
+    defs[n.type] = {
+      title:d.title, group:d.group||'', color:_defColorHex(d),
+      inputs:(d.inputs||[]).map(p=>({n:p.n,t:p.t})),
+      outputs:(d.outputs||[]).map(p=>({n:p.n,t:p.t})),
+    };
+  });
+  return { nodes, edges, defs };
+}
+/* 节点预览窗口：选中节点完整信息（props / 预览图 / 计算输出 / 连接） */
+export function getNodeDetail(id){
+  const n = state.nodes.get(id);
+  if(!n) return null;
+  const def = NODE_DEFS[n.type];
+  if(!def) return null;
+  let previewUrl = null;
+  let previewKind = 'none';
+  if(_NOISE_PV_TYPES.has(n.type)){
+    previewUrl = _noisePreviewUrl(n);
+    previewKind = 'image';
+  } else if(typeof n.props.tex === 'string' && n.props.tex){
+    previewUrl = n.props.tex;
+    previewKind = 'image';
+  } else if(typeof n.props.color === 'string' && n.props.color){
+    previewKind = 'color';
+  } else if(typeof n.props.value === 'number'){
+    previewKind = 'value';
+  }
+  const evalOut = {};
+  const r = state._results ? state._results.get(id) : null;
+  if(r){
+    for(const k in r){
+      const v = r[k];
+      const tv = typeof v;
+      if(tv === 'number') evalOut[k] = Math.round(v * 1e4) / 1e4;
+      else if(tv === 'string' || tv === 'boolean') evalOut[k] = v;
+      else if(Array.isArray(v)) evalOut[k] = v.slice(0, 8).map(x => (typeof x === 'number' ? Math.round(x * 1e4) / 1e4 : String(x)));
+    }
+  }
+  const nodeTitle = (nid) => {
+    const m = state.nodes.get(nid);
+    if(!m) return nid;
+    const md = NODE_DEFS[m.type];
+    return m.title || (md ? md.title : nid);
+  };
+  const connIn = [], connOut = [];
+  state.edges.forEach(e => {
+    if(e.to.node === id) connIn.push({ port:e.to.port, from:e.from.node, fromPort:e.from.port, fromTitle:nodeTitle(e.from.node) });
+    if(e.from.node === id) connOut.push({ port:e.from.port, to:e.to.node, toPort:e.to.port, toTitle:nodeTitle(e.to.node) });
+  });
+  return {
+    id:n.id, type:n.type, title:n.title || def.title,
+    def:{
+      title:def.title, group:def.group||'', color:_defColorHex(def),
+      inputs:(def.inputs||[]).map(p=>({n:p.n,t:p.t})),
+      outputs:(def.outputs||[]).map(p=>({n:p.n,t:p.t})),
+    },
+    props:JSON.parse(JSON.stringify(n.props)),
+    previewUrl, previewKind,
+    evalOut,
+    connections:{ inputs:connIn, outputs:connOut },
+  };
+}
+export function focusNodeInCanvas(id){
+  const n = state.nodes.get(id);
+  if(!n) return false;
+  selectNode(id, false);
+  const w = n.el ? n.el.offsetWidth : 200;
+  const h = n.el ? n.el.offsetHeight : 100;
+  const wx = n.x + w/2, wy = n.y + h/2;
+  const r = canvasWrap.getBoundingClientRect();
+  const z = Math.max(state.viewport.zoom, 0.85);
+  state.viewport.zoom = z;
+  state.viewport.x = r.width/2 - wx*z;
+  state.viewport.y = r.height/2 - wy*z;
+  applyViewport();
+  return true;
+}
+export { createNode, startEdge as _debugStartEdge, finishEdge as _debugFinishEdge, saveGraph as _debugSaveGraph, loadGraphJSON as _debugLoadGraphJSON };
+
+/* ── 节点项目管理：保存 / 加载（.mtgp 特殊格式，自包含工程）── */
+const _TEX_REF_PREFIX = '@tex/';
+function _safeTexName(name, i){
+  const base = (typeof name==='string' && name.trim())
+    ? name.trim().replace(/[\\/:*?"<>|\s]/g,'_').slice(0,64) : '';
+  const ext = base && /\.(png|jpe?g|webp|gif|bmp|tiff?|avif|svg|ico)$/i.test(base) ? '' : '.png';
+  const safe = base || ('texture_'+i);
+  return i+'-'+safe+ext;
+}
+function _texRef(file){ return _TEX_REF_PREFIX+file; }
+function _rawTexUrl(absPath){ return '/api/file/raw?path='+encodeURIComponent(absPath); }
+
+function _collectProjectTextures(graph){
+  const textures = [];
+  const nodeTex = new Map();
+  state.nodes.forEach(node=>{
+    if((node.type==='texture'||node.type==='mainTex') && node.props.tex) nodeTex.set(node.id, node.props);
+  });
+  let i = 0;
+  graph.nodes.forEach(nd=>{
+    const p = nodeTex.get(nd.id);
+    if(!p) return;
+    const src = p.tex;
+    let name = p._name || '';
+    let entry = null;
+    if(src.startsWith('data:')){
+      entry = { name, dataUrl: src };
+    } else {
+      const m = /[?&]path=([^&]+)/.exec(src);
+      if(m){
+        try {
+          const abs = decodeURIComponent(m[1]);
+          if(!name) name = abs.split(/[\\/]/).pop() || '';
+          entry = { name, path: abs };
+        } catch(e){}
+      }
+    }
+    if(!entry) return;
+    const file = _safeTexName(entry.name, i);
+    nd.widgets_values = nd.widgets_values && typeof nd.widgets_values==='object' ? JSON.parse(JSON.stringify(nd.widgets_values)) : {};
+    nd.widgets_values.tex = _texRef(file);
+    textures.push({ name: entry.name, path: entry.path, dataUrl: entry.dataUrl });
+    i++;
+  });
+  return textures;
+}
+
+function _generateProjectThumb(){
+  return new Promise(resolve=>{
+    const S = 256, CELL = 3;
+    const c = document.createElement('canvas');
+    c.width = S; c.height = S;
+    const ctx = c.getContext('2d');
+    const sources = [];
+    state.nodes.forEach(node=>{
+      if((node.type==='texture'||node.type==='mainTex') && node.props.tex){
+        sources.push({kind:'img', src: node.props.tex});
+      } else if(_NOISE_PV_TYPES.has(node.type)){
+        const u = _noisePreviewUrl(node);
+        if(u) sources.push({kind:'img', src: u});
+      } else if(node.type==='color' && node.props.color){
+        sources.push({kind:'color', color: node.props.color});
+      }
+    });
+    const picked = sources.slice(0, CELL*CELL);
+    const done = ()=>{
+      if(!picked.length){
+        const g = ctx.createLinearGradient(0,0,S,S);
+        g.addColorStop(0,'#1c2230'); g.addColorStop(1,'#2a3348');
+        ctx.fillStyle = g; ctx.fillRect(0,0,S,S);
+        ctx.fillStyle = '#7cbd56';
+        ctx.font = 'bold 28px ui-monospace,monospace';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(state.nodes.size+' 节点', S/2, S/2);
+      }
+      resolve(c.toDataURL('image/png'));
+    };
+    if(!picked.length){ done(); return; }
+    const imgs = picked.map(p=> p.kind==='img' ? _loadImg(p.src) : Promise.resolve(null));
+    Promise.all(imgs).then(loaded=>{
+      const n = picked.length;
+      const grid = Math.ceil(Math.sqrt(n));
+      const cellW = S/grid, cellH = S/Math.ceil(n/grid);
+      picked.forEach((p, idx)=>{
+        const x = (idx%grid)*cellW, y = Math.floor(idx/grid)*cellH;
+        const im = loaded[idx];
+        if(p.kind==='color' || !im){
+          ctx.fillStyle = p.kind==='color' ? p.color : '#262b38';
+          ctx.fillRect(x+1, y+1, cellW-2, cellH-2);
+        } else {
+          const r = Math.min(cellW/im.naturalWidth, cellH/im.naturalHeight);
+          const w = im.naturalWidth*r, h = im.naturalHeight*r;
+          ctx.drawImage(im, x+(cellW-w)/2, y+(cellH-h)/2, w, h);
+        }
+      });
+      done();
+    }).catch(done);
+  });
+}
+
+function _projApiUrl(p){
+  return (window.matogaCore && window.matogaCore.url) ? window.matogaCore.url(p) : p;
+}
+
+/* 记忆最近一次打开/保存的项目 id（config.lastNodeProject），供启动时自动恢复 */
+function _rememberProject(id){
+  try{ if(window.api && window.api.setConfig) window.api.setConfig({ lastNodeProject: id || null }); }catch(e){}
+}
+
+/* 启动恢复：读取 lastNodeProject 并静默加载；无记忆/加载失败时回退示例图 */
+async function _restoreLastProject(){
+  let lastId = null
+  try{
+    const cfg = await window.api.getConfig()
+    lastId = cfg && cfg.lastNodeProject
+  }catch(e){}
+  if(!lastId) return false
+  try{
+    const data = await loadNodeProject(lastId)
+    toast('已恢复上次项目「' + (data && data.name ? data.name : lastId) + '」')
+    return true
+  }catch(e){ return false }
+}
+
+/* ── 当前节点项目（Ctrl+S / 保存按钮的目标地址：data/node-projects/<id>.mtgp/）── */
+let _currentProject = null;
+export function getCurrentProject(){ return _currentProject ? { ..._currentProject } : null; }
+
+/* ── 项目指示器 + 自动保存 ────────────────────
+   画布头部显示当前打开的项目；内容变化（增删节点/连线/属性/位置）时标记脏，
+   防抖后自动保存到当前项目；保存/加载/清空后随时刷新指示器。 */
+const AUTOSAVE_DELAY = 2500;
+let _dirty = false;
+let _autoSaveTimer = null;
+let _suspendAutoSave = false;
+let _saving = false;
+let _lastSavedSig = null;
+
+function _graphSignature(){
+  const nodes = [];
+  state.nodes.forEach(n=>{
+    nodes.push([n.id, n.type, Math.round(n.x), Math.round(n.y), n.title||null, !!n.collapsed, JSON.stringify(n.props)]);
+  });
+  const edges = [];
+  state.edges.forEach(e=>{
+    edges.push([e.id, e.from.node, e.from.port, e.to.node, e.to.port]);
+  });
+  return JSON.stringify([nodes, edges]);
+}
+
+function _updateProjectIndicator(){
+  const badge = document.getElementById('ncProject');
+  const stat = document.getElementById('stat-project');
+  const name = _currentProject ? _currentProject.name : null;
+  if(badge){
+    const nm = badge.querySelector('.nc-project-name');
+    if(nm) nm.textContent = name ? name : '未关联项目';
+    badge.classList.toggle('linked', !!name);
+    badge.classList.toggle('dirty', !!name && _dirty);
+    badge.title = name
+      ? `当前节点项目：${name}（${_currentProject.id}）· ${_dirty ? '有未保存更改' : '已保存'}`
+      : '当前节点项目：未关联（Ctrl+S 保存后自动关联）';
+  }
+  if(stat){
+    stat.textContent = name ? name : '—';
+    stat.parentElement && (stat.parentElement.title = name
+      ? `当前打开的节点项目：${name}` : '未关联节点项目');
+  }
+}
+
+function _setAutoSaveState(kind, text){
+  const seg = document.getElementById('seg-autosave');
+  const b = document.getElementById('stat-autosave');
+  if(b) b.textContent = text;
+  if(seg){
+    seg.classList.remove('saving','saved','error');
+    if(kind) seg.classList.add(kind);
+  }
+}
+
+function _markDirty(){
+  if(_suspendAutoSave) return;
+  if(!_dirty){ _dirty = true; _updateProjectIndicator(); }
+  if(!_currentProject) return;
+  if(_autoSaveTimer) clearTimeout(_autoSaveTimer);
+  _autoSaveTimer = setTimeout(()=>{ _autoSaveTimer=null; _autoSave(); }, AUTOSAVE_DELAY);
+}
+
+function _resetSavedState(){
+  _dirty = false;
+  if(_autoSaveTimer){ clearTimeout(_autoSaveTimer); _autoSaveTimer = null; }
+  try { _lastSavedSig = state.nodes.size ? _graphSignature() : null; } catch(e){ _lastSavedSig = null; }
+  if(_currentProject) _setAutoSaveState('saved', '已就绪');
+  else _setAutoSaveState(null, '—');
+  _updateProjectIndicator();
+}
+
+async function _autoSave(force, opts){
+  if(!_currentProject || !_dirty || _saving || _suspendAutoSave) return;
+  if(state.nodes.size === 0) return;
+  let sig = null;
+  try { sig = _graphSignature(); } catch(e){}
+  if(sig !== null && sig === _lastSavedSig){
+    _dirty = false;
+    _setAutoSaveState('saved', '已保存');
+    _updateProjectIndicator();
+    return;
+  }
+  _saving = true;
+  _setAutoSaveState('saving', '自动保存中…');
+  _updateProjectIndicator();
+  const proj = { ..._currentProject };
+  try {
+    await saveNodeProject(proj.name, proj.id, { keepalive: !!(opts && opts.keepalive) });
+    if(_currentProject && _currentProject.id === proj.id){
+      _dirty = false;
+      _lastSavedSig = sig;
+      const t = new Date();
+      const hh = String(t.getHours()).padStart(2,'0');
+      const mm = String(t.getMinutes()).padStart(2,'0');
+      const ss = String(t.getSeconds()).padStart(2,'0');
+      _setAutoSaveState('saved', `已保存 ${hh}:${mm}:${ss}`);
+    }
+  } catch(e){
+    if(_currentProject && _currentProject.id === proj.id){
+      _setAutoSaveState('error', '失败·稍后重试');
+      if(_autoSaveTimer) clearTimeout(_autoSaveTimer);
+      _autoSaveTimer = setTimeout(()=>{ _autoSaveTimer=null; _autoSave(); }, 10000);
+    }
+  } finally {
+    _saving = false;
+    _updateProjectIndicator();
+  }
+}
+
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState === 'hidden' && _currentProject && _dirty) _autoSave(true);
+});
+window.addEventListener('beforeunload', (e)=>{
+  if(_currentProject && _dirty && state.nodes.size > 0){
+    _autoSave(true, { keepalive: true });
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
+
+export async function saveNodeProject(name, id, opts){
+  if(state.nodes.size===0) throw new Error('画布为空');
+  const graph = _graphToComfy();
+  const textures = _collectProjectTextures(graph);
+  const thumbnail = await _generateProjectThumb();
+  const res = await fetch(_projApiUrl('/api/node-projects'), {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ id: id||undefined, name, graph, thumbnail, textures }),
+    ...(opts && opts.keepalive ? { keepalive: true } : {})
+  });
+  const j = await res.json();
+  if(!j || !j.ok) throw new Error((j && j.msg) || '保存失败');
+  _currentProject = { id: j.data.id, name };
+  _rememberProject(j.data.id);
+  _resetSavedState();
+  try{ document.dispatchEvent(new CustomEvent('nodeproject:saved', { detail:{ id:_currentProject.id, name:_currentProject.name } })); }catch(e){}
+  return j.data;
+}
+
+export async function loadNodeProject(id){
+  const res = await fetch(_projApiUrl('/api/node-projects/'+encodeURIComponent(id)));
+  const j = await res.json();
+  if(!j || !j.ok) throw new Error((j && j.msg) || '加载失败');
+  const data = j.data;
+  const graph = JSON.parse(JSON.stringify(data.graph));
+  const urlByFile = new Map();
+  (data.textures||[]).forEach(t=>{ if(t.exists) urlByFile.set(t.file, _rawTexUrl(t.fullPath)); });
+  let json = JSON.stringify(graph);
+  urlByFile.forEach((url, file)=>{
+    json = json.split(JSON.stringify(_texRef(file))).join(JSON.stringify(url));
+  });
+  loadGraphJSON(json);
+  _currentProject = { id: data.id || id, name: data.name || id };
+  _rememberProject(data.id || id);
+  _resetSavedState();
+  setTimeout(fitView, 80);
+  return data;
+}
 
 export function addNodeAt(type){
   if(!canvasWrap) return null;
@@ -2157,7 +2867,7 @@ export function addTextureAt(path, name){
   const wp = screenToWorld(r.left + r.width/2, r.top + r.height/2);
   const node = createNode('texture', wp.x, wp.y);
   if(node){
-    node.props.tex = texUrl(path);
+    node.props.tex = (typeof path==='string' && path.startsWith('data:')) ? path : texUrl(path);
     node.props._name = name || '';
     const thumb = node.el.querySelector('.w-tex .thumb');
     const fn = node.el.querySelector('.w-tex .fn');
@@ -2173,10 +2883,7 @@ function _centerXY(ox, oy){
   const wp = screenToWorld(r.left + r.width/2, r.top + r.height/2);
   return { x: wp.x + (ox||0), y: wp.y + (oy||0) };
 }
-function _addEdge(fn, fp, tn, tp){
-  const eid = 'e'+Math.random().toString(36).slice(2,9);
-  state.edges.set(eid, {id:eid, from:{node:fn,port:fp}, to:{node:tn,port:tp}});
-}
+
 function _buildMaterialPreset(baseColor, roughness, metallic){
   const c = _centerXY(-220, -40);
   const colorNode = createNode('color', c.x, c.y);
@@ -2185,12 +2892,7 @@ function _buildMaterialPreset(baseColor, roughness, metallic){
   if(roughNode) roughNode.props.value = roughness;
   const metalNode = createNode('number', c.x + 120, c.y + 80);
   if(metalNode) metalNode.props.value = metallic;
-  const p = _centerXY(20, -20);
-  const outNode = createNode('output', p.x, p.y);
-  [colorNode, roughNode, metalNode, outNode].forEach(n => { if(n){ n.el.remove(); renderNode(n); } });
-  if(colorNode && outNode) _addEdge(colorNode.id, 'color', outNode.id, 'baseColor');
-  if(roughNode && outNode) _addEdge(roughNode.id, 'value', outNode.id, 'roughness');
-  if(metalNode && outNode) _addEdge(metalNode.id, 'value', outNode.id, 'metallic');
+  [colorNode, roughNode, metalNode].forEach(n => { if(n){ n.el.remove(); renderNode(n); } });
   renderEdges(); updateStats(); evaluate();
 }
 const _PRESET_RECIPES = {
@@ -2212,6 +2914,8 @@ export function initNodeCanvas(){
   _initialized = true;
   buildLibrary();
   initExample();
+  _resetSavedState();
+  _restoreLastProject();   // 恢复成功时内部清掉示例图并重渲染；失败则保持示例图
   const _c = document.getElementById('material3dContainer');
   if(_c && m3d.initMaterial3D) m3d.initMaterial3D(_c);
   evaluate();

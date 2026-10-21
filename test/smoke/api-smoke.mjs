@@ -2,7 +2,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { mkdir, writeFile } from 'node:fs/promises'
 
-const BASE = 'http://127.0.0.1:5273'
+const BASE = process.env.SMOKE_BASE || 'http://127.0.0.1:5273'
 const HERE = fileURLToPath(new URL('.', import.meta.url))
 const SMOKE = join(HERE, '..', '..', 'data', 'tmp', 'smoke', 'src')
 const WIN = process.platform === 'win32'
@@ -42,7 +42,7 @@ async function main() {
   check('config get 返回 schema 默认值', cfg.ok && cfg.data.locale === 'zh' && cfg.data.theme === 'light', cfg)
 
   const health = await j('GET', '/api/health')
-  check('health 返回 ok 状态', health.ok && health.data.status === 'ok' && typeof health.data.uptime === 'number' && health.data.pid === process.pid, health)
+  check('health 返回 ok 状态', health.ok && health.data.status === 'ok' && typeof health.data.uptime === 'number' && typeof health.data.pid === 'number', health)
 
   const hash = await j('POST', '/api/file/hash', { path: join(SMOKE, 'a.png') })
   check('hash 返回 md5 hex', hash.ok && typeof hash.data.hash === 'string' && hash.data.hash.length === 32, hash)

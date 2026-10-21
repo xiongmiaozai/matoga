@@ -20,7 +20,7 @@ const FAV_FILE = path.join(DIR, 'favorites.json')
 const RECENT_FILE = path.join(DIR, 'recent.json')
 const LEGACY_FILE = path.join(DATA_DIR, 'assets.json')
 
-const VALID_TYPES = new Set(['tex', 'hdri', 'mc', 'preset'])
+const VALID_TYPES = new Set(['tex', 'hdri', 'mc', 'official', 'preset', 'project'])
 const MAX_FAV = 500
 const MAX_RECENT = 50
 
@@ -55,7 +55,7 @@ function isValidKey(key) {
 }
 
 function classifyByType(items) {
-  const groups = { tex: [], hdri: [], mc: [], preset: [] }
+  const groups = { tex: [], hdri: [], mc: [], official: [], preset: [], project: [] }
   for (const it of items) {
     const s = sanitizeItem(it)
     if (!s) continue
@@ -82,6 +82,7 @@ function sanitizeItem(item) {
   }
   if (typeof item.role === 'string') clean.role = item.role
   if (typeof item.color === 'string') clean.color = item.color
+  if (typeof item.badge === 'string') clean.badge = item.badge
   return clean
 }
 
