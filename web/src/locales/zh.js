@@ -6,7 +6,7 @@
 
 export default {
   'app.title': 'matoga',
-  'app.version': 'v2.0',
+  'app.version': 'v3.0',
 
   'common.select': '选择',
   'common.close': '关闭',
