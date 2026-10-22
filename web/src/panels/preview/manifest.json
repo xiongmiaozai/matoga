@@ -1,0 +1,8 @@
+{
+  "id": "preview",
+  "title": "预览",
+  "icon": "i-image",
+  "html": "panel.html",
+  "mount": ".sidebar-right",
+  "order": 5
+}

@@ -21,7 +21,7 @@ import {
   setAutoRotate, setWireframe, screenshot, toggleFullscreen,
   setOpacityMode, setOpacity, setTransmission, setIOR, setClearcoat,
   setTextureFilter, setMipmapsEnabled, setAnisotropyLevel, getMaxAnisotropy,
-  isMaterial3DReady
+  isMaterial3DReady, activateMaterial3DHost
 } from './material3d.js'
 import {
   initHdrPreset, refreshHdrPreset, clearHdrPresetSelection, filterHdrPresets,
@@ -36,6 +36,10 @@ export async function initPreviewPanel() {
       document.querySelectorAll('.pv-tabs button[data-pv-tab]').forEach(b => b.classList.remove('active'))
       btn.classList.add('active')
       document.querySelectorAll('.pv-content[data-pv-content]').forEach(c => c.classList.toggle('active', c.dataset.pvContent === tab))
+      if (tab === '3d') {
+        const host = btn.closest('.panel') && btn.closest('.panel').querySelector('.material3d-container')
+        if (host) activateMaterial3DHost(host)
+      }
     })
   })
 
@@ -362,14 +366,59 @@ export async function initPreviewPanel() {
     else if (p === 'emissive') { set('m3dMetalness', 0); set('m3dRoughness', 0.5); set('m3dEmissive', 3); set('m3dOpacity', 1); set('m3dTransmission', 0) }
   }))
 
+  /* ── 自定义材质预设：收集滑条值 → 存 config.materialCustomPresets ── */
+  const MAT_PRESET_INPUTS = ['m3dMetalness', 'm3dRoughness', 'm3dNormal', 'm3dEmissive', 'm3dOpacity', 'm3dTransmission', 'm3dIOR', 'm3dClearcoat']
+  function getMaterialPresetFromUI() {
+    const p = {}
+    MAT_PRESET_INPUTS.forEach(id => { const el = $(id); if (el) p[id] = parseFloat(el.value) })
+    return p
+  }
+  function applyMaterialPreset(p) {
+    if (!p) return
+    MAT_PRESET_INPUTS.forEach(id => {
+      if (p[id] === undefined || p[id] === null) return
+      const el = $(id)
+      if (el) { el.value = p[id]; el.dispatchEvent(new Event('input', { bubbles: true })) }
+    })
+  }
+  function renderMatCustomList(customPresets) {
+    const list = $('m3dMatCustomList'); if (!list) return
+    list.innerHTML = ''
+    if (!customPresets || customPresets.length === 0) return
+    customPresets.forEach((preset, i) => {
+      const item = document.createElement('div'); item.className = 'm3d-light-custom-item'
+      const applyBtn = document.createElement('button'); applyBtn.className = 'm3d-light-custom-apply'; applyBtn.textContent = preset.name
+      applyBtn.addEventListener('click', () => applyMaterialPreset(preset.config || preset))
+      const delBtn = document.createElement('button'); delBtn.className = 'm3d-light-custom-del'; delBtn.innerHTML = '&times;'
+      delBtn.addEventListener('click', async () => {
+        const cfg = await window.api.getConfig()
+        const presets = ((cfg && cfg.materialCustomPresets) || []).filter((_, j) => j !== i)
+        await window.api.setConfig({ materialCustomPresets: presets })
+        renderMatCustomList(presets); showToast(t('m3d.matPresetDeleted'))
+      })
+      item.appendChild(applyBtn); item.appendChild(delBtn); list.appendChild(item)
+    })
+  }
+  const matSave = $('m3dMatSaveBtn'); if (matSave) matSave.addEventListener('click', async () => {
+    const name = $('m3dMatPresetName').value.trim()
+    if (!name) { showToast(t('m3d.matPresetNameEmpty')); return }
+    const cfg = await window.api.getConfig()
+    const presets = (cfg && cfg.materialCustomPresets) || []
+    presets.push({ name, config: getMaterialPresetFromUI() })
+    await window.api.setConfig({ materialCustomPresets: presets })
+    $('m3dMatPresetName').value = ''
+    renderMatCustomList(presets); showToast(t('m3d.matPresetSaved'))
+  })
+
   /* ── HDR 预设网格初始化 ── */
   try { await initHdrPreset() } catch (e) { console.error('[preview-panel] initHdrPreset', e) }
 
-  /* ── 自定义灯光/天空预设列表 ── */
+  /* ── 自定义灯光/天空/材质预设列表 ── */
   try {
     const cfg = (await window.api.getConfig()) || {}
     renderSkyCustomList(cfg.skyCustomPresets || [])
     renderLightCustomList(cfg.lightCustomPresets || [])
+    renderMatCustomList(cfg.materialCustomPresets || [])
   } catch (e) { console.error('[preview-panel] load presets', e) }
 
   /* ── 防时序：若 3D 已先就绪，主动刷新一次灯光编辑器 ── */

@@ -258,7 +258,8 @@
 .lm_content > .center { display: flex; flex-direction: column; }
 .lm_content > .panel { display: flex; flex-direction: column; }
 .lm_content > .panel > .panel-body { position: relative; flex: 1; overflow: auto; min-height: 0; }
-.lm_content > .panel > .panel-head { flex-shrink: 0; }
+.lm_content > .panel > .panel-head { display: none; }
+.lm_content > .panel > .panel-toolbar { flex-shrink: 0; }
 .lm_content > .folder-card { display: flex; flex-direction: column; }
 
 /* 隐藏面板内重复标题（GL 标签栏已显示） */
@@ -316,11 +317,11 @@ body.gl-active #collapseRightBtn { display: none !important; }
 /* 原 workspace 隐藏（GL 接管后） */
 body.gl-active #workspace { display: none !important; }
 
-/* 节点相关面板位于 #workspace 之外：GL 激活但未被当前工作区布局收纳时隐藏，
-   避免「默认」等不含节点面板的工作区出现游离面板（被 GL 收纳时带 .gl-panel-content，不受影响） */
-body.gl-active #nodeCanvasPanelWrap:not(.gl-panel-content):not(.floating),
-body.gl-active #nodeLibraryPanelWrap:not(.gl-panel-content):not(.floating),
-body.gl-active #assetLibraryPanelWrap:not(.gl-panel-content):not(.floating) { display: none !important; }
+/* 动态注入面板（mount:body，由 panel-loader 包裹在 .panel-host 中）位于 #workspace 之外：
+   GL 激活但未被当前工作区布局收纳时隐藏，避免「默认」等不含该面板的工作区出现游离面板。
+   被 GL 收纳时带 .gl-panel-content、经典浮动时带 .floating，均不受影响。
+   通用规则覆盖所有动态注入面板，新增面板无需再维护 ID 白名单 */
+body.gl-active .panel-host > .panel:not(.gl-panel-content):not(.floating) { display: none !important; }
 
 /* ===== 工作区预设管理对话框 ===== */
 .preset-mgr-overlay {

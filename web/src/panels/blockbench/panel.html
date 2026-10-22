@@ -1,0 +1,16 @@
+<!-- Blockbench 模型开发面板（工作区可拼装窗口）-->
+<div class="panel" id="blockbenchPanelWrap" data-panel="blockbench">
+  <div class="panel-head">
+    <div class="panel-title"><svg class="ico ico-sm"><use href="#i-cube"/></svg> <span data-i18n="panel.blockbench">Blockbench</span></div>
+    <div class="panel-tools">
+      <button class="panel-tool" data-panel-action="float" data-i18n-title="preview.float" title="浮动"><svg class="ico ico-sm"><use href="#i-external"/></svg></button>
+      <button class="panel-tool panel-close" data-panel-action="close" data-i18n-title="common.close" title="关闭"><svg class="ico ico-sm"><use href="#i-x"/></svg></button>
+    </div>
+  </div>
+  <div class="panel-toolbar">
+    <button class="panel-tool" id="bbPushTex" data-i18n-title="panel.bbPushTex" title="推送当前预览贴图到 Blockbench"><svg class="ico ico-sm"><use href="#i-download"/></svg></button>
+  </div>
+  <div class="panel-body" style="padding:0">
+    <iframe id="blockbenchFrame" src="/blockbench/" style="width:100%;height:100%;border:0;display:block" allow="clipboard-read; clipboard-write"></iframe>
+  </div>
+</div>

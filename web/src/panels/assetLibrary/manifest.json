@@ -1,0 +1,8 @@
+{
+  "id": "assetLibrary",
+  "title": "总资产库",
+  "icon": "i-folder",
+  "html": "panel.html",
+  "mount": "body",
+  "order": 9
+}

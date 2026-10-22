@@ -1,0 +1,51 @@
+<main class="center" data-region="center">
+  <div class="center-head">
+    <div class="center-title-bar">
+      <span class="center-title"><svg class="ico ico-sm"><use href="#i-compare"/></svg> <span data-i18n="center.compareResult">对比结果</span></span>
+      <div class="view-tabs">
+        <button class="view-tab active" data-view="table" data-i18n-title="center.tableView" title="表格视图 (Ctrl+1)"><svg class="ico ico-sm"><use href="#i-layers"/></svg> <span data-i18n="center.table">表格</span></button>
+        <button class="view-tab" data-view="chart" data-i18n-title="center.chartView" title="可视化视图 (Ctrl+2)"><svg class="ico ico-sm"><use href="#i-pie"/></svg> <span data-i18n="center.chart">可视化</span></button>
+      </div>
+    </div>
+    <div id="statsDashboard" class="stats-dashboard"></div>
+    <div id="tableToolbar" class="table-toolbar">
+      <div class="filter-bar">
+        <button class="filter-btn status-filter-btn active" data-filter="all" data-i18n="center.filterAll">全部</button>
+        <button class="filter-btn status-filter-btn" data-filter="missing" data-i18n="center.filterMissing">缺失</button>
+        <button class="filter-btn status-filter-btn" data-filter="diff" data-i18n="center.filterDiff">不同</button>
+        <button class="filter-btn status-filter-btn" data-filter="extra" data-i18n="center.filterExtra">多余</button>
+      </div>
+      <div class="filter-bar type-filter-bar">
+        <button class="filter-btn type-filter-btn active" data-type-filter="all" data-i18n="center.filterTypeAll">全部类型</button>
+        <button class="filter-btn type-filter-btn" data-type-filter="material"><svg class="ico ico-sm"><use href="#i-layers"/></svg> <span data-i18n="center.filterTypeMaterial">材质</span></button>
+        <button class="filter-btn type-filter-btn" data-type-filter="image"><svg class="ico ico-sm"><use href="#i-image"/></svg> <span data-i18n="center.filterTypeImage">图片</span></button>
+        <button class="filter-btn type-filter-btn" data-type-filter="folder"><svg class="ico ico-sm"><use href="#i-folder"/></svg> <span data-i18n="center.filterTypeFolder">文件夹</span></button>
+      </div>
+      <div id="summary" class="summary"></div>
+    </div>
+  </div>
+  <div id="tableView" class="view-pane active">
+    <div class="result-table-wrap">
+      <table id="resultTable" class="result-table">
+        <thead>
+          <tr>
+            <th class="col-status" data-key="status" data-i18n="common.status">状态</th>
+            <th class="col-preview" data-i18n="center.colPreview">预览</th>
+            <th class="col-name" data-key="name" data-i18n="common.name">名称</th>
+            <th class="col-type" data-key="type" data-i18n="common.type">类型</th>
+            <th class="col-size" data-key="size" data-i18n="common.size">大小</th>
+            <th class="col-mtime" data-key="mtime" data-i18n="center.colMtime">修改时间</th>
+            <th class="col-left" data-key="left" data-i18n="center.colLeft">左</th>
+            <th class="col-right" data-key="right" data-i18n="center.colRight">右</th>
+          </tr>
+        </thead>
+        <tbody id="resultBody">
+          <tr class="empty-row"><td colspan="8"><svg class="ico ico-empty"><use href="#i-folder"/></svg><br><span data-i18n="center.emptyHint">拖拽文件夹到左侧卡片开始对比</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div id="chartView" class="view-pane">
+    <div id="chartContent" class="chart-content"></div>
+  </div>
+</main>

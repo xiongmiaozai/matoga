@@ -1,0 +1,8 @@
+{
+  "id": "nodeCanvas",
+  "title": "节点画布",
+  "icon": "i-node",
+  "html": "panel.html",
+  "mount": "body",
+  "order": 7
+}

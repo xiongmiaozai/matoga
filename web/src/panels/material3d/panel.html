@@ -1,0 +1,17 @@
+<!-- 独立 3D 材质视口面板（工作区可拼装窗口） -->
+<div class="panel" id="material3dPanelWrap" data-panel="material3d">
+  <div class="panel-head">
+    <div class="panel-title"><svg class="ico ico-sm"><use href="#i-cube"/></svg> <span data-i18n="panel.material3d">3D 视口</span></div>
+    <div class="panel-tools">
+      <button class="panel-tool" data-panel-action="float" data-i18n-title="preview.float" title="浮动"><svg class="ico ico-sm"><use href="#i-external"/></svg></button>
+      <button class="panel-tool" id="m3dStandaloneFullscreenBtn" data-i18n-title="m3d.fullscreen" title="全屏"><svg class="ico ico-sm"><use href="#i-maximize"/></svg></button>
+      <button class="panel-tool panel-close" data-panel-action="close" data-i18n-title="common.close" title="关闭"><svg class="ico ico-sm"><use href="#i-x"/></svg></button>
+    </div>
+  </div>
+  <div class="panel-body" style="padding:0">
+    <div class="material3d-container m3d-standalone-host" id="material3dStandaloneHost">
+      <div class="m3d-loading"><div class="m3d-loading-text" data-i18n="m3d.loading">处理法线贴图...</div><div class="m3d-loading-bar"><div class="m3d-loading-fill"></div></div></div>
+      <div class="m3d-host-empty" style="display:none" data-i18n="m3d.hostEmpty">3D 视口当前在其他面板中显示，点击此处接管</div>
+    </div>
+  </div>
+</div>

@@ -73,6 +73,25 @@ test('load: 读取工程与贴图映射', async () => {
   assert.equal(p.name, '测试工程 _A_')
 })
 
+test('save: 再次保存时贴图 sourcePath 指向工程内 texDir 不丢失（回归：加载后再次保存丢图）', async () => {
+  // 加载工程后 props.tex 变成 /api/file/raw?path=<工程内textures路径>；再次保存时
+  // 前端 _collectProjectTextures 把它当 file source（path 指向当前工程 texDir）。
+  // 后端 save 先 rmSync(texDir) 再 copyFile 会因源文件已删而失败 → 贴图丢失。
+  const list = store.list()
+  const id = list[0].id
+  const fp = store.load(id).textures[0].fullPath
+  await store.save({
+    id,
+    name: '测试工程 <A>',
+    graph: { nodes: [{ id: 'n1', type: 'texture', pos: [0, 0], widgets_values: { tex: '@tex/0-a.png' } }], links: [] },
+    textures: [{ name: 'a.png', path: fp }],
+  })
+  const p = store.load(id)
+  assert.equal(p.textures.length, 1, '再次保存后贴图不应丢失')
+  assert.ok(p.textures[0].exists, '贴图文件应存在')
+  assert.equal(p.textures[0].file, '0-a.png')
+})
+
 test('save: 更新已存在项目（覆盖贴图）', async () => {
   const list = store.list()
   const id = list[0].id

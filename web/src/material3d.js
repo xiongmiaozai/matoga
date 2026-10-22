@@ -14,14 +14,38 @@ import { t as _t } from './i18n.js'
 let scene, camera, renderer, animationId, pmrem, envTexture, pmremTexture
 let isWebGL2 = false
 
-function showLoading(text) { const el = document.getElementById('m3dLoading'); if (!el) return; const t = el.querySelector('.m3d-loading-text'); if (t && text) t.textContent = text; el.classList.add('show') }
-function hideLoading() { const el = document.getElementById('m3dLoading'); if (el) el.classList.remove('show') }
-function setLoadingProgress(pct) { const el = document.getElementById('m3dLoading'); if (!el) return; const f = el.querySelector('.m3d-loading-fill'); if (f) f.style.width = Math.round(pct * 100) + '%' }
+
 let meshLeft, meshRight, labelLeft, labelRight
 let groundMesh, gridHelper, lightGroup
 let container = null
 let initialized = false
+const hosts = new Set()
+let hostObserver = null
+let containerResizeObserver = null
 let currentGeo = 'cube'
+
+function _loadingEls() {
+  if (container) {
+    const el = container.querySelector('.m3d-loading')
+    return el ? [el] : []
+  }
+  return document.querySelectorAll('.m3d-loading')
+}
+
+function showLoading(text) {
+  _loadingEls().forEach(el => {
+    const t = el.querySelector('.m3d-loading-text')
+    if (t && text) t.textContent = text
+    el.classList.add('show')
+  })
+}
+function hideLoading() { _loadingEls().forEach(el => el.classList.remove('show')) }
+function setLoadingProgress(pct) {
+  _loadingEls().forEach(el => {
+    const f = el.querySelector('.m3d-loading-fill')
+    if (f) f.style.width = Math.round(pct * 100) + '%'
+  })
+}
 let emissiveIntensity = 1.0
 let normalScale = 1.0
 let materialFormat = 'auto'
@@ -841,12 +865,103 @@ function makeMaterial() {
   return mat
 }
 
-export function initMaterial3D(containerEl) {
+function isHostVisible(el) {
+  if (!el || !el.isConnected) return false
+  const r = el.getBoundingClientRect()
+  return r.width > 1 && r.height > 1
+}
+
+function findVisibleHost() {
+  for (const h of hosts) { if (isHostVisible(h)) return h }
+  return null
+}
+
+function activeHost() {
+  return (renderer && renderer.domElement.parentElement) || null
+}
+
+function refreshHostHints() {
+  const active = initialized ? activeHost() : null
+  for (const h of hosts) {
+    h.classList.toggle('m3d-host-active', h === active)
+    const hint = h.querySelector('.m3d-host-empty')
+    if (hint) hint.style.display = (initialized && h !== active) ? '' : 'none'
+  }
+}
+
+function moveViewportWidgets(target) {
+  document.querySelectorAll('.m3d-hud-bar, .m3d-params-overlay').forEach(w => {
+    if (w.parentElement !== target) target.appendChild(w)
+  })
+}
+
+function setContainer(el) {
+  if (!el || el === container) { refreshHostHints(); return }
+  container = el
+  if (renderer) { el.appendChild(renderer.domElement); moveViewportWidgets(el); handleResize() }
+  refreshHostHints()
+}
+
+export function activateMaterial3DHost(el) {
+  if (!el || !hosts.has(el)) return
+  if (!initialized) { initMaterial3D(el); return }
+  setContainer(el)
+}
+
+function reevaluateActiveHost() {
+  if (!initialized) return
+  const active = activeHost()
+  if (active && isHostVisible(active)) return
+  const visible = findVisibleHost()
+  if (visible) setContainer(visible)
+}
+
+function ensureHostObserver() {
+  if (hostObserver) return hostObserver
+  hostObserver = new IntersectionObserver((entries) => {
+    if (!initialized) return
+    for (const entry of entries) {
+      if (entry.isIntersecting && isHostVisible(entry.target)) setContainer(entry.target)
+    }
+    reevaluateActiveHost()
+  })
+  return hostObserver
+}
+
+let _hostReevalRAF = 0
+if (typeof window !== 'undefined') {
+  window.addEventListener('resize', () => {
+    if (_hostReevalRAF) return
+    _hostReevalRAF = requestAnimationFrame(() => {
+      _hostReevalRAF = 0
+      reevaluateActiveHost()
+    })
+  })
+}
+
+export function registerMaterial3DHost(el) {
+  if (!el || hosts.has(el)) return
+  hosts.add(el)
+  ensureHostObserver().observe(el)
+  if (containerResizeObserver) containerResizeObserver.observe(el)
+  el.addEventListener('pointerdown', () => { if (initialized) setContainer(el) }, true)
   if (initialized) {
-    if (containerEl !== container) { container.innerHTML = ''; container = containerEl; container.appendChild(renderer.domElement); handleResize() }
+    const active = activeHost()
+    if ((!active || !isHostVisible(active)) && isHostVisible(el)) setContainer(el)
+    else refreshHostHints()
+  } else { refreshHostHints() }
+}
+
+export function initMaterial3D(containerEl) {
+  registerMaterial3DHost(containerEl)
+  if (initialized) {
+    if (containerEl !== container) {
+      const target = isHostVisible(containerEl) ? containerEl : (findVisibleHost() || containerEl)
+      setContainer(target)
+    } else { refreshHostHints() }
     return
   }
-  container = containerEl
+  container = isHostVisible(containerEl) ? containerEl : (findVisibleHost() || containerEl)
   const width = container.clientWidth || 300, height = container.clientHeight || 200
   scene = new THREE.Scene(); scene.background = new THREE.Color(LIGHT_PRESETS.studio.bg)
   camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100); camera.position.set(0, 0.5, camDist)
@@ -869,7 +984,13 @@ export function initMaterial3D(containerEl) {
   groundMesh = new THREE.Mesh(groundGeo, groundMat); groundMesh.rotation.x = -Math.PI / 2; groundMesh.position.y = -1.3; groundMesh.receiveShadow = true; scene.add(groundMesh)
   gridHelper = new THREE.GridHelper(8, 32, 0x444466, 0x222244)
   gridHelper.position.y = -1.29; gridHelper.material.transparent = true; gridHelper.material.opacity = 0.3; scene.add(gridHelper)
-  setupControls(); new ResizeObserver(handleResize).observe(container); animate(); initialized = true
+  setupControls()
+  if (containerResizeObserver) containerResizeObserver.disconnect()
+  containerResizeObserver = new ResizeObserver(handleResize)
+  for (const h of hosts) containerResizeObserver.observe(h)
+  animate(); initialized = true
+  moveViewportWidgets(container)
+  refreshHostHints()
   applyLightPreset('studio')
   applySourceSide()
   document.dispatchEvent(new CustomEvent('material3d:ready'))

@@ -589,6 +589,10 @@ tr.row-extra td:first-child { border-left-color: var(--extra); }
   border-bottom: 2px solid #000;
   background: var(--mc-darker);
 }
+.panel-toolbar {
+  border-bottom: 2px solid #000;
+  background: var(--mc-darker);
+}
 
 .panel-tool {
   border: 2px solid #000;

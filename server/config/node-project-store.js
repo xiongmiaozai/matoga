@@ -161,6 +161,23 @@ async function save({ id, name, graph, thumbnail, textures }) {
   const cleanTextures = sanitizeTextures(textures)
 
   const run = async () => {
+    // 加载工程后 props.tex 是工程内 /api/file/raw URL，再次保存时该贴图的 sourcePath 会指向
+    // 当前 texDir；若先 rmSync(texDir) 再 copyFile 会因源文件已删而失败，导致贴图丢失。
+    // 故 rmSync 前把指向 texDir 内的 file source 读入内存转为 embedded。
+    for (const t of cleanTextures) {
+      if (t.source === 'file' && t.sourcePath) {
+        const sp = path.normalize(t.sourcePath)
+        const td = path.normalize(texDir)
+        if (sp === td || sp.startsWith(td + path.sep)) {
+          try {
+            t.buf = await fs.promises.readFile(sp)
+            t.source = 'embedded'
+            delete t.sourcePath
+          } catch (e) { logger.warn('node-projects', 'in-project texture read failed: ' + e.message) }
+        }
+      }
+    }
+
     fs.rmSync(texDir, { recursive: true, force: true })
     fs.mkdirSync(texDir, { recursive: true })
 

@@ -54,8 +54,37 @@ const NODE_DEFS = {
     eval:(i)=>{const t=clamp(num(i.t),0,1); const a=col(i.a),b=col(i.b);
       return {out:[a[0]*(1-t)+b[0]*t, a[1]*(1-t)+b[1]*t, a[2]*(1-t)+b[2]*t]}} },
 
+  // PS 混合模式（27 种，按 PS 官方分类拆为 6 子组：基础/变暗/变亮/对比度/比较/颜色）
+  blendNormal: _psNode('正常','normal','基础'),
+  blendDissolve: _psNode('溶解','dissolve','基础'),
+  blendDarken: _psNode('变暗','darken','变暗'),
+  blendMultiply: _psNode('正片叠底','multiply','变暗'),
+  blendColorBurn: _psNode('颜色加深','colorBurn','变暗'),
+  blendLinearBurn: _psNode('线性加深','linearBurn','变暗'),
+  blendDarkerColor: _psNode('深色','darkerColor','变暗'),
+  blendLighten: _psNode('变亮','lighten','变亮'),
+  blendScreen: _psNode('滤色','screen','变亮'),
+  blendColorDodge: _psNode('颜色减淡','colorDodge','变亮'),
+  blendLinearDodge: _psNode('线性减淡','linearDodge','变亮'),
+  blendLighterColor: _psNode('浅色','lighterColor','变亮'),
+  blendOverlay: _psNode('叠加','overlay','对比度'),
+  blendSoftLight: _psNode('柔光','softLight','对比度'),
+  blendHardLight: _psNode('强光','hardLight','对比度'),
+  blendVividLight: _psNode('亮光','vividLight','对比度'),
+  blendLinearLight: _psNode('线性光','linearLight','对比度'),
+  blendPinLight: _psNode('点光','pinLight','对比度'),
+  blendHardMix: _psNode('实色混合','hardMix','对比度'),
+  blendDifference: _psNode('差值','difference','比较'),
+  blendExclusion: _psNode('排除','exclusion','比较'),
+  blendSubtract: _psNode('减去','subtract','比较'),
+  blendDivide: _psNode('划分','divide','比较'),
+  blendHue: _psNode('色相','hue','颜色'),
+  blendSaturation: _psNode('饱和度','saturation','颜色'),
+  blendColor: _psNode('颜色','blendColor','颜色'),
+  blendLuminosity: _psNode('明度','luminosity','颜色'),
+
   // 材质
-  mainTex: { title:'主图', group:'材质', color:'var(--type-texture)',
+  mainTex: { title:'主图', group:'材质', subgroup:'采样', color:'var(--type-texture)',
     inputs:[], outputs:[{n:'color',t:'color'},{n:'alpha',t:'number'},{n:'tex',t:'texture'}],
     widget:(n)=>textureWidget(n,'tex'),
     eval:(i,n)=>{
@@ -65,25 +94,25 @@ const NODE_DEFS = {
                tex: url || null };
     } },
 
-  sample: { title:'贴图采样', group:'材质', color:'var(--type-texture)',
+  sample: { title:'贴图采样', group:'材质', subgroup:'采样', color:'var(--type-texture)',
     inputs:[{n:'tex',t:'texture'},{n:'uv',t:'vector'}], outputs:[{n:'color',t:'color'}],
     eval:(i)=>{
       if(typeof i.tex==='string' && i.tex) return {color:_texAvgColor(i.tex)};
       if(Array.isArray(i.tex) && i.tex.length>=3) return {color:[i.tex[0],i.tex[1],i.tex[2]]};
       return {color:[0.5,0.5,0.5]};
     } },
-  hdr: { title:'HDR 环境', group:'材质', color:'var(--type-env)',
+  hdr: { title:'HDR 环境', group:'材质', subgroup:'环境', color:'var(--type-env)',
     inputs:[], outputs:[{n:'env',t:'environment'}],
     widget:(n)=>selectWidget(n,'preset',['studio','forest','sunset','night','courtyard']),
     eval:()=>null },
-  normalMap: { title:'法线生成', group:'材质', color:'var(--type-texture)',
+  normalMap: { title:'法线生成', group:'材质', subgroup:'采样', color:'var(--type-texture)',
     inputs:[{n:'tex',t:'texture'},{n:'strength',t:'number'}], outputs:[{n:'normal',t:'texture'}],
     eval:(i)=>{
       const tex = i.tex || null;
       const strength = clamp(num(i.strength),0,2);
       return {normal: tex ? {src:tex, strength} : null};
     } },
-  rgbaMerge: { title:'RGBA 合并', group:'材质', color:'var(--type-texture)',
+  rgbaMerge: { title:'RGBA 合并', group:'材质', subgroup:'通道', color:'var(--type-texture)',
     inputs:[{n:'r',t:'any'},{n:'g',t:'any'},{n:'b',t:'any'},{n:'a',t:'any'}],
     outputs:[{n:'tex',t:'texture'}],
     widget:(n)=>rgbaMergeWidget(n),
@@ -97,30 +126,47 @@ const NODE_DEFS = {
       n._rgbaUrl = url || null;
       return {tex: url || null};
     } },
+  rgbaSplit: { title:'RGBA 拆分', group:'材质', subgroup:'通道', color:'var(--type-texture)',
+    inputs:[{n:'tex',t:'texture'}],
+    outputs:[{n:'r',t:'texture'},{n:'g',t:'texture'},{n:'b',t:'texture'},{n:'a',t:'texture'}],
+    widget:(n)=>rgbaSplitWidget(n),
+    eval:(i,n)=>{
+      const url = _texUrl(i.tex);
+      const parts = url ? _rgbaSplit(url) : null;
+      n._rgbaParts = parts || null;
+      return parts
+        ? {r:parts.r||null, g:parts.g||null, b:parts.b||null, a:parts.a||null}
+        : {r:null, g:null, b:null, a:null};
+    } },
+  rgbAlphaSplit: { title:'RGB+A 拆分', group:'材质', subgroup:'通道', color:'var(--type-texture)',
+    inputs:[{n:'tex',t:'texture'}],
+    outputs:[{n:'rgb',t:'texture'},{n:'alpha',t:'texture'}],
+    widget:(n)=>rgbAlphaSplitWidget(n),
+    eval:(i,n)=>{
+      const url = _texUrl(i.tex);
+      const parts = url ? _rgbAlphaSplit(url) : null;
+      n._rgbAlphaParts = parts || null;
+      return parts
+        ? {rgb:parts.rgb||null, alpha:parts.alpha||null}
+        : {rgb:null, alpha:null};
+    } },
 
   // 程序化纹理
-  noise: { title:'噪声 (Perlin)', group:'纹理', color:'var(--type-number)',
+  noise: { title:'噪声 (Perlin)', group:'纹理', subgroup:'基础', color:'var(--type-number)',
     inputs:[{n:'uv',t:'vector'}], outputs:[{n:'out',t:'number'},{n:'tex',t:'texture'}],
     widget:(n)=>noiseWidget(n),
     eval:(i,n)=>{
       const uv = Array.isArray(i.uv) ? i.uv : [0.5,0.5];
-      const scale = +(n.props.scale ?? 4);
-      const seed = Math.round(+(n.props.seed ?? 0));
-      const octaves = Math.round(+(n.props.octaves ?? 4));
-      const v = _fbm2D(uv[0]*scale, uv[1]*scale, seed, octaves);
-      return {out:clamp(v,0,1), tex:_noiseTexUrl(n)};
+      return {out:_noiseValue('noise', uv[0], uv[1], n.props), tex:_noiseTexUrl(n)};
     } },
-  voronoi: { title:'Voronoi', group:'纹理', color:'var(--type-number)',
+  voronoi: { title:'Voronoi', group:'纹理', subgroup:'其他', color:'var(--type-number)',
     inputs:[{n:'uv',t:'vector'}], outputs:[{n:'out',t:'number'},{n:'tex',t:'texture'}],
     widget:(n)=>voronoiWidget(n),
     eval:(i,n)=>{
       const uv = Array.isArray(i.uv) ? i.uv : [0.5,0.5];
-      const scale = +(n.props.scale ?? 5);
-      const seed = Math.round(+(n.props.seed ?? 0));
-      const v = _voronoi2D(uv[0]*scale, uv[1]*scale, seed);
-      return {out:clamp(v,0,1), tex:_noiseTexUrl(n)};
+      return {out:_noiseValue('voronoi', uv[0], uv[1], n.props), tex:_noiseTexUrl(n)};
     } },
-  gradient: { title:'渐变', group:'纹理', color:'var(--type-color)',
+  gradient: { title:'渐变', group:'纹理', subgroup:'其他', color:'var(--type-color)',
     inputs:[{n:'colorA',t:'color'},{n:'colorB',t:'color'},{n:'t',t:'number'}],
     outputs:[{n:'out',t:'color'}],
     widget:(n)=>gradientWidget(n),
@@ -133,42 +179,97 @@ const NODE_DEFS = {
       const a = col(i.colorA), b = col(i.colorB);
       return {out:[_lerp(a[0],b[0],tt), _lerp(a[1],b[1],tt), _lerp(a[2],b[2],tt)]};
     } },
-  simplex: { title:'Simplex 噪声', group:'纹理', color:'var(--type-number)',
+  simplex: { title:'Simplex 噪声', group:'纹理', subgroup:'基础', color:'var(--type-number)',
     inputs:[{n:'uv',t:'vector'}], outputs:[{n:'out',t:'number'},{n:'tex',t:'texture'}],
     widget:(n)=>noiseWidget(n),
     eval:(i,n)=>{
       const uv = Array.isArray(i.uv) ? i.uv : [0.5,0.5];
-      const scale = +(n.props.scale ?? 4);
-      const seed = Math.round(+(n.props.seed ?? 0));
-      const octaves = Math.round(+(n.props.octaves ?? 4));
-      const v = _simplexFbm2D(uv[0]*scale, uv[1]*scale, seed, octaves);
-      return {out:clamp(v*0.5+0.5,0,1), tex:_noiseTexUrl(n)};
+      return {out:_noiseValue('simplex', uv[0], uv[1], n.props), tex:_noiseTexUrl(n)};
     } },
-  ridge: { title:'山脊噪声', group:'纹理', color:'var(--type-number)',
+  ridge: { title:'山脊噪声', group:'纹理', subgroup:'分形', color:'var(--type-number)',
     inputs:[{n:'uv',t:'vector'}], outputs:[{n:'out',t:'number'},{n:'tex',t:'texture'}],
     widget:(n)=>noiseWidget(n),
     eval:(i,n)=>{
       const uv = Array.isArray(i.uv) ? i.uv : [0.5,0.5];
-      const scale = +(n.props.scale ?? 4);
-      const seed = Math.round(+(n.props.seed ?? 0));
-      const octaves = Math.round(+(n.props.octaves ?? 4));
-      const v = _ridged2D(uv[0]*scale, uv[1]*scale, seed, octaves);
-      return {out:clamp(v,0,1), tex:_noiseTexUrl(n)};
+      return {out:_noiseValue('ridge', uv[0], uv[1], n.props), tex:_noiseTexUrl(n)};
     } },
-  warp: { title:'域扭曲', group:'纹理', color:'var(--type-number)',
+  warp: { title:'域扭曲', group:'纹理', subgroup:'扭曲', color:'var(--type-number)',
     inputs:[{n:'uv',t:'vector'}], outputs:[{n:'out',t:'number'},{n:'tex',t:'texture'}],
     widget:(n)=>warpWidget(n),
     eval:(i,n)=>{
       const uv = Array.isArray(i.uv) ? i.uv : [0.5,0.5];
-      const scale = +(n.props.scale ?? 3);
-      const seed = Math.round(+(n.props.seed ?? 0));
-      const octaves = Math.round(+(n.props.octaves ?? 4));
-      const amount = +(n.props.amount ?? 1);
-      const x = uv[0]*scale, y = uv[1]*scale;
-      const qx = x + amount*_simplex2D(x+2.7, y+1.3, seed);
-      const qy = y + amount*_simplex2D(x-1.7, y+2.1, seed+31);
-      const v = _simplexFbm2D(qx, qy, seed+13, octaves);
-      return {out:clamp(v*0.5+0.5,0,1), tex:_noiseTexUrl(n)};
+      return {out:_noiseValue('warp', uv[0], uv[1], n.props), tex:_noiseTexUrl(n)};
+    } },
+  white: { title:'白噪 (White)', group:'纹理', subgroup:'基础', color:'var(--type-number)',
+    inputs:[{n:'uv',t:'vector'}], outputs:[{n:'out',t:'number'},{n:'tex',t:'texture'}],
+    widget:(n)=>whiteWidget(n),
+    eval:(i,n)=>{
+      const uv = Array.isArray(i.uv) ? i.uv : [0.5,0.5];
+      return {out:_noiseValue('white', uv[0], uv[1], n.props), tex:_noiseTexUrl(n)};
+    } },
+  cell: { title:'格子 (Cell)', group:'纹理', subgroup:'其他', color:'var(--type-number)',
+    inputs:[{n:'uv',t:'vector'}], outputs:[{n:'out',t:'number'},{n:'tex',t:'texture'}],
+    widget:(n)=>cellWidget(n),
+    eval:(i,n)=>{
+      const uv = Array.isArray(i.uv) ? i.uv : [0.5,0.5];
+      return {out:_noiseValue('cell', uv[0], uv[1], n.props), tex:_noiseTexUrl(n)};
+    } },
+  billow: { title:'絮状噪声 (Billow)', group:'纹理', subgroup:'分形', color:'var(--type-number)',
+    inputs:[{n:'uv',t:'vector'}], outputs:[{n:'out',t:'number'},{n:'tex',t:'texture'}],
+    widget:(n)=>noiseWidget(n),
+    eval:(i,n)=>{
+      const uv = Array.isArray(i.uv) ? i.uv : [0.5,0.5];
+      return {out:_noiseValue('billow', uv[0], uv[1], n.props), tex:_noiseTexUrl(n)};
+    } },
+  cubic: { title:'三次值噪 (Cubic)', group:'纹理', subgroup:'基础', color:'var(--type-number)',
+    inputs:[{n:'uv',t:'vector'}], outputs:[{n:'out',t:'number'},{n:'tex',t:'texture'}],
+    widget:(n)=>noiseWidget(n),
+    eval:(i,n)=>{
+      const uv = Array.isArray(i.uv) ? i.uv : [0.5,0.5];
+      return {out:_noiseValue('cubic', uv[0], uv[1], n.props), tex:_noiseTexUrl(n)};
+    } },
+  pingpong: { title:'乒乓噪声 (PingPong)', group:'纹理', subgroup:'分形', color:'var(--type-number)',
+    inputs:[{n:'uv',t:'vector'}], outputs:[{n:'out',t:'number'},{n:'tex',t:'texture'}],
+    widget:(n)=>pingpongWidget(n),
+    eval:(i,n)=>{
+      const uv = Array.isArray(i.uv) ? i.uv : [0.5,0.5];
+      return {out:_noiseValue('pingpong', uv[0], uv[1], n.props), tex:_noiseTexUrl(n)};
+    } },
+  voronoise: { title:'超模式 (Voronoise)', group:'纹理', subgroup:'分形', color:'var(--type-number)',
+    inputs:[{n:'uv',t:'vector'}], outputs:[{n:'out',t:'number'},{n:'tex',t:'texture'}],
+    widget:(n)=>voronoiseWidget(n),
+    eval:(i,n)=>{
+      const uv = Array.isArray(i.uv) ? i.uv : [0.5,0.5];
+      return {out:_noiseValue('voronoise', uv[0], uv[1], n.props), tex:_noiseTexUrl(n)};
+    } },
+  reaction: { title:'反应扩散 (Reaction)', group:'特效', color:'var(--type-number)',
+    inputs:[{n:'uv',t:'vector'}], outputs:[{n:'out',t:'number'},{n:'tex',t:'texture'}],
+    widget:(n)=>reactionWidget(n),
+    eval:(i,n)=>{
+      const uv = Array.isArray(i.uv) ? i.uv : [0.5,0.5];
+      return {out:_noiseValue('reaction', uv[0], uv[1], n.props), tex:_noiseTexUrl(n)};
+    } },
+  lightning: { title:'闪电 (Lightning)', group:'特效', color:'var(--type-number)',
+    inputs:[{n:'uv',t:'vector'}], outputs:[{n:'out',t:'number'},{n:'tex',t:'texture'}],
+    widget:(n)=>lightningWidget(n),
+    eval:(i,n)=>{
+      const uv = Array.isArray(i.uv) ? i.uv : [0.5,0.5];
+      return {out:_noiseValue('lightning', uv[0], uv[1], n.props), tex:_noiseTexUrl(n)};
+    } },
+  mandel: { title:'分形陷阱 (Mandel)', group:'特效', color:'var(--type-number)',
+    inputs:[{n:'uv',t:'vector'}], outputs:[{n:'out',t:'number'},{n:'tex',t:'texture'}],
+    widget:(n)=>mandelWidget(n),
+    eval:(i,n)=>{
+      const uv = Array.isArray(i.uv) ? i.uv : [0.5,0.5];
+      return {out:_noiseValue('mandel', uv[0], uv[1], n.props), tex:_noiseTexUrl(n)};
+    } },
+  palette: { title:'余弦调色板 (Palette)', group:'特效', color:'var(--type-color)',
+    inputs:[{n:'t',t:'number'}], outputs:[{n:'color',t:'color'},{n:'tex',t:'texture'}],
+    widget:(n)=>paletteWidget(n),
+    eval:(i,n)=>{
+      const t = (i.t === undefined || i.t === null) ? 0.5 : clamp(num(i.t), 0, 1);
+      const rgb = _paletteRGB(t, n.props.preset, n.props.freq, n.props.phase);
+      return {color:rgb, tex:_noiseTexUrl(n)};
     } },
 
   // 输出（hidden：不显示在节点库/添加菜单，仅供程序内部创建）
@@ -366,6 +467,79 @@ function _rgbaMerge(rr, gg, bb, aa, size){
   return null;
 }
 
+/* ── RGBA 通道拆分 → 4 张灰度 PNG（供 rgbaSplit 节点用，rgbaMerge 的逆操作）── */
+function _imageDataToPngUrl(out, W, H){
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  c.getContext('2d').putImageData(out, 0, 0);
+  return c.toDataURL('image/png');
+}
+const _rgbaSplitCache = new Map();
+async function _rgbaSplitCompose(url, cb){
+  try{
+    const img = await _loadImg(url);
+    if(!img){ cb(null); return; }
+    const W = Math.max(1, img.naturalWidth || 1), H = Math.max(1, img.naturalHeight || 1);
+    const c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    const ctx = c.getContext('2d', {willReadFrequently:true});
+    ctx.drawImage(img, 0, 0, W, H);
+    const src = ctx.getImageData(0, 0, W, H).data;
+    const parts = {};
+    ['r','g','b','a'].forEach((name, ch)=>{
+      const out = new ImageData(W, H);
+      const od = out.data;
+      for(let i=0;i<W*H;i++){
+        const v = src[i*4+ch];
+        od[i*4] = v; od[i*4+1] = v; od[i*4+2] = v; od[i*4+3] = 255;
+      }
+      parts[name] = _imageDataToPngUrl(out, W, H);
+    });
+    cb(parts);
+  }catch(e){ cb(null); }
+}
+function _rgbaSplit(url){
+  if(_rgbaSplitCache.has(url)) return _rgbaSplitCache.get(url);
+  if(_rgbaSplitCache.size > 16) _rgbaSplitCache.clear();
+  _rgbaSplitCompose(url, (parts)=>{
+    _rgbaSplitCache.set(url, parts || {r:'',g:'',b:'',a:''});
+    evaluate();
+  });
+  return null;
+}
+
+/* ── RGB / Alpha 拆分 → 不透明 RGB 图 + Alpha 灰度遮罩（供 rgbAlphaSplit 节点用）── */
+const _rgbAlphaSplitCache = new Map();
+async function _rgbAlphaSplitCompose(url, cb){
+  try{
+    const img = await _loadImg(url);
+    if(!img){ cb(null); return; }
+    const W = Math.max(1, img.naturalWidth || 1), H = Math.max(1, img.naturalHeight || 1);
+    const c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    const ctx = c.getContext('2d', {willReadFrequently:true});
+    ctx.drawImage(img, 0, 0, W, H);
+    const src = ctx.getImageData(0, 0, W, H).data;
+    const rgb = new ImageData(W, H), alpha = new ImageData(W, H);
+    const rd = rgb.data, ad = alpha.data;
+    for(let i=0;i<W*H;i++){
+      rd[i*4] = src[i*4]; rd[i*4+1] = src[i*4+1]; rd[i*4+2] = src[i*4+2]; rd[i*4+3] = 255;
+      const v = src[i*4+3];
+      ad[i*4] = v; ad[i*4+1] = v; ad[i*4+2] = v; ad[i*4+3] = 255;
+    }
+    cb({rgb:_imageDataToPngUrl(rgb, W, H), alpha:_imageDataToPngUrl(alpha, W, H)});
+  }catch(e){ cb(null); }
+}
+function _rgbAlphaSplit(url){
+  if(_rgbAlphaSplitCache.has(url)) return _rgbAlphaSplitCache.get(url);
+  if(_rgbAlphaSplitCache.size > 16) _rgbAlphaSplitCache.clear();
+  _rgbAlphaSplitCompose(url, (parts)=>{
+    _rgbAlphaSplitCache.set(url, parts || {rgb:'', alpha:''});
+    evaluate();
+  });
+  return null;
+}
+
 /* ── 程序化噪声算法 ───────────────────────── */
 function _hash(x, y, seed){
   let h = (x * 374761393 + y * 668265263 + seed * 1013904223) | 0;
@@ -374,36 +548,393 @@ function _hash(x, y, seed){
 }
 function _smoothstep(t){ return t * t * (3 - 2 * t); }
 function _lerp(a, b, t){ return a + (b - a) * t; }
-function _valueNoise2D(x, y, seed){
-  const ix = Math.floor(x), iy = Math.floor(y);
-  const fx = x - ix, fy = y - iy;
-  const a = _hash(ix, iy, seed);
-  const b = _hash(ix + 1, iy, seed);
-  const c = _hash(ix, iy + 1, seed);
-  const d = _hash(ix + 1, iy + 1, seed);
-  const ux = _smoothstep(fx), uy = _smoothstep(fy);
-  return _lerp(_lerp(a, b, ux), _lerp(c, d, ux), uy);
+
+/* ── PS 混合模式（27 种）───────────────────────────── */
+const _PS_BLEND = {
+  normal:(a,b)=>b,
+  darken:(a,b)=>Math.min(a,b),
+  multiply:(a,b)=>a*b,
+  colorBurn:(a,b)=>b<=0?0:1-Math.min(1,(1-a)/b),
+  linearBurn:(a,b)=>Math.max(0,a+b-1),
+  lighten:(a,b)=>Math.max(a,b),
+  screen:(a,b)=>1-(1-a)*(1-b),
+  colorDodge:(a,b)=>b>=1?1:Math.min(1,a/(1-b)),
+  linearDodge:(a,b)=>Math.min(1,a+b),
+  overlay:(a,b)=>a<0.5?2*a*b:1-2*(1-a)*(1-b),
+  softLight:(a,b)=>b<0.5?a-(1-2*b)*a*(1-a):a+(2*b-1)*((a<0.25?((16*a-12)*a+4)*a:Math.sqrt(a))-a),
+  hardLight:(a,b)=>b<0.5?2*a*b:1-2*(1-a)*(1-b),
+  vividLight:(a,b)=>b<0.5?(b*2<=0?0:1-Math.min(1,(1-a)/(b*2))):(b*2-1>=1?1:Math.min(1,a/(2-b*2))),
+  linearLight:(a,b)=>clamp(a+2*b-1,0,1),
+  pinLight:(a,b)=>b<0.5?Math.min(a,2*b):Math.max(a,2*b-1),
+  hardMix:(a,b)=>(b<0.5?(b*2<=0?0:1-Math.min(1,(1-a)/(b*2))):(b*2-1>=1?1:Math.min(1,a/(2-b*2))))<0.5?0:1,
+  difference:(a,b)=>Math.abs(a-b),
+  exclusion:(a,b)=>a+b-2*a*b,
+  subtract:(a,b)=>Math.max(0,a-b),
+  divide:(a,b)=>b<=0?1:Math.min(1,a/b),
+};
+function _rgbToHsb(r,g,b){
+  const mx=Math.max(r,g,b), mn=Math.min(r,g,b), d=mx-mn;
+  let h=0;
+  if(d>0){ if(mx===r)h=((g-b)/d)%6; else if(mx===g)h=(b-r)/d+2; else h=(r-g)/d+4; h*=60; if(h<0)h+=360; }
+  return [h/360, mx<=0?0:d/mx, mx];
 }
-function _fbm2D(x, y, seed, octaves){
-  let val = 0, amp = 0.5, freq = 1, max = 0;
+function _hsbToRgb(h,s,v){
+  h=(h%1+1)%1*360; const c=v*s, x=c*(1-Math.abs((h/60)%2-1)), m=v-c;
+  let r,g,b;
+  if(h<60){r=c;g=x;b=0;} else if(h<120){r=x;g=c;b=0;} else if(h<180){r=0;g=c;b=x;}
+  else if(h<240){r=0;g=x;b=c;} else if(h<300){r=x;g=0;b=c;} else {r=c;g=0;b=x;}
+  return [r+m,g+m,b+m];
+}
+function _psBlendComponent(mode,a,b){
+  const A=_rgbToHsb(a[0],a[1],a[2]), B=_rgbToHsb(b[0],b[1],b[2]);
+  let h,s,v;
+  if(mode==='hue'){h=A[0];s=B[1];v=B[2];}
+  else if(mode==='saturation'){h=B[0];s=A[1];v=B[2];}
+  else if(mode==='blendColor'){h=A[0];s=A[1];v=B[2];}
+  else {h=B[0];s=B[1];v=A[2];}
+  return _hsbToRgb(h,s,v);
+}
+function _psBlendApply(mode,aIn,bIn,opacity){
+  const op=clamp(num(opacity),0,1);
+  const isColor=Array.isArray(aIn)||Array.isArray(bIn);
+  if(!isColor){
+    const a=clamp(num(aIn),0,1), b=clamp(num(bIn),0,1);
+    let r;
+    if(mode==='dissolve') r=Math.random()<b?b:a;
+    else if(_PS_BLEND[mode]) r=_PS_BLEND[mode](a,b);
+    else r=b;
+    if(op>=1) return r;
+    if(op<=0) return a;
+    return _lerp(a,r,op);
+  }
+  const a=col(aIn), b=col(bIn);
+  let out;
+  if(mode==='darkerColor'){
+    const la=0.299*a[0]+0.587*a[1]+0.114*a[2], lb=0.299*b[0]+0.587*b[1]+0.114*b[2];
+    out=la<lb?a:b;
+  } else if(mode==='lighterColor'){
+    const la=0.299*a[0]+0.587*a[1]+0.114*a[2], lb=0.299*b[0]+0.587*b[1]+0.114*b[2];
+    out=la>lb?a:b;
+  } else if(mode==='dissolve'){
+    const lb=0.299*b[0]+0.587*b[1]+0.114*b[2];
+    out=Math.random()<lb?b:a;
+  } else if(mode==='hue'||mode==='saturation'||mode==='blendColor'||mode==='luminosity'){
+    out=_psBlendComponent(mode,a,b);
+  } else {
+    const fn=_PS_BLEND[mode]||((x,y)=>y);
+    out=[fn(a[0],b[0]),fn(a[1],b[1]),fn(a[2],b[2])];
+  }
+  if(op>=1) return out;
+  if(op<=0) return a;
+  return [_lerp(a[0],out[0],op),_lerp(a[1],out[1],op),_lerp(a[2],out[2],op)];
+}
+function _psNode(title,mode,subgroup){
+  return { title, group:'混合', subgroup, color:'var(--type-color)',
+    inputs:[{n:'a',t:'any'},{n:'b',t:'any'},{n:'opacity',t:'number'}],
+    outputs:[{n:'out',t:'any'}],
+    eval:(i)=>({out:_psBlendApply(mode,i.a,i.b,i.opacity===undefined?1:i.opacity)}) };
+}
+
+/* 分形叠加公共骨架：增益 gain（Hurst 指数 G=2^-H，0.5=各向同性）+ 每层旋转并微失谐
+   （2.03 而非 2，避免各倍频波峰精确重叠产生规则伪图案，同时消除轴向对齐伪影） */
+function _octaveStep(x, y){
+  return [(0.8 * x - 0.6 * y) * 2.03, (0.6 * x + 0.8 * y) * 2.03];
+}
+function _fbm2D(x, y, seed, octaves, gain){
+  gain = gain ?? 0.5;
+  let val = 0, amp = 0.5, max = 0;
   for(let o = 0; o < octaves; o++){
-    val += _valueNoise2D(x * freq, y * freq, seed + o * 17) * amp;
-    max += amp; amp *= 0.5; freq *= 2;
+    val += _valueNoise2D(x, y, seed + o * 17) * amp;
+    max += amp; amp *= gain;
+    [x, y] = _octaveStep(x, y);
   }
   return val / max;
 }
-function _voronoi2D(x, y, seed){
+function _voronoiCells2D(x, y, seed, jitter){
+  jitter = jitter ?? 1;
   const ix = Math.floor(x), iy = Math.floor(y);
-  let minDist = Infinity;
+  let d1 = Infinity, d2 = Infinity;
   for(let dx = -1; dx <= 1; dx++){
     for(let dy = -1; dy <= 1; dy++){
-      const cx = ix + dx + _hash(ix + dx, iy + dy, seed);
-      const cy = iy + dy + _hash(ix + dx, iy + dy, seed + 999);
+      const cx = ix + dx + 0.5 + (_hash(ix + dx, iy + dy, seed) - 0.5) * jitter;
+      const cy = iy + dy + 0.5 + (_hash(ix + dx, iy + dy, seed + 999) - 0.5) * jitter;
       const dist = (cx - x) * (cx - x) + (cy - y) * (cy - y);
-      if(dist < minDist) minDist = dist;
+      if(dist < d1){ d2 = d1; d1 = dist; }
+      else if(dist < d2){ d2 = dist; }
     }
   }
-  return Math.sqrt(minDist);
+  return [Math.sqrt(d1), Math.sqrt(d2)];
+}
+function _voronoiSmooth2D(x, y, seed, jitter, falloff){
+  const ix = Math.floor(x), iy = Math.floor(y);
+  let res = 0;
+  for(let dx = -1; dx <= 1; dx++){
+    for(let dy = -1; dy <= 1; dy++){
+      const cx = ix + dx + 0.5 + (_hash(ix + dx, iy + dy, seed) - 0.5) * jitter;
+      const cy = iy + dy + 0.5 + (_hash(ix + dx, iy + dy, seed + 999) - 0.5) * jitter;
+      const d = Math.sqrt((cx - x) * (cx - x) + (cy - y) * (cy - y));
+      res += Math.pow(2, -falloff * d);
+    }
+  }
+  return -Math.log2(res) / falloff;
+}
+
+function _white2D(x, y, seed){
+  return _hash((x * 8191) | 0, (y * 131071) | 0, seed);
+}
+function _cell2D(x, y, seed){
+  return _hash(Math.floor(x), Math.floor(y), seed);
+}
+function _cubicAt(t, p0, p1, p2, p3){
+  return 0.5 * ((2 * p1) + (-p0 + p2) * t
+    + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t
+    + (-p0 + 3 * p1 - 3 * p2 + p3) * t * t * t);
+}
+function _cubicNoise2D(x, y, seed){
+  const ix = Math.floor(x), iy = Math.floor(y);
+  const fx = x - ix, fy = y - iy;
+  const v = (i, j) => _hash(ix + i, iy + j, seed);
+  const r = [0, 1, 2, 3].map(j => _cubicAt(fx, v(0, j), v(1, j), v(2, j), v(3, j)));
+  return _cubicAt(fy, r[0], r[1], r[2], r[3]);
+}
+function _cubicFbm2D(x, y, seed, octaves, gain){
+  gain = gain ?? 0.5;
+  let val = 0, amp = 0.5, max = 0;
+  for(let o = 0; o < octaves; o++){
+    val += _cubicNoise2D(x, y, seed + o * 17) * amp;
+    max += amp; amp *= gain;
+    [x, y] = _octaveStep(x, y);
+  }
+  return val / max;
+}
+function _pingpongFbm2D(x, y, seed, octaves, gain, strength){
+  gain = gain ?? 0.5; strength = strength ?? 2;
+  let val = 0, amp = 0.5, max = 0;
+  for(let o = 0; o < octaves; o++){
+    const n = _valueNoise2D(x, y, seed + o * 17);
+    let t = (n * strength) % 2; if(t < 0) t += 2;
+    const s = t < 1 ? t : 2 - t;
+    val += (s * 2 - 1) * amp;
+    max += amp; amp *= gain;
+    [x, y] = _octaveStep(x, y);
+  }
+  return val / max;
+}
+function _billow2D(x, y, seed, octaves, gain){
+  gain = gain ?? 0.5;
+  let val = 0, amp = 0.5, max = 0;
+  for(let o = 0; o < octaves; o++){
+    const n = Math.abs(_simplex2D(x, y, seed + o * 17));
+    val += (n * 2 - 1) * amp;
+    max += amp; amp *= gain;
+    [x, y] = _octaveStep(x, y);
+  }
+  return val / max;
+}
+function _voronoise2D(x, y, seed, jitter, blend){
+  const ix = Math.floor(x), iy = Math.floor(y);
+  const fx = x - ix, fy = y - iy;
+  const k = 1 + 63 * Math.pow(1 - blend, 4);
+  let va = 0, wt = 0;
+  for(let j = -2; j <= 2; j++){
+    for(let i = -2; i <= 2; i++){
+      const hx = _hash(ix + i, iy + j, seed);
+      const hy = _hash(ix + i, iy + j, seed + 999);
+      const hz = _hash(ix + i, iy + j, seed + 555);
+      const rx = i - fx + hx * jitter;
+      const ry = j - fy + hy * jitter;
+      const d = Math.sqrt(rx * rx + ry * ry);
+      const s = Math.min(d / 1.41421356, 1);
+      const w = Math.pow(1 - s * s * (3 - 2 * s), k);
+      va += w * hz; wt += w;
+    }
+  }
+  return wt > 0 ? va / wt : 0;
+}
+
+/* ── 特效场生成器（玄幻/科幻，整图计算型）──────────────── */
+/* 反应扩散 Gray-Scott：A' = A + (DA∇²A − AB² + f(1−A))·dt，B' = B + (DB∇²B + AB² − (k+f)B)·dt
+   f/k 决定形态：珊瑚/迷宫/孤子/波动。固定 256² 模拟，S 更大时双线性上采样（每 props 仅算一次并缓存） */
+const _RD_SIM = 256;
+const _RD_PRESETS = {
+  coral:   { f: 0.0545, k: 0.062  },
+  maze:    { f: 0.029,  k: 0.057  },
+  soliton: { f: 0.030,  k: 0.062  },
+  waves:   { f: 0.014,  k: 0.045  },
+  worm:    { f: 0.078,  k: 0.061  },
+};
+const _rdFieldCache = new Map();
+function _reactionField(seed, iterations, presetKey, quick){
+  const key = JSON.stringify([seed, iterations, presetKey, !!quick]);
+  if(_rdFieldCache.has(key)) return _rdFieldCache.get(key);
+  const pr = _RD_PRESETS[presetKey] || _RD_PRESETS.coral;
+  const f = pr.f, k = pr.k;
+  const S = _RD_SIM;
+  let A = new Float32Array(S * S).fill(1);
+  let B = new Float32Array(S * S);
+  for(let s = 0; s < 8; s++){
+    const cx = 0.2 + 0.6 * _hash(s, 1, seed), cy = 0.2 + 0.6 * _hash(s, 2, seed);
+    const r = 0.05 + 0.06 * _hash(s, 3, seed);
+    for(let py = 0; py < S; py++){
+      for(let px = 0; px < S; px++){
+        const dx = px / S - cx, dy = py / S - cy;
+        if(dx * dx + dy * dy < r * r) B[py * S + px] = 1;
+      }
+    }
+  }
+  const DA = 1.0, DB = 0.5, dt = 1.0;
+  for(let it = 0; it < iterations; it++){
+    const A2 = new Float32Array(S * S), B2 = new Float32Array(S * S);
+    for(let py = 0; py < S; py++){
+      const yn = py === 0 ? S - 1 : py - 1, ys = py === S - 1 ? 0 : py + 1;
+      for(let px = 0; px < S; px++){
+        const xw = px === 0 ? S - 1 : px - 1, xe = px === S - 1 ? 0 : px + 1;
+        const i = py * S + px;
+        const la = 0.2 * (A[py * S + xw] + A[py * S + xe] + A[yn * S + px] + A[ys * S + px])
+                 + 0.05 * (A[yn * S + xw] + A[yn * S + xe] + A[ys * S + xw] + A[ys * S + xe]) - A[i];
+        const lb = 0.2 * (B[py * S + xw] + B[py * S + xe] + B[yn * S + px] + B[ys * S + px])
+                 + 0.05 * (B[yn * S + xw] + B[yn * S + xe] + B[ys * S + xw] + B[ys * S + xe]) - B[i];
+        const abb = A[i] * B[i] * B[i];
+        A2[i] = Math.min(1, Math.max(0, A[i] + (DA * la - abb + f * (1 - A[i])) * dt));
+        B2[i] = Math.min(1, Math.max(0, B[i] + (DB * lb + abb - (k + f) * B[i]) * dt));
+      }
+    }
+    A = A2; B = B2;
+  }
+  const out = new Float32Array(S * S);
+  let mn = Infinity, mx = -Infinity;
+  for(let i = 0; i < S * S; i++){
+    const v = 1 - B[i];
+    out[i] = v; if(v < mn) mn = v; if(v > mx) mx = v;
+  }
+  const res = { field: out, S, mn, mx };
+  if(_rdFieldCache.size > 8) _rdFieldCache.clear();
+  _rdFieldCache.set(key, res);
+  return res;
+}
+function _sampleField(fld, u, v){
+  const fx = clamp(u, 0, 1) * (fld.S - 1), fy = clamp(v, 0, 1) * (fld.S - 1);
+  const x0 = Math.floor(fx), y0 = Math.floor(fy);
+  const x1 = Math.min(x0 + 1, fld.S - 1), y1 = Math.min(y0 + 1, fld.S - 1);
+  const tx = fx - x0, ty = fy - y0;
+  const g = fld.field;
+  return _lerp(_lerp(g[y0 * fld.S + x0], g[y0 * fld.S + x1], tx),
+               _lerp(g[y1 * fld.S + x0], g[y1 * fld.S + x1], tx), ty);
+}
+/* 中点位移闪电：线段递归中点随机位移 + 子分支，光栅化到浮点场后模糊做辉光 */
+const _boltFieldCache = new Map();
+function _rng(seed){
+  let s = (Math.imul(Math.round(seed) + 7, 2654435761)) | 0;
+  return () => { s = (Math.imul(s, 1664525) + 1013904223) | 0; return ((s >>> 8) & 0xffffff) / 0xffffff; };
+}
+function _lightningField(seed, branches, detail, glow, quick){
+  const key = JSON.stringify([seed, branches, detail, glow, !!quick]);
+  if(_boltFieldCache.has(key)) return _boltFieldCache.get(key);
+  const maxDepth = quick ? 6 : 7; // 快速档：细分更早收敛 + 辉光仅 1 遍
+  const minLen = quick ? 9 : 6;
+  const S = 256;
+  const field = new Float32Array(S * S);
+  const rand = _rng(seed);
+  const segs = [];
+  const subdivide = (x0, y0, x1, y1, depth, amp, bright) => {
+    const dx = x1 - x0, dy = y1 - y0;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if(len < minLen || depth > maxDepth){
+      segs.push([x0, y0, x1, y1, bright]);
+      return;
+    }
+    const mx = (x0 + x1) / 2 + (rand() - 0.5) * len * amp * detail;
+    const my = (y0 + y1) / 2 + (rand() - 0.5) * len * amp * detail * 0.4;
+    subdivide(x0, y0, mx, my, depth + 1, amp * 0.52, bright);
+    subdivide(mx, my, x1, y1, depth + 1, amp * 0.52, bright);
+    if(depth >= 1 && rand() < branches * 0.35){
+      const ang = Math.atan2(dy, dx) + (rand() - 0.5) * 2.2;
+      const bl = len * (0.35 + rand() * 0.55);
+      subdivide(mx, my, mx + Math.cos(ang) * bl, my + Math.sin(ang) * bl, depth + 1, amp * 0.5, bright * 0.4);
+    }
+  };
+  const topX = 0.2 + rand() * 0.6;
+  subdivide(topX * S, 0, (topX + (rand() - 0.5) * 0.3) * S, S - 1, 0, 0.28, 1);
+  for(const sg of segs){
+    const x0 = sg[0], y0 = sg[1], x1 = sg[2], y1 = sg[3], bright = sg[4];
+    const steps = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) * 2 + 1;
+    for(let t = 0; t <= steps; t++){
+      const px = Math.round(_lerp(x0, x1, t / steps));
+      const py = Math.round(_lerp(y0, y1, t / steps));
+      if(px >= 0 && px < S && py >= 0 && py < S){
+        const i = py * S + px;
+        if(field[i] < bright) field[i] = bright;
+      }
+    }
+  }
+  const passes = quick ? 1 : Math.max(1, Math.round(1 + glow * 5));
+  for(let pass = 0; pass < passes; pass++){
+    const cp = Float32Array.from(field);
+    for(let py = 1; py < S - 1; py++){
+      for(let px = 1; px < S - 1; px++){
+        const i = py * S + px;
+        const blur = (cp[i - 1] + cp[i + 1] + cp[i - S] + cp[i + S]) * 0.25;
+        if(field[i] < blur) field[i] = blur;
+      }
+    }
+  }
+  let mn = Infinity, mx = -Infinity;
+  for(let i = 0; i < S * S; i++){ if(field[i] < mn) mn = field[i]; if(field[i] > mx) mx = field[i]; }
+  const res = { field, S, mn, mx };
+  if(_boltFieldCache.size > 8) _boltFieldCache.clear();
+  _boltFieldCache.set(key, res);
+  return res;
+}
+/* Mandelbrot / Julia + orbit trap：逃逸时间平滑着色，陷阱距离（原点圆）做轨道捕获染色 */
+function _mandelPoint(u, v, p){
+  const mode = p.fractal ?? 'mandel';
+  const zoom = +(p.zoom ?? 1);
+  const maxIter = Math.round(+(p.iterations ?? 96));
+  const cx0 = (u - 0.5) * 3.5 / zoom;
+  const cy0 = (v - 0.5) * 3.5 / zoom;
+  let zx, zy, cx, cy;
+  if(mode === 'julia'){
+    const seed = Math.round(+(p.seed ?? 0));
+    cx = (0.5 + _hash(seed, 1, 11) * 0.35) * (_hash(seed, 2, 11) < 0.5 ? -1 : 1);
+    cy = (0.5 + _hash(seed, 3, 11) * 0.35) * (_hash(seed, 4, 11) < 0.5 ? -1 : 1);
+    zx = cx0; zy = cy0;
+  } else {
+    zx = 0; zy = 0; cx = cx0; cy = cy0;
+  }
+  let trap = Infinity;
+  let i = 0;
+  while(i < maxIter){
+    const zx2 = zx * zx, zy2 = zy * zy;
+    if(zx2 + zy2 > 16) break;
+    const d = Math.sqrt(zx2 + zy2 + 0.1);
+    if(d < trap) trap = d;
+    const nx = zx2 - zy2 + cx;
+    zy = 2 * zx * zy + cy;
+    zx = nx;
+    i++;
+  }
+  if(i >= maxIter) return clamp(1 - trap * 0.5, 0, 1);
+  const smooth = i + 1 - Math.log(Math.log(Math.sqrt(zx * zx + zy * zy)) || 1) / Math.log(2);
+  return clamp((smooth / maxIter) * 1.35, 0, 1);
+}
+/* iq 余弦调色板：color(t) = a + b·cos(2π(c·t + d)) */
+const _IQ_PALETTES = {
+  rainbow:  { a: [0.5,0.5,0.5], b: [0.5,0.5,0.5], c: [1,1,1],     d: [0,0.33,0.67] },
+  ocean:    { a: [0.5,0.5,0.5], b: [0.5,0.5,0.5], c: [1,1,1],     d: [0,0.1,0.2] },
+  sunset:   { a: [0.5,0.5,0.5], b: [0.5,0.5,0.5], c: [1,1,0.5],   d: [0.8,0.9,0.3] },
+  ember:    { a: [0.5,0.5,0.5], b: [0.5,0.5,0.5], c: [1,0.7,0.4], d: [0,0.15,0.2] },
+  fire:     { a: [0.5,0.5,0.5], b: [0.5,0.5,0.5], c: [2,1,0],     d: [0.5,0.2,0.25] },
+  verdant:  { a: [0.8,0.5,0.4], b: [0.2,0.4,0.2], c: [2,1,1],     d: [0,0.25,0.25] },
+};
+function _paletteRGB(t, presetKey, freq, phase){
+  const p = _IQ_PALETTES[presetKey] || _IQ_PALETTES.rainbow;
+  const c = +(freq ?? 1), ph = +(phase ?? 0);
+  const w = 6.283185 * (c * clamp(t, 0, 1) + ph);
+  return [
+    clamp(p.a[0] + p.b[0] * Math.cos(w + 6.283185 * p.d[0]), 0, 1),
+    clamp(p.a[1] + p.b[1] * Math.cos(w + 6.283185 * p.d[1]), 0, 1),
+    clamp(p.a[2] + p.b[2] * Math.cos(w + 6.283185 * p.d[2]), 0, 1),
+  ];
 }
 
 /* ── Simplex 2D（Stefan Gustavson 公有域实现）── */
@@ -428,70 +959,210 @@ function _simplex2D(xin, yin, seed){
   let t2=0.5-x2*x2-y2*y2; if(t2>0){t2*=t2; n2=t2*t2*(_grad3[g2]*x2+_grad3[g2+1]*y2);}
   return 70*(n0+n1+n2);
 }
-function _simplexFbm2D(x, y, seed, octaves){
-  let val=0, amp=0.5, freq=1, max=0;
+function _simplexFbm2D(x, y, seed, octaves, gain){
+  gain = gain ?? 0.5;
+  let val=0, amp=0.5, max=0;
   for(let o=0;o<octaves;o++){
-    val += _simplex2D(x*freq, y*freq, seed+o*17)*amp;
-    max += amp; amp*=0.5; freq*=2;
+    val += _simplex2D(x, y, seed+o*17)*amp;
+    max += amp; amp*=gain;
+    [x, y] = _octaveStep(x, y);
   }
   return val/max;
 }
-function _ridged2D(x, y, seed, octaves){
-  let val=0, amp=0.5, freq=1, max=0;
+function _ridged2D(x, y, seed, octaves, gain){
+  gain = gain ?? 0.5;
+  let val=0, amp=0.5, max=0;
   for(let o=0;o<octaves;o++){
-    let n = 1 - Math.abs(_simplex2D(x*freq, y*freq, seed+o*17));
-    val += n*n*amp; max += amp; amp*=0.5; freq*=2;
+    let n = 1 - Math.abs(_simplex2D(x, y, seed+o*17));
+    val += n*n*amp; max += amp; amp*=gain;
+    [x, y] = _octaveStep(x, y);
   }
   return val/max;
 }
 
-/* ── 噪波节点预览图（对 [0,1]² 域整图采样，算法与各节点 eval 一致）── */
-const _NOISE_PV_TYPES = new Set(['noise','voronoi','simplex','ridge','warp']);
+/* ── 噪波节点预览图（对 [0,1]² 域整图采样，算法与各节点 eval 统一走 _noiseValue）── */
+const _NOISE_PV_TYPES = new Set(['noise','voronoi','simplex','ridge','warp','white','cell','billow','cubic','pingpong','voronoise','reaction','lightning','mandel','palette']);
 const _noisePvCache = new Map();
-function _noiseSample(type, u, v, p){
+function _noiseValue(type, u, v, p){
   const scale = +(p.scale ?? 4);
   const seed = Math.round(+(p.seed ?? 0));
   const octaves = Math.round(+(p.octaves ?? 4));
-  const x = u*scale, y = v*scale;
-  if(type==='noise')    return clamp(_fbm2D(x, y, seed, octaves), 0, 1);
-  if(type==='voronoi')  return clamp(_voronoi2D(x, y, seed), 0, 1);
-  if(type==='simplex')  return clamp(_simplexFbm2D(x, y, seed, octaves)*0.5+0.5, 0, 1);
-  if(type==='ridge')    return clamp(_ridged2D(x, y, seed, octaves), 0, 1);
-  const amount = +(p.amount ?? 1);
-  const qx = x + amount*_simplex2D(x+2.7, y+1.3, seed);
-  const qy = y + amount*_simplex2D(x-1.7, y+2.1, seed+31);
-  return clamp(_simplexFbm2D(qx, qy, seed+13, octaves)*0.5+0.5, 0, 1);
+  const gain = +(p.gain ?? 0.5);
+  const x = u * scale, y = v * scale;
+  switch(type){
+    case 'reaction': { // 场模拟型：忽略 scale，整图 [0,1]² 域采样；小预览走快速档（低迭代）
+      const iters = p._quick ? Math.min(Math.round(+(p.iterations ?? 120)), 40) : Math.round(+(p.iterations ?? 120));
+      const fld = _reactionField(seed, iters, p.preset ?? 'coral', !!p._quick);
+      return clamp(_sampleField(fld, u, v), 0, 1);
+    }
+    case 'lightning': {
+      const fld = _lightningField(seed, +(p.branches ?? 0.7), +(p.detail ?? 1), +(p.glow ?? 0.5), !!p._quick);
+      return clamp(_sampleField(fld, u, v), 0, 1);
+    }
+    case 'mandel':    return _mandelPoint(u, v, p);
+    case 'noise':     return clamp(_fbm2D(x, y, seed, octaves, gain), 0, 1);
+    case 'simplex':   return clamp(_simplexFbm2D(x, y, seed, octaves, gain) * 0.5 + 0.5, 0, 1);
+    case 'ridge':     return clamp(_ridged2D(x, y, seed, octaves, gain), 0, 1);
+    case 'billow':    return clamp(_billow2D(x, y, seed, octaves, gain) * 0.5 + 0.5, 0, 1);
+    case 'cubic':     return clamp(_cubicFbm2D(x, y, seed, octaves, gain), 0, 1);
+    case 'pingpong':  return clamp(_pingpongFbm2D(x, y, seed, octaves, gain, +(p.strength ?? 2)) * 0.5 + 0.5, 0, 1);
+    case 'white':     return clamp(_white2D(x, y, seed), 0, 1);
+    case 'cell':      return clamp(_cell2D(x, y, seed), 0, 1);
+    case 'voronoise': return clamp(_voronoise2D(x, y, seed, +(p.jitter ?? 1), +(p.blend ?? 0.5)), 0, 1);
+    case 'voronoi': {
+      const mode = p.mode ?? 'f1';
+      const jit = +(p.jitter ?? 1);
+      if(mode === 'smooth'){
+        const falloff = 4 + 60 * clamp(+(p.smooth ?? 0.5), 0, 1);
+        return clamp(_voronoiSmooth2D(x, y, seed, jit, falloff), 0, 1);
+      }
+      const [f1, f2] = _voronoiCells2D(x, y, seed, jit);
+      if(mode === 'f2')    return clamp(f2, 0, 1);
+      if(mode === 'f2-f1') return clamp((f2 - f1) * 1.6, 0, 1);
+      return clamp(f1, 0, 1);
+    }
+    default: { // warp：双层递归域扭曲 fbm(p + fbm(p + fbm(p)))
+      const amount = +(p.amount ?? 1);
+      const qx = x + amount * _simplex2D(x + 2.7, y + 1.3, seed);
+      const qy = y + amount * _simplex2D(x - 1.7, y + 2.1, seed + 31);
+      const rx = qx + amount * 0.5 * _simplex2D(qx + 1.7, qy + 9.2, seed + 7);
+      const ry = qy + amount * 0.5 * _simplex2D(qx + 8.3, qy + 2.8, seed + 38);
+      return clamp(_simplexFbm2D(rx, ry, seed + 13, octaves, gain) * 0.5 + 0.5, 0, 1);
+    }
+  }
+}
+
+/* quintic 插值曲线（C² 连续）：比 cubic smoothstep 频谱旁瓣小，fBm 叠加无格纹残留 */
+function _quintic(t){ return t * t * t * (t * (t * 6 - 15) + 10); }
+function _valueNoise2D(x, y, seed){
+  const ix = Math.floor(x), iy = Math.floor(y);
+  const fx = x - ix, fy = y - iy;
+  const a = _hash(ix, iy, seed);
+  const b = _hash(ix + 1, iy, seed);
+  const c = _hash(ix, iy + 1, seed);
+  const d = _hash(ix + 1, iy + 1, seed);
+  const ux = _quintic(fx), uy = _quintic(fy);
+  return _lerp(_lerp(a, b, ux), _lerp(c, d, ux), uy);
+}
+/* ── 噪波图像生成（画质三重保障）────────────────
+   ① SSAA 超采样：小图 2×2 子像素平均抗锯齿（离散型/模拟型除外——white/cell/voronoise
+     离散高频，reaction/lightning 为场采样，mandel 逐点迭代成本高，SSAA 无收益）
+   ② min-max 对比度归一化：多倍频叠加使动态范围收窄（oct=4 仅 ~77%），拉伸满幅
+   ③ 三角分布抖动 ±0.5LSB：打散 8bit 量化在缓变区的色带 */
+const _NO_SSAA = new Set(['white', 'cell', 'voronoise', 'reaction', 'lightning', 'mandel']);
+function _noiseGrid(type, S, p){
+  const ssaa = (S <= 256 && !_NO_SSAA.has(type)) ? 2 : 1;
+  /* 小图（节点预览/预览窗口）走快速档：field 类降参（低迭代/浅细分），
+     全参 512 纹理由 _noiseTexUrl 异步队列生成 —— 拖动滑条时保帧率 */
+  const gp = (S <= 128 && (type === 'reaction' || type === 'lightning')) ? { ...p, _quick: true } : p;
+  const buf = new Float32Array(S * S);
+  let mn = Infinity, mx = -Infinity;
+  const sub = 1 / (S * ssaa);
+  for(let py = 0; py < S; py++){
+    for(let px = 0; px < S; px++){
+      let v = 0;
+      for(let sy = 0; sy < ssaa; sy++){
+        const vy = (py * ssaa + sy + 0.5) * sub;
+        for(let sx = 0; sx < ssaa; sx++){
+          v += _noiseValue(type, (px * ssaa + sx + 0.5) * sub, vy, gp);
+        }
+      }
+      v /= ssaa * ssaa;
+      const i = py * S + px;
+      buf[i] = v;
+      if(v < mn) mn = v;
+      if(v > mx) mx = v;
+    }
+  }
+  return {buf, mn, mx};
+}
+function _gridToImageData(buf, mn, mx, S){
+  const span = (mx - mn) > 1e-6 ? 1 / (mx - mn) : 0;
+  const out = new Uint8ClampedArray(S * S);
+  for(let i = 0; i < S * S; i++){
+    const v = span ? (buf[i] - mn) * span : buf[i];
+    const dith = ((_hash(i % S, (i / S) | 0, 0) - 0.5) + (_hash((i % S) + 7, ((i / S) | 0) + 13, 0) - 0.5)) * 0.5;
+    out[i] = Math.round(clamp(v, 0, 1) * 255 + dith);
+  }
+  return out;
 }
 function _noisePreviewUrl(node, S){
   S = Math.max(8, Math.round(+(S ?? 96)));
   const p = node.props;
-  const key = JSON.stringify([node.type, +p.scale, Math.round(+(p.seed??0)), Math.round(+(p.octaves??4)), +(p.amount??1), S]);
+  const key = JSON.stringify([node.type, node.props, S]);
   if(_noisePvCache.has(key)) return _noisePvCache.get(key);
   const c = document.createElement('canvas');
   c.width = S; c.height = S;
   const ctx = c.getContext('2d');
   const img = ctx.createImageData(S, S);
   const d = img.data;
-  for(let py=0;py<S;py++){
-    const v = py/S;
-    for(let px=0;px<S;px++){
-      const b = Math.round(_noiseSample(node.type, px/S, v, p)*255);
-      const i = (py*S+px)*4;
-      d[i]=b; d[i+1]=b; d[i+2]=b; d[i+3]=255;
+  if(node.type === 'palette'){ // iq 余弦调色板：彩色横条渐变（t=u）
+    const preset = p.preset ?? 'rainbow';
+    const freq = +(p.freq ?? 1), phase = +(p.phase ?? 0);
+    for(let py = 0; py < S; py++){
+      for(let px = 0; px < S; px++){
+        const rgb = _paletteRGB(px / S * 0.999, preset, freq, phase);
+        const j = (py * S + px) * 4;
+        d[j] = rgb[0] * 255; d[j + 1] = rgb[1] * 255; d[j + 2] = rgb[2] * 255; d[j + 3] = 255;
+      }
+    }
+  } else {
+    const {buf, mn, mx} = _noiseGrid(node.type, S, p);
+    const gray = _gridToImageData(buf, mn, mx, S);
+    for(let i = 0; i < S * S; i++){
+      const b = gray[i];
+      const j = i * 4;
+      d[j] = b; d[j + 1] = b; d[j + 2] = b; d[j + 3] = 255;
     }
   }
   ctx.putImageData(img, 0, 0);
   let url = null;
   try { url = c.toDataURL('image/png'); } catch(e){ url = null; }
-  if(_noisePvCache.size > 32) _noisePvCache.clear();
+  /* LRU 淘汰：超出容量移除最旧 8 条（而非清空——来回拖动滑条时保留热门键） */
+  if(_noisePvCache.size > 32){
+    const it = _noisePvCache.keys();
+    for(let i = 0; i < 8; i++){
+      const k = it.next().value;
+      if(k === undefined) break;
+      _noisePvCache.delete(k);
+    }
+  }
   _noisePvCache.set(key, url);
   return url;
 }
-/* ── 噪波纹理输出：对 [0,1]² 域整图采样生成灰度 PNG（供 tex 输出端口用）── */
-const _NOISE_TEX_SIZE = 256;
+/* ── 噪波纹理输出（异步生成）────────────────
+   eval 调用时不做 512² 采样+PNG 编码（~46ms 同步阻塞）：缓存命中或上次成功 URL 立即返回，
+   miss 时入队（同节点去重，只保留最新 props），每帧后台处理一个，完成后 evaluate 刷新下游收敛。 */
+const _NOISE_TEX_SIZE = 512;
+const _texQueue = new Map();
+let _texQueueRunning = false;
 function _noiseTexUrl(node){
-  const url = _noisePreviewUrl(node, _NOISE_TEX_SIZE);
-  return (typeof url === 'string' && url) ? url : null;
+  const key = JSON.stringify([node.type, node.props, _NOISE_TEX_SIZE]);
+  if(_noisePvCache.has(key)){
+    const hit = _noisePvCache.get(key);
+    if(typeof hit === 'string' && hit) node._lastTexUrl = hit;
+    _texQueue.delete(node.id);
+    return (typeof hit === 'string' && hit) ? hit : (node._lastTexUrl ?? null);
+  }
+  _texQueue.set(node.id, { node, props: node.props });
+  _drainTexQueue();
+  return node._lastTexUrl ?? null;
+}
+function _drainTexQueue(){
+  if(_texQueueRunning || _texQueue.size === 0) return;
+  _texQueueRunning = true;
+  const tick = (typeof requestAnimationFrame === 'function') ? requestAnimationFrame : (f => setTimeout(f, 0));
+  tick(()=>{
+    _texQueueRunning = false;
+    const first = _texQueue.entries().next().value;
+    if(!first) return;
+    _texQueue.delete(first[0]);
+    const job = first[1];
+    const node = state.nodes.get(first[0]);
+    if(node && node.props === job.props) _noisePreviewUrl(node, _NOISE_TEX_SIZE);
+    if(_texQueue.size > 0) _drainTexQueue();
+    evaluate();
+  });
 }
 function _renderNoisePreview(node, val){
   const el = node._outPreviewEl;
@@ -531,18 +1202,116 @@ const gridBg = $('#grid-bg');
 function applyViewport(){
   const {x,y,zoom} = state.viewport;
   world.style.transform = `translate(${x}px,${y}px) scale(${zoom})`;
-  // 网格随缩放平移
+  // 网格（点阵）随缩放平移
   const g = 24*zoom, G = 120*zoom;
-  gridBg.style.backgroundSize = `${g}px ${g}px, ${g}px ${g}px, ${G}px ${G}px, ${G}px ${G}px`;
-  gridBg.style.backgroundPosition = `${x}px ${y}px, ${x}px ${y}px, ${x}px ${y}px, ${x}px ${y}px`;
+  gridBg.style.backgroundSize = `${g}px ${g}px, ${G}px ${G}px`;
+  gridBg.style.backgroundPosition = `${x}px ${y}px, ${x}px ${y}px`;
   const pct = Math.round(zoom*100)+'%';
   $('#zoom-label').textContent = pct;
   $('#stat-zoom').textContent = pct;
+  updateMinimap();
 }
 function screenToWorld(sx, sy){
   const r = canvasWrap.getBoundingClientRect();
   const {x,y,zoom} = state.viewport;
   return {x:(sx-r.left-x)/zoom, y:(sy-r.top-y)/zoom};
+}
+
+/* ── 小地图导航 ─────────────────────────────── */
+let _minimapEl = null, _minimapCanvas = null, _minimapVp = null, _minimapEmpty = null;
+let _minimapMap = null; // {scale, offX, offY} 世界→minimap 映射
+function _buildMinimap(){
+  if(_minimapEl) return;
+  _minimapEl = document.createElement('div');
+  _minimapEl.className = 'nc-minimap';
+  _minimapEl.innerHTML = '<span class="nc-mm-label">导航</span><canvas></canvas><div class="nc-mm-vp"></div><div class="nc-mm-empty" style="display:none">无节点</div>';
+  canvasWrap.appendChild(_minimapEl);
+  _minimapCanvas = _minimapEl.querySelector('canvas');
+  _minimapVp = _minimapEl.querySelector('.nc-mm-vp');
+  _minimapEmpty = _minimapEl.querySelector('.nc-mm-empty');
+  let dragging = false;
+  const moveTo = (e)=>{
+    if(!_minimapMap) return;
+    const r = _minimapCanvas.getBoundingClientRect();
+    const mx = e.clientX - r.left, my = e.clientY - r.top;
+    const wx = (mx - _minimapMap.offX) / _minimapMap.scale;
+    const wy = (my - _minimapMap.offY) / _minimapMap.scale;
+    const cr = canvasWrap.getBoundingClientRect();
+    const {zoom} = state.viewport;
+    state.viewport.x = cr.width/2 - wx*zoom;
+    state.viewport.y = cr.height/2 - wy*zoom;
+    applyViewport();
+  };
+  _minimapEl.addEventListener('pointerdown', (e)=>{
+    if(e.target === _minimapEmpty) return;
+    dragging = true; try{_minimapEl.setPointerCapture(e.pointerId);}catch(_){}
+    moveTo(e); e.stopPropagation();
+  });
+  _minimapEl.addEventListener('pointermove', (e)=>{ if(dragging){ moveTo(e); e.stopPropagation(); } });
+  _minimapEl.addEventListener('pointerup', (e)=>{ dragging=false; try{_minimapEl.releasePointerCapture(e.pointerId);}catch(_){} });
+  _minimapEl.addEventListener('pointercancel', ()=>{ dragging=false; });
+}
+function updateMinimap(){
+  if(!_minimapEl) _buildMinimap();
+  const W = 160, H = 110;
+  const dpr = window.devicePixelRatio || 1;
+  if(_minimapCanvas.width !== W*dpr){ _minimapCanvas.width = W*dpr; _minimapCanvas.height = H*dpr; }
+  const ctx = _minimapCanvas.getContext('2d');
+  if(!ctx) return;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,W,H);
+  if(state.nodes.size === 0){
+    _minimapEmpty.style.display = 'flex';
+    _minimapVp.style.display = 'none';
+    _minimapMap = null;
+    return;
+  }
+  _minimapEmpty.style.display = 'none';
+  _minimapVp.style.display = 'block';
+  let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
+  state.nodes.forEach(n=>{
+    const w = (n.el ? n.el.offsetWidth : 200) || 200;
+    const h = (n.el ? n.el.offsetHeight : 60) || 60;
+    minX = Math.min(minX, n.x); minY = Math.min(minY, n.y);
+    maxX = Math.max(maxX, n.x + w); maxY = Math.max(maxY, n.y + h);
+  });
+  const cr = canvasWrap.getBoundingClientRect();
+  const {x:vx, y:vy, zoom} = state.viewport;
+  const vw = cr.width / zoom, vh = cr.height / zoom;
+  const vLeft = -vx/zoom, vTop = -vy/zoom;
+  minX = Math.min(minX, vLeft); minY = Math.min(minY, vTop);
+  maxX = Math.max(maxX, vLeft + vw); maxY = Math.max(maxY, vTop + vh);
+  const pad = 40;
+  minX -= pad; minY -= pad; maxX += pad; maxY += pad;
+  const bw = maxX - minX, bh = maxY - minY;
+  const scale = Math.min(W/bw, H/bh);
+  const offX = (W - bw*scale)/2 - minX*scale;
+  const offY = (H - bh*scale)/2 - minY*scale;
+  _minimapMap = {scale, offX, offY};
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(154,154,154,.4)';
+  state.edges.forEach(e=>{
+    const fN = state.nodes.get(e.from.node), tN = state.nodes.get(e.to.node);
+    if(!fN||!tN) return;
+    const fx = fN.x*scale+offX + 100*scale, fy = fN.y*scale+offY + 14*scale;
+    const tx = tN.x*scale+offX, ty = tN.y*scale+offY + 14*scale;
+    ctx.beginPath(); ctx.moveTo(fx,fy); ctx.lineTo(tx,ty); ctx.stroke();
+  });
+  state.nodes.forEach(n=>{
+    const def = NODE_DEFS[n.type];
+    const w = (n.el ? n.el.offsetWidth : 200) || 200;
+    const h = (n.el ? n.el.offsetHeight : 60) || 60;
+    const x = n.x*scale+offX, y = n.y*scale+offY;
+    ctx.fillStyle = def ? def.color : '#9a9a9a';
+    ctx.globalAlpha = state.selected.has(n.id) ? 1 : .72;
+    ctx.fillRect(x, y, Math.max(3, w*scale), Math.max(2, h*scale));
+  });
+  ctx.globalAlpha = 1;
+  const vpX = vLeft*scale+offX, vpY = vTop*scale+offY;
+  _minimapVp.style.left = vpX+'px';
+  _minimapVp.style.top = vpY+'px';
+  _minimapVp.style.width = (vw*scale)+'px';
+  _minimapVp.style.height = (vh*scale)+'px';
 }
 function setZoom(z, cx, cy){
   z = clamp(z, 0.2, 3);
@@ -582,11 +1351,21 @@ function defaultProps(type){
   else if(type==='mainTex'){ p.tex = ''; p._role = 'main'; }
   else if(type==='vector2'){p.x=0.5; p.y=0.5;}
   else if(type==='hdr') p.preset = 'studio';
-  else if(type==='noise'){p.scale=4; p.seed=0; p.octaves=4;}
-  else if(type==='voronoi'){p.scale=5; p.seed=0;}
-  else if(type==='simplex'){p.scale=4; p.seed=0; p.octaves=4;}
-  else if(type==='ridge'){p.scale=4; p.seed=0; p.octaves=4;}
-  else if(type==='warp'){p.scale=3; p.seed=0; p.octaves=4; p.amount=1;}
+  else if(type==='noise'){p.scale=4; p.seed=0; p.octaves=4; p.gain=0.5;}
+  else if(type==='voronoi'){p.scale=5; p.seed=0; p.mode='f1'; p.jitter=1; p.smooth=0.5;}
+  else if(type==='simplex'){p.scale=4; p.seed=0; p.octaves=4; p.gain=0.5;}
+  else if(type==='ridge'){p.scale=4; p.seed=0; p.octaves=4; p.gain=0.5;}
+  else if(type==='warp'){p.scale=3; p.seed=0; p.octaves=4; p.amount=1; p.gain=0.5;}
+  else if(type==='white'){p.scale=24; p.seed=0;}
+  else if(type==='cell'){p.scale=6; p.seed=0;}
+  else if(type==='billow'){p.scale=4; p.seed=0; p.octaves=4; p.gain=0.5;}
+  else if(type==='cubic'){p.scale=4; p.seed=0; p.octaves=4; p.gain=0.5;}
+  else if(type==='pingpong'){p.scale=4; p.seed=0; p.octaves=4; p.gain=0.5; p.strength=2;}
+  else if(type==='voronoise'){p.scale=4; p.seed=0; p.jitter=1; p.blend=0.5;}
+  else if(type==='reaction'){p.seed=0; p.iterations=120; p.preset='coral';}
+  else if(type==='lightning'){p.seed=0; p.branches=0.7; p.detail=1; p.glow=0.5;}
+  else if(type==='mandel'){p.fractal='mandel'; p.zoom=1; p.iterations=96; p.seed=0;}
+  else if(type==='palette'){p.preset='rainbow'; p.freq=1; p.phase=0;}
   else if(type==='gradient'){p.colorA='#7cbd56'; p.colorB='#c084fc'; p.mode='linear';}
   else if(type==='rgbaMerge'){p.r=0; p.g=0; p.b=0; p.a=1; p.size=null;}
   return p;
@@ -735,6 +1514,19 @@ function _notifySelected(){
 }
 
 /* ── widgets ───────────────────────────────── */
+/* 滑条/取色 input 高频触发的求值合并到下一帧（rAF）：拖动时每帧至多一次 evaluate，
+   避免 input 事件栈内同步执行整图求值+纹理生成导致掉帧 */
+let _evalScheduled = false;
+function _scheduleEval(){
+  if(_evalScheduled) return;
+  _evalScheduled = true;
+  const tick = (typeof requestAnimationFrame === 'function') ? requestAnimationFrame : (f => setTimeout(f, 0));
+  tick(()=>{
+    _evalScheduled = false;
+    evaluate();
+    _markDirty();
+  });
+}
 function numWidget(node, key, min, max, step){
   const box = document.createElement('div');
   box.className='w-num';
@@ -745,8 +1537,7 @@ function numWidget(node, key, min, max, step){
   inp.addEventListener('input', ()=>{
     node.props[key] = +inp.value;
     val.textContent = (+inp.value).toFixed(2);
-    evaluate();
-    _markDirty();
+    _scheduleEval();
   });
   // 双击可输入
   val.addEventListener('dblclick', async ()=>{
@@ -764,7 +1555,7 @@ function colorWidget(node, key){
   inp.type='color'; inp.value=node.props[key];
   const hex = document.createElement('span'); hex.className='hex'; hex.textContent=node.props[key];
   inp.addEventListener('input', ()=>{
-    node.props[key]=inp.value; hex.textContent=inp.value; evaluate(); _markDirty();
+    node.props[key]=inp.value; hex.textContent=inp.value; _scheduleEval();
   });
   box.appendChild(inp); box.appendChild(hex);
   return box;
@@ -782,7 +1573,7 @@ function vecWidget(node, keys, min, max, step){
     inp.min=min; inp.max=max; inp.step=step; inp.value=node.props[k];
     const val=document.createElement('span'); val.className='val';
     val.textContent=(+node.props[k]).toFixed(2);
-    inp.addEventListener('input',()=>{node.props[k]=+inp.value; val.textContent=(+inp.value).toFixed(2); evaluate(); _markDirty();});
+    inp.addEventListener('input',()=>{node.props[k]=+inp.value; val.textContent=(+inp.value).toFixed(2); _scheduleEval();});
     row.appendChild(lbl); row.appendChild(inp); row.appendChild(val);
     box.appendChild(row);
   });
@@ -859,6 +1650,60 @@ function rgbaMergeWidget(node){
   });
   return box;
 }
+function rgbaSplitWidget(node){
+  const box = document.createElement('div');
+  box.className='w-multi';
+  const hint = document.createElement('div');
+  hint.style.cssText='font-size:10px;color:var(--text-dim);margin-bottom:4px;line-height:1.4;';
+  hint.textContent='各通道输出为灰度图（通道值写入 RGB），可接回 RGBA 合并还原原图';
+  box.appendChild(hint);
+  const actions = document.createElement('div');
+  actions.className='w-tex';
+  actions.style.marginTop='4px';
+  const info = document.createElement('div'); info.className='info';
+  info.style.cssText='display:flex;gap:10px;flex-wrap:wrap;';
+  ['r','g','b','a'].forEach(ch=>{
+    const btn=document.createElement('div'); btn.className='btn'; btn.textContent='存 '+ch.toUpperCase();
+    btn.addEventListener('click', ()=>{
+      const url = node._rgbaParts && node._rgbaParts[ch];
+      if(!url){ toast('通道尚未拆分（等待输入求值）'); return; }
+      const a=document.createElement('a');
+      a.href=url; a.download='matoga-rgba-'+ch+'.png';
+      a.click();
+    });
+    info.appendChild(btn);
+  });
+  actions.appendChild(info);
+  box.appendChild(actions);
+  return box;
+}
+function rgbAlphaSplitWidget(node){
+  const box = document.createElement('div');
+  box.className='w-multi';
+  const hint = document.createElement('div');
+  hint.style.cssText='font-size:10px;color:var(--text-dim);margin-bottom:4px;line-height:1.4;';
+  hint.textContent='rgb 输出不透明原图颜色（alpha=255），alpha 输出灰度遮罩；两路可接回 RGBA 合并的 rgb 常量与 a 通道';
+  box.appendChild(hint);
+  const actions = document.createElement('div');
+  actions.className='w-tex';
+  actions.style.marginTop='4px';
+  const info = document.createElement('div'); info.className='info';
+  info.style.cssText='display:flex;gap:10px;flex-wrap:wrap;';
+  [['rgb','RGB'],['alpha','A']].forEach(([key, label])=>{
+    const btn=document.createElement('div'); btn.className='btn'; btn.textContent='存 '+label;
+    btn.addEventListener('click', ()=>{
+      const url = node._rgbAlphaParts && node._rgbAlphaParts[key];
+      if(!url){ toast('通道尚未拆分（等待输入求值）'); return; }
+      const a=document.createElement('a');
+      a.href=url; a.download='matoga-rgbsplit-'+key+'.png';
+      a.click();
+    });
+    info.appendChild(btn);
+  });
+  actions.appendChild(info);
+  box.appendChild(actions);
+  return box;
+}
 function selectWidget(node, key, options){
   const box=document.createElement('div');
   const sel=document.createElement('select'); sel.className='w-select';
@@ -893,18 +1738,111 @@ function _labeledRow(label, widgetEl){
   return row;
 }
 function noiseWidget(node){
+  if(node.props.gain===undefined) node.props.gain=0.5;
   const box=document.createElement('div');
   box.className='w-multi';
   box.appendChild(_labeledRow('缩放', numWidget(node,'scale',0.1,20,0.1)));
   box.appendChild(_labeledRow('种子', numWidget(node,'seed',0,100,1)));
   box.appendChild(_labeledRow('层数', numWidget(node,'octaves',1,8,1)));
+  box.appendChild(_labeledRow('增益', numWidget(node,'gain',0.4,0.95,0.05)));
   return box;
 }
 function voronoiWidget(node){
+  if(node.props.mode===undefined) node.props.mode='f1';
+  if(node.props.jitter===undefined) node.props.jitter=1;
+  if(node.props.smooth===undefined) node.props.smooth=0.5;
   const box=document.createElement('div');
   box.className='w-multi';
   box.appendChild(_labeledRow('缩放', numWidget(node,'scale',0.1,20,0.1)));
   box.appendChild(_labeledRow('种子', numWidget(node,'seed',0,100,1)));
+  box.appendChild(_labeledRow('模式', selectWidget(node,'mode',['f1','f2','f2-f1','smooth'])));
+  box.appendChild(_labeledRow('抖动', numWidget(node,'jitter',0,1,0.05)));
+  box.appendChild(_labeledRow('平滑', numWidget(node,'smooth',0,1,0.05)));
+  return box;
+}
+function whiteWidget(node){
+  const box=document.createElement('div');
+  box.className='w-multi';
+  box.appendChild(_labeledRow('密度', numWidget(node,'scale',1,256,1)));
+  box.appendChild(_labeledRow('种子', numWidget(node,'seed',0,100,1)));
+  return box;
+}
+function cellWidget(node){
+  const box=document.createElement('div');
+  box.className='w-multi';
+  box.appendChild(_labeledRow('缩放', numWidget(node,'scale',0.5,32,0.5)));
+  box.appendChild(_labeledRow('种子', numWidget(node,'seed',0,100,1)));
+  return box;
+}
+function pingpongWidget(node){
+  if(node.props.gain===undefined) node.props.gain=0.5;
+  if(node.props.strength===undefined) node.props.strength=2;
+  const box=document.createElement('div');
+  box.className='w-multi';
+  box.appendChild(_labeledRow('缩放', numWidget(node,'scale',0.1,20,0.1)));
+  box.appendChild(_labeledRow('种子', numWidget(node,'seed',0,100,1)));
+  box.appendChild(_labeledRow('层数', numWidget(node,'octaves',1,8,1)));
+  box.appendChild(_labeledRow('增益', numWidget(node,'gain',0.4,0.95,0.05)));
+  box.appendChild(_labeledRow('强度', numWidget(node,'strength',0.5,8,0.1)));
+  return box;
+}
+function voronoiseWidget(node){
+  if(node.props.jitter===undefined) node.props.jitter=1;
+  if(node.props.blend===undefined) node.props.blend=0.5;
+  const box=document.createElement('div');
+  box.className='w-multi';
+  box.appendChild(_labeledRow('缩放', numWidget(node,'scale',0.1,20,0.1)));
+  box.appendChild(_labeledRow('种子', numWidget(node,'seed',0,100,1)));
+  box.appendChild(_labeledRow('抖动', numWidget(node,'jitter',0,1,0.05)));
+  box.appendChild(_labeledRow('插值', numWidget(node,'blend',0,1,0.05)));
+  return box;
+}
+function reactionWidget(node){
+  if(node.props.iterations===undefined) node.props.iterations=120;
+  if(node.props.preset===undefined) node.props.preset='coral';
+  const box=document.createElement('div');
+  box.className='w-multi';
+  const hint=document.createElement('div');
+  hint.style.cssText='font-size:10px;color:var(--text-dim);margin-bottom:4px;line-height:1.4;';
+  hint.textContent='Gray-Scott 反应扩散：迭代涌现斑纹（珊瑚/迷宫/孤子）';
+  box.appendChild(hint);
+  box.appendChild(_labeledRow('形态', selectWidget(node,'preset',['coral','maze','soliton','waves','worm'])));
+  box.appendChild(_labeledRow('迭代', numWidget(node,'iterations',40,300,10)));
+  box.appendChild(_labeledRow('种子', numWidget(node,'seed',0,100,1)));
+  return box;
+}
+function lightningWidget(node){
+  if(node.props.branches===undefined) node.props.branches=0.7;
+  if(node.props.detail===undefined) node.props.detail=1;
+  if(node.props.glow===undefined) node.props.glow=0.5;
+  const box=document.createElement('div');
+  box.className='w-multi';
+  box.appendChild(_labeledRow('种子', numWidget(node,'seed',0,100,1)));
+  box.appendChild(_labeledRow('分叉', numWidget(node,'branches',0,1,0.05)));
+  box.appendChild(_labeledRow('细节', numWidget(node,'detail',0.2,2,0.1)));
+  box.appendChild(_labeledRow('辉光', numWidget(node,'glow',0,1,0.05)));
+  return box;
+}
+function mandelWidget(node){
+  if(node.props.fractal===undefined) node.props.fractal='mandel';
+  if(node.props.zoom===undefined) node.props.zoom=1;
+  if(node.props.iterations===undefined) node.props.iterations=96;
+  const box=document.createElement('div');
+  box.className='w-multi';
+  box.appendChild(_labeledRow('类型', selectWidget(node,'fractal',['mandel','julia'])));
+  box.appendChild(_labeledRow('缩放', numWidget(node,'zoom',0.5,64,0.5)));
+  box.appendChild(_labeledRow('迭代', numWidget(node,'iterations',32,256,8)));
+  box.appendChild(_labeledRow('种子', numWidget(node,'seed',0,100,1)));
+  return box;
+}
+function paletteWidget(node){
+  if(node.props.freq===undefined) node.props.freq=1;
+  if(node.props.phase===undefined) node.props.phase=0;
+  const box=document.createElement('div');
+  box.className='w-multi';
+  box.appendChild(_labeledRow('预设', selectWidget(node,'preset',['rainbow','ocean','sunset','ember','fire','verdant'])));
+  box.appendChild(_labeledRow('频率', numWidget(node,'freq',0.5,4,0.1)));
+  box.appendChild(_labeledRow('相位', numWidget(node,'phase',0,1,0.05)));
   return box;
 }
 function gradientWidget(node){
@@ -916,12 +1854,14 @@ function gradientWidget(node){
   return box;
 }
 function warpWidget(node){
+  if(node.props.gain===undefined) node.props.gain=0.5;
   const box=document.createElement('div');
   box.className='w-multi';
   box.appendChild(_labeledRow('缩放', numWidget(node,'scale',0.1,20,0.1)));
   box.appendChild(_labeledRow('扭曲', numWidget(node,'amount',0,3,0.1)));
   box.appendChild(_labeledRow('种子', numWidget(node,'seed',0,100,1)));
   box.appendChild(_labeledRow('层数', numWidget(node,'octaves',1,8,1)));
+  box.appendChild(_labeledRow('增益', numWidget(node,'gain',0.4,0.95,0.05)));
   return box;
 }
 
@@ -997,6 +1937,61 @@ function renderEdges(){
     if(f) f.classList.add('linked');
     if(t) t.classList.add('linked');
   });
+  updateMinimap();
+}
+/* ── 拖拽对齐辅助线 ─────────────────────────── */
+function _showAlignGuide(orient, worldPos){
+  const g = document.createElement('div');
+  g.className = 'nc-align-guide ' + orient;
+  const {x:vx, y:vy, zoom} = state.viewport;
+  if(orient === 'v'){
+    g.style.left = (worldPos*zoom + vx) + 'px';
+    g.style.top = '0'; g.style.height = '100%';
+  } else {
+    g.style.top = (worldPos*zoom + vy) + 'px';
+    g.style.left = '0'; g.style.width = '100%';
+  }
+  canvasWrap.appendChild(g);
+}
+function _clearAlignGuides(){
+  canvasWrap.querySelectorAll('.nc-align-guide').forEach(g=>g.remove());
+}
+function _alignGuides(d){
+  _clearAlignGuides();
+  if(!d.moving || d.moving.size !== 1) return;
+  const id = [...d.moving][0];
+  const n = state.nodes.get(id);
+  if(!n || !n.el) return;
+  const zoom = state.viewport.zoom;
+  const thr = 6 / zoom;
+  const w = n.el.offsetWidth || 200, h = n.el.offsetHeight || 60;
+  const myXs = [n.x, n.x + w, n.x + w/2];
+  const myYs = [n.y, n.y + h, n.y + h/2];
+  const offs = [0, w, w/2], offsY = [0, h, h/2];
+  let bestX = null, bestXDiff = thr, bestXi = 0;
+  let bestY = null, bestYDiff = thr, bestYi = 0;
+  state.nodes.forEach((other, oid)=>{
+    if(oid === id || !other.el) return;
+    const ow = other.el.offsetWidth || 200, oh = other.el.offsetHeight || 60;
+    const oXs = [other.x, other.x + ow, other.x + ow/2];
+    const oYs = [other.y, other.y + oh, other.y + oh/2];
+    myXs.forEach((mx, mi)=> oXs.forEach(ox=>{
+      const diff = Math.abs(mx - ox);
+      if(diff < bestXDiff){ bestXDiff = diff; bestX = ox; bestXi = mi; }
+    }));
+    myYs.forEach((my, mi)=> oYs.forEach(oy=>{
+      const diff = Math.abs(my - oy);
+      if(diff < bestYDiff){ bestYDiff = diff; bestY = oy; bestYi = mi; }
+    }));
+  });
+  if(bestX !== null){
+    n.x = bestX - offs[bestXi]; n.el.style.left = n.x + 'px';
+    _showAlignGuide('v', bestX);
+  }
+  if(bestY !== null){
+    n.y = bestY - offsY[bestYi]; n.el.style.top = n.y + 'px';
+    _showAlignGuide('h', bestY);
+  }
 }
 function typeColor(t){
   return {number:'#7cbd56',color:'#c084fc',texture:'#f5a623',material:'#5bcefa',
@@ -1147,8 +2142,9 @@ function evaluate(){
 /* ── 联动：把求值结果推送到 3D/2D 预览 ─────── */
 function syncToPreview(results){
   // 收集所有 output 节点的材质结果
-  let mat = null, matLeft = null, matRight = null, mainTex = null, normalTex = null, hdrPreset = null;
+  let mat = null, matLeft = null, matRight = null, hdrPreset = null;
   // 贴图输出节点（主贴图/法线-n/高光-s × 左/右）：null=已放置未连线，undefined=未放置
+  // 仅输出接口节点（output*/mainTexOut*/normalOut*/specOut*）的内容会进入预览与 3D 视口
   const texOutL = { main:undefined, normal:undefined, spec:undefined };
   const texOutR = { main:undefined, normal:undefined, spec:undefined };
   state.nodes.forEach((node,id)=>{
@@ -1157,11 +2153,6 @@ function syncToPreview(results){
     if(node.type==='output' && r.material) mat = r.material;
     if(node.type==='outputLeft' && r.material) matLeft = r.material;
     if(node.type==='outputRight' && r.material) matRight = r.material;
-    if((node.type==='texture' || node.type==='mainTex') && node.props.tex){
-      // 第一个 texture/mainTex 节点作为主贴图候选
-      if(!mainTex) mainTex = node.props.tex;
-    }
-    if(node.type==='normalMap' && r.normal && r.normal.src) normalTex = r.normal.src;
     if(node.type==='hdr' && node.props.preset) hdrPreset = node.props.preset;
     if(r.mainTextureUrl!==undefined){
       if(node.type==='mainTexOutLeft') texOutL.main = r.mainTextureUrl;
@@ -1176,32 +2167,28 @@ function syncToPreview(results){
       else if(node.type==='specOutRight') texOutR.spec = r.specTextureUrl;
     }
   });
-  const hasTexOutL = texOutL.main!==undefined || texOutL.normal!==undefined || texOutL.spec!==undefined;
-  const hasTexOutR = texOutR.main!==undefined || texOutR.normal!==undefined || texOutR.spec!==undefined;
+
   // 3D 联动
   if(m3d && m3d.isMaterial3DReady && m3d.isMaterial3DReady()){
     const buildP = (m, side)=>{
       const p = {};
-      let nTex = normalTex;
+      let nTex = null;
       if(m){
         if(m.baseColor) p.baseColor = m.baseColor;
         if(typeof m.roughness==='number') p.roughness = m.roughness;
         if(typeof m.metallic==='number') p.metallic = m.metallic;
         if(m.normal && m.normal.src) nTex = m.normal.src;
       }
-      // 左右专用贴图输出节点优先于全局纹理候选（null=显式清除该槽位）
+      // 仅输出接口：贴图槽位只取自贴图输出节点（无输出节点时显式置 null 清空）
       const o = side==='left' ? texOutL : texOutR;
-      if(o.main!==undefined) p.mainTextureUrl = o.main;
-      else if(mainTex) p.mainTextureUrl = mainTex;
-      if(o.normal!==undefined) p.normalMapUrl = o.normal;
-      else if(nTex) p.normalMapUrl = nTex;
-      if(o.spec!==undefined) p.specTextureUrl = o.spec;
+      p.mainTextureUrl = (o.main!==undefined) ? o.main : null;
+      p.normalMapUrl = (o.normal!==undefined) ? o.normal : nTex;
+      p.specTextureUrl = (o.spec!==undefined) ? o.spec : null;
       if(hdrPreset) p.lightPreset = hdrPreset;
       return p;
     };
-    const effLeft = matLeft || mat, effRight = matRight || mat;
-    if(effLeft || hasTexOutL){ try { m3d.applyNodePBRSide(buildP(effLeft,'left'), 'left'); } catch(e){ console.warn('applyNodePBRSide 失败', e); } }
-    if(effRight || hasTexOutR){ try { m3d.applyNodePBRSide(buildP(effRight,'right'), 'right'); } catch(e){ console.warn('applyNodePBRSide 失败', e); } }
+    try { m3d.applyNodePBRSide(buildP(matLeft || mat,'left'), 'left'); } catch(e){ console.warn('applyNodePBRSide 失败', e); }
+    try { m3d.applyNodePBRSide(buildP(matRight || mat,'right'), 'right'); } catch(e){ console.warn('applyNodePBRSide 失败', e); }
      // 更新底栏
      const barMat = mat || matLeft || matRight;
      if(barMat && barMat.baseColor){
@@ -1213,17 +2200,19 @@ function syncToPreview(results){
      }
   }
   // 2D 预览联动
-  sync2D(results, {mainTex, normalTex, mat, matLeft, matRight, texOutL, texOutR});
+  sync2D(results, {mat, matLeft, matRight, texOutL, texOutR});
 }
-/* 2D 预览仅承载主贴图/法线/高光三种材质槽位；纹理、噪波、颜色等在节点自身预览（widget / out-preview）中查看 */
+/* 2D 预览仅承载主贴图/法线/高光三种材质槽位；仅输出接口节点（贴图输出/材质输出）产生行；
+   纹理、噪波、颜色等在节点自身预览（widget / out-preview）中查看 */
 export function buildPreview2DRows(info){
   const effLeft = info.matLeft || info.mat, effRight = info.matRight || info.mat;
   const texOutL = info.texOutL || {}, texOutR = info.texOutR || {};
   const rows = [];
-  // 主贴图：左右贴图输出节点优先，回退全局纹理候选
-  const mainL = texOutL.main!==undefined ? texOutL.main : info.mainTex;
-  const mainR = texOutR.main!==undefined ? texOutR.main : info.mainTex;
+  // 主贴图：仅主贴图输出节点
+  const mainL = texOutL.main!==undefined ? texOutL.main : null;
+  const mainR = texOutR.main!==undefined ? texOutR.main : null;
   if(mainL || mainR) rows.push({role:'主贴图 (Albedo)', left:mainL?{img:mainL}:null, right:mainR?{img:mainR}:null});
+  // 法线：法线输出节点优先，其次材质输出节点携带的 normal
   let ln = effLeft&&effLeft.normal&&effLeft.normal.src?effLeft.normal.src:null;
   let rn = effRight&&effRight.normal&&effRight.normal.src?effRight.normal.src:null;
   if(texOutL.normal!==undefined) ln = texOutL.normal;
@@ -1418,7 +2407,9 @@ window.addEventListener('pointermove', (e)=>{
       n.el.style.left = n.x+'px';
       n.el.style.top = n.y+'px';
     });
+    _alignGuides(d);
     renderEdges();
+    updateMinimap();
   } else if(d.kind==='edge'){
     const cur = screenToWorld(e.clientX, e.clientY);
     let a = d.startWorld, b = cur;
@@ -1476,6 +2467,7 @@ window.addEventListener('pointerup', (e)=>{
       const n=state.nodes.get(id);
       if(n) n.el.classList.remove('dragging');
     });
+    _clearAlignGuides();
     _markDirty();
   }
   if(d && d.kind==='box' && d.moved){
@@ -1504,6 +2496,7 @@ window.addEventListener('pointercancel', (e)=>{
   if(state.dragging){
     if(state.dragging.kind==='node') state.dragging.moving.forEach(id=>{const n=state.nodes.get(id);if(n)n.el.classList.remove('dragging');});
     if(state.dragging.kind==='edge') cleanupEdgeDrag();
+    _clearAlignGuides();
     state.dragging=null;
   }
   canvasWrap.classList.remove('panning');
@@ -1586,15 +2579,32 @@ function showCanvasMenu(e){
   Object.entries(groups).forEach(([g,items])=>{
     const grp=document.createElement('div'); grp.className='grp'; grp.textContent=g;
     m.appendChild(grp);
-    const itemEls=[];
-    items.forEach(([k,d])=>{
-      const it=document.createElement('div'); it.className='item';
-      it.innerHTML=`<span class="ic" style="background:${d.color}"></span><span class="nm">${d.title}</span>`;
-      it.dataset.name=d.title.toLowerCase(); it.dataset.group=g.toLowerCase();
-      it.addEventListener('click', ()=>{ createNode(k, wp.x-100, wp.y-14); closeCtxMenu(); });
-      m.appendChild(it); itemEls.push(it);
-    });
-    groupEls.push({grp,items:itemEls});
+    const itemEls=[], subHeads=[];
+    const hasSub = items.some(([,d])=>d.subgroup);
+    if(hasSub){
+      const subs={};
+      items.forEach(([k,d])=>{ const sg=d.subgroup||'其他'; (subs[sg]=subs[sg]||[]).push([k,d]); });
+      Object.entries(subs).forEach(([sg,subItems])=>{
+        const sgEl=document.createElement('div'); sgEl.className='subgrp'; sgEl.textContent=sg; sgEl.dataset.sub=sg.toLowerCase();
+        m.appendChild(sgEl); subHeads.push(sgEl);
+        subItems.forEach(([k,d])=>{
+          const it=document.createElement('div'); it.className='item';
+          it.innerHTML=`<span class="ic" style="background:${d.color}"></span><span class="nm">${d.title}</span>`;
+          it.dataset.name=d.title.toLowerCase(); it.dataset.group=g.toLowerCase(); it.dataset.sub=sg.toLowerCase();
+          it.addEventListener('click', ()=>{ createNode(k, wp.x-100, wp.y-14); closeCtxMenu(); });
+          m.appendChild(it); itemEls.push(it);
+        });
+      });
+    } else {
+      items.forEach(([k,d])=>{
+        const it=document.createElement('div'); it.className='item';
+        it.innerHTML=`<span class="ic" style="background:${d.color}"></span><span class="nm">${d.title}</span>`;
+        it.dataset.name=d.title.toLowerCase(); it.dataset.group=g.toLowerCase();
+        it.addEventListener('click', ()=>{ createNode(k, wp.x-100, wp.y-14); closeCtxMenu(); });
+        m.appendChild(it); itemEls.push(it);
+      });
+    }
+    groupEls.push({grp,items:itemEls,subHeads});
     const sep=document.createElement('div'); sep.className='sep'; m.appendChild(sep);
   });
   const emptyHint=document.createElement('div');
@@ -1604,14 +2614,20 @@ function showCanvasMenu(e){
   search.addEventListener('input', ()=>{
     const term=search.value.trim().toLowerCase();
     let anyVisible=false;
-    groupEls.forEach(({grp,items})=>{
+    groupEls.forEach(({grp,items,subHeads})=>{
       let gv=false;
       items.forEach(it=>{
-        const match=!term || it.dataset.name.includes(term) || it.dataset.group.includes(term);
+        const match=!term || it.dataset.name.includes(term) || it.dataset.group.includes(term) || (it.dataset.sub&&it.dataset.sub.includes(term));
         it.classList.toggle('hidden', !match);
         if(match){ gv=true; anyVisible=true; }
       });
       grp.classList.toggle('hidden', !gv);
+      if(subHeads && subHeads.length){
+        subHeads.forEach(sh=>{
+          const hasVis=items.some(it=>!it.classList.contains('hidden') && it.dataset.sub===sh.dataset.sub);
+          sh.classList.toggle('hidden', !hasVis);
+        });
+      }
     });
     emptyHint.style.display=anyVisible?'none':'block';
   });
@@ -1792,14 +2808,157 @@ function cutSelection(){
 /* ── 节点库面板 ─────────────────────────────── */
 const libraryEl = $('#library');
 const libraryBody = $('#library-body');
+const LIB_GLYPHS = {
+  number:'#', color:'◑', texture:'▦', vector2:'↗',
+  add:'+', sub:'−', mul:'×', div:'÷', mix:'↔', clamp:'⌐', colorMix:'◐',
+  mainTex:'▦', sample:'◎', hdr:'☀', normalMap:'⊥', rgbaMerge:'⊞', rgbaSplit:'⊟', rgbAlphaSplit:'⊟',
+  noise:'〰', voronoi:'◈', gradient:'▮', simplex:'∼', ridge:'∧', warp:'↭',
+  white:'▫', cell:'▦', billow:'☁', cubic:'∿', pingpong:'↕', voronoise:'◈',
+  reaction:'⊙', lightning:'⚡', mandel:'∞', palette:'◑',
+  mainTexOutLeft:'→', mainTexOutRight:'→', normalOutLeft:'↥', normalOutRight:'↥',
+  specOutLeft:'↥', specOutRight:'↥',
+};
+const LIB_GROUP_SHAPE = { '输入':'circle','运算':'diamond','混合':'rounded','材质':'square','纹理':'square','特效':'hex','输出':'rounded' };
+const LIB_GROUP_GLYPH = { '输入':'◆','运算':'◇','混合':'⊕','材质':'▦','纹理':'〰','特效':'✦','输出':'→' };
+const _libCollapsed = new Set();
+const _libSubCollapsed = new Set();
+let _libSearchInput = null;
+function _libIconHTML(type, def){
+  const shape = LIB_GROUP_SHAPE[def.group] || 'square';
+  const glyph = LIB_GLYPHS[type] || LIB_GROUP_GLYPH[def.group] || '◆';
+  return `<span class="ic ic-${shape}" style="background:${def.color}">${glyph}</span>`;
+}
+/* ── 节点库条目预览（常驻缩略图）──────────────
+    对各节点类型用默认参数生成预览：噪波/渐变/调色板→图像；颜色→色块；
+    数值→刻度条；向量→坐标点；PS 混合→双渐变混合示例；其余回退图标。
+    按 type 缓存，搜索重建时零开销。 */
+const _libPvCache = new Map();
+const _LIB_PV_SIZE = 40;
+const _BLEND_MODE_OF = {
+  blendNormal:'normal', blendDissolve:'dissolve', blendDarken:'darken',
+  blendMultiply:'multiply', blendColorBurn:'colorBurn', blendLinearBurn:'linearBurn',
+  blendDarkerColor:'darkerColor', blendLighten:'lighten', blendScreen:'screen',
+  blendColorDodge:'colorDodge', blendLinearDodge:'linearDodge', blendLighterColor:'lighterColor',
+  blendOverlay:'overlay', blendSoftLight:'softLight', blendHardLight:'hardLight',
+  blendVividLight:'vividLight', blendLinearLight:'linearLight', blendPinLight:'pinLight',
+  blendHardMix:'hardMix', blendDifference:'difference', blendExclusion:'exclusion',
+  blendSubtract:'subtract', blendDivide:'divide', blendHue:'hue',
+  blendSaturation:'saturation', blendColor:'blendColor', blendLuminosity:'luminosity',
+};
+function _blendPreviewUrl(mode){
+  const key = 'b:'+mode;
+  if(_libPvCache.has(key)) return _libPvCache.get(key);
+  const S = _LIB_PV_SIZE;
+  const c = document.createElement('canvas');
+  c.width = S; c.height = S;
+  const ctx = c.getContext('2d');
+  const img = ctx.createImageData(S, S);
+  const d = img.data;
+  for(let py = 0; py < S; py++){
+    for(let px = 0; px < S; px++){
+      const u = px / S, v = py / S;
+      const a = [u, 0.5, 1 - u];
+      const b = [1 - v, v, 0.5];
+      const o = _psBlendApply(mode, a, b, 1);
+      const j = (py * S + px) * 4;
+      d[j]     = clamp(o[0], 0, 1) * 255;
+      d[j + 1] = clamp(o[1], 0, 1) * 255;
+      d[j + 2] = clamp(o[2], 0, 1) * 255;
+      d[j + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  let url = null;
+  try { url = c.toDataURL('image/png'); } catch(e){ url = null; }
+  _libPvCache.set(key, url);
+  return url;
+}
+function _genLibPreview(type, def){
+  try {
+    if(_NOISE_PV_TYPES.has(type)){
+      const url = _noisePreviewUrl({ type, props: defaultProps(type) }, _LIB_PV_SIZE);
+      if(url) return `<span class="pv pv-img" style="background-image:url('${url}')"></span>`;
+    } else if(type === 'gradient'){
+      const p = defaultProps(type);
+      return `<span class="pv pv-grad" style="background:linear-gradient(135deg, ${p.colorA}, ${p.colorB})"></span>`;
+    } else if(type === 'color'){
+      const p = defaultProps(type);
+      return `<span class="pv pv-color" style="background:${p.color}"></span>`;
+    } else if(type === 'colorMix'){
+      return `<span class="pv pv-grad" style="background:linear-gradient(135deg, #7cbd56, #c084fc)"></span>`;
+    } else if(type === 'number'){
+      return `<span class="pv pv-num"><i class="mark" style="left:50%"></i></span>`;
+    } else if(type === 'vector2'){
+      return `<span class="pv pv-vec"><i class="dot" style="left:50%;top:50%"></i></span>`;
+    } else if(_BLEND_MODE_OF[type]){
+      const url = _blendPreviewUrl(_BLEND_MODE_OF[type]);
+      if(url) return `<span class="pv pv-img" style="background-image:url('${url}')"></span>`;
+    }
+  } catch(e){}
+  return _libIconHTML(type, def);
+}
+function _libPreviewHTML(type, def){
+  if(_libPvCache.has(type)) return _libPvCache.get(type);
+  const html = _genLibPreview(type, def);
+  _libPvCache.set(type, html);
+  return html;
+}
 function buildLibrary(){
   const searchBox=document.createElement('div');
   searchBox.className='lib-search';
-  searchBox.innerHTML=`<input type="text" id="lib-search-input" placeholder="搜索节点…" style="width:100%;box-sizing:border-box;padding:4px 8px;border:1px solid var(--border,#333);border-radius:4px;background:var(--bg2,#1a1a1a);color:var(--text,#eee);font-size:11px;margin-bottom:6px">`;
+  searchBox.innerHTML=`<span class="lib-search-ico">⌕</span><input type="text" id="lib-search-input" placeholder="搜索节点…" autocomplete="off" spellcheck="false"><button class="lib-search-clear" id="lib-search-clear" title="清除" type="button">✕</button>`;
   libraryBody.appendChild(searchBox);
-  const searchInput=searchBox.querySelector('input');
-  searchInput.addEventListener('input',()=>filterLibrary(searchInput.value));
+  _libSearchInput = searchBox.querySelector('input');
+  const clearBtn=searchBox.querySelector('#lib-search-clear');
+  _libSearchInput.addEventListener('input',()=>{
+    clearBtn.hidden = !_libSearchInput.value;
+    filterLibrary(_libSearchInput.value);
+  });
+  clearBtn.addEventListener('click',()=>{ _libSearchInput.value=''; clearBtn.hidden=true; filterLibrary(''); _libSearchInput.focus(); });
   filterLibrary('');
+  _enableLibDrop();
+}
+function _highlight(text, term){
+  if(!term) return escapeHtml(text);
+  const t = term.toLowerCase(), low = text.toLowerCase();
+  const idx = low.indexOf(t);
+  if(idx < 0) return escapeHtml(text);
+  return escapeHtml(text.slice(0,idx)) + '<mark>' + escapeHtml(text.slice(idx, idx+t.length)) + '</mark>' + escapeHtml(text.slice(idx+t.length));
+}
+let _libDragType = null, _ghostEl = null;
+function _updateGhost(e){
+  if(!_libDragType) return;
+  const def = NODE_DEFS[_libDragType];
+  if(!def) return;
+  if(!_ghostEl){
+    _ghostEl = document.createElement('div');
+    _ghostEl.className = 'node ghost';
+    _ghostEl.innerHTML = `<div class="node-head"><span class="badge" style="background:${def.color}"></span><span class="title">${escapeHtml(def.title)}</span></div>`;
+    nodesLayer.appendChild(_ghostEl);
+  }
+  _ghostEl.style.setProperty('--node-color', def.color);
+  const wp = screenToWorld(e.clientX, e.clientY);
+  _ghostEl.style.left = (wp.x - 100) + 'px';
+  _ghostEl.style.top = (wp.y - 14) + 'px';
+}
+function _clearGhost(){ if(_ghostEl){ _ghostEl.remove(); _ghostEl = null; } }
+function _libItemEl(k,d){
+  const it=document.createElement('div'); it.className='lib-item';
+  it.draggable=true; it.dataset.type=k;
+  it.innerHTML=`${_libPreviewHTML(k,d)}<span class="nm">${d.title}</span><span class="ports">${d.inputs.length||'·'}→${d.outputs.length||'·'}</span>`;
+  it.addEventListener('click', ()=>{
+    const r = canvasWrap.getBoundingClientRect();
+    const wp = screenToWorld(r.left+r.width/2, r.top+r.height/2);
+    createNode(k, wp.x-100, wp.y-30);
+  });
+  it.addEventListener('dragstart',(e)=>{
+    e.dataTransfer.setData('text/node-type', k);
+    e.dataTransfer.effectAllowed='copy';
+    _libDragType = k;
+    canvasWrap.classList.add('lib-drop-target');
+  });
+  it.addEventListener('dragend',()=>{ canvasWrap.classList.remove('lib-drop-target'); _libDragType = null; _clearGhost(); });
+  return it;
 }
 function filterLibrary(term){
   term=(term||'').trim().toLowerCase();
@@ -1808,31 +2967,71 @@ function filterLibrary(term){
   const groups = {};
   Object.entries(NODE_DEFS).forEach(([k,d])=>{
     if(d.hidden) return;
-    if(term && !d.title.toLowerCase().includes(term) && !k.toLowerCase().includes(term) && !d.group.toLowerCase().includes(term)) return;
+    if(term && !d.title.toLowerCase().includes(term) && !k.toLowerCase().includes(term)
+       && !d.group.toLowerCase().includes(term) && !(d.subgroup&&d.subgroup.toLowerCase().includes(term))) return;
     (groups[d.group]=groups[d.group]||[]).push([k,d]);
   });
   const wrap=document.createElement('div'); wrap.className='lib-group';
   Object.entries(groups).forEach(([g,items])=>{
-    const h=document.createElement('h3'); h.textContent=g; wrap.appendChild(h);
-    items.forEach(([k,d])=>{
-      const it=document.createElement('div'); it.className='lib-item';
-      it.innerHTML=`<span class="ic" style="background:${d.color}"></span><span class="nm">${d.title}</span>`;
-      it.addEventListener('click', ()=>{
-        const r = canvasWrap.getBoundingClientRect();
-        const wp = screenToWorld(r.left+r.width/2, r.top+r.height/2);
-        createNode(k, wp.x-100, wp.y-30);
-      });
-      wrap.appendChild(it);
+    const collapsed = _libCollapsed.has(g);
+    const gh=document.createElement('div'); gh.className='lib-group-head'+(collapsed?' collapsed':'');
+    gh.innerHTML=`<span class="lib-arrow">${collapsed?'▸':'▾'}</span><span class="lib-gname">${g}</span><span class="lib-count">${items.length}</span>`;
+    gh.addEventListener('click',()=>{
+      if(_libCollapsed.has(g)) _libCollapsed.delete(g); else _libCollapsed.add(g);
+      filterLibrary(_libSearchInput ? _libSearchInput.value : '');
     });
-    const sep=document.createElement('div'); sep.className='lib-sep'; wrap.appendChild(sep);
+    wrap.appendChild(gh);
+    const itemsWrap=document.createElement('div'); itemsWrap.className='lib-group-items';
+    if(collapsed) itemsWrap.style.display='none';
+    const hasSub = items.some(([,d])=>d.subgroup);
+    if(hasSub){
+      const subs = {};
+      items.forEach(([k,d])=>{ const sg=d.subgroup||'其他'; (subs[sg]=subs[sg]||[]).push([k,d]); });
+      Object.entries(subs).forEach(([sg,subItems])=>{
+        const subKey=g+'>'+sg;
+        const subCollapsed=_libSubCollapsed.has(subKey);
+        const sh=document.createElement('div'); sh.className='lib-sub-head'+(subCollapsed?' collapsed':'');
+        sh.innerHTML=`<span class="lib-sub-arrow">${subCollapsed?'▸':'▾'}</span><span class="lib-sub-name">${sg}</span><span class="lib-sub-count">${subItems.length}</span>`;
+        sh.addEventListener('click',()=>{
+          if(_libSubCollapsed.has(subKey)) _libSubCollapsed.delete(subKey); else _libSubCollapsed.add(subKey);
+          filterLibrary(_libSearchInput ? _libSearchInput.value : '');
+        });
+        itemsWrap.appendChild(sh);
+        const subWrap=document.createElement('div'); subWrap.className='lib-sub-items';
+        if(subCollapsed) subWrap.style.display='none';
+        subItems.forEach(([k,d])=>{ const it=_libItemEl(k,d); if(term && d.title.toLowerCase().includes(term)){ it.querySelector('.nm').innerHTML=_highlight(d.title, term); } subWrap.appendChild(it); });
+        itemsWrap.appendChild(subWrap);
+      });
+    } else {
+      items.forEach(([k,d])=>{ const it=_libItemEl(k,d); if(term && d.title.toLowerCase().includes(term)){ it.querySelector('.nm').innerHTML=_highlight(d.title, term); } itemsWrap.appendChild(it); });
+    }
+    wrap.appendChild(itemsWrap);
   });
   if(Object.keys(groups).length===0){
     const empty=document.createElement('div');
-    empty.style.cssText='color:var(--text-dim);font-size:11px;padding:12px;text-align:center';
-    empty.textContent='未找到匹配节点';
+    empty.className='lib-empty';
+    empty.innerHTML=`<span class="lib-empty-ico">⌕</span><span>未找到匹配节点</span>`;
     wrap.appendChild(empty);
   }
   libraryBody.appendChild(wrap);
+}
+let _libDropEnabled=false;
+function _enableLibDrop(){
+  if(_libDropEnabled) return; _libDropEnabled=true;
+  canvasWrap.addEventListener('dragover',(e)=>{
+    if(e.dataTransfer.types.includes('text/node-type')){ e.preventDefault(); e.dataTransfer.dropEffect='copy'; _updateGhost(e); }
+  });
+  canvasWrap.addEventListener('dragleave',(e)=>{
+    if(!canvasWrap.contains(e.relatedTarget)) _clearGhost();
+  });
+  canvasWrap.addEventListener('drop',(e)=>{
+    const k=e.dataTransfer.getData('text/node-type');
+    if(!k) return;
+    e.preventDefault();
+    const wp=screenToWorld(e.clientX, e.clientY);
+    createNode(k, wp.x-100, wp.y-30);
+    _clearGhost();
+  });
 }
 
 /* ── 工具栏 ─────────────────────────────────── */
@@ -2226,6 +3425,7 @@ function updateStats(){
   $('#stat-nodes').textContent = state.nodes.size;
   $('#stat-edges').textContent = state.edges.size;
   _notifyGraphChanged();
+  updateMinimap();
 }
 function _notifyGraphChanged(){
   _markDirty();
@@ -2566,7 +3766,7 @@ export function focusNodeInCanvas(id){
   applyViewport();
   return true;
 }
-export { createNode, startEdge as _debugStartEdge, finishEdge as _debugFinishEdge, saveGraph as _debugSaveGraph, loadGraphJSON as _debugLoadGraphJSON };
+export { createNode, startEdge as _debugStartEdge, finishEdge as _debugFinishEdge, saveGraph as _debugSaveGraph, loadGraphJSON as _debugLoadGraphJSON, evaluate as _debugEvaluate, _noiseGrid as _debugNoiseGrid, _gridToImageData as _debugGridToImageData, _noiseValue as _debugNoiseValue, _paletteRGB as _debugPaletteRGB, _psBlendApply as _debugPsBlendApply, _libPreviewHTML as _debugLibPreviewHTML, _genLibPreview as _debugGenLibPreview, _BLEND_MODE_OF as _debugBlendModeOf };
 
 /* ── 节点项目管理：保存 / 加载（.mtgp 特殊格式，自包含工程）── */
 const _TEX_REF_PREFIX = '@tex/';
@@ -2907,6 +4107,14 @@ export function loadPreset(name){
   if(!fn){ toast('未知预设: '+name); return; }
   fn();
   toast('已加载预设: '+name);
+}
+
+/* 自定义画布预设：导出当前图（ComfyUI 格式对象）/ 整图恢复 */
+export function serializeGraphData(){ return _graphToComfy(); }
+export function loadCanvasPresetGraph(graph){
+  if(!graph || !Array.isArray(graph.nodes) || !graph.nodes.length){ toast('画布预设为空'); return; }
+  loadGraphJSON(typeof graph==='string' ? graph : JSON.stringify(graph));
+  setTimeout(fitView, 80);
 }
 
 export function initNodeCanvas(){

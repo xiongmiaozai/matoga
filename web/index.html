@@ -22,6 +22,14 @@
   <link rel="stylesheet" href="node-rel.css" />
   <link rel="stylesheet" href="node-preview.css" />
   <link rel="stylesheet" href="floating-window.css" />
+  <style>
+    .bb-launch { display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; height:100%; padding:24px; gap:10px; color:#9a9a9a; }
+    .bb-launch-ico { width:56px; height:56px; opacity:.85; color:#3a7bd5; }
+    .bb-launch-title { font-size:16px; font-weight:600; color:#e6e6e6; }
+    .bb-launch-desc { font-size:12.5px; line-height:1.6; max-width:320px; }
+    .bb-launch-btn { display:inline-flex; align-items:center; gap:6px; margin-top:6px; padding:9px 20px; border:0; border-radius:6px; background:#3a7bd5; color:#fff; font-size:13.5px; cursor:pointer; transition:background .15s; }
+    .bb-launch-btn:hover { background:#2f6cc0; }
+  </style>
 </head>
 <body>
   <!-- MC 边角装饰 — 独立 SVG, CC0 (github.com/minecraft-svg-icons) -->
@@ -94,6 +102,7 @@
     </div>
     <div class="header-actions">
 
+      <button id="blockbenchBtn" class="icon-btn" data-i18n-title="header.blockbenchWin" title="Blockbench 窗口"><svg class="ico"><use href="#i-cube"/></svg></button>
       <button id="nodeRelBtn" class="icon-btn" data-i18n-title="header.nodeRelWin" title="节点关系窗口"><svg class="ico"><use href="#i-tree"/></svg></button>
       <button id="nodePreviewBtn" class="icon-btn" data-i18n-title="header.nodePreviewWin" title="节点预览窗口"><svg class="ico"><use href="#i-eye"/></svg></button>
       <button id="langBtn" class="icon-btn" data-i18n-title="header.language" title="语言"><img src="assets/mc-icons/globe.png" alt="" class="mc-ico" /></button>
@@ -109,121 +118,16 @@
       <button id="collapseLeftBtn" class="collapse-btn" data-i18n-title="sidebar.collapseLeft" title="折叠/展开左栏"><svg class="ico"><use href="#i-chevron-left"/></svg></button>
 
       <div class="sidebar-inner">
-        <div class="folder-card" id="folderCard">
-          <div class="folder-card-head">
-            <div class="head-side head-side-left">
-              <span class="tag tag-left" data-i18n="sidebar.leftTag">左侧 · 基准</span>
-              <div class="side-actions">
-                <button id="leftBtn" class="btn btn-primary btn-sm side-select-btn" data-i18n="common.select">选择</button>
-                <button id="leftPackBtn" class="btn btn-ghost btn-sm pack-btn" data-i18n-title="sidebar.quickPick" title="快速选包（MC 资产包 / 官方包）"><svg class="ico ico-sm"><use href="#i-box"/></svg><svg class="ico ico-sm pack-caret"><use href="#i-chevron-down"/></svg></button>
-              </div>
-            </div>
-            <div class="vs-divider" aria-hidden="true"><span class="vs-badge"><svg class="ico ico-xs"><use href="#i-compare"/></svg></span></div>
-            <div class="head-side head-side-right">
-              <span class="tag tag-right" data-i18n="sidebar.rightTag">右侧 · 对比</span>
-              <div class="side-actions">
-                <button id="rightBtn" class="btn btn-primary btn-sm side-select-btn" data-i18n="common.select">选择</button>
-                <button id="rightPackBtn" class="btn btn-ghost btn-sm pack-btn" data-i18n-title="sidebar.quickPick" title="快速选包（MC 资产包 / 官方包）"><svg class="ico ico-sm"><use href="#i-box"/></svg><svg class="ico ico-sm pack-caret"><use href="#i-chevron-down"/></svg></button>
-              </div>
-            </div>
-          </div>
-          <div id="leftPath" class="path-box" data-i18n="common.empty">未选择</div>
-          <div id="rightPath" class="path-box" data-i18n="common.empty">未选择</div>
-
-        </div>
-
-        <div class="panel-card">
-          <div class="panel-card-title"><svg class="ico ico-sm"><use href="#i-compare"/></svg><span data-i18n="sidebar.compareSettings">对比设置</span></div>
-          <div class="opt-row">
-            <label class="opt"><input type="radio" name="viewMode" value="all" checked /><span data-i18n="common.all">全部</span></label>
-            <label class="opt"><input type="radio" name="viewMode" value="byFolder" /><span data-i18n="sidebar.byFolder">分类</span></label>
-          </div>
-          <div class="opt-row">
-            <label class="opt"><input type="checkbox" id="recursiveChk" /><span data-i18n="sidebar.recursive">递归</span></label>
-            <label class="opt"><input type="checkbox" id="onlyMissingChk" /><span data-i18n="sidebar.onlyMissing">仅不一致</span></label>
-          </div>
-          <div class="opt-row">
-            <label class="opt"><input type="checkbox" id="ignoreChk" checked /><span data-i18n="sidebar.ignoreSys">忽略系统</span></label>
-            <label class="opt"><input type="checkbox" id="hashChk" /><span data-i18n="sidebar.hashCheck">哈希校验</span></label>
-          </div>
-          <label class="opt-text"><span data-i18n="sidebar.customIgnore">自定义忽略</span><input type="text" id="ignoreInput" class="input-text" data-i18n-placeholder="sidebar.customIgnorePh" placeholder="*.tmp,*.bak" /></label>
-        </div>
+  <!-- 面板 DOM 已迁移至 web/src/panels/<id>/panel.html，由 panel-loader 动态注入 -->
 
 
-        <div class="panel-card">
-          <div class="panel-card-title"><svg class="ico ico-sm"><use href="#i-swap"/></svg><span data-i18n="sidebar.actions">操作</span></div>
-          <button id="compareBtn2" class="btn btn-accent" disabled data-i18n="sidebar.startCompare">开始对比</button>
-          <div class="action-row">
-            <button id="undoBtn" class="btn btn-ghost btn-sm" disabled><svg class="ico ico-sm"><use href="#i-undo"/></svg> <span data-i18n="sidebar.undo">撤回</span></button>
-            <button id="swapBtn2" class="btn btn-ghost btn-sm"><svg class="ico ico-sm"><use href="#i-swap"/></svg> <span data-i18n="sidebar.swap">交换</span></button>
-          </div>
-          <div class="action-row">
-            <button id="batchRightBtn" class="btn btn-sm" disabled data-i18n="sidebar.batchRight">批量→右</button>
-            <button id="batchLeftBtn" class="btn btn-sm" disabled data-i18n="sidebar.batchLeft">批量→左</button>
-          </div>
-          <div class="action-row">
-            <button id="exportBtn" class="btn btn-ghost btn-sm" disabled><svg class="ico ico-sm"><use href="#i-download"/></svg> <span>TXT</span></button>
-            <button id="exportHtmlBtn" class="btn btn-ghost btn-sm" disabled><svg class="ico ico-sm"><use href="#i-download"/></svg> <span>HTML</span></button>
-            <button id="clearMemBtn" class="btn btn-ghost btn-sm" disabled><svg class="ico ico-sm"><use href="#i-trash"/></svg></button>
-          </div>
-        </div>
+
       </div>
     </aside>
 
 
     <div class="resizer" data-resize="left" data-i18n-title="sidebar.resizeLeft" title="拖拽调整左栏宽度"></div>
 
-    <main class="center" data-region="center">
-      <div class="center-head">
-        <div class="center-title-bar">
-          <span class="center-title"><svg class="ico ico-sm"><use href="#i-compare"/></svg> <span data-i18n="center.compareResult">对比结果</span></span>
-          <div class="view-tabs">
-            <button class="view-tab active" data-view="table" data-i18n-title="center.tableView" title="表格视图 (Ctrl+1)"><svg class="ico ico-sm"><use href="#i-layers"/></svg> <span data-i18n="center.table">表格</span></button>
-            <button class="view-tab" data-view="chart" data-i18n-title="center.chartView" title="可视化视图 (Ctrl+2)"><svg class="ico ico-sm"><use href="#i-pie"/></svg> <span data-i18n="center.chart">可视化</span></button>
-          </div>
-        </div>
-        <div id="statsDashboard" class="stats-dashboard"></div>
-        <div id="tableToolbar" class="table-toolbar">
-          <div class="filter-bar">
-            <button class="filter-btn status-filter-btn active" data-filter="all" data-i18n="center.filterAll">全部</button>
-            <button class="filter-btn status-filter-btn" data-filter="missing" data-i18n="center.filterMissing">缺失</button>
-            <button class="filter-btn status-filter-btn" data-filter="diff" data-i18n="center.filterDiff">不同</button>
-            <button class="filter-btn status-filter-btn" data-filter="extra" data-i18n="center.filterExtra">多余</button>
-          </div>
-          <div class="filter-bar type-filter-bar">
-            <button class="filter-btn type-filter-btn active" data-type-filter="all" data-i18n="center.filterTypeAll">全部类型</button>
-            <button class="filter-btn type-filter-btn" data-type-filter="material"><svg class="ico ico-sm"><use href="#i-layers"/></svg> <span data-i18n="center.filterTypeMaterial">材质</span></button>
-            <button class="filter-btn type-filter-btn" data-type-filter="image"><svg class="ico ico-sm"><use href="#i-image"/></svg> <span data-i18n="center.filterTypeImage">图片</span></button>
-            <button class="filter-btn type-filter-btn" data-type-filter="folder"><svg class="ico ico-sm"><use href="#i-folder"/></svg> <span data-i18n="center.filterTypeFolder">文件夹</span></button>
-          </div>
-          <div id="summary" class="summary"></div>
-        </div>
-      </div>
-      <div id="tableView" class="view-pane active">
-        <div class="result-table-wrap">
-          <table id="resultTable" class="result-table">
-            <thead>
-              <tr>
-                <th class="col-status" data-key="status" data-i18n="common.status">状态</th>
-                <th class="col-preview" data-i18n="center.colPreview">预览</th>
-                <th class="col-name" data-key="name" data-i18n="common.name">名称</th>
-                <th class="col-type" data-key="type" data-i18n="common.type">类型</th>
-                <th class="col-size" data-key="size" data-i18n="common.size">大小</th>
-                <th class="col-mtime" data-key="mtime" data-i18n="center.colMtime">修改时间</th>
-                <th class="col-left" data-key="left" data-i18n="center.colLeft">左</th>
-                <th class="col-right" data-key="right" data-i18n="center.colRight">右</th>
-              </tr>
-            </thead>
-            <tbody id="resultBody">
-              <tr class="empty-row"><td colspan="8"><svg class="ico ico-empty"><use href="#i-folder"/></svg><br><span data-i18n="center.emptyHint">拖拽文件夹到左侧卡片开始对比</span></td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-      <div id="chartView" class="view-pane">
-        <div id="chartContent" class="chart-content"></div>
-      </div>
-    </main>
 
     <div id="nodeView">
       <div class="node-window-bar">
@@ -237,368 +141,17 @@
 
     <aside class="sidebar-right" id="sidebarRight" data-region="right">
       <button id="collapseRightBtn" class="collapse-btn collapse-right-expand" data-i18n-title="sidebar.collapseRight" title="展开右栏"><svg class="ico"><use href="#i-chevron-left"/></svg></button>
-      <div class="panel" id="previewPanelWrap" data-panel="preview">
-        <div class="panel-head">
-          <div class="pv-tabs">
-            <button class="active" data-pv-tab="2d"><svg class="ico ico-sm"><use href="#i-image"/></svg> <span data-i18n="preview.2d">2D</span></button>
-            <button data-pv-tab="3d"><svg class="ico ico-sm"><use href="#i-cube"/></svg> <span data-i18n="preview.3d">3D</span></button>
-          </div>
-          <div class="panel-tools">
-            <button class="panel-tool" data-panel-action="float" data-i18n-title="preview.float" title="浮动"><svg class="ico ico-sm"><use href="#i-external"/></svg></button>
-            <button class="panel-tool" data-panel-action="collapse" data-i18n-title="sidebar.collapseRight" title="折叠右栏"><svg class="ico ico-sm"><use href="#i-chevron-right"/></svg></button>
-            <button class="panel-tool panel-close" data-panel-action="close" data-i18n-title="common.close" title="关闭"><svg class="ico ico-sm"><use href="#i-x"/></svg></button>
-          </div>
-        </div>
-        <div class="panel-body">
-          <div class="pv-content active" data-pv-content="2d">
-            <div class="pv-toolbar">
-              <div class="m3d-segment" id="pvChannelSeg">
-                <button class="active" data-ch="all" data-i18n="common.all">全部</button>
-                <button data-ch="r">R</button>
-                <button data-ch="g">G</button>
-                <button data-ch="b">B</button>
-                <button data-ch="a">A</button>
-              </div>
-              <label class="pv-zoom"><span data-i18n="preview.zoom">缩放</span><input type="range" id="pvZoom" min="50" max="300" step="10" value="100" /><span class="pv-zoom-val" id="pvZoomVal">100%</span></label>
-              <label class="pv-split-toggle"><input type="checkbox" id="pvSplit" /> <span data-i18n="preview.splitToggle">对比滑块</span></label>
-              <div class="m3d-segment" id="pvFilterSeg">
-                <button class="active" data-pvf="nearest" data-i18n="preview.filterNearest">邻近</button>
-                <button data-pvf="bilinear" data-i18n="preview.filterBilinear">双线性</button>
-                <button data-pvf="trilinear" data-i18n="preview.filterTrilinear">三线性</button>
-                <button data-pvf="anisotropic" data-i18n="preview.filterAniso">各向异性</button>
-              </div>
-            </div>
-            <div class="preview-panel" id="previewPanel">
-              <div class="pv-hint" data-i18n="preview.hint">点击表格中的材质查看预览</div>
-            </div>
-          </div>
-          <div class="pv-content" data-pv-content="3d">
-            <div class="material3d-container" id="material3dContainer">
-              <div class="m3d-loading" id="m3dLoading"><div class="m3d-loading-text" data-i18n="m3d.loading">处理法线贴图...</div><div class="m3d-loading-bar"><div class="m3d-loading-fill"></div></div></div>
-              <div class="m3d-hud-bar">
-                <div class="m3d-segment" id="m3dGeoSeg">
-                  <button data-geo="sphere" data-i18n-title="m3d.geoSphere" title="球"><svg class="ico ico-sm"><use href="#i-sphere"/></svg></button>
-                  <button class="active" data-geo="cube" data-i18n-title="m3d.geoCube" title="方"><svg class="ico ico-sm"><use href="#i-cube"/></svg></button>
-                  <button data-geo="plane" data-i18n-title="m3d.geoPlane" title="面"><svg class="ico ico-sm"><use href="#i-plane"/></svg></button>
-                  <button data-geo="torus" data-i18n-title="m3d.geoTorus" title="环"><svg class="ico ico-sm"><use href="#i-torus"/></svg></button>
-                  <button data-geo="cylinder" data-i18n-title="m3d.geoCylinder" title="柱"><svg class="ico ico-sm"><use href="#i-cylinder"/></svg></button>
-                  <button data-geo="capsule" data-i18n-title="m3d.geoCapsule" title="囊"><svg class="ico ico-sm"><use href="#i-capsule"/></svg></button>
-                </div>
-                <div class="m3d-segment" id="m3dSrcSeg">
-                  <button data-src="left" data-i18n="common.left">左</button>
-                  <button class="active" data-src="dual" data-i18n="m3d.srcDual">双</button>
-                  <button data-src="right" data-i18n="common.right">右</button>
-                </div>
-                <div class="m3d-hud-spacer"></div>
-                <button class="m3d-hud-btn" id="m3dShotBtn" data-i18n-title="m3d.shot" title="截图"><svg class="ico ico-sm"><use href="#i-camera"/></svg></button>
-                <button class="m3d-hud-btn" id="m3dFullscreenBtn" data-i18n-title="m3d.fullscreen" title="全屏"><svg class="ico ico-sm"><use href="#i-maximize"/></svg></button>
-                <button class="m3d-hud-btn" id="m3dParamsBtn" data-i18n-title="m3d.params" title="参数"><svg class="ico ico-sm"><use href="#i-sliders"/></svg></button>
-              </div>
-              <div class="m3d-params-overlay" id="m3dParamsOverlay">
-                <div class="m3d-params-drag" id="m3dParamsDrag">
-                  <span class="m3d-params-title" data-i18n="m3d.params">参数</span>
-                  <button class="m3d-params-close" id="m3dParamsClose" data-i18n-title="common.close" title="关闭"><svg class="ico ico-sm"><use href="#i-x"/></svg></button>
-                </div>
-                <div class="m3d-tabs">
-                  <button class="active" data-tab="material" data-i18n-title="m3d.tabMaterial" title="材质"><svg class="ico ico-sm"><use href="#i-layers"/></svg></button>
-                  <button data-tab="parallax" data-i18n-title="m3d.tabParallax" title="视差"><svg class="ico ico-sm"><use href="#i-depth"/></svg></button>
-                  <button data-tab="opacity" data-i18n-title="m3d.tabOpacity" title="透明"><svg class="ico ico-sm"><use href="#i-opacity"/></svg></button>
-                  <button data-tab="env" data-i18n-title="m3d.tabEnv" title="环境"><svg class="ico ico-sm"><use href="#i-globe"/></svg></button>
-                  <button data-tab="advanced" data-i18n-title="m3d.tabAdvanced" title="高级"><svg class="ico ico-sm"><use href="#i-sliders"/></svg></button>
-                </div>
-                <div class="m3d-tab-panes">
-                  <div class="m3d-tab-pane active" data-pane="material">
-                    <div class="m3d-presets">
-                      <button data-preset="metal" data-i18n-title="m3d.presetMetal" title="金属"><svg class="ico ico-sm"><use href="#i-metal"/></svg></button>
-                      <button data-preset="plastic" data-i18n-title="m3d.presetPlastic" title="塑料"><svg class="ico ico-sm"><use href="#i-plastic"/></svg></button>
-                      <button data-preset="glass" data-i18n-title="m3d.presetGlass" title="玻璃"><svg class="ico ico-sm"><use href="#i-glass"/></svg></button>
-                      <button data-preset="fabric" data-i18n-title="m3d.presetFabric" title="织物"><svg class="ico ico-sm"><use href="#i-fabric"/></svg></button>
-                      <button data-preset="emissive" data-i18n-title="m3d.presetEmissive" title="自发光"><svg class="ico ico-sm"><use href="#i-sun"/></svg></button>
-                    </div>
-                    <div class="m3d-ctrl-group">
-                      <label class="m3d-slider"><span data-i18n="m3d.metalness">金属度</span><input type="range" id="m3dMetalness" min="0" max="1" step="0.01" value="0.1" /><span class="m3d-val" id="m3dMetalnessVal">0.10</span></label>
-                      <label class="m3d-slider"><span data-i18n="m3d.roughness">粗糙度</span><input type="range" id="m3dRoughness" min="0" max="1" step="0.01" value="0.5" /><span class="m3d-val" id="m3dRoughnessVal">0.50</span></label>
-                      <label class="m3d-slider"><span data-i18n="m3d.normal">法线</span><input type="range" id="m3dNormal" min="0" max="2" step="0.01" value="1" /><span class="m3d-val" id="m3dNormalVal">1.00</span></label>
-                      <label class="m3d-slider"><span data-i18n="m3d.emissive">自发光</span><input type="range" id="m3dEmissive" min="0" max="5" step="0.1" value="1" /><span class="m3d-val" id="m3dEmissiveVal">1.0</span></label>
-                    </div>
-                  </div>
-                  <div class="m3d-tab-pane" data-pane="parallax">
 
-                    <div class="m3d-ctrl-group">
-                      <label class="m3d-checkbox"><input type="checkbox" id="m3dParallaxEnable" checked /> <span data-i18n="m3d.parallaxEnable">启用视差</span></label>
-                    </div>
-                    <div class="m3d-ctrl-group">
-                      <span class="m3d-light-label" data-i18n="m3d.algorithm">算法</span>
-                      <div class="m3d-segment" id="m3dParallaxModeSeg">
-                        <button data-mode="0" data-i18n="m3d.parallaxBasic">基础</button>
-                        <button data-mode="1" data-i18n="m3d.parallaxSteep">陡峭</button>
-                        <button class="active" data-mode="2">POM</button>
-                        <button data-mode="3">Relief</button>
-                      </div>
-                    </div>
-                    <div class="m3d-ctrl-group">
-                      <label class="m3d-slider"><span data-i18n="m3d.parallaxScale">视差强度</span><input type="range" id="m3dParallax" min="-1" max="1" step="0.01" value="0.05" /><span class="m3d-val" id="m3dParallaxVal">0.05</span></label>
-                      <label class="m3d-slider"><span data-i18n="m3d.parallaxSteps">视差步数</span><input type="range" id="m3dParallaxSteps" min="8" max="64" step="1" value="32" /><span class="m3d-val" id="m3dParallaxStepsVal">32</span></label>
-                      <label class="m3d-checkbox"><input type="checkbox" id="m3dParallaxAdaptive" checked /><span data-i18n="m3d.parallaxAdaptive">自适应层数</span></label>
-                      <label class="m3d-checkbox"><input type="checkbox" id="m3dParallaxShadow" /><span data-i18n="m3d.parallaxShadow">自阴影</span></label>
-                      <label class="m3d-slider"><span data-i18n="m3d.parallaxShadowStr">阴影强度</span><input type="range" id="m3dParallaxShadowStr" min="0" max="1" step="0.05" value="0.5" disabled /><span class="m3d-val" id="m3dParallaxShadowStrVal">0.5</span></label>
-                    </div>
-                  </div>
-                  <div class="m3d-tab-pane" data-pane="opacity">
-                    <div class="m3d-ctrl-group">
-                      <div class="m3d-segment" id="m3dOpacityModeSeg">
-                        <button class="active" data-mode="auto" data-i18n="m3d.opaAuto">自动</button>
-                        <button data-mode="cutout" data-i18n="m3d.opaCutout">裁剪</button>
-                        <button data-mode="blend" data-i18n="m3d.opaBlend">半透</button>
-                        <button data-mode="glass" data-i18n="m3d.opaGlass">玻璃</button>
-                      </div>
-                    </div>
-                    <div class="m3d-ctrl-group">
-                      <label class="m3d-slider"><span data-i18n="m3d.opacity">不透明</span><input type="range" id="m3dOpacity" min="0" max="1" step="0.01" value="1" /><span class="m3d-val" id="m3dOpacityVal">1.00</span></label>
-                      <label class="m3d-slider"><span data-i18n="m3d.transmission">透射</span><input type="range" id="m3dTransmission" min="0" max="1" step="0.01" value="0" /><span class="m3d-val" id="m3dTransmissionVal">0.00</span></label>
-                      <label class="m3d-slider"><span data-i18n="m3d.ior">折射率</span><input type="range" id="m3dIOR" min="1" max="2.33" step="0.01" value="1.5" /><span class="m3d-val" id="m3dIORVal">1.50</span></label>
-                      <label class="m3d-slider"><span data-i18n="m3d.clearcoat">清漆</span><input type="range" id="m3dClearcoat" min="0" max="1" step="0.01" value="0" /><span class="m3d-val" id="m3dClearcoatVal">0.00</span></label>
-                    </div>
-                  </div>
-                  <div class="m3d-tab-pane" data-pane="env">
-                    <div class="m3d-ctrl-group">
-                      <span class="m3d-light-label" data-i18n="m3d.env">环境</span>
-                      <div class="m3d-segment" id="m3dEnvModeSeg">
-                        <button class="active" data-envmode="custom" data-i18n="m3d.envCustom">自定义灯光</button>
-                        <button data-envmode="sky" data-i18n="m3d.envSky">程序化天空</button>
-                        <button data-envmode="hdri" data-i18n="m3d.envHdri">HDRI</button>
-                      </div>
-                    </div>
-                    <div class="m3d-env-subpane active" data-envpane="custom">
-                      <div class="m3d-ctrl-group">
-                        <span class="m3d-light-label" data-i18n="m3d.light">光照</span>
-                        <div class="m3d-segment" id="m3dLightSeg">
-                          <button class="active" data-light="studio" data-i18n="m3d.lightStudio">工作室</button>
-                          <button data-light="outdoor" data-i18n="m3d.lightOutdoor">户外</button>
-                          <button data-light="soft" data-i18n="m3d.lightSoft">柔和</button>
-                          <button data-light="warm" data-i18n="m3d.lightWarm">暖光</button>
-                          <button data-light="cool" data-i18n="m3d.lightCool">冷光</button>
-                        </div>
-                      </div>
-                      <div class="m3d-ctrl-group">
-                        <span class="m3d-light-label" data-i18n="m3d.lightAmbient">环境光</span>
-                        <input type="color" id="m3dAmbientColor" class="m3d-color-input" value="#ffffff" />
-                        <label class="m3d-slider"><span data-i18n="m3d.lightAmbientInt">强度</span><input type="range" id="m3dAmbientIntensity" min="0" max="2" step="0.01" value="0.25" /><span class="m3d-val" id="m3dAmbientIntensityVal">0.25</span></label>
-                      </div>
-                      <div id="m3dLightList"></div>
-                      <div class="m3d-ctrl-group">
-                        <button id="m3dAddLight" class="btn btn-ghost btn-sm" data-i18n="m3d.lightAdd">+ 添加灯光</button>
-                      </div>
-                      <div class="m3d-ctrl-group">
-                        <span class="m3d-light-label" data-i18n="m3d.lightBg">背景色</span>
-                        <input type="color" id="m3dBgColor" class="m3d-color-input" value="#1a1a2e" />
-                      </div>
-                      <div class="m3d-ctrl-group m3d-light-save-row">
-                        <input type="text" id="m3dLightPresetName" class="m3d-light-name-input" placeholder="预设名称" data-i18n-placeholder="m3d.lightPresetNamePh" maxlength="20">
-                        <button class="m3d-light-save-btn" id="m3dLightSaveBtn" data-i18n="m3d.lightSavePreset">保存</button>
-                      </div>
-                      <div class="m3d-ctrl-group m3d-light-custom-list" id="m3dLightCustomList"></div>
-                    </div>
-                     <div class="m3d-env-subpane" data-envpane="sky">
-                      <div class="m3d-ctrl-group">
-                        <div class="m3d-segment" id="m3dSkyPresetSeg">
-                          <button data-preset="noon" data-i18n="m3d.skyNoon">正午</button>
-                          <button data-preset="sunset" data-i18n="m3d.skySunset">日落</button>
-                          <button data-preset="overcast" data-i18n="m3d.skyOvercast">阴天</button>
-                          <button data-preset="night" data-i18n="m3d.skyNight">夜晚</button>
-                        </div>
-                      </div>
-                      <div class="m3d-ctrl-group m3d-sky-save-row">
-                        <input type="text" id="m3dSkyPresetName" class="m3d-sky-name-input" placeholder="预设名称" data-i18n-placeholder="m3d.skyPresetNamePh" maxlength="20" />
-                        <button class="m3d-sky-save-btn" id="m3dSkySaveBtn" data-i18n="m3d.skySavePreset">保存</button>
-                      </div>
-                      <div class="m3d-ctrl-group m3d-sky-custom-list" id="m3dSkyCustomList"></div>
-                      <div class="m3d-ctrl-group">
-                        <label class="m3d-slider"><span data-i18n="m3d.skyElevation">太阳高度</span><input type="range" id="m3dSkyElevation" min="-10" max="89" step="1" value="15" /><span class="m3d-val" id="m3dSkyElevationVal">15°</span></label>
-                        <label class="m3d-slider"><span data-i18n="m3d.skyAzimuth">方位角</span><input type="range" id="m3dSkyAzimuth" min="0" max="360" step="1" value="180" /><span class="m3d-val" id="m3dSkyAzimuthVal">180°</span></label>
-                      </div>
-                      <div class="m3d-ctrl-group">
-                        <label class="m3d-slider"><span data-i18n="m3d.skyTurbidity">浑浊度</span><input type="range" id="m3dSkyTurbidity" min="0" max="20" step="0.1" value="3" /><span class="m3d-val" id="m3dSkyTurbidityVal">3.0</span></label>
-                        <label class="m3d-slider"><span data-i18n="m3d.skyRayleigh">瑞利</span><input type="range" id="m3dSkyRayleigh" min="0" max="30" step="0.01" value="2.5" /><span class="m3d-val" id="m3dSkyRayleighVal">2.50</span></label>
-                      </div>
-                      <div class="m3d-ctrl-group">
-                        <label class="m3d-slider"><span data-i18n="m3d.skyMie">Mie系数</span><input type="range" id="m3dSkyMie" min="0" max="0.1" step="0.001" value="0.005" /><span class="m3d-val" id="m3dSkyMieVal">0.005</span></label>
-                        <label class="m3d-slider"><span data-i18n="m3d.skyMieG">Mie方向</span><input type="range" id="m3dSkyMieG" min="0" max="0.999" step="0.001" value="0.8" /><span class="m3d-val" id="m3dSkyMieGVal">0.800</span></label>
-                      </div>
-                      <div class="m3d-ctrl-group">
-
-                        <span class="m3d-light-label" data-i18n="m3d.skyTint">天空色调</span>
-                        <input type="color" id="m3dSkyTint" value="#a0c0ff" data-i18n-title="m3d.skyTintTitle" title="天空整体色调，白色=物理结果" />
-                      </div>
-                    </div>
-                    <div class="m3d-env-subpane" data-envpane="hdri">
-                      <div class="m3d-ctrl-group">
-                        <button id="m3dHdrBtn" class="btn btn-ghost btn-sm"><svg class="ico ico-sm"><use href="#i-globe"/></svg> <span data-i18n="m3d.loadHdr">加载HDR</span></button>
-                        <button id="m3dHdrClearBtn" class="btn btn-ghost btn-sm" data-i18n="m3d.clearHdr">清除HDR</button>
-                        <button id="m3dHdrRefreshBtn" class="btn btn-ghost btn-sm"><svg class="ico ico-sm"><use href="#i-refresh"/></svg> <span data-i18n="m3d.refresh">刷新</span></button>
-                      </div>
-                      <div class="m3d-ctrl-group">
-                        <div class="m3d-segment" id="m3dHdrUsageSeg">
-                          <button class="active" data-hdruage="both" data-i18n="m3d.hdrUsageBoth">环境+背景</button>
-                          <button data-hdruage="env" data-i18n="m3d.hdrUsageEnv">仅环境</button>
-                          <button data-hdruage="bg" data-i18n="m3d.hdrUsageBg">仅背景</button>
-                        </div>
-                      </div>
-                      <div class="m3d-ctrl-group">
-                        <label class="m3d-slider"><span data-i18n="m3d.hdrRotation">旋转</span><input type="range" id="m3dHdrRotation" min="0" max="360" step="1" value="0" /><span class="m3d-val" id="m3dHdrRotationVal">0°</span></label>
-
-                      </div>
-                      <div class="m3d-hdr-info" id="m3dHdrInfo"></div>
-                      <div class="m3d-ctrl-group">
-                        <input type="text" id="m3dHdrSearch" class="m3d-hdr-search" data-i18n-placeholder="m3d.hdrSearchPh" placeholder="搜索预设..." />
-                      </div>
-                      <div class="hdri-thumb-progress" id="m3dHdrThumbProgress"><div class="hdri-thumb-progress-bar"></div><span class="hdri-thumb-progress-text"></span></div>
-                      <div class="hdri-preset-grid" id="m3dHdrPresetGrid"></div>
-                    </div>
-                    <div class="m3d-ctrl-group">
-                      <label class="m3d-slider"><span data-i18n="m3d.envIntensity">环境</span><input type="range" id="m3dEnvIntensity" min="0" max="3" step="0.01" value="0.5" /><span class="m3d-val" id="m3dEnvIntensityVal">0.50</span></label>
-                      <label class="m3d-slider"><span data-i18n="m3d.exposure">曝光</span><input type="range" id="m3dExposure" min="0" max="3" step="0.01" value="2.2" /><span class="m3d-val" id="m3dExposureVal">2.20</span></label>
-                      <label class="m3d-checkbox"><input type="checkbox" id="m3dGround" checked /> <span data-i18n="m3d.ground">地面</span></label>
-                      <label class="m3d-checkbox"><input type="checkbox" id="m3dAutoRotate" checked /> <span data-i18n="m3d.autoRotate">自转</span></label>
-                      <label class="m3d-checkbox"><input type="checkbox" id="m3dWireframe" /><span data-i18n="m3d.wireframe">线框</span></label>
-                    </div>
-                  </div>
-                  <div class="m3d-tab-pane" data-pane="advanced">
-                    <div class="m3d-ctrl-group m3d-advanced-row">
-                      <span class="m3d-light-label" data-i18n="m3d.format">材质格式</span>
-                      <select id="m3dFormat" class="input-select input-select-sm">
-                        <option value="auto" data-i18n="m3d.formatAuto">自动检测</option>
-                        <option value="labpbr">labPBR</option>
-                        <option value="old" data-i18n="m3d.formatOld">旧版 PBR</option>
-                      </select>
-                      <span class="m3d-format-detected" id="m3dFormatDetected"></span>
-                    </div>
-                    <div class="m3d-ctrl-group">
-
-                      <span class="m3d-light-label" data-i18n="m3d.texFilter">纹理过滤</span>
-                      <div class="m3d-segment" id="m3dFilterSeg">
-                        <button class="active" data-filter="nearest" data-i18n="preview.filterNearest">邻近</button>
-                        <button data-filter="bilinear" data-i18n="preview.filterBilinear">双线性</button>
-                        <button data-filter="trilinear" data-i18n="preview.filterTrilinear">三线性</button>
-                        <button data-filter="anisotropic" data-i18n="preview.filterAniso">各向异性</button>
-                      </div>
-                    </div>
-                    <div class="m3d-ctrl-group">
-                      <label class="m3d-slider"><span data-i18n="m3d.anisoLevel">各向异性</span><input type="range" id="m3dAniso" min="1" max="16" step="1" value="4" /><span class="m3d-val" id="m3dAnisoVal">4</span></label>
-                      <label class="m3d-checkbox"><input type="checkbox" id="m3dMipmaps" checked /> Mipmap</label>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="panel" id="detailPanelWrap" data-panel="detail">
-
-        <div class="panel-body">
-          <div class="detail-panel" id="detailPanel">
-            <div class="detail-hint" data-i18n="preview.notSelected">未选中</div>
-          </div>
-
-          <div class="action-panel" id="actionPanel"></div>
-        </div>
-      </div>
     </aside>
   </div>
 
   <!-- 节点画布面板（直接集成 node-canvas.js，非 iframe） -->
-  <div class="panel node-canvas-panel" id="nodeCanvasPanelWrap" data-panel="nodeCanvas">
-    <div class="panel-head">
-      <div class="panel-title"><svg class="ico ico-sm"><use href="#i-node"/></svg> <span data-i18n="panel.nodeCanvas">节点画布</span></div>
-      <span class="nc-project" id="ncProject" title="当前节点项目：未关联（保存后自动关联）"><span class="nc-project-dot"></span><span class="nc-project-name">未关联项目</span></span>
-      <div class="nc-toolbar">
-        <button class="tbtn" id="btn-add" title="添加节点">+ 添加</button>
-        <button class="tbtn" id="btn-import" title="导入贴图">↧ 导入</button>
-        <button class="tbtn" id="btn-fit" title="适应">适应</button>
-        <button class="tbtn" id="btn-layout" title="自动布局">布局</button>
-        <button class="tbtn" id="btn-save" title="保存到节点项目 (Ctrl+S)">↧ 保存</button>
-        <button class="tbtn" id="btn-load" title="加载图">↥ 加载</button>
-        <button class="tbtn danger" id="btn-clear" title="清空">清空</button>
-        <div class="zoom-pill"><button id="zoom-out">−</button><span id="zoom-label">100%</span><button id="zoom-in">+</button></div>
-      </div>
-      <div class="panel-tools">
-        <button class="panel-tool" data-panel-action="float" data-i18n-title="preview.float" title="浮动"><svg class="ico ico-sm"><use href="#i-external"/></svg></button>
-        <button class="panel-tool panel-close" data-panel-action="close" data-i18n-title="common.close" title="关闭"><svg class="ico ico-sm"><use href="#i-x"/></svg></button>
-      </div>
-    </div>
-    <div class="panel-body">
-      <div class="canvas-wrap" id="canvas-wrap">
-        <div class="grid-bg" id="grid-bg"></div>
-        <div class="world" id="world">
-          <svg class="edges" id="edges" xmlns="http://www.w3.org/2000/svg"><defs><filter id="edge-glow"><feGaussianBlur stdDeviation="2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs></svg>
-          <div id="nodes-layer"></div>
-        </div>
-      </div>
-      <div class="statusbar" id="statusbar">
-        <span class="seg nc-proj-seg" id="seg-project" title="当前打开的节点项目">项目 <b id="stat-project">—</b></span>
-        <span class="seg" id="seg-autosave" title="自动保存状态">自动保存 <b id="stat-autosave">—</b></span>
-        <span class="seg">节点 <b id="stat-nodes">0</b></span>
-        <span class="seg">连线 <b id="stat-edges">0</b></span>
-        <span class="seg">缩放 <b id="stat-zoom">100%</b></span>
-      </div>
-      <button id="btn-lib" hidden></button>
-      <button id="btn-preview" hidden></button>
-      <button id="canvas-close" hidden></button>
-      <button id="library-close" hidden></button>
-      <div class="import-overlay" id="importOverlay">
-        <div class="import-dlg">
-          <div class="import-dlg-head"><span>导入贴图为节点</span><span class="x" id="importClose">✕</span></div>
-          <div class="import-dlg-toolbar">
-            <input type="text" id="importSearch" class="import-search" placeholder="搜索贴图名称…">
-            <div class="import-seg" id="importRoleSeg"><button class="active" data-role="all">全部</button><button data-role="main">仅主</button><button data-role="normal">含法线</button><button data-role="specular">含高光</button></div>
-            <div class="import-seg" id="importSortSeg"><button class="active" data-sort="name-asc">名↑</button><button data-sort="name-desc">名↓</button></div>
-            <button id="importSelectAll" class="import-mini-btn">全选</button>
-            <button id="importClearAll" class="import-mini-btn">清空</button>
-            <span class="import-count" id="importCount"></span>
-          </div>
-          <div class="import-dlg-body" id="importBody"></div>
-          <div class="import-dlg-foot"><span class="info" id="importInfo">点击贴图组卡片选择，再次点击取消。选中后点"导入"创建纹理节点。</span><div class="btns"><button id="importCancel">取消</button><button class="primary" id="importOk">导入所选</button></div></div>
-        </div>
-      </div>
-    </div>
-  </div>
 
   <!-- 节点库面板（node-canvas.js buildLibrary 渲染，支持拖拽到画布） -->
-  <div class="panel node-library-panel" id="nodeLibraryPanelWrap" data-panel="nodeLibrary">
-    <div class="panel-head">
-      <div class="panel-title"><svg class="ico ico-sm"><use href="#i-layers"/></svg> <span data-i18n="panel.nodeLibrary">节点库</span></div>
-      <div class="panel-tools">
-        <button class="panel-tool" data-panel-action="float" data-i18n-title="preview.float" title="浮动"><svg class="ico ico-sm"><use href="#i-external"/></svg></button>
-        <button class="panel-tool panel-close" data-panel-action="close" data-i18n-title="common.close" title="关闭"><svg class="ico ico-sm"><use href="#i-x"/></svg></button>
-      </div>
-    </div>
-    <div class="panel-body">
-      <div class="library" id="library">
-        <div class="library-body" id="library-body"></div>
-        <div class="lib-resize" id="lib-resize" hidden></div>
-      </div>
-    </div>
-  </div>
 
   <!-- 总资产库面板 -->
-  <div class="panel" id="assetLibraryPanelWrap" data-panel="assetLibrary">
-    <div class="panel-head">
-      <div class="panel-title"><svg class="ico ico-sm"><use href="#i-folder"/></svg> <span data-i18n="panel.assetLibrary">总资产库</span></div>
-      <div class="panel-tools">
-        <button class="panel-tool" id="assetLibRefresh" data-i18n-title="panel.refresh" title="刷新"><svg class="ico ico-sm"><use href="#i-refresh"/></svg></button>
-        <button class="panel-tool" data-panel-action="float" data-i18n-title="preview.float" title="浮动"><svg class="ico ico-sm"><use href="#i-external"/></svg></button>
-        <button class="panel-tool panel-close" data-panel-action="close" data-i18n-title="common.close" title="关闭"><svg class="ico ico-sm"><use href="#i-x"/></svg></button>
-      </div>
-    </div>
-    <div class="panel-body">
-      <div class="asset-lib-search"><svg class="ico ico-sm"><use href="#i-search"/></svg><input type="search" id="assetLibSearch" data-i18n-placeholder="panel.assetLibSearchPh" placeholder="搜索资产…" /></div>
-      <div class="asset-lib-toolbar" id="assetLibToolbar"></div>
-      <div class="asset-lib-list" id="assetLibraryBody"></div>
-    </div>
-  </div>
+
+  <!-- Blockbench 面板已迁移至 web/src/panels/blockbench/，由 panel-loader 动态加载 -->
 
   <div id="settingsDrawer" class="settings-drawer">
     <div class="settings-head">
@@ -717,7 +270,38 @@
 
   <script src="/api/api-client.js"></script>
   <script src="/api/folder-tree.js"></script>
-  <script type="module" src="renderer.js"></script>
+  <script type="module">
+    // 提前注入面板 DOM：core.js 在模块加载时同步 getElementById 抓取面板内元素，
+    // 必须在 import renderer.js（及其依赖 core.js）之前完成注入，否则引用为 null。
+    window.__panelsInjected = new Set();
+    try {
+      const r = await fetch('/api/panels');
+      const { panels } = await r.json();
+      for (const p of panels) {
+        if (!p.htmlUrl) continue;
+        const hr = await fetch(p.htmlUrl);
+        const html = await hr.text();
+        const tpl = document.createElement('template');
+        tpl.innerHTML = html.trim();
+        const sel = p.mount;
+        const mount = (!sel || sel === 'body') ? document.body
+          : (sel === 'head') ? document.head
+          : (document.querySelector(sel) || document.body);
+        const useHost = !sel || sel === 'body' || sel === 'head';
+        if (useHost) {
+          const host = document.createElement('div');
+          host.className = 'panel-host';
+          host.dataset.panelId = p.id;
+          host.appendChild(tpl.content.cloneNode(true));
+          mount.appendChild(host);
+        } else {
+          mount.appendChild(tpl.content.cloneNode(true));
+        }
+        window.__panelsInjected.add(p.id);
+      }
+    } catch (e) { console.error('[pre-inject] failed', e); }
+    await import('/renderer.js');
+  </script>
   <script type="module">
     const btn = document.getElementById('nodePanelBtn');
     const closeBtn = document.getElementById('nodeWindowClose');

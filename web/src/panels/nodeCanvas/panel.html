@@ -1,0 +1,54 @@
+<div class="panel node-canvas-panel" id="nodeCanvasPanelWrap" data-panel="nodeCanvas">
+  <div class="panel-head">
+    <span class="nc-project" id="ncProject" title="当前节点项目：未关联（保存后自动关联）"><span class="nc-project-dot"></span><span class="nc-project-name">未关联项目</span></span>
+    <div class="nc-toolbar">
+      <button class="tbtn" id="btn-add" title="添加节点">+ 添加</button>
+      <button class="tbtn" id="btn-import" title="导入贴图">↧ 导入</button>
+      <button class="tbtn" id="btn-fit" title="适应">适应</button>
+      <button class="tbtn" id="btn-layout" title="自动布局">布局</button>
+      <button class="tbtn" id="btn-save" title="保存到节点项目 (Ctrl+S)">↧ 保存</button>
+      <button class="tbtn" id="btn-load" title="加载图">↥ 加载</button>
+      <button class="tbtn danger" id="btn-clear" title="清空">清空</button>
+      <div class="zoom-pill"><button id="zoom-out">−</button><span id="zoom-label">100%</span><button id="zoom-in">+</button></div>
+    </div>
+    <div class="panel-tools">
+      <button class="panel-tool" data-panel-action="float" data-i18n-title="preview.float" title="浮动"><svg class="ico ico-sm"><use href="#i-external"/></svg></button>
+      <button class="panel-tool panel-close" data-panel-action="close" data-i18n-title="common.close" title="关闭"><svg class="ico ico-sm"><use href="#i-x"/></svg></button>
+    </div>
+  </div>
+  <div class="panel-body">
+    <div class="canvas-wrap" id="canvas-wrap">
+      <div class="grid-bg" id="grid-bg"></div>
+      <div class="world" id="world">
+        <svg class="edges" id="edges" xmlns="http://www.w3.org/2000/svg"><defs><filter id="edge-glow"><feGaussianBlur stdDeviation="2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs></svg>
+        <div id="nodes-layer"></div>
+      </div>
+    </div>
+    <div class="statusbar" id="statusbar">
+      <span class="seg nc-proj-seg" id="seg-project" title="当前打开的节点项目">项目 <b id="stat-project">—</b></span>
+      <span class="seg" id="seg-autosave" title="自动保存状态">自动保存 <b id="stat-autosave">—</b></span>
+      <span class="seg">节点 <b id="stat-nodes">0</b></span>
+      <span class="seg">连线 <b id="stat-edges">0</b></span>
+      <span class="seg">缩放 <b id="stat-zoom">100%</b></span>
+    </div>
+    <button id="btn-lib" hidden></button>
+    <button id="btn-preview" hidden></button>
+    <button id="canvas-close" hidden></button>
+    <button id="library-close" hidden></button>
+    <div class="import-overlay" id="importOverlay">
+      <div class="import-dlg">
+        <div class="import-dlg-head"><span>导入贴图为节点</span><span class="x" id="importClose">✕</span></div>
+        <div class="import-dlg-toolbar">
+          <input type="text" id="importSearch" class="import-search" placeholder="搜索贴图名称…">
+          <div class="import-seg" id="importRoleSeg"><button class="active" data-role="all">全部</button><button data-role="main">仅主</button><button data-role="normal">含法线</button><button data-role="specular">含高光</button></div>
+          <div class="import-seg" id="importSortSeg"><button class="active" data-sort="name-asc">名↑</button><button data-sort="name-desc">名↓</button></div>
+          <button id="importSelectAll" class="import-mini-btn">全选</button>
+          <button id="importClearAll" class="import-mini-btn">清空</button>
+          <span class="import-count" id="importCount"></span>
+        </div>
+        <div class="import-dlg-body" id="importBody"></div>
+        <div class="import-dlg-foot"><span class="info" id="importInfo">点击贴图组卡片选择，再次点击取消。选中后点"导入"创建纹理节点。</span><div class="btns"><button id="importCancel">取消</button><button class="primary" id="importOk">导入所选</button></div></div>
+      </div>
+    </div>
+  </div>
+</div>

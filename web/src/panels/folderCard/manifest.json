@@ -1,0 +1,8 @@
+{
+  "id": "folderCard",
+  "title": "文件夹选择",
+  "icon": "i-folder",
+  "html": "panel.html",
+  "mount": ".sidebar-left .sidebar-inner",
+  "order": 1
+}

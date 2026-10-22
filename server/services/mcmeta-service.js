@@ -592,7 +592,7 @@ async function statPack(root, name) {
   return st
 }
 
-function assertValidRelPath(rel) {
+function assertValidRelPath(rel, opts = {}) {
   if (rel === 'pack.png') return rel
   if (typeof rel !== 'string' || !rel.startsWith('assets/')) {
     throw new AppError('ERR_INVALID_PARAM', 'texture path must start with assets/')
@@ -600,7 +600,7 @@ function assertValidRelPath(rel) {
   if (rel.includes('..') || rel.includes('\\') || rel.includes('\0') || rel.startsWith('/')) {
     throw new AppError('ERR_INVALID_PARAM', 'invalid texture path')
   }
-  if (!IMG_EXT_RE.test(rel)) {
+  if (!opts.anyExt && !IMG_EXT_RE.test(rel)) {
     throw new AppError('ERR_INVALID_PARAM', 'not an image texture')
   }
   return rel
@@ -700,8 +700,8 @@ async function listPackEntries(root, name, opts = {}) {
   }
 }
 
-async function readPackFile(root, name, relPath) {
-  const rel = assertValidRelPath(relPath)
+async function readPackFile(root, name, relPath, opts = {}) {
+  const rel = assertValidRelPath(relPath, opts)
   const st = await statPack(root, name)
   const full = path.join(root, name)
   if (st.isDirectory()) {

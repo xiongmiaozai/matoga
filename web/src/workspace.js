@@ -9,6 +9,7 @@
 import { GoldenLayout, LayoutConfig } from 'golden-layout'
 import { $, showToast } from './core.js'
 import { sanitizeLayoutConfig } from './layout-config.js'
+import { getPanelDefs } from './panel-loader.js'
 
 
 const call = (m, p, b) => window.matogaCore.call(m, p, b)
@@ -91,16 +92,19 @@ function showConfirm(message) {
   })
 }
 
-const PANEL_DEFS = [
+let PANEL_DEFS = [
   { id: 'folderCard',     title: '文件夹选择', icon: 'i-folder' },
   { id: 'compareSettings',title: '对比设置',    icon: 'i-compare' },
   { id: 'actions',        title: '操作',        icon: 'i-swap' },
   { id: 'compare',        title: '对比结果',    icon: 'i-compare' },
   { id: 'preview',        title: '预览',        icon: 'i-image' },
+  { id: 'material3d',     title: '3D 视口',     icon: 'i-cube' },
   { id: 'detail',         title: '详情',        icon: 'i-layers' },
   { id: 'nodeCanvas',     title: '节点画布',    icon: 'i-node' },
   { id: 'nodeLibrary',    title: '节点库',      icon: 'i-layers' },
   { id: 'assetLibrary',   title: '总资产库',    icon: 'i-folder' },
+  { id: 'blockbench',     title: 'Blockbench',  icon: 'i-cube' },
+
 ]
 
 function comp(id, title) { return { type: 'component', componentType: id, title, reorderEnabled: true, minSize: '120px' } }
@@ -132,7 +136,7 @@ let saveTimer = null
 let glReady = false
 let suppressAutoSave = false
 
-const ALL_PANEL_IDS = new Set(PANEL_DEFS.map(d => d.id))
+let ALL_PANEL_IDS = new Set(PANEL_DEFS.map(d => d.id))
 
 function collectComponentTypes(node, out) {
   if (!node || typeof node !== 'object') return
@@ -161,10 +165,13 @@ function extractPanels() {
     actions: cards[1],
     compare: document.querySelector('.center'),
     preview: $('previewPanelWrap'),
+    material3d: $('material3dPanelWrap'),
     detail: $('detailPanelWrap'),
     nodeCanvas: $('nodeCanvasPanelWrap'),
     nodeLibrary: $('nodeLibraryPanelWrap'),
     assetLibrary: $('assetLibraryPanelWrap'),
+    blockbench: $('blockbenchPanelWrap'),
+
   }
   panelHomes = Object.values(panelEls)
     .filter(Boolean)
@@ -233,9 +240,19 @@ function createPanelClone(original) {
   clone.classList.add('gl-panel-content', 'gl-panel-clone')
   clone.removeAttribute('id')
   clone.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'))
+  stripCloneViewport(clone)
   bindCloneDelegation(clone, original)
   syncCloneFromOriginal(original, clone)
   return clone
+}
+
+function stripCloneViewport(clone) {
+  clone.querySelectorAll('.material3d-container').forEach(c => {
+    c.querySelectorAll('canvas').forEach(cv => cv.remove())
+    c.classList.remove('m3d-host-active')
+    const hint = c.querySelector('.m3d-host-empty')
+    if (hint) hint.style.display = 'none'
+  })
 }
 
 function bindCloneDelegation(clone, original) {
@@ -292,6 +309,7 @@ function syncCloneFromOriginal(original, clone) {
       clone._lastHtml = html
       clone.innerHTML = html
       clone.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'))
+      stripCloneViewport(clone)
     }
   })
   observer.observe(original, { childList: true, subtree: true, characterData: true, attributes: true })
@@ -336,6 +354,9 @@ function applyConfig(config) {
   cfg.dimensions = GL_DIMENSIONS
   layout.loadLayout(cfg)
   reconcileOrphanPanels()
+  const comps = new Set()
+  collectComponentTypes(cfg.root, comps)
+  document.dispatchEvent(new CustomEvent('workspace:activated', { detail: { components: [...comps] } }))
 }
 
 function getDefaultConfig() {
@@ -444,8 +465,8 @@ function renderWorkspaceBar() {
   actions.className = 'workspace-bar-actions'
   const addWinBtn = document.createElement('button')
   addWinBtn.id = 'addWinBtn'
-  addWinBtn.textContent = '+ 窗口'
-  addWinBtn.title = '添加新窗口到当前工作区'
+  addWinBtn.textContent = '+ 面板'
+  addWinBtn.title = '添加新面板到当前工作区'
   addWinBtn.addEventListener('click', addWindowMenu)
   const manageBtn = document.createElement('button')
   manageBtn.textContent = '管理'
@@ -760,7 +781,7 @@ function addWindowMenu() {
 
   const header = document.createElement('div')
   header.className = 'add-win-header'
-  header.textContent = '选择要添加的窗口'
+  header.textContent = '选择要添加的面板'
   menu.appendChild(header)
 
   for (const def of PANEL_DEFS) {
@@ -775,7 +796,7 @@ function addWindowMenu() {
       const closeMenu = () => { menu.remove(); document.removeEventListener('keydown', onKey) }
       if (counts[def.id] > 0) {
         const focused = focusPanel(def.id)
-        showToast(focused ? '「' + def.title + '」已打开，已聚焦该窗口' : '「' + def.title + '」已在布局中')
+        showToast(focused ? '「' + def.title + '」已打开，已聚焦该面板' : '「' + def.title + '」已在布局中')
         closeMenu()
         return
       }
@@ -798,7 +819,7 @@ function addWindowMenu() {
 
   const hint = document.createElement('div')
   hint.className = 'add-win-hint'
-  hint.textContent = activeStack ? '点击 → 添加 / 聚焦窗口 · Alt+点击 → 新建标签组' : '点击 → 添加 / 聚焦窗口'
+  hint.textContent = activeStack ? '点击 → 添加 / 聚焦面板 · Alt+点击 → 新建标签组' : '点击 → 添加 / 聚焦面板'
   menu.appendChild(hint)
 
   document.body.appendChild(menu)
@@ -917,6 +938,11 @@ function openPresetManager() {
 
 export async function initWorkspace() {
   try {
+    const defs = getPanelDefs()
+    if (defs && defs.length) {
+      PANEL_DEFS = defs
+      ALL_PANEL_IDS = new Set(PANEL_DEFS.map(d => d.id))
+    }
     extractPanels()
     createLayoutRoot()
     document.body.classList.add('gl-active')

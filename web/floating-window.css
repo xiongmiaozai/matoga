@@ -1,20 +1,23 @@
 /* ════════════════════════════════════════════════════════════
    matoga Floating Window — 页面内浮动小窗（节点关系 / 节点预览）
    可自由拖拽摆放：标题栏拖动、右下角缩放、双击标题栏最大化
+   现代精致主题：毛玻璃 · 圆角 · 柔和阴影 · 精致过渡
    ════════════════════════════════════════════════════════════ */
 
 .fw-win{
   position: fixed;
   display: flex; flex-direction: column;
   min-width: 240px; min-height: 160px;
-  background: var(--panel-bg, #2a2a2e);
+  background: rgba(46,46,52,.86); backdrop-filter: blur(16px) saturate(150%);
   border: 1px solid var(--border, #4a4a52);
-  border-radius: var(--radius-md, 6px);
-  box-shadow: var(--shadow-3);
+  border-radius: 10px;
+  box-shadow: 0 12px 36px rgba(0,0,0,.4), 0 2px 8px rgba(0,0,0,.24);
   overflow: hidden;
+  animation: fw-in .2s cubic-bezier(.16,1,.3,1);
 }
+@keyframes fw-in{ from{ opacity:0; transform:scale(.96) } to{ opacity:1; transform:scale(1) } }
 
-/* 最大化态：占满视口、无圆角 */
+/* 最大化态 */
 .fw-win.maximized{
   left: 0; top: 0;
   width: 100vw; height: 100vh;
@@ -25,10 +28,10 @@
 
 /* ── 标题栏 ── */
 .fw-titlebar{
-  flex: none; height: 32px;
+  flex: none; height: 34px;
   display: flex; align-items: center; gap: 8px;
-  padding: 0 4px 0 10px;
-  background: var(--panel-2, #333338);
+  padding: 0 6px 0 12px;
+  background: rgba(0,0,0,.22);
   border-bottom: 1px solid var(--border-soft, #3a3a40);
   cursor: grab;
   user-select: none;
@@ -41,24 +44,25 @@
   font-size: 12px; font-weight: 600;
   color: var(--text, #e8e8e8);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  letter-spacing: .2px;
 }
 .fw-title .ico{ color: var(--primary) }
-.fw-tools{ display: flex; align-items: center; gap: 2px }
+.fw-tools{ display: flex; align-items: center; gap: 3px }
 .fw-btn{
   width: 24px; height: 24px;
   display: inline-flex; align-items: center; justify-content: center;
-  background: none; border: none; border-radius: 4px;
+  background: none; border: none; border-radius: 5px;
   color: var(--text-muted, #9a9a9a);
   cursor: pointer;
-  transition: background .12s, color .12s;
+  transition: background .15s cubic-bezier(.2,.7,.2,1), color .15s;
 }
 .fw-btn:hover{
   color: var(--primary);
-  background: var(--primary-soft, rgba(124,189,86,.12));
+  background: rgba(124,189,86,.12);
 }
 .fw-btn.fw-close:hover{
   color: var(--danger, #c63a3a);
-  background: var(--danger-soft, rgba(198,58,58,.12));
+  background: rgba(198,58,58,.14);
 }
 
 /* ── 内容区 ── */
@@ -72,19 +76,20 @@
 /* ── 右下角缩放手柄 ── */
 .fw-resize{
   position: absolute; right: 0; bottom: 0;
-  width: 16px; height: 16px;
+  width: 18px; height: 18px;
   cursor: nwse-resize;
   z-index: 5;
   touch-action: none;
 }
 .fw-resize::after{
   content: '';
-  position: absolute; right: 3px; bottom: 3px;
+  position: absolute; right: 4px; bottom: 4px;
   width: 8px; height: 8px;
   border-right: 2px solid var(--border, #4a4a52);
   border-bottom: 2px solid var(--border, #4a4a52);
   border-bottom-right-radius: 2px;
   opacity: .8;
+  transition: border-color .15s;
 }
 .fw-resize:hover::after{
   border-right-color: var(--primary);
@@ -95,5 +100,5 @@
 .icon-btn.fw-active{
   color: var(--primary);
   border-color: var(--primary);
-  background: var(--primary-soft);
+  background: rgba(124,189,86,.12);
 }

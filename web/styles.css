@@ -633,6 +633,10 @@ tr.sub-row td:nth-child(3) { padding-left: 30px; color: var(--text-muted); }
 }
 .panel-title { font-size: 12px; font-weight: 600; }
 .panel-tools { display: flex; gap: 4px; }
+.panel-toolbar {
+  display: flex; align-items: center; gap: 4px;
+  padding: 6px 14px; border-bottom: 1px solid var(--border-soft); flex-shrink: 0;
+}
 .panel-tool {
   width: 28px; height: 28px; border-radius: var(--radius-sm); border: 1px solid transparent; background: transparent;
   cursor: pointer; font-size: 14px; color: var(--text-muted);
@@ -642,6 +646,7 @@ tr.sub-row td:nth-child(3) { padding-left: 30px; color: var(--text-muted); }
 .panel-close:hover { background: var(--danger-soft); color: var(--danger); border-color: var(--danger); }
 .panel-body { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
 .panel.collapsed .panel-body { display: none; }
+.panel.collapsed .panel-toolbar { display: none; }
 .panel.collapsed .panel-tool[data-panel-action="collapse"] { transform: rotate(-90deg); }
 .panel.floating {
   position: fixed; z-index: 200; box-shadow: var(--shadow-3);

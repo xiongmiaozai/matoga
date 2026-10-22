@@ -1,0 +1,8 @@
+{
+  "id": "nodeLibrary",
+  "title": "节点库",
+  "icon": "i-layers",
+  "html": "panel.html",
+  "mount": "body",
+  "order": 8
+}

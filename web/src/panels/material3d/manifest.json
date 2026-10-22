@@ -1,0 +1,11 @@
+{
+  "id": "material3d",
+  "title": "3D 视口",
+  "icon": "i-cube",
+  "html": "panel.html",
+  "css": "panel.css",
+  "js": "panel.js",
+  "mount": ".sidebar-right",
+  "order": 6,
+  "dynamic": true
+}

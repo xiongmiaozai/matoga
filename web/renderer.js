@@ -22,7 +22,7 @@ import {
   setHdrRotation, setHdrUsage, getHdrInfo,
   setSkyTurbidity, setSkyRayleigh, setSkyMieCoefficient, setSkyMieDirectionalG, setSkySunElevation, setSkySunAzimuth, setSkyTint,
   setAutoRotate, setWireframe, screenshot, toggleFullscreen,
-  initMaterial3D, updateMaterial3D,
+  initMaterial3D, updateMaterial3D, clearMaterial3D,
   setOpacityMode, setOpacity, setTransmission, setIOR, setClearcoat,
   setTextureFilter, setMipmapsEnabled, setAnisotropyLevel, getMaxAnisotropy
 } from './src/material3d.js'
@@ -35,6 +35,7 @@ import { initPreviewPanel } from './src/preview-panel.js'
 import { initNodeCanvas, refreshNodePreview } from './src/node-canvas.js'
 import { initNodeRel } from './src/node-rel.js'
 import { initNodePreview } from './src/node-preview.js'
+import { initPanelLoader } from './src/panel-loader.js'
 import { initPackPickers } from './src/pack-picker.js'
 import { toggleWindow } from './src/floating-window.js'
 import { initAssetLibrary } from './src/asset-library.js'
@@ -50,16 +51,27 @@ import {
 {
   const nrBtn = document.getElementById('nodeRelBtn')
   const npBtn = document.getElementById('nodePreviewBtn')
+  const bbBtn = document.getElementById('blockbenchBtn')
   if (nrBtn) nrBtn.addEventListener('click', () => toggleWindow('nodeRel'))
   if (npBtn) npBtn.addEventListener('click', () => toggleWindow('nodePreview'))
+  if (bbBtn) bbBtn.addEventListener('click', () => toggleWindow('blockbench'))
   document.addEventListener('fw:toggle', (e) => {
-    const btn = e.detail.id === 'nodeRel' ? nrBtn : (e.detail.id === 'nodePreview' ? npBtn : null)
+    const btn = e.detail.id === 'nodeRel' ? nrBtn : (e.detail.id === 'nodePreview' ? npBtn : (e.detail.id === 'blockbench' ? bbBtn : null))
     if (btn) btn.classList.toggle('fw-active', !!e.detail.open)
   })
 }
 
 leftBtn.addEventListener('click', () => loadFolder('left'))
 rightBtn.addEventListener('click', () => loadFolder('right'))
+
+document.addEventListener('workspace:activated', (e) => {
+  const comps = new Set((e.detail && e.detail.components) || [])
+  const hasNode = comps.has('nodeCanvas')
+  const hasCompare = comps.has('compare')
+  if (hasNode === hasCompare) return
+  if (hasNode) { clearMaterial3D(); refreshNodePreview() }
+  else { renderSidebar() }
+})
 
 
 exportBtn.addEventListener('click', exportResult)
@@ -324,6 +336,7 @@ function initCtxMenu() {
 ;(async function init() {
   const step = async (name, fn) => { try { return await fn() } catch (e) { console.error('[init]', name, e) } }
   await step('initI18n', initI18n)
+  await step('initPanelLoader', initPanelLoader)
   await step('initSettings', () => initSettings())
   await step('initWorkspace', initWorkspace)
   await step('initPreview2D', () => initPreview2D())

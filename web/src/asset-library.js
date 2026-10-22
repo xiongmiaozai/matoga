@@ -17,7 +17,7 @@
 
 import { state, IMG_EXTS, showToast } from './core.js'
 import { fileUrl, formatSize, formatDate, escAttr } from './utils.js'
-import { addNodeAt, addTextureAt, loadPreset, saveNodeProject, loadNodeProject } from './node-canvas.js'
+import { addNodeAt, addTextureAt, loadPreset, saveNodeProject, loadNodeProject, serializeGraphData, loadCanvasPresetGraph } from './node-canvas.js'
 import { t, onLocaleChange } from './i18n.js'
 import { uiPrompt, uiConfirm } from './ui-dialog.js'
 
@@ -88,6 +88,7 @@ let mcEntries = null
 let officialEntries = null
 let hdriEntries = null
 let projectEntries = null
+let canvasPresets = null      /* 自定义画布预设（config.canvasCustomPresets），null = 未加载 */
 let texPacks = null
 let lastTexSig = ''
 let loadErrors = { hdri: null, mc: null, official: null, project: null, tex: null }
@@ -214,8 +215,14 @@ function itemFromStored(s) {
   let onAdd, onBrowse, name = s.name
   if (s.type === 'preset') {
     const id = s.key.slice(8)
-    onAdd = () => loadPreset(id)
-    name = presetName(id)
+    if (id.startsWith('cp:')) {
+      const cp = (canvasPresets || []).find(p => ('cp:' + p.id) === id)
+      onAdd = cp ? () => loadCanvasPresetGraph(cp.graph) : () => showToast(t('asset.canvasPresetMissing'))
+      name = cp ? cp.name : (s.name || name)
+    } else {
+      onAdd = () => loadPreset(id)
+      name = presetName(id)
+    }
   } else if (s.type === 'project') {
     const id = s.key.slice(8)
     onAdd = () => loadNodeProject(id)
@@ -385,12 +392,94 @@ function buildSection(catKey, title, items, errMsg, loading) {
   return sec
 }
 
+const CANVAS_PRESET_MAX_BYTES = 8 * 1024 * 1024  /* 后端 body 上限 12MB，留余量 */
+
+async function loadCanvasPresets() {
+  try {
+    const cfg = await window.api.getConfig()
+    canvasPresets = (cfg && Array.isArray(cfg.canvasCustomPresets)) ? cfg.canvasCustomPresets : []
+  } catch { canvasPresets = [] }
+}
+
+async function saveCanvasPresetAs() {
+  let graph = null
+  try { graph = serializeGraphData() } catch { graph = null }
+  if (!graph || !Array.isArray(graph.nodes) || !graph.nodes.length) { showToast(t('asset.canvasPresetEmpty')); return }
+  const name = await uiPrompt({ title: t('asset.canvasPresetSaveTitle'), label: t('asset.canvasPresetNamePrompt') })
+  if (name === null) return
+  const n = name.trim()
+  if (!n) { showToast(t('asset.canvasPresetNameEmpty')); return }
+  try {
+    const cfg = await window.api.getConfig()
+    const presets = (cfg && Array.isArray(cfg.canvasCustomPresets)) ? cfg.canvasCustomPresets : []
+    presets.push({ id: 'cp' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name: n, graph, createdAt: Date.now() })
+    if (JSON.stringify(presets).length > CANVAS_PRESET_MAX_BYTES) { showToast(t('asset.canvasPresetTooLarge')); return }
+    await window.api.setConfig({ canvasCustomPresets: presets })
+    canvasPresets = presets
+    showToast(t('asset.canvasPresetSaved'))
+    rebuild()
+  } catch (e) {
+    showToast(t('asset.canvasPresetSaveFail') + ': ' + (e.message || e))
+  }
+}
+
+async function deleteCanvasPreset(item) {
+  if (!item.canvasPresetId) return
+  if (!await uiConfirm({ title: t('asset.presetSection'), message: t('asset.canvasPresetDeleteConfirm', { name: item.name }), danger: true })) return
+  try {
+    const cfg = await window.api.getConfig()
+    const presets = ((cfg && Array.isArray(cfg.canvasCustomPresets)) ? cfg.canvasCustomPresets : []).filter(p => p.id !== item.canvasPresetId)
+    await window.api.setConfig({ canvasCustomPresets: presets })
+    canvasPresets = presets
+    favorites = favorites.filter(f => f.key !== item.key)
+    recent = recent.filter(r => r.key !== item.key)
+    persistFavorites()
+    persistRecent()
+    showToast(t('asset.canvasPresetDeleted'))
+    rebuild()
+  } catch (e) {
+    showToast(t('asset.canvasPresetDeleteFail') + ': ' + (e.message || e))
+  }
+}
+
 function buildPresetSection() {
   const items = PRESETS.map(p => ({
     key: 'preset:' + p.id, name: presetName(p.id), color: p.color, type: 'preset', path: null, mtime: 0, role: 'preset',
     onAdd: () => loadPreset(p.id),
   }))
-  return buildSection('preset', t('asset.presetSection'), items, null, false)
+  for (const p of canvasPresets || []) {
+    if (!p || !p.id || !p.graph) continue
+    items.push({
+      key: 'preset:cp:' + p.id, name: p.name, color: '#8ab4f8', type: 'preset', path: null,
+      mtime: p.createdAt || 0, role: 'preset', canvasPresetId: p.id,
+      onAdd: () => loadCanvasPresetGraph(p.graph),
+    })
+  }
+  const sorted = sortItems(items)
+  const sec = el('div', 'asset-lib-section')
+  sec.dataset.cat = 'preset'
+  if (collapsedSet.has('preset')) sec.classList.add('collapsed')
+  const head = el('div', 'asset-lib-section-head',
+    `<span class="caret">▾</span><span>${t('asset.presetSection')}</span><span class="cnt">${sorted.length}</span>`)
+  head.addEventListener('click', () => {
+    sec.classList.toggle('collapsed')
+    if (sec.classList.contains('collapsed')) { collapsedSet.add('preset'); saveCollapsed(collapsedSet) }
+    else { collapsedSet.delete('preset'); saveCollapsed(collapsedSet) }
+  })
+  sec.appendChild(head)
+
+  const actions = el('div', 'asset-lib-sec-actions')
+  const saveBtn = el('button', 'asset-lib-sec-btn', t('asset.canvasPresetSave'))
+  saveBtn.title = t('asset.canvasPresetSaveTitle')
+  saveBtn.addEventListener('click', (e) => { e.stopPropagation(); saveCanvasPresetAs() })
+  actions.appendChild(saveBtn)
+  sec.appendChild(actions)
+
+  const grid = el('div', 'asset-lib-grid')
+  if (viewMode === 'list') grid.classList.add('list-view')
+  for (const it of sorted) grid.appendChild(makeCard(it))
+  sec.appendChild(grid)
+  return sec
 }
 
 /* ── 材质贴图节：聚合左右目录 + MC 材质包 + 官方包全部贴图，按文件夹/包类别分组 ── */
@@ -1257,6 +1346,9 @@ function showCtxMenu(e, item) {
     opts.push({ label: t('asset.ctxRenameProject'), fn: () => renameProjectAsset(item) })
     opts.push({ label: t('asset.ctxDeleteProject'), fn: () => deleteProjectAsset(item) })
   }
+  if (item.type === 'preset' && item.canvasPresetId) {
+    opts.push({ label: t('asset.ctxDeleteCanvasPreset'), fn: () => deleteCanvasPreset(item) })
+  }
   if (item.type === 'official' && item.pack) {
     opts.push({ label: t('asset.ctxRenameOfficial'), fn: () => renameOfficialAsset(item, false) })
     if (officialSuggestName(item.pack)) {
@@ -1317,7 +1409,7 @@ async function loadTexPacks() {
 }
 
 export async function refreshAssetLibrary() {
-  await Promise.all([loadHdri(), loadMc(), loadOfficial(), loadProjects(), loadTexPacks()])
+  await Promise.all([loadHdri(), loadMc(), loadOfficial(), loadProjects(), loadTexPacks(), loadCanvasPresets()])
   rebuild()
 }
 

@@ -1,0 +1,259 @@
+<div class="panel" id="previewPanelWrap" data-panel="preview">
+  <div class="panel-head">
+    <div class="pv-tabs">
+      <button class="active" data-pv-tab="2d"><svg class="ico ico-sm"><use href="#i-image"/></svg> <span data-i18n="preview.2d">2D</span></button>
+      <button data-pv-tab="3d"><svg class="ico ico-sm"><use href="#i-cube"/></svg> <span data-i18n="preview.3d">3D</span></button>
+    </div>
+    <div class="panel-tools">
+      <button class="panel-tool" data-panel-action="float" data-i18n-title="preview.float" title="浮动"><svg class="ico ico-sm"><use href="#i-external"/></svg></button>
+      <button class="panel-tool" data-panel-action="collapse" data-i18n-title="sidebar.collapseRight" title="折叠右栏"><svg class="ico ico-sm"><use href="#i-chevron-right"/></svg></button>
+      <button class="panel-tool panel-close" data-panel-action="close" data-i18n-title="common.close" title="关闭"><svg class="ico ico-sm"><use href="#i-x"/></svg></button>
+    </div>
+  </div>
+  <div class="panel-body">
+    <div class="pv-content active" data-pv-content="2d">
+      <div class="pv-toolbar">
+        <div class="m3d-segment" id="pvChannelSeg">
+          <button class="active" data-ch="all" data-i18n="common.all">全部</button>
+          <button data-ch="r">R</button>
+          <button data-ch="g">G</button>
+          <button data-ch="b">B</button>
+          <button data-ch="a">A</button>
+        </div>
+        <label class="pv-zoom"><span data-i18n="preview.zoom">缩放</span><input type="range" id="pvZoom" min="50" max="300" step="10" value="100" /><span class="pv-zoom-val" id="pvZoomVal">100%</span></label>
+        <label class="pv-split-toggle"><input type="checkbox" id="pvSplit" /> <span data-i18n="preview.splitToggle">对比滑块</span></label>
+        <div class="m3d-segment" id="pvFilterSeg">
+          <button class="active" data-pvf="nearest" data-i18n="preview.filterNearest">邻近</button>
+          <button data-pvf="bilinear" data-i18n="preview.filterBilinear">双线性</button>
+          <button data-pvf="trilinear" data-i18n="preview.filterTrilinear">三线性</button>
+          <button data-pvf="anisotropic" data-i18n="preview.filterAniso">各向异性</button>
+        </div>
+      </div>
+      <div class="preview-panel" id="previewPanel">
+        <div class="pv-hint" data-i18n="preview.hint">点击表格中的材质查看预览</div>
+      </div>
+    </div>
+    <div class="pv-content" data-pv-content="3d">
+      <div class="material3d-container" id="material3dContainer">
+        <div class="m3d-loading" id="m3dLoading"><div class="m3d-loading-text" data-i18n="m3d.loading">处理法线贴图...</div><div class="m3d-loading-bar"><div class="m3d-loading-fill"></div></div></div>
+        <div class="m3d-host-empty" style="display:none" data-i18n="m3d.hostEmpty">3D 视口当前在其他面板中显示，点击此处接管</div>
+        <div class="m3d-hud-bar">
+          <div class="m3d-segment" id="m3dGeoSeg">
+            <button data-geo="sphere" data-i18n-title="m3d.geoSphere" title="球"><svg class="ico ico-sm"><use href="#i-sphere"/></svg></button>
+            <button class="active" data-geo="cube" data-i18n-title="m3d.geoCube" title="方"><svg class="ico ico-sm"><use href="#i-cube"/></svg></button>
+            <button data-geo="plane" data-i18n-title="m3d.geoPlane" title="面"><svg class="ico ico-sm"><use href="#i-plane"/></svg></button>
+            <button data-geo="torus" data-i18n-title="m3d.geoTorus" title="环"><svg class="ico ico-sm"><use href="#i-torus"/></svg></button>
+            <button data-geo="cylinder" data-i18n-title="m3d.geoCylinder" title="柱"><svg class="ico ico-sm"><use href="#i-cylinder"/></svg></button>
+            <button data-geo="capsule" data-i18n-title="m3d.geoCapsule" title="囊"><svg class="ico ico-sm"><use href="#i-capsule"/></svg></button>
+          </div>
+          <div class="m3d-segment" id="m3dSrcSeg">
+            <button data-src="left" data-i18n="common.left">左</button>
+            <button class="active" data-src="dual" data-i18n="m3d.srcDual">双</button>
+            <button data-src="right" data-i18n="common.right">右</button>
+          </div>
+          <div class="m3d-hud-spacer"></div>
+          <button class="m3d-hud-btn" id="m3dShotBtn" data-i18n-title="m3d.shot" title="截图"><svg class="ico ico-sm"><use href="#i-camera"/></svg></button>
+          <button class="m3d-hud-btn" id="m3dFullscreenBtn" data-i18n-title="m3d.fullscreen" title="全屏"><svg class="ico ico-sm"><use href="#i-maximize"/></svg></button>
+          <button class="m3d-hud-btn" id="m3dParamsBtn" data-i18n-title="m3d.params" title="参数"><svg class="ico ico-sm"><use href="#i-sliders"/></svg></button>
+        </div>
+        <div class="m3d-params-overlay" id="m3dParamsOverlay">
+          <div class="m3d-params-drag" id="m3dParamsDrag">
+            <span class="m3d-params-title" data-i18n="m3d.params">参数</span>
+            <button class="m3d-params-close" id="m3dParamsClose" data-i18n-title="common.close" title="关闭"><svg class="ico ico-sm"><use href="#i-x"/></svg></button>
+          </div>
+          <div class="m3d-tabs">
+            <button class="active" data-tab="material" data-i18n-title="m3d.tabMaterial" title="材质"><svg class="ico ico-sm"><use href="#i-layers"/></svg></button>
+            <button data-tab="parallax" data-i18n-title="m3d.tabParallax" title="视差"><svg class="ico ico-sm"><use href="#i-depth"/></svg></button>
+            <button data-tab="opacity" data-i18n-title="m3d.tabOpacity" title="透明"><svg class="ico ico-sm"><use href="#i-opacity"/></svg></button>
+            <button data-tab="env" data-i18n-title="m3d.tabEnv" title="环境"><svg class="ico ico-sm"><use href="#i-globe"/></svg></button>
+            <button data-tab="advanced" data-i18n-title="m3d.tabAdvanced" title="高级"><svg class="ico ico-sm"><use href="#i-sliders"/></svg></button>
+          </div>
+          <div class="m3d-tab-panes">
+            <div class="m3d-tab-pane active" data-pane="material">
+              <div class="m3d-presets">
+                <button data-preset="metal" data-i18n-title="m3d.presetMetal" title="金属"><svg class="ico ico-sm"><use href="#i-metal"/></svg></button>
+                <button data-preset="plastic" data-i18n-title="m3d.presetPlastic" title="塑料"><svg class="ico ico-sm"><use href="#i-plastic"/></svg></button>
+                <button data-preset="glass" data-i18n-title="m3d.presetGlass" title="玻璃"><svg class="ico ico-sm"><use href="#i-glass"/></svg></button>
+                <button data-preset="fabric" data-i18n-title="m3d.presetFabric" title="织物"><svg class="ico ico-sm"><use href="#i-fabric"/></svg></button>
+                <button data-preset="emissive" data-i18n-title="m3d.presetEmissive" title="自发光"><svg class="ico ico-sm"><use href="#i-sun"/></svg></button>
+              </div>
+              <div class="m3d-ctrl-group m3d-light-save-row">
+                <input type="text" id="m3dMatPresetName" class="m3d-light-name-input" placeholder="预设名称" data-i18n-placeholder="m3d.matPresetNamePh" maxlength="20">
+                <button class="m3d-light-save-btn" id="m3dMatSaveBtn" data-i18n="m3d.matSavePreset">保存</button>
+              </div>
+              <div class="m3d-ctrl-group m3d-light-custom-list" id="m3dMatCustomList"></div>
+              <div class="m3d-ctrl-group">
+                <label class="m3d-slider"><span data-i18n="m3d.metalness">金属度</span><input type="range" id="m3dMetalness" min="0" max="1" step="0.01" value="0.1" /><span class="m3d-val" id="m3dMetalnessVal">0.10</span></label>
+                <label class="m3d-slider"><span data-i18n="m3d.roughness">粗糙度</span><input type="range" id="m3dRoughness" min="0" max="1" step="0.01" value="0.5" /><span class="m3d-val" id="m3dRoughnessVal">0.50</span></label>
+                <label class="m3d-slider"><span data-i18n="m3d.normal">法线</span><input type="range" id="m3dNormal" min="0" max="2" step="0.01" value="1" /><span class="m3d-val" id="m3dNormalVal">1.00</span></label>
+                <label class="m3d-slider"><span data-i18n="m3d.emissive">自发光</span><input type="range" id="m3dEmissive" min="0" max="5" step="0.1" value="1" /><span class="m3d-val" id="m3dEmissiveVal">1.0</span></label>
+              </div>
+            </div>
+            <div class="m3d-tab-pane" data-pane="parallax">
+              <div class="m3d-ctrl-group">
+                <label class="m3d-checkbox"><input type="checkbox" id="m3dParallaxEnable" checked /> <span data-i18n="m3d.parallaxEnable">启用视差</span></label>
+              </div>
+              <div class="m3d-ctrl-group">
+                <span class="m3d-light-label" data-i18n="m3d.algorithm">算法</span>
+                <div class="m3d-segment" id="m3dParallaxModeSeg">
+                  <button data-mode="0" data-i18n="m3d.parallaxBasic">基础</button>
+                  <button data-mode="1" data-i18n="m3d.parallaxSteep">陡峭</button>
+                  <button class="active" data-mode="2">POM</button>
+                  <button data-mode="3">Relief</button>
+                </div>
+              </div>
+              <div class="m3d-ctrl-group">
+                <label class="m3d-slider"><span data-i18n="m3d.parallaxScale">视差强度</span><input type="range" id="m3dParallax" min="-1" max="1" step="0.01" value="0.05" /><span class="m3d-val" id="m3dParallaxVal">0.05</span></label>
+                <label class="m3d-slider"><span data-i18n="m3d.parallaxSteps">视差步数</span><input type="range" id="m3dParallaxSteps" min="8" max="64" step="1" value="32" /><span class="m3d-val" id="m3dParallaxStepsVal">32</span></label>
+                <label class="m3d-checkbox"><input type="checkbox" id="m3dParallaxAdaptive" checked /><span data-i18n="m3d.parallaxAdaptive">自适应层数</span></label>
+                <label class="m3d-checkbox"><input type="checkbox" id="m3dParallaxShadow" /><span data-i18n="m3d.parallaxShadow">自阴影</span></label>
+                <label class="m3d-slider"><span data-i18n="m3d.parallaxShadowStr">阴影强度</span><input type="range" id="m3dParallaxShadowStr" min="0" max="1" step="0.05" value="0.5" disabled /><span class="m3d-val" id="m3dParallaxShadowStrVal">0.5</span></label>
+              </div>
+            </div>
+            <div class="m3d-tab-pane" data-pane="opacity">
+              <div class="m3d-ctrl-group">
+                <div class="m3d-segment" id="m3dOpacityModeSeg">
+                  <button class="active" data-mode="auto" data-i18n="m3d.opaAuto">自动</button>
+                  <button data-mode="cutout" data-i18n="m3d.opaCutout">裁剪</button>
+                  <button data-mode="blend" data-i18n="m3d.opaBlend">半透</button>
+                  <button data-mode="glass" data-i18n="m3d.opaGlass">玻璃</button>
+                </div>
+              </div>
+              <div class="m3d-ctrl-group">
+                <label class="m3d-slider"><span data-i18n="m3d.opacity">不透明</span><input type="range" id="m3dOpacity" min="0" max="1" step="0.01" value="1" /><span class="m3d-val" id="m3dOpacityVal">1.00</span></label>
+                <label class="m3d-slider"><span data-i18n="m3d.transmission">透射</span><input type="range" id="m3dTransmission" min="0" max="1" step="0.01" value="0" /><span class="m3d-val" id="m3dTransmissionVal">0.00</span></label>
+                <label class="m3d-slider"><span data-i18n="m3d.ior">折射率</span><input type="range" id="m3dIOR" min="1" max="2.33" step="0.01" value="1.5" /><span class="m3d-val" id="m3dIORVal">1.50</span></label>
+                <label class="m3d-slider"><span data-i18n="m3d.clearcoat">清漆</span><input type="range" id="m3dClearcoat" min="0" max="1" step="0.01" value="0" /><span class="m3d-val" id="m3dClearcoatVal">0.00</span></label>
+              </div>
+            </div>
+            <div class="m3d-tab-pane" data-pane="env">
+              <div class="m3d-ctrl-group">
+                <span class="m3d-light-label" data-i18n="m3d.env">环境</span>
+                <div class="m3d-segment" id="m3dEnvModeSeg">
+                  <button class="active" data-envmode="custom" data-i18n="m3d.envCustom">自定义灯光</button>
+                  <button data-envmode="sky" data-i18n="m3d.envSky">程序化天空</button>
+                  <button data-envmode="hdri" data-i18n="m3d.envHdri">HDRI</button>
+                </div>
+              </div>
+              <div class="m3d-env-subpane active" data-envpane="custom">
+                <div class="m3d-ctrl-group">
+                  <span class="m3d-light-label" data-i18n="m3d.light">光照</span>
+                  <div class="m3d-segment" id="m3dLightSeg">
+                    <button class="active" data-light="studio" data-i18n="m3d.lightStudio">工作室</button>
+                    <button data-light="outdoor" data-i18n="m3d.lightOutdoor">户外</button>
+                    <button data-light="soft" data-i18n="m3d.lightSoft">柔和</button>
+                    <button data-light="warm" data-i18n="m3d.lightWarm">暖光</button>
+                    <button data-light="cool" data-i18n="m3d.lightCool">冷光</button>
+                  </div>
+                </div>
+                <div class="m3d-ctrl-group">
+                  <span class="m3d-light-label" data-i18n="m3d.lightAmbient">环境光</span>
+                  <input type="color" id="m3dAmbientColor" class="m3d-color-input" value="#ffffff" />
+                  <label class="m3d-slider"><span data-i18n="m3d.lightAmbientInt">强度</span><input type="range" id="m3dAmbientIntensity" min="0" max="2" step="0.01" value="0.25" /><span class="m3d-val" id="m3dAmbientIntensityVal">0.25</span></label>
+                </div>
+                <div id="m3dLightList"></div>
+                <div class="m3d-ctrl-group">
+                  <button id="m3dAddLight" class="btn btn-ghost btn-sm" data-i18n="m3d.lightAdd">+ 添加灯光</button>
+                </div>
+                <div class="m3d-ctrl-group">
+                  <span class="m3d-light-label" data-i18n="m3d.lightBg">背景色</span>
+                  <input type="color" id="m3dBgColor" class="m3d-color-input" value="#1a1a2e" />
+                </div>
+                <div class="m3d-ctrl-group m3d-light-save-row">
+                  <input type="text" id="m3dLightPresetName" class="m3d-light-name-input" placeholder="预设名称" data-i18n-placeholder="m3d.lightPresetNamePh" maxlength="20">
+                  <button class="m3d-light-save-btn" id="m3dLightSaveBtn" data-i18n="m3d.lightSavePreset">保存</button>
+                </div>
+                <div class="m3d-ctrl-group m3d-light-custom-list" id="m3dLightCustomList"></div>
+              </div>
+              <div class="m3d-env-subpane" data-envpane="sky">
+                <div class="m3d-ctrl-group">
+                  <div class="m3d-segment" id="m3dSkyPresetSeg">
+                    <button data-preset="noon" data-i18n="m3d.skyNoon">正午</button>
+                    <button data-preset="sunset" data-i18n="m3d.skySunset">日落</button>
+                    <button data-preset="overcast" data-i18n="m3d.skyOvercast">阴天</button>
+                    <button data-preset="night" data-i18n="m3d.skyNight">夜晚</button>
+                  </div>
+                </div>
+                <div class="m3d-ctrl-group m3d-sky-save-row">
+                  <input type="text" id="m3dSkyPresetName" class="m3d-sky-name-input" placeholder="预设名称" data-i18n-placeholder="m3d.skyPresetNamePh" maxlength="20" />
+                  <button class="m3d-sky-save-btn" id="m3dSkySaveBtn" data-i18n="m3d.skySavePreset">保存</button>
+                </div>
+                <div class="m3d-ctrl-group m3d-sky-custom-list" id="m3dSkyCustomList"></div>
+                <div class="m3d-ctrl-group">
+                  <label class="m3d-slider"><span data-i18n="m3d.skyElevation">太阳高度</span><input type="range" id="m3dSkyElevation" min="-10" max="89" step="1" value="15" /><span class="m3d-val" id="m3dSkyElevationVal">15°</span></label>
+                  <label class="m3d-slider"><span data-i18n="m3d.skyAzimuth">方位角</span><input type="range" id="m3dSkyAzimuth" min="0" max="360" step="1" value="180" /><span class="m3d-val" id="m3dSkyAzimuthVal">180°</span></label>
+                </div>
+                <div class="m3d-ctrl-group">
+                  <label class="m3d-slider"><span data-i18n="m3d.skyTurbidity">浑浊度</span><input type="range" id="m3dSkyTurbidity" min="0" max="20" step="0.1" value="3" /><span class="m3d-val" id="m3dSkyTurbidityVal">3.0</span></label>
+                  <label class="m3d-slider"><span data-i18n="m3d.skyRayleigh">瑞利</span><input type="range" id="m3dSkyRayleigh" min="0" max="30" step="0.01" value="2.5" /><span class="m3d-val" id="m3dSkyRayleighVal">2.50</span></label>
+                </div>
+                <div class="m3d-ctrl-group">
+                  <label class="m3d-slider"><span data-i18n="m3d.skyMie">Mie系数</span><input type="range" id="m3dSkyMie" min="0" max="0.1" step="0.001" value="0.005" /><span class="m3d-val" id="m3dSkyMieVal">0.005</span></label>
+                  <label class="m3d-slider"><span data-i18n="m3d.skyMieG">Mie方向</span><input type="range" id="m3dSkyMieG" min="0" max="0.999" step="0.001" value="0.8" /><span class="m3d-val" id="m3dSkyMieGVal">0.800</span></label>
+                </div>
+                <div class="m3d-ctrl-group">
+                  <span class="m3d-light-label" data-i18n="m3d.skyTint">天空色调</span>
+                  <input type="color" id="m3dSkyTint" value="#a0c0ff" data-i18n-title="m3d.skyTintTitle" title="天空整体色调，白色=物理结果" />
+                </div>
+              </div>
+              <div class="m3d-env-subpane" data-envpane="hdri">
+                <div class="m3d-ctrl-group">
+                  <button id="m3dHdrBtn" class="btn btn-ghost btn-sm"><svg class="ico ico-sm"><use href="#i-globe"/></svg> <span data-i18n="m3d.loadHdr">加载HDR</span></button>
+                  <button id="m3dHdrClearBtn" class="btn btn-ghost btn-sm" data-i18n="m3d.clearHdr">清除HDR</button>
+                  <button id="m3dHdrRefreshBtn" class="btn btn-ghost btn-sm"><svg class="ico ico-sm"><use href="#i-refresh"/></svg> <span data-i18n="m3d.refresh">刷新</span></button>
+                </div>
+                <div class="m3d-ctrl-group">
+                  <div class="m3d-segment" id="m3dHdrUsageSeg">
+                    <button class="active" data-hdruage="both" data-i18n="m3d.hdrUsageBoth">环境+背景</button>
+                    <button data-hdruage="env" data-i18n="m3d.hdrUsageEnv">仅环境</button>
+                    <button data-hdruage="bg" data-i18n="m3d.hdrUsageBg">仅背景</button>
+                  </div>
+                </div>
+                <div class="m3d-ctrl-group">
+                  <label class="m3d-slider"><span data-i18n="m3d.hdrRotation">旋转</span><input type="range" id="m3dHdrRotation" min="0" max="360" step="1" value="0" /><span class="m3d-val" id="m3dHdrRotationVal">0°</span></label>
+                </div>
+                <div class="m3d-hdr-info" id="m3dHdrInfo"></div>
+                <div class="m3d-ctrl-group">
+                  <input type="text" id="m3dHdrSearch" class="m3d-hdr-search" data-i18n-placeholder="m3d.hdrSearchPh" placeholder="搜索预设..." />
+                </div>
+                <div class="hdri-thumb-progress" id="m3dHdrThumbProgress"><div class="hdri-thumb-progress-bar"></div><span class="hdri-thumb-progress-text"></span></div>
+                <div class="hdri-preset-grid" id="m3dHdrPresetGrid"></div>
+              </div>
+              <div class="m3d-ctrl-group">
+                <label class="m3d-slider"><span data-i18n="m3d.envIntensity">环境</span><input type="range" id="m3dEnvIntensity" min="0" max="3" step="0.01" value="0.5" /><span class="m3d-val" id="m3dEnvIntensityVal">0.50</span></label>
+                <label class="m3d-slider"><span data-i18n="m3d.exposure">曝光</span><input type="range" id="m3dExposure" min="0" max="3" step="0.01" value="2.2" /><span class="m3d-val" id="m3dExposureVal">2.20</span></label>
+                <label class="m3d-checkbox"><input type="checkbox" id="m3dGround" checked /> <span data-i18n="m3d.ground">地面</span></label>
+                <label class="m3d-checkbox"><input type="checkbox" id="m3dAutoRotate" checked /> <span data-i18n="m3d.autoRotate">自转</span></label>
+                <label class="m3d-checkbox"><input type="checkbox" id="m3dWireframe" /><span data-i18n="m3d.wireframe">线框</span></label>
+              </div>
+            </div>
+            <div class="m3d-tab-pane" data-pane="advanced">
+              <div class="m3d-ctrl-group m3d-advanced-row">
+                <span class="m3d-light-label" data-i18n="m3d.format">材质格式</span>
+                <select id="m3dFormat" class="input-select input-select-sm">
+                  <option value="auto" data-i18n="m3d.formatAuto">自动检测</option>
+                  <option value="labpbr">labPBR</option>
+                  <option value="old" data-i18n="m3d.formatOld">旧版 PBR</option>
+                </select>
+                <span class="m3d-format-detected" id="m3dFormatDetected"></span>
+              </div>
+              <div class="m3d-ctrl-group">
+                <span class="m3d-light-label" data-i18n="m3d.texFilter">纹理过滤</span>
+                <div class="m3d-segment" id="m3dFilterSeg">
+                  <button class="active" data-filter="nearest" data-i18n="preview.filterNearest">邻近</button>
+                  <button data-filter="bilinear" data-i18n="preview.filterBilinear">双线性</button>
+                  <button data-filter="trilinear" data-i18n="preview.filterTrilinear">三线性</button>
+                  <button data-filter="anisotropic" data-i18n="preview.filterAniso">各向异性</button>
+                </div>
+              </div>
+              <div class="m3d-ctrl-group">
+                <label class="m3d-slider"><span data-i18n="m3d.anisoLevel">各向异性</span><input type="range" id="m3dAniso" min="1" max="16" step="1" value="4" /><span class="m3d-val" id="m3dAnisoVal">4</span></label>
+                <label class="m3d-checkbox"><input type="checkbox" id="m3dMipmaps" checked /> Mipmap</label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

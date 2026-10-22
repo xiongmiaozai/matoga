@@ -51,7 +51,7 @@ router.get('/:name/entries', wrap(async (req, res) => {
 
 router.get('/:name/raw', wrap(async (req, res) => {
   const root = configStore.get().mcPacksPath
-  const { buf, mime } = await mcmeta.readPackFile(root, req.params.name, req.query.path)
+  const { buf, mime } = await mcmeta.readPackFile(root, req.params.name, req.query.path, { anyExt: req.query.any === '1' })
   res.setHeader('Content-Type', mime)
   res.setHeader('Cache-Control', 'private, max-age=3600')
   res.end(buf)

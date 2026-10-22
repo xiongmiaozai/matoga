@@ -1,0 +1,8 @@
+{
+  "id": "compare",
+  "title": "对比结果",
+  "icon": "i-compare",
+  "html": "panel.html",
+  "mount": "#workspace",
+  "order": 4
+}
