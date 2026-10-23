@@ -45,3 +45,6 @@ config.json
 # 运行时数据 / 文档输出
 data/
 output/
+# 用户本地制作包 / 临时文件
+craft-packs/
+桌子.json

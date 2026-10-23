@@ -36,6 +36,7 @@ test('get: hdriPresetPath 和 mcPacksPath 有默认值', () => {
   assert.ok(cfg.hdriPresetPath.endsWith(path.join('hdri-presets')))
   assert.ok(cfg.mcPacksPath.endsWith(path.join('mc-packs')))
   assert.ok(cfg.officialPacksPath.endsWith(path.join('official-packs')))
+  assert.ok(cfg.craftPacksPath.endsWith(path.join('craft-packs')))
 })
 
 test('put: 写入 patch 后 get 可读回', async () => {

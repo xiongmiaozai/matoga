@@ -32,6 +32,8 @@ function createApp() {
   api.use('/config', require('./routes/config'))
   api.use('/workspace', require('./routes/workspace'))
   api.use('/asset', require('./routes/asset'))
+  api.use('/craft-pack', require('./routes/craft-pack'))
+
   api.use('/mc-official', require('./routes/mc-official'))
   api.use('/mc-packs', require('./routes/mc-packs'))
   api.use('/node-projects', require('./routes/node-projects'))
@@ -86,11 +88,13 @@ function initTrustedRoots() {
   trust(cfg.hdriPresetPath)
   trust(cfg.mcPacksPath)
   trust(cfg.officialPacksPath)
+  trust(cfg.craftPacksPath)
   const uploadService = require('./services/upload-service')
   trust(uploadService.UPLOAD_DIR)
   const nodeProjectStore = require('./config/node-project-store')
   trust(nodeProjectStore.DIR)
-  return { trustedRoots: [cfg.hdriPresetPath, cfg.mcPacksPath, cfg.officialPacksPath] }
+
+  return { trustedRoots: [cfg.hdriPresetPath, cfg.mcPacksPath, cfg.officialPacksPath, cfg.craftPacksPath] }
 }
 
 module.exports = { createApp }

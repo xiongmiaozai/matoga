@@ -326,6 +326,109 @@ test('renamePack: 非法名字被拒绝（防路径穿越）', async () => {
   }
 })
 
+/* ── readPackFile 模糊兜底（模型引用与包内实际条目名大小写 / 扩展名不一致）── */
+
+test('readPackFile: zip 条目名大小写不敏感兜底', async () => {
+  const root = path.join(TMP, 'fuzzy-root')
+  fs.mkdirSync(root, { recursive: true })
+  fs.writeFileSync(path.join(root, 'Case.zip'), makeZip([
+    { name: 'pack.mcmeta', data: MCMETA_121 },
+    { name: 'assets/minecraft/textures/block/Stone.PNG', data: 'case-bytes' },
+  ]))
+  const r = await svc.readPackFile(root, 'Case.zip', 'assets/minecraft/textures/block/stone.png')
+  assert.equal(r.buf.toString(), 'case-bytes')
+  assert.equal(r.mime, 'image/png', 'mime 按实际命中条目扩展名')
+})
+
+test('readPackFile: zip 图片扩展名变体（引用 .png 实为 .jpg）', async () => {
+  const root = path.join(TMP, 'fuzzy-root')
+  fs.writeFileSync(path.join(root, 'Jpg.zip'), makeZip([
+    { name: 'pack.mcmeta', data: MCMETA_121 },
+    { name: 'assets/minecraft/textures/block/flower.jpg', data: 'jpg-bytes' },
+  ]))
+  const r = await svc.readPackFile(root, 'Jpg.zip', 'assets/minecraft/textures/block/flower.png')
+  assert.equal(r.buf.toString(), 'jpg-bytes')
+  assert.equal(r.mime, 'image/jpeg', 'mime 反映真实图片类型')
+})
+
+test('readPackFile: zip 精确条目优先于模糊变体（png 与 jpg 并存取 png）', async () => {
+  const root = path.join(TMP, 'fuzzy-root')
+  fs.writeFileSync(path.join(root, 'Both.zip'), makeZip([
+    { name: 'pack.mcmeta', data: MCMETA_121 },
+    { name: 'assets/minecraft/textures/block/stone.png', data: 'png-wins' },
+    { name: 'assets/minecraft/textures/block/stone.jpg', data: 'jpg-loses' },
+  ]))
+  const r = await svc.readPackFile(root, 'Both.zip', 'assets/minecraft/textures/block/stone.png')
+  assert.equal(r.buf.toString(), 'png-wins')
+})
+
+test('readPackFile: zip mcmeta 扩展名变体（请求 .png.mcmeta 命中 .jpg.mcmeta）', async () => {
+  const root = path.join(TMP, 'fuzzy-root')
+  fs.writeFileSync(path.join(root, 'Meta.zip'), makeZip([
+    { name: 'pack.mcmeta', data: MCMETA_121 },
+    { name: 'assets/minecraft/textures/block/flower.jpg.mcmeta', data: '{"animation":{}}' },
+  ]))
+  const r = await svc.readPackFile(root, 'Meta.zip', 'assets/minecraft/textures/block/flower.png.mcmeta', { anyExt: true })
+  assert.equal(r.buf.toString(), '{"animation":{}}')
+})
+
+test('readPackFile: zip mcmeta 请求不误命中普通贴图（无变体 mcmeta 时 404）', async () => {
+  const root = path.join(TMP, 'fuzzy-root')
+  fs.writeFileSync(path.join(root, 'NoMeta.zip'), makeZip([
+    { name: 'pack.mcmeta', data: MCMETA_121 },
+    { name: 'assets/minecraft/textures/block/flower.jpg', data: 'jpg-bytes' },
+    { name: 'assets/minecraft/textures/block/bare.png.mcmeta', data: '{"animation":{}}' },
+  ]))
+  /* mcmeta 请求不误命中普通贴图 flower.jpg */
+  await assert.rejects(
+    () => svc.readPackFile(root, 'NoMeta.zip', 'assets/minecraft/textures/block/flower.png.mcmeta', { anyExt: true }),
+    e => e.code === 'ERR_FS_NOT_FOUND',
+  )
+  /* 反向：贴图请求不误命中 .mcmeta 条目（bare 仅有 mcmeta 元数据、无图片本体） */
+  await assert.rejects(
+    () => svc.readPackFile(root, 'NoMeta.zip', 'assets/minecraft/textures/block/bare.png'),
+    e => e.code === 'ERR_FS_NOT_FOUND',
+  )
+})
+
+test('readPackFile: zip 大小写不敏感嵌套前缀（多层根 + 大小写差异）', async () => {
+  const root = path.join(TMP, 'fuzzy-root')
+  fs.writeFileSync(path.join(root, 'Nest.zip'), makeZip([
+    { name: 'pack.mcmeta', data: MCMETA_121 },
+    { name: 'a/pack/assets/minecraft/textures/block/Grass.png', data: 'nest-bytes' },
+  ]))
+  const r = await svc.readPackFile(root, 'Nest.zip', 'assets/minecraft/textures/block/grass.png')
+  assert.equal(r.buf.toString(), 'nest-bytes')
+})
+
+test('readPackFile: 目录包大小写 / 图片扩展名变体兜底', async () => {
+  const root = path.join(TMP, 'fuzzy-root')
+  const pkg = path.join(root, 'DirPack')
+  fs.mkdirSync(path.join(pkg, 'assets', 'minecraft', 'textures', 'block'), { recursive: true })
+  fs.writeFileSync(path.join(pkg, 'pack.mcmeta'), MCMETA_121)
+  fs.writeFileSync(path.join(pkg, 'assets/minecraft/textures/block/Grass.png'), 'grass-bytes')
+  fs.writeFileSync(path.join(pkg, 'assets/minecraft/textures/block/dirt.jpg'), 'dirt-bytes')
+
+  const a = await svc.readPackFile(root, 'DirPack', 'assets/minecraft/textures/block/grass.png')
+  assert.equal(a.buf.toString(), 'grass-bytes', '大小写不敏感命中')
+  assert.equal(a.mime, 'image/png')
+
+  const b = await svc.readPackFile(root, 'DirPack', 'assets/minecraft/textures/block/dirt.png')
+  assert.equal(b.buf.toString(), 'dirt-bytes', '扩展名变体命中')
+  assert.equal(b.mime, 'image/jpeg', 'mime 按实际文件扩展名')
+
+  /* 目录包 mcmeta 变体：请求 .png.mcmeta 命中 .jpg.mcmeta */
+  fs.writeFileSync(path.join(pkg, 'assets/minecraft/textures/block/dirt.jpg.mcmeta'), '{"animation":{}}')
+  const c = await svc.readPackFile(root, 'DirPack', 'assets/minecraft/textures/block/dirt.png.mcmeta', { anyExt: true })
+  assert.equal(c.buf.toString(), '{"animation":{}}')
+
+  /* 无同名 stem 文件仍 404（不误匹配同目录其他贴图） */
+  await assert.rejects(
+    () => svc.readPackFile(root, 'DirPack', 'assets/minecraft/textures/block/none.png'),
+    e => e.code === 'ERR_FS_NOT_FOUND',
+  )
+})
+
 /* ── suggestName ────────────────────────────── */
 
 test('suggestName: 由版本范围生成规范名', () => {

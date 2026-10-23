@@ -346,6 +346,7 @@ function initCtxMenu() {
   await step('initNodePreview', () => initNodePreview())
   await step('initAssetLibrary', () => initAssetLibrary())
   await step('initPackPickers', () => initPackPickers())
+
   await step('initViewTabs', () => initViewTabs())
   await step('initCtxMenu', () => initCtxMenu())
 

@@ -78,6 +78,10 @@
         "to": "mc-packs"
       },
       {
+        "from": "craft-packs",
+        "to": "craft-packs"
+      },
+      {
         "from": "official-packs",
         "to": "official-packs"
       }

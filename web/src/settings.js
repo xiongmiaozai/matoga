@@ -73,6 +73,7 @@ function initPathSettings() {
   const items = [
     { inputId: 'hdriPresetPathInput', pickId: 'hdriPresetPickBtn', createId: 'hdriPresetCreateBtn', openId: 'hdriPresetOpenBtn', cfgKey: 'hdriPresetPath' },
     { inputId: 'mcPacksPathInput', pickId: 'mcPacksPickBtn', createId: 'mcPacksCreateBtn', openId: 'mcPacksOpenBtn', cfgKey: 'mcPacksPath' },
+    { inputId: 'craftPacksPathInput', pickId: 'craftPacksPickBtn', createId: 'craftPacksCreateBtn', openId: 'craftPacksOpenBtn', cfgKey: 'craftPacksPath' },
     { inputId: 'userPacksPathInput', pickId: 'userPacksPickBtn', createId: 'userPacksCreateBtn', openId: 'userPacksOpenBtn', cfgKey: 'userPacksPath' },
     { inputId: 'officialPacksPathInput', pickId: 'officialPacksPickBtn', createId: 'officialPacksCreateBtn', openId: 'officialPacksOpenBtn', cfgKey: 'officialPacksPath' }
   ]

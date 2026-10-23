@@ -23,12 +23,16 @@ const ASSETS_PREFIX = 'assets/'
 /* 包内贴图：assets/<ns>/textures/** 下的图片文件 */
 const IMG_EXT_RE = /\.(png|jpe?g|webp|gif|bmp|tiff?|avif)$/i
 const TEX_DIR_RE = /^assets\/[^/]+\/textures\//
+/* 包内模型：assets/<ns>/models/** 下的 JSON 文件 + 1.21.4+ 物品模型定义 assets/<ns>/items/*.json */
+const MODEL_DIR_RE = /^assets\/[^/]+\/(models|items)\//
+const MODEL_EXT_RE = /\.json$/i
 const MIME_BY_EXT = {
   png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp',
   gif: 'image/gif', bmp: 'image/bmp', tif: 'image/tiff', tiff: 'image/tiff', avif: 'image/avif',
 }
 const MAX_TEX_WALK = 20000
 const MAX_TEX_RETURN = 200
+const MAX_MODEL_WALK = 20000
 
 // pack_format -> Minecraft 版本范围（资源包格式，Java 版）
 const PACK_FORMAT_VERSIONS = [
@@ -117,16 +121,58 @@ function pickMcmetaEntry(entries) {
   return nested[0] || null
 }
 
-/* 按归一化路径查 zip 条目：精确 → assets 嵌套归一 → 任意层嵌套根前缀（pack.png 等） */
+/* 图片扩展名变体集合（模糊匹配：模型引用 .png 而包内实为 .jpg 等的社区包） */
+const IMG_EXT_LIST = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'tif', 'tiff', 'avif']
+const MCMETA_SUFFIX = '.mcmeta'
+
+/* 请求路径（小写）→ 同 stem 的图片扩展名候选集合；非图片扩展名返回 null。
+   动画元数据（.mcmeta 结尾）剥掉后缀再取 stem：stone.png.mcmeta → { stone.png, stone.jpg, … } */
+function imgVariantKeys(relL) {
+  const isMeta = relL.endsWith(MCMETA_SUFFIX)
+  const base = isMeta ? relL.slice(0, -MCMETA_SUFFIX.length) : relL
+  const dot = base.lastIndexOf('.')
+  if (dot <= base.lastIndexOf('/')) return null
+  if (!IMG_EXT_LIST.includes(base.slice(dot + 1))) return null
+  const stem = base.slice(0, dot)
+  return new Set(IMG_EXT_LIST.map(e => stem + '.' + e))
+}
+
+/* 模糊比较键（条目名小写）：mcmeta 查询时仅 .mcmeta 条目参与（剥后缀），反向亦然——
+   避免「请求 stone.png.mcmeta 误命中普通贴图 stone.png / 请求贴图误命中 .png.mcmeta」 */
+function fuzzyVariantKey(nameL, isMetaQuery) {
+  const isMetaEntry = nameL.endsWith(MCMETA_SUFFIX)
+  if (isMetaQuery) return isMetaEntry ? nameL.slice(0, -MCMETA_SUFFIX.length) : null
+  return isMetaEntry ? null : nameL
+}
+
+/* 按归一化路径查 zip 条目，匹配层级（前者未命中才进后者）：
+   1. 精确（大小写敏感）          2. assets 嵌套归一（剥一层根前缀）
+   3. 任意层嵌套根前缀（取最浅）   4. 以上三级的大小写不敏感形态
+   5. 图片扩展名变体（.png ↔ .jpg 等，mcmeta 查询剥后缀同 stem 比较）
+   模糊层仅兜底原本 404 的请求：zip 实际条目名大小写 / 扩展名与模型引用不一致的场景 */
 function findZipEntry(entries, rel) {
-  const exact = entries.find(e => e.name === rel)
-  if (exact) return exact
-  const norm = entries.find(e => normalizeZipTexName(e.name) === rel)
-  if (norm) return norm
-  const nested = entries
-    .filter(e => e.name.endsWith('/' + rel))
-    .sort((a, b) => a.name.split('/').length - b.name.split('/').length)
-  return nested[0] || null
+  const relL = rel.toLowerCase()
+  const isMeta = relL.endsWith(MCMETA_SUFFIX)
+  const variants = imgVariantKeys(relL)
+  let norm = null, nested = null, nestedDepth = Infinity
+  let icExact = null, icNorm = null, icNested = null, icNestedDepth = Infinity, variantHit = null
+  for (const e of entries) {
+    const n = e.name
+    if (n === rel) return e
+    const p = normalizeZipTexName(n)
+    if (!norm && p === rel) norm = e
+    const nL = n.toLowerCase()
+    if (!icExact && nL === relL) icExact = e
+    if (p && !icNorm && p.toLowerCase() === relL) icNorm = e
+    const depth = n.split('/').length
+    if (n.endsWith('/' + rel) && depth < nestedDepth) { nested = e; nestedDepth = depth }
+    if (nL.endsWith('/' + relL) && depth < icNestedDepth) { icNested = e; icNestedDepth = depth }
+    if (!variantHit && variants) {
+      const key = fuzzyVariantKey(nL, isMeta)
+      if (key != null && variants.has(key)) variantHit = e
+    }
+  }
+  return norm || nested || icExact || icNorm || icNested || variantHit || null
 }
 
 function collectNamespaces(entries) {
@@ -274,6 +320,56 @@ function zipTextureEntries(entries) {
   for (const e of entries) {
     const p = normalizeZipTexName(e.name)
     if (p && IMG_EXT_RE.test(e.name)) out.push({ path: p, size: e.usize })
+  }
+  out.sort((a, b) => a.path.localeCompare(b.path))
+  return out
+}
+
+/* ── 包内模型（assets/<ns>/models/** 与 1.21.4+ 物品定义 assets/<ns>/items/*.json）── */
+
+/* zip 条目名 → 归一化模型路径：容忍包内容套一层根文件夹（<root>/assets/...） */
+function normalizeZipModelName(name) {
+  if (MODEL_DIR_RE.test(name)) return name
+  const m = /^[^/]+\/(assets\/[^/]+\/(models|items)\/.+)$/.exec(name)
+  return m ? m[1] : null
+}
+
+/* 解析模型路径：models/** 返回 { ns, rest }；items/** 返回 { ns, rest, kind: 'item' } */
+function parseModelPath(p) {
+  let m = /^assets\/([^/]+)\/models\/(.+)$/.exec(p)
+  if (m) return { ns: m[1], rest: m[2] }
+  m = /^assets\/([^/]+)\/items\/([^/]+\.json)$/.exec(p)
+  if (m) return { ns: m[1], rest: m[2], kind: 'item' }
+  return null
+}
+
+/* 递归收集包内模型（相对包根的 assets/... 路径，带上限防大包卡死） */
+async function walkDirModels(packRoot) {
+  const found = []
+  async function walk(abs, rel) {
+    if (found.length >= MAX_MODEL_WALK) return
+    let ents
+    try { ents = await fs.promises.readdir(abs, { withFileTypes: true }) } catch { return }
+    for (const e of ents) {
+      if (e.name.startsWith('.')) continue
+      const r = rel ? rel + '/' + e.name : e.name
+      if (e.isDirectory()) await walk(path.join(abs, e.name), r)
+      else if (MODEL_DIR_RE.test(r) && MODEL_EXT_RE.test(e.name)) {
+        found.push({ path: r, size: 0 })
+        if (found.length >= MAX_MODEL_WALK) return
+      }
+    }
+  }
+  await walk(packRoot, '')
+  return found
+}
+
+/* zip 包内模型条目：路径限定 assets/<ns>/models/ 或 assets/<ns>/items/ 且扩展名 .json（blockstates 等其他 json 排除） */
+function zipModelEntries(entries) {
+  const out = []
+  for (const e of entries) {
+    const p = normalizeZipModelName(e.name)
+    if (p && MODEL_EXT_RE.test(e.name)) out.push({ path: p, size: e.usize })
   }
   out.sort((a, b) => a.path.localeCompare(b.path))
   return out
@@ -584,6 +680,40 @@ async function listPackTexGroups(root, name) {
   return { name, kind, root: packRoot, total: texs.length, groups: sorted }
 }
 
+/* ── 总资产库模型聚合：包内全部模型按类别分组（models/ 第一级目录；items/ 物品定义独立分组），无分页 ── */
+
+async function listPackModelGroups(root, name) {
+  const st = await statPack(root, name)
+  const full = path.join(root, name)
+  let kind = 'dir'
+  let packRoot = null
+  let models = []
+  if (st.isDirectory()) {
+    const r = await resolveDirPack(full)
+    packRoot = r ? r.root : full
+    models = await walkDirModels(packRoot)
+    const metas = await statTexMeta(packRoot, models)
+    models.forEach((t, i) => { const m = metas[i]; if (m) { t.size = m.size; t.mtime = m.mtime } })
+  } else {
+    kind = 'zip'
+    models = zipModelEntries(parseZipCentralDirectory(await fs.promises.readFile(full)))
+  }
+  const groups = new Map()
+  for (const t of models) {
+    const p = parseModelPath(t.path)
+    if (!p) continue
+    /* 1.21.4+ 物品模型定义（assets/<ns>/items/*.json）归入独立分组；models/ 按第一级目录分组 */
+    const key = p.kind === 'item' ? 'items' : (p.rest.split('/').length >= 2 ? p.rest.split('/')[0] : '')
+    let g = groups.get(key)
+    if (!g) { g = { key, count: 0, files: [] }; groups.set(key, g) }
+    g.count++
+    g.files.push({ path: t.path, name: t.path.split('/').pop(), size: t.size || 0, mtime: t.mtime || 0 })
+  }
+  const sorted = [...groups.values()].sort((a, b) =>
+    (a.key === '' ? -1 : b.key === '' ? 1 : b.count - a.count) || a.key.localeCompare(b.key))
+  return { name, kind, root: packRoot, total: models.length, groups: sorted }
+}
+
 async function statPack(root, name) {
   if (!validPackName(name)) throw new AppError('ERR_INVALID_PARAM', 'invalid pack name')
   const full = path.join(root, name)
@@ -700,6 +830,25 @@ async function listPackEntries(root, name, opts = {}) {
   }
 }
 
+/* 目录包模糊定位：目标目录内按「大小写不敏感同名 → 图片扩展名变体」匹配实际文件名，
+   命中返回实际文件名（mime 按其扩展名），找不到返回 null */
+async function resolveDirFileFuzzy(dirAbs, rel) {
+  const ents = await fs.promises.readdir(dirAbs).catch(() => null)
+  if (!ents) return null
+  const want = rel.slice(rel.lastIndexOf('/') + 1).toLowerCase()
+  const isMeta = want.endsWith(MCMETA_SUFFIX)
+  const variants = imgVariantKeys(want)
+  let variantHit = null
+  for (const n of ents) {
+    const nL = n.toLowerCase()
+    if (nL === want) return n
+    if (!variants || variantHit) continue
+    const key = fuzzyVariantKey(nL, isMeta)
+    if (key != null && variants.has(key)) variantHit = n
+  }
+  return variantHit
+}
+
 async function readPackFile(root, name, relPath, opts = {}) {
   const rel = assertValidRelPath(relPath, opts)
   const st = await statPack(root, name)
@@ -715,6 +864,14 @@ async function readPackFile(root, name, relPath, opts = {}) {
       const buf = await fs.promises.readFile(file)
       return { buf, mime: mimeOf(rel) }
     } catch {
+      /* 模糊兜底：实际文件名大小写 / 图片扩展名与模型引用不一致（社区包常见） */
+      const hit = await resolveDirFileFuzzy(path.dirname(file), rel)
+      if (hit) {
+        try {
+          const buf = await fs.promises.readFile(path.join(path.dirname(file), hit))
+          return { buf, mime: mimeOf(hit) }
+        } catch {}
+      }
       throw new AppError('ERR_FS_NOT_FOUND', 'texture not found: ' + rel)
     }
   }
@@ -722,7 +879,8 @@ async function readPackFile(root, name, relPath, opts = {}) {
   const entries = parseZipCentralDirectory(buf)
   const entry = findZipEntry(entries, rel)
   if (!entry) throw new AppError('ERR_FS_NOT_FOUND', 'texture not found: ' + rel)
-  return { buf: readZipEntry(buf, entry), mime: mimeOf(rel) }
+  /* mime 按实际命中条目的扩展名（模糊命中 .jpg 等变体时请求扩展名不代表真实类型） */
+  return { buf: readZipEntry(buf, entry), mime: mimeOf(entry.name) }
 }
 
 module.exports = {
@@ -736,7 +894,12 @@ module.exports = {
   validPackName,
   listPackTextures,
   listPackTexGroups,
+  listPackModelGroups,
   listPackEntries,
   readPackFile,
+  resolveDirPack,
+  parseZipCentralDirectory,
+  statPack,
+  normalizeZipBrowseName,
   ZIP_EXTS,
 }

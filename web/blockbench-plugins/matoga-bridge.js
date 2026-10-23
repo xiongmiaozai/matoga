@@ -7,6 +7,7 @@
  *  - 工具菜单「发送模型到 matoga」: 导出 .bbmodel → POST /api/blockbench/models
  *  - 工具菜单「拉取 matoga 材质」: GET /api/blockbench/inbox → 应用纹理 → 清除
  *  - 监听 postMessage {type:'matoga-texture', name, dataUrl}: 父页面实时推送材质
+ *  - 监听 postMessage {type:'matoga-open-model', data}: 父页面打开模型（.bbmodel / MC .json）
  * 同源部署，API 用绝对路径 /api/blockbench/*；LAN 模式 token 经 URL 参数传递。
  */
 
@@ -35,6 +36,21 @@ function applyTexture(name, dataUrl) {
     tex.add().then(() => {}).catch(() => {})
     return true
   } catch { return false }
+}
+
+/* 打开 matoga 推送的模型：.bbmodel 走 bbmodel 编解码，MC .json 模型走 java_block（Java 方块/物品） */
+function openModelData(data) {
+  try {
+    const isBb = data && data.meta && typeof data.meta === 'object' &&
+      (data.meta.format === 'bbmodel' || data.meta.model_format)
+    const text = JSON.stringify(data)
+    if (isBb && Codecs.bbmodel) Codecs.bbmodel.parse(text)
+    else if (!isBb && Codecs.java_block) Codecs.java_block.parse(text)
+    else return Blockbench.showStatusMessage('不支持的模型格式', 3000)
+    Blockbench.showStatusMessage('已打开 matoga 模型', 2000)
+  } catch (e) {
+    Blockbench.showStatusMessage('打开模型失败: ' + e.message, 3000)
+  }
 }
 
 function registerPlugin() {
@@ -84,9 +100,18 @@ Plugin.register('matoga_bridge', {
 
     window.addEventListener('message', (e) => {
       const d = e.data
-      if (!d || d.type !== 'matoga-texture') return
-      if (applyTexture(d.name, d.dataUrl)) Blockbench.showStatusMessage('已接收材质: ' + (d.name || ''), 1500)
+      if (!d || typeof d !== 'object') return
+      if (d.type === 'matoga-texture') {
+        if (applyTexture(d.name, d.dataUrl)) Blockbench.showStatusMessage('已接收材质: ' + (d.name || ''), 1500)
+      } else if (d.type === 'matoga-open-model' && d.data) {
+        openModelData(d.data)
+      }
     })
+
+    /* 插件就绪信号：父页面据此补投加载期间丢失的模型消息 */
+    try {
+      if (window.parent && window.parent !== window) window.parent.postMessage({ type: 'matoga-bridge-ready' }, '*')
+    } catch {}
   },
   onunload() {
     if (sendAction) sendAction.delete()

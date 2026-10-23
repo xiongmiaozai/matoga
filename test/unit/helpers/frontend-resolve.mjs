@@ -20,6 +20,10 @@ export function initMaterial3D(){}
 export function applyNodePBRSide(){}
 export function isMaterial3DReady(){ return false }
 export function updateMaterial3D(){}
+export function showCustomModel(g){ const f = globalThis.__m3dShow; return f ? !!f(g) : false }
+export function clearCustomModel(){}
+export function isCustomModelActive(){ return false }
+export function hasVisibleViewport(){ return false }
 `
 
 export async function load(url, context, next) {

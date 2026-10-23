@@ -132,6 +132,13 @@ export function folderOf(g) {
   return (g._folder = idx >= 0 ? g.key.slice(0, idx) : t('render.rootFolder'))
 }
 
+export function modelTypeOf(g) {
+  const m = g.key.match(/^assets\/[^/]+\/models\/([^/]+)/)
+  if (m) return m[1]
+  if (/^assets\/[^/]+\/items\//.test(g.key)) return 'item'
+  return null
+}
+
 export function getIgnorePatterns() {
   const patterns = []
   if (ignoreChk.checked) patterns.push('.DS_Store', 'Thumbs.db', 'desktop.ini', '.git', 'node_modules', '__pycache__', '*_backup_*')

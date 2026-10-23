@@ -861,6 +861,8 @@ body.node-mode #nodeView{ display:flex; }
   image-rendering:pixelated;
 }
 .asset-card .ac-thumb img{ width:100%; height:100%; object-fit:cover; display:block }
+/* 模型 3D 离屏渲染缩略图：抗锯齿插值（区别于像素风贴图缩略图） */
+.asset-card .ac-thumb.ac-thumb-3d img{ image-rendering:auto }
 .asset-card .ac-icon{ color:var(--text-muted); width:22px; height:22px }
 .asset-card .ac-name{
   font-size:9px; color:var(--text-muted); white-space:nowrap;
@@ -872,6 +874,7 @@ body.node-mode #nodeView{ display:flex; }
 .asset-card .ac-role.specular{ background:#3a2a1a; color:var(--warn) }
 .asset-card .ac-role.preset{ background:rgba(91,206,250,.18); color:var(--accent) }
 .asset-card .ac-role.project{ background:#2b2f4a; color:#8fa8ff }
+.asset-card .ac-role.model{ background:#2a2a4d; color:#a892ff }
 .asset-card .ac-role.official{ background:#1f3d2b; color:#7fd69a; letter-spacing:.2px }
 .asset-lib-sec-actions{ display:flex; gap:6px; padding:0 10px 6px }
 .asset-lib-sec-btn{
@@ -882,6 +885,19 @@ body.node-mode #nodeView{ display:flex; }
 .asset-lib-sec-btn:hover{ border-color:var(--primary); color:var(--primary) }
 .asset-lib-empty{ padding:24px 12px; text-align:center; color:var(--text-dim); font-size:11px }
 .asset-lib-loading{ padding:24px 12px; text-align:center; color:var(--text-muted); font-size:11px }
+
+/* 制作包（我的开发包） */
+.craft-stat{ padding:0 10px 6px; font-size:10px; color:var(--text-dim) }
+.craft-pack-list{ display:flex; flex-direction:column; gap:4px; padding:2px 10px 8px }
+.craft-pack-list-title{ font-size:10px; font-weight:600; color:var(--text-dim) }
+.craft-pack-row{
+  display:flex; align-items:center; gap:8px; padding:4px 8px;
+  border:1px solid var(--border-soft); border-radius:var(--r-sm); background:rgba(0,0,0,.2);
+  font-size:11px;
+}
+.craft-pack-name{ font-weight:600; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.craft-pack-meta{ font-size:10px; color:var(--text-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-left:auto }
+.craft-pack-row .asset-lib-sec-btn{ flex:none }
 
 /* 资产库贴图子分组 */
 .asset-lib-groups{ display:flex; flex-direction:column; gap:4px; padding:2px 10px 8px }
@@ -1097,6 +1113,7 @@ body.node-mode #nodeView{ display:flex; }
 }
 .pb-file .pf-thumb img{ width:100%; height:100%; object-fit:cover; display:block }
 .pb-file .pf-thumb .ico{ width:13px; height:13px; color:var(--text-dim) }
+.pb-file .pf-thumb.model .ico{ color:#a892ff }
 .pb-file .fn{ font-size:11px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1 }
 .pb-file .fs{ font-size:10px; color:var(--text-dim); flex:none }
 .pf-add{

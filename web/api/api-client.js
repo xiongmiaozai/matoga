@@ -55,7 +55,8 @@
             const begin = await call('POST', '/api/upload/begin')
             await putRaw(begin.uploadId, f.name, f)
             const end = await call('POST', '/api/upload/end?uploadId=' + begin.uploadId)
-            resolve(end.rootPath)
+            const sep = end.rootPath.includes('\\') && !end.rootPath.includes('/') ? '\\' : '/'
+            resolve(end.rootPath + sep + f.name)
           } catch { resolve(null) }
         }
         input.click()

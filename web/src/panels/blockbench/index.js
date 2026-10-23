@@ -56,6 +56,24 @@ export function toggleBlockbench() {
   if (_fw) _fw.toggle()
 }
 
+/* 在 Blockbench 窗口中打开模型（bbmodel / MC .json 模型）：确保窗口已创建并可见后投递给 iframe */
+let _pendingModel = null
+window.addEventListener('message', (e) => {
+  if (e.data && e.data.type === 'matoga-bridge-ready' && _pendingModel) {
+    if (Date.now() > _pendingModel.expires) { _pendingModel = null; return }
+    const d = _pendingModel.data
+    _pendingModel = null
+    postToFrame({ type: 'matoga-open-model', data: d })
+  }
+})
+export function openModelInBlockbench(data) {
+  initBlockbenchPanel()
+  if (_fw && !_fw.isOpen()) _fw.open()
+  /* iframe 首次加载中时 Blockbench 可能未就绪：暂存，等 bridge ready 信号后补投（10s 内有效） */
+  _pendingModel = { data, expires: Date.now() + 10000 }
+  postToFrame({ type: 'matoga-open-model', data })
+}
+
 function getActiveIframe() {
   const panelFrame = document.getElementById('blockbenchFrame')
   if (panelFrame && panelFrame.offsetParent !== null) return panelFrame

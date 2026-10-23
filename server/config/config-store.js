@@ -53,6 +53,7 @@ function get() {
   if (!cfg.hdriPresetPath) cfg.hdriPresetPath = path.join(PRESET, 'hdri-presets')
   if (!cfg.mcPacksPath) cfg.mcPacksPath = path.join(PRESET, 'mc-packs')
   if (!cfg.officialPacksPath) cfg.officialPacksPath = path.join(PRESET, 'official-packs')
+  if (!cfg.craftPacksPath) cfg.craftPacksPath = path.join(PRESET, 'craft-packs')
   if (!cfg.userPacksPath) cfg.userPacksPath = path.join(DATA_DIR, 'user-packs')
   return cfg
 }

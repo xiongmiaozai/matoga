@@ -192,8 +192,11 @@ function renderAssetMeta(a){
 
 function renderAssetActions(a){
   const btns = []
-  btns.push(`<button class="np-btn primary" data-np-asset-act="add">${esc(t('asset.detailAddCanvas'))}</button>`)
+  btns.push(`<button class="np-btn primary" data-np-asset-act="add">${esc(t(a.type === 'model' ? 'asset.detailViewViewport' : 'asset.detailAddCanvas'))}</button>`)
   btns.push(`<button class="np-btn" data-np-asset-act="fav">${esc(t(a.fav ? 'asset.detailUnfav' : 'asset.detailFav'))}</button>`)
+  if (a.onBlockbench){
+    btns.push(`<button class="np-btn" data-np-asset-act="blockbench">${esc(t('asset.ctxSendBlockbench'))}</button>`)
+  }
   if (a.path){
     btns.push(`<button class="np-btn" data-np-asset-act="locate">${esc(t('asset.detailLocate'))}</button>`)
     btns.push(`<button class="np-btn" data-np-asset-act="copyPath">${esc(t('asset.detailCopyPath'))}</button>`)

@@ -4,9 +4,12 @@
  * SPDX-License-Identifier: MIT
  *
  * 快速选包：folder-card-head 中左右两侧的「选择」旁下拉入口，
- * 分组列出 mc-packs（MC 资产包）与 official-packs（官方包）目录下的包，
+ * 分组列出 mc-packs（MC 资产包）、official-packs（官方包）目录下的包，
+ * 以及制作包（craft-pack 当前制作项目 craft-packs/我的制作包/），
  * 点击即以该包路径作为该侧对比目录加载（loadFromPath）。
- * 数据复用 /api/mc-packs/list 与 /api/mc-official/list（同构 { root, exists, packs }）。
+
+ * 数据复用 /api/mc-packs/list、/api/mc-official/list（同构 { root, exists, packs }）
+ * 与 /api/craft-pack/current（当前制作项目，经 pick 适配为统一包项）。
  */
 
 import { showToast } from './core.js'
@@ -14,8 +17,16 @@ import { loadFromPath } from './actions.js'
 import { t, onLocaleChange } from './i18n.js'
 
 const GROUPS = [
-  { key: 'mc',       api: '/api/mc-packs/list',    labelKey: 'sidebar.mcPacksGroup',   emptyKey: 'sidebar.quickMcEmpty' },
-  { key: 'official', api: '/api/mc-official/list', labelKey: 'sidebar.officialGroup',  emptyKey: 'sidebar.quickOfficialEmpty' },
+  { key: 'mc',       api: '/api/mc-packs/list',    labelKey: 'sidebar.mcPacksGroup',       emptyKey: 'sidebar.quickMcEmpty',
+    pick: (d) => (d && d.packs) || [] },
+  { key: 'official', api: '/api/mc-official/list', labelKey: 'sidebar.officialGroup',      emptyKey: 'sidebar.quickOfficialEmpty',
+    pick: (d) => (d && d.packs) || [] },
+  { key: 'craft',    api: '/api/craft-pack/current', labelKey: 'sidebar.craftGroup',         emptyKey: 'sidebar.quickCraftEmpty',
+    pick: (d) => {
+      const p = d && d.pack
+      return p ? [{ name: p.name, fullPath: p.dir, packFormat: p.packFormat, fileCount: p.fileCount, recursive: true }] : []
+    } },
+
 ]
 
 const CACHE_TTL = 30_000
@@ -36,12 +47,17 @@ async function fetchGroup(group) {
   const res = await fetch(apiUrl(group.api))
   const j = await res.json()
   if (!j || !j.ok) throw new Error((j && j.msg) || (j && j.code) || 'bad response')
-  const data = { root: j.data && j.data.root, packs: (j.data && j.data.packs) || [] }
+  const data = { packs: group.pick(j.data) }
   cache.set(group.key, { time: Date.now(), data })
   return data
 }
 
 function clearCache() { cache.clear() }
+
+export function invalidatePackPickers() {
+  clearCache()
+
+}
 
 function ensureMenu() {
   if (menuEl) return menuEl
@@ -98,7 +114,10 @@ function itemNode(side, pack) {
   const bits = []
   if (pack.formatLabel) bits.push(pack.formatLabel)
   else if (pack.formatRange) bits.push(pack.formatRange)
+  else if (pack.packFormat != null) bits.push(t('sidebar.quickFormat', { n: pack.packFormat }))
   if (pack.textureCount) bits.push(t('sidebar.quickTexCount', { n: pack.textureCount }))
+  else if (pack.fileCount) bits.push(t('sidebar.quickFileCount', { n: pack.fileCount }))
+  else if (pack.assetCount) bits.push(t('sidebar.quickAssetCount', { n: pack.assetCount }))
   meta.textContent = bits.join(' · ')
   btn.appendChild(name)
   btn.appendChild(meta)
@@ -110,7 +129,7 @@ function itemNode(side, pack) {
     btn.addEventListener('click', async () => {
       closeMenu()
       if (!pack.fullPath) return
-      await loadFromPath(side, pack.fullPath)
+      await loadFromPath(side, pack.fullPath, pack.recursive ? { forceRecursive: true } : undefined)
     })
   }
   return btn

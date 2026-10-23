@@ -17,6 +17,7 @@ let isWebGL2 = false
 
 let meshLeft, meshRight, labelLeft, labelRight
 let groundMesh, gridHelper, lightGroup
+let customModelGroup = null   /* 自定义模型（MC .json / .bbmodel）托管容器，非空时内置预览 mesh 隐藏 */
 let container = null
 let initialized = false
 const hosts = new Set()
@@ -61,7 +62,7 @@ let parallaxShadow = 0.0
 const _lightDirTmp = new THREE.Vector3()
 let currentLightPreset = 'studio'
 let currentEnvMode = 'custom'
-let groundVisible = true
+let groundVisible = false
 let envIntensity = 0.5
 let hdrTexture = null
 let hdrTextureOriginal = null
@@ -97,6 +98,19 @@ let rotX = 0, rotY = 0, targetRotX = 0, targetRotY = 0
 let isDragging = false, lastX = 0, lastY = 0
 let camDist = 3, targetCamDist = 3
 let autoRotate = true
+
+let camPanX = 0, camPanY = 0, targetPanX = 0, targetPanY = 0
+let dragMode = null
+let freeCamMode = false
+const flyPos = new THREE.Vector3(0, 0.5, 3)
+let flyYaw = 0, flyPitch = 0
+const flyKeys = Object.create(null)
+const FLY_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight'])
+const FLY_SPEED = 3, FLY_BOOST = 2.5
+let lastFrameTime = 0
+const _flyForward = new THREE.Vector3()
+const _flyRight = new THREE.Vector3()
+const _flyMove = new THREE.Vector3()
 
 const LIGHT_PRESETS = {
   studio: {
@@ -981,13 +995,14 @@ export function initMaterial3D(containerEl) {
   scene.add(labelLeft); scene.add(labelRight)
   const groundGeo = new THREE.PlaneGeometry(8, 8)
   const groundMat = new THREE.MeshStandardMaterial({ color: 0x2a2a3e, roughness: 0.8, metalness: 0.0 })
-  groundMesh = new THREE.Mesh(groundGeo, groundMat); groundMesh.rotation.x = -Math.PI / 2; groundMesh.position.y = -1.3; groundMesh.receiveShadow = true; scene.add(groundMesh)
+  groundMesh = new THREE.Mesh(groundGeo, groundMat); groundMesh.rotation.x = -Math.PI / 2; groundMesh.position.y = -1.3; groundMesh.receiveShadow = true; groundMesh.visible = groundVisible; scene.add(groundMesh)
   gridHelper = new THREE.GridHelper(8, 32, 0x444466, 0x222244)
-  gridHelper.position.y = -1.29; gridHelper.material.transparent = true; gridHelper.material.opacity = 0.3; scene.add(gridHelper)
+  gridHelper.position.y = -1.29; gridHelper.material.transparent = true; gridHelper.material.opacity = 0.3; gridHelper.visible = groundVisible; scene.add(gridHelper)
   setupControls()
   if (containerResizeObserver) containerResizeObserver.disconnect()
   containerResizeObserver = new ResizeObserver(handleResize)
   for (const h of hosts) containerResizeObserver.observe(h)
+  lastFrameTime = performance.now()
   animate(); initialized = true
   moveViewportWidgets(container)
   refreshHostHints()
@@ -1016,11 +1031,89 @@ function applySourceSide() {
 
 function setupControls() {
   const canvas = renderer.domElement; canvas.style.cursor = 'grab'
-  canvas.addEventListener('mousedown', (e) => { isDragging = true; autoRotate = false; lastX = e.clientX; lastY = e.clientY; canvas.style.cursor = 'grabbing' })
-  canvas.addEventListener('mousemove', (e) => { if (!isDragging) return; targetRotY += (e.clientX - lastX) * 0.01; targetRotX += (e.clientY - lastY) * 0.01; targetRotX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, targetRotX)); lastX = e.clientX; lastY = e.clientY })
-  window.addEventListener('mouseup', () => { if (isDragging) { isDragging = false; canvas.style.cursor = 'grab' } })
-  canvas.addEventListener('wheel', (e) => { e.preventDefault(); targetCamDist = Math.max(1.5, Math.min(8, targetCamDist + e.deltaY * 0.003)) }, { passive: false })
-  canvas.addEventListener('dblclick', () => { autoRotate = !autoRotate; targetRotX = 0; targetRotY = 0 })
+  canvas.addEventListener('contextmenu', (e) => e.preventDefault())
+  canvas.addEventListener('mousedown', (e) => {
+    isDragging = true; autoRotate = false; lastX = e.clientX; lastY = e.clientY
+    if (freeCamMode) dragMode = 'look'
+    else if (e.button === 0 && !e.shiftKey) dragMode = 'rotate'
+    else dragMode = 'pan'
+    canvas.style.cursor = 'grabbing'
+    if (e.button === 1) e.preventDefault()
+  })
+  canvas.addEventListener('mousemove', (e) => {
+    if (!isDragging) return
+    const dx = e.clientX - lastX, dy = e.clientY - lastY
+    lastX = e.clientX; lastY = e.clientY
+    if (dragMode === 'look') {
+      flyYaw -= dx * 0.005
+      flyPitch = Math.max(-1.55, Math.min(1.55, flyPitch - dy * 0.005))
+    } else if (dragMode === 'rotate') {
+      targetRotY += dx * 0.01; targetRotX += dy * 0.01
+      targetRotX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, targetRotX))
+    } else {
+      const k = camDist * 0.0015
+      targetPanX -= dx * k; targetPanY += dy * k
+    }
+  })
+  window.addEventListener('mouseup', () => { if (isDragging) { isDragging = false; dragMode = null; canvas.style.cursor = freeCamMode ? 'crosshair' : 'grab' } })
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault()
+    if (freeCamMode) {
+      _flyForward.set(0, 0, -1).applyEuler(camera.rotation)
+      flyPos.addScaledVector(_flyForward, -e.deltaY * 0.01)
+      clampFlyPos()
+    } else {
+      targetCamDist = Math.max(1.5, Math.min(8, targetCamDist + e.deltaY * 0.003))
+    }
+  }, { passive: false })
+  canvas.addEventListener('dblclick', () => {
+    if (freeCamMode) { resetFreeView(); return }
+    autoRotate = !autoRotate; targetRotX = 0; targetRotY = 0; targetPanX = 0; targetPanY = 0
+  })
+  window.addEventListener('keydown', (e) => {
+    if (!freeCamMode) return
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT' || e.target.isContentEditable)) return
+    if (FLY_KEYS.has(e.code)) { flyKeys[e.code] = true; e.preventDefault() }
+  })
+  window.addEventListener('keyup', (e) => { delete flyKeys[e.code] })
+  window.addEventListener('blur', () => { for (const k in flyKeys) delete flyKeys[k] })
+}
+
+function clampFlyPos() {
+  flyPos.x = Math.max(-40, Math.min(40, flyPos.x))
+  flyPos.y = Math.max(-20, Math.min(40, flyPos.y))
+  flyPos.z = Math.max(-40, Math.min(40, flyPos.z))
+}
+
+function lookAtOrigin() {
+  _flyForward.set(0, 0, 0).sub(flyPos)
+  if (_flyForward.lengthSq() < 1e-8) _flyForward.set(0, 0, -1)
+  _flyForward.normalize()
+  flyPitch = Math.asin(Math.max(-1, Math.min(1, _flyForward.y)))
+  flyYaw = Math.atan2(-_flyForward.x, -_flyForward.z)
+}
+
+function resetFreeView() {
+  flyPos.set(0, 0.5, 3)
+  lookAtOrigin()
+}
+
+function updateFlyMovement(dt) {
+  _flyMove.set(0, 0, 0)
+  _flyForward.set(0, 0, -1).applyEuler(camera.rotation)
+  _flyRight.set(1, 0, 0).applyEuler(camera.rotation)
+  if (flyKeys.KeyW || flyKeys.ArrowUp) _flyMove.add(_flyForward)
+  if (flyKeys.KeyS || flyKeys.ArrowDown) _flyMove.sub(_flyForward)
+  if (flyKeys.KeyD || flyKeys.ArrowRight) _flyMove.add(_flyRight)
+  if (flyKeys.KeyA || flyKeys.ArrowLeft) _flyMove.sub(_flyRight)
+  if (flyKeys.KeyE) _flyMove.y += 1
+  if (flyKeys.KeyQ) _flyMove.y -= 1
+  if (_flyMove.lengthSq() > 0) {
+    const speed = FLY_SPEED * ((flyKeys.ShiftLeft || flyKeys.ShiftRight) ? FLY_BOOST : 1)
+    _flyMove.normalize().multiplyScalar(speed * dt)
+    flyPos.add(_flyMove)
+    clampFlyPos()
+  }
 }
 
 let _resizeRAF = 0
@@ -1036,12 +1129,26 @@ function handleResize() {
 
 function animate() {
   animationId = requestAnimationFrame(animate)
-  if (autoRotate) targetRotY += 0.005
-  rotX += (targetRotX - rotX) * 0.1; rotY += (targetRotY - rotY) * 0.1; camDist += (targetCamDist - camDist) * 0.1
-  meshLeft.rotation.x = rotX; meshLeft.rotation.y = rotY
-  meshRight.rotation.x = rotX; meshRight.rotation.y = rotY
+  if (!container || container.clientWidth < 2 || container.clientHeight < 2) { lastFrameTime = performance.now(); return }
+  const now = performance.now()
+  const dt = Math.min(0.05, Math.max(0, (now - lastFrameTime) / 1000))
+  lastFrameTime = now
 
-  camera.position.z = camDist
+  if (freeCamMode) {
+    camera.rotation.set(flyPitch, flyYaw, 0)
+    updateFlyMovement(dt)
+    camera.position.copy(flyPos)
+  } else {
+    if (autoRotate) targetRotY += 0.005
+    rotX += (targetRotX - rotX) * 0.1; rotY += (targetRotY - rotY) * 0.1; camDist += (targetCamDist - camDist) * 0.1
+    camPanX += (targetPanX - camPanX) * 0.18; camPanY += (targetPanY - camPanY) * 0.18
+    meshLeft.rotation.x = rotX; meshLeft.rotation.y = rotY
+    meshRight.rotation.x = rotX; meshRight.rotation.y = rotY
+    if (customModelGroup) { customModelGroup.rotation.x = rotX; customModelGroup.rotation.y = rotY }
+    camera.position.set(camPanX, 0.5 + camPanY, camDist)
+    camera.rotation.set(0, 0, 0)
+  }
+
   camera.updateMatrixWorld()
   if (parallaxShadow > 0.0) {
     let lDir = null
@@ -1057,6 +1164,7 @@ function animate() {
 
 export function setGeometry(geoType) {
   if (!initialized || !geometries[geoType]) return
+  clearCustomModel()
   currentGeo = geoType; meshLeft.geometry.dispose(); meshRight.geometry.dispose()
   meshLeft.geometry = geometries[geoType](); meshRight.geometry = geometries[geoType]()
 }
@@ -1081,6 +1189,26 @@ export function setEnvIntensity(val) { envIntensity = val; if (initialized) { if
 export function setExposure(val) { if (initialized && renderer) renderer.toneMappingExposure = val }
 export function toggleGround(visible) { groundVisible = visible; if (initialized) { if (groundMesh) groundMesh.visible = visible; if (gridHelper) gridHelper.visible = visible } }
 export function setAutoRotate(on) { autoRotate = on }
+export function isFreeCameraMode() { return freeCamMode }
+export function setFreeCameraMode(on) {
+  if (!initialized) return
+  on = !!on
+  if (freeCamMode === on) return
+  freeCamMode = on
+  if (freeCamMode) {
+    flyPos.copy(camera.position)
+    lookAtOrigin()
+    camera.rotation.order = 'YXZ'
+    autoRotate = false
+    for (const k in flyKeys) delete flyKeys[k]
+    renderer.domElement.style.cursor = 'crosshair'
+  } else {
+    camPanX = 0; camPanY = 0; targetPanX = 0; targetPanY = 0
+    camera.rotation.set(0, 0, 0)
+    renderer.domElement.style.cursor = 'grab'
+  }
+  document.dispatchEvent(new CustomEvent('material3d:freecam', { detail: { enabled: freeCamMode } }))
+}
 export function setWireframe(on) { if (initialized) { meshLeft.material.wireframe = on; meshRight.material.wireframe = on } }
 export function setOpacityMode(mode) { opacityMode = mode; if (initialized) { for (const m of [meshLeft, meshRight]) { if (m) applyOpacityMode(m.material) } } }
 export function setOpacity(val) { opacityValue = val; if (initialized) { for (const m of [meshLeft, meshRight]) { if (m) applyOpacityMode(m.material) } } }
@@ -1235,12 +1363,65 @@ function applyTexturesToMesh(mesh, group, side) {
 
 export function updateMaterial3D(group) {
   if (!initialized) return
+  if (group) clearCustomModel()
   if (!group && heightDetectCallback) heightDetectCallback(false)
   applyTexturesToMesh(meshLeft, group, 'left')
   applyTexturesToMesh(meshRight, group, 'right')
 }
 
 export function clearMaterial3D() { updateMaterial3D(null) }
+
+/* ── 自定义模型（MC .json / .bbmodel）：3D 视口渲染通道 ──────────
+   group 的内容需以自身原点为几何中心（缩放适配与贴地由本函数完成），
+   wrapper 原点保持在模型中心，旋转（拖拽/自动旋转）围绕中心进行。 */
+export function showCustomModel(group) {
+  if (!initialized || !group) return false
+  clearCustomModel()
+  try {
+    const box = new THREE.Box3().setFromObject(group)
+    if (box.isEmpty()) return false
+    const size = box.getSize(new THREE.Vector3())
+    const center = box.getCenter(new THREE.Vector3())
+    const maxDim = Math.max(size.x, size.y, size.z) || 1
+    const scale = 2.0 / maxDim
+    group.position.set(-center.x, -center.y, -center.z)
+    group.scale.setScalar(scale)
+    const wrapper = new THREE.Group()
+    wrapper.add(group)
+    /* 底面贴地（地面 y=-1.3）：wrapper 原点在缩放后模型中心 */
+    const halfY = (size.y * scale) / 2
+    wrapper.position.y = -1.28 + halfY
+    meshLeft.visible = false; meshRight.visible = false
+    labelLeft.visible = false; labelRight.visible = false
+    customModelGroup = wrapper
+    scene.add(wrapper)
+    return true
+  } catch { return false }
+}
+
+export function clearCustomModel() {
+  if (!customModelGroup) return
+  scene.remove(customModelGroup)
+  disposeGroupDeep(customModelGroup)
+  customModelGroup = null
+  if (initialized) applySourceSide()
+}
+
+export function isCustomModelActive() { return !!customModelGroup }
+
+export function hasVisibleViewport() {
+  if (!initialized) return false
+  return !!findVisibleHost()
+}
+
+function disposeGroupDeep(root) {
+  root.traverse(o => {
+    if (o.geometry) o.geometry.dispose()
+    const mats = Array.isArray(o.material) ? o.material : (o.material ? [o.material] : [])
+    /* userData.shared 标记的跨模型共享材质（隐藏面/占位）不 dispose */
+    for (const m of mats) { if (!(m && m.userData && m.userData.shared)) m.dispose() }
+  })
+}
 
 /* ════════════════════════════════════════════════════════════
    节点编辑器联动 API
@@ -1330,6 +1511,7 @@ export function clearSpecularTexture() {
 }
 export function applyNodePBR(p) {
   if (!initialized || !p) return
+  if (p.mainTextureUrl) clearCustomModel()
   if (p.baseColor) setBaseColor(p.baseColor)
   if (typeof p.roughness === 'number') setRoughness(clamp01(p.roughness))
   if (typeof p.metallic === 'number') setMetalness(clamp01(p.metallic))
@@ -1349,6 +1531,7 @@ export function applyNodePBR(p) {
 }
 export function applyNodePBRSide(p, side) {
   if (!initialized || !p) return
+  if (p.mainTextureUrl) clearCustomModel()
   const mesh = side === 'left' ? meshLeft : meshRight
   if (!mesh) return
   const mat = mesh.material
@@ -1399,6 +1582,7 @@ export function disposeMaterial3D() {
   if (animationId) cancelAnimationFrame(animationId)
   if (skyBakeTimer) { clearTimeout(skyBakeTimer); skyBakeTimer = null }
   if (hdrRotateTimer) { clearTimeout(hdrRotateTimer); hdrRotateTimer = null }
+  if (customModelGroup) { scene.remove(customModelGroup); disposeGroupDeep(customModelGroup); customModelGroup = null }
   for (const m of [meshLeft, meshRight]) { if (m) { if (m.material) { disposeAllMaterialTextures(m.material); m.material.dispose() }; if (m.geometry) m.geometry.dispose() } }
   if (groundMesh) { groundMesh.geometry.dispose(); groundMesh.material.dispose() }
   if (gridHelper) { gridHelper.geometry.dispose(); gridHelper.material.dispose() }

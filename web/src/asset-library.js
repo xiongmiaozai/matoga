@@ -6,10 +6,14 @@
  * 聚合多类资产到 #assetLibraryBody：
  *  1. 材质贴图（聚合左右已选目录 + MC 材质包 + MC 官方包内的全部贴图，
  *     数据源 state.leftEntries/rightEntries 与 /api/asset/tex，按文件夹/包类别分子组展示）
- *  2. HDRI 预设（/api/hdri/list）
- *  3. MC 资源包（config.mcPacksPath + /api/mc-packs/list，整包储存为包媒体，点开浏览包内贴图）
- *  4. MC 官方材质包（config.officialPacksPath + /api/mc-official/list，解析 pack.mcmeta 分析版本）
- *  5. 内置节点预设（金属/塑料/玻璃/织物/自发光）
+ *  2. 模型（MC 材质包/官方包内 assets/<ns>/models/*.json 与 1.21.4+ 物品定义
+ *     assets/<ns>/items/*.json + Blockbench 发送的 .bbmodel，
+ *     数据源 /api/asset/model 与 /api/blockbench/models，双击详情显示 parent/贴图引用，
+ *     添加/拖拽 = 在 Blockbench 浮窗中打开）
+ *  3. HDRI 预设（/api/hdri/list）
+ *  4. MC 资源包（config.mcPacksPath + /api/mc-packs/list，整包储存为包媒体，点开浏览包内贴图）
+ *  5. MC 官方材质包（config.officialPacksPath + /api/mc-official/list，解析 pack.mcmeta 分析版本）
+ *  6. 内置节点预设（金属/塑料/玻璃/织物/自发光）
  * 收藏夹与最近使用通过后端 /api/asset 持久化，localStorage 作为离线回退。
  * 单击卡片打开详情面板（大图预览 + 元数据），拖拽或详情面板按钮添加到画布。
  * 双击文件夹型资产（MC 资源包 / 官方材质包）在面板内切换为文件管理器式包内容浏览。
@@ -20,6 +24,12 @@ import { fileUrl, formatSize, formatDate, escAttr } from './utils.js'
 import { addNodeAt, addTextureAt, loadPreset, saveNodeProject, loadNodeProject, serializeGraphData, loadCanvasPresetGraph } from './node-canvas.js'
 import { t, onLocaleChange } from './i18n.js'
 import { uiPrompt, uiConfirm } from './ui-dialog.js'
+import { openModelInBlockbench } from './panels/blockbench/index.js'
+import { viewMcModelInViewport, viewBbModelInViewport, isViewportVisible } from './mc-model-viewer.js'
+import { activateMaterial3DHost } from './material3d.js'
+import { ensureModelThumb, observeModelThumbs } from './model-thumb.js'
+import { invalidatePackPickers } from './pack-picker.js'
+import { splitGroupsByPrefix } from './model-prefix.js'
 
 const PRESETS = [
   { id: 'metal',     color: '#c8c8d0' },
@@ -29,13 +39,17 @@ const PRESETS = [
   { id: 'emissive',  color: '#fff3c0' },
 ]
 
-const ALL_TYPES = ['tex', 'hdri', 'mc', 'official', 'preset', 'project']
+const ALL_TYPES = ['tex', 'model', 'hdri', 'mc', 'official', 'preset', 'project']
 const MAX_RECENT = 50
 const HDRI_EXTS = new Set(['hdr', 'exr'])
 const TEX_GROUP_PAGE = 400
 const PROJECTS_API = '/api/node-projects'
 const MC_OFFICIAL_API = '/api/mc-official'
 const MC_PACKS_API = '/api/mc-packs'
+const BB_API = '/api/blockbench'
+const MODEL_JSON_RE = /\.json$/i
+/* 包浏览中的模型文件：assets/<ns>/models/**（旧格式）或 assets/<ns>/items/*.json（1.21.4+ 物品定义） */
+const MODEL_DIR_PATH_RE = /^assets\/[^/]+\/(models|items)\//
 
 /* 包媒体 API 前缀：mc 资源包与官方材质包共用同一套包浏览/读取接口 */
 function packApiFor(type) { return type === 'mc' ? MC_PACKS_API : MC_OFFICIAL_API }
@@ -47,7 +61,7 @@ const ROLE_PATTERNS = [
 ]
 
 const TYPE_LABEL_KEYS = {
-  tex: 'asset.catTex', hdri: 'asset.catHdri', mc: 'asset.catMc', official: 'asset.catOfficial', preset: 'asset.catPreset', project: 'asset.catProject',
+  tex: 'asset.catTex', model: 'asset.catModel', hdri: 'asset.catHdri', mc: 'asset.catMc', official: 'asset.catOfficial', preset: 'asset.catPreset', project: 'asset.catProject',
 }
 
 function detectTypeFromPath(p) {
@@ -88,10 +102,15 @@ let mcEntries = null
 let officialEntries = null
 let hdriEntries = null
 let projectEntries = null
+let craftItems = null       /* 制作包自选清单（/api/craft-pack），null = 未加载 */
+let craftPacks = null       /* 已导出制作包（/api/craft-pack/packs），null = 未加载 */
 let canvasPresets = null      /* 自定义画布预设（config.canvasCustomPresets），null = 未加载 */
 let texPacks = null
+let modelPacks = null         /* /api/asset/model 聚合结果（包内 .json 模型），null = 未加载 */
+let bbModels = null           /* Blockbench .bbmodel 模型（/api/blockbench/models），null = 未加载 */
+let bbInstalled = true        /* Blockbench Web 是否已安装（/api/blockbench/status） */
 let lastTexSig = ''
-let loadErrors = { hdri: null, mc: null, official: null, project: null, tex: null }
+let loadErrors = { hdri: null, mc: null, official: null, project: null, tex: null, model: null }
 
 let favorites = loadList('matoga:assetFav')
 let recent = loadList('matoga:assetRecent')
@@ -110,7 +129,7 @@ function presetName(id) {
 }
 
 function roleText(role) {
-  const keys = { preset: 'asset.rolePreset', main: 'asset.roleMain', normal: 'asset.roleNormal', specular: 'asset.roleSpecular', project: 'asset.roleProject' }
+  const keys = { preset: 'asset.rolePreset', main: 'asset.roleMain', normal: 'asset.roleNormal', specular: 'asset.roleSpecular', project: 'asset.roleProject', model: 'asset.roleModel' }
   return keys[role] ? t(keys[role]) : role
 }
 
@@ -134,6 +153,102 @@ function parsePackTexPath(p) {
 
 function packTexThumbUrl(source, packName, rel) {
   return packRawUrl(packApiFor(source), packName, rel)
+}
+
+/* zip 包内模型的虚拟路径：packmodel:<source>:<packName>/<包内相对路径>（与贴图 pack: 前缀区分） */
+function parsePackModelPath(p) {
+  if (typeof p !== 'string' || !p.startsWith('packmodel:')) return null
+  const rest = p.slice(10)
+  const ci = rest.indexOf(':')
+  if (ci <= 0) return null
+  const source = rest.slice(0, ci)
+  const remain = rest.slice(ci + 1)
+  const si = remain.indexOf('/')
+  if (si <= 0) return null
+  return { source, packName: remain.slice(0, si), rel: remain.slice(si + 1) }
+}
+
+/* 无磁盘路径的虚拟资产（zip 包内贴图 / 包内模型 / bbmodel 引用）：不可定位、不可 stat */
+function isVirtualAssetPath(item) {
+  if (!item || typeof item.path !== 'string' || !item.path) return false
+  if (parsePackTexPath(item.path)) return true
+  if (parsePackModelPath(item.path)) return true
+  if (item.path.startsWith('bb:')) return true
+  return false
+}
+
+/* ── 模型查看：3D 视口（主入口）与 Blockbench 窗口（辅助入口）── */
+
+function ensureBbInstalled() {
+  if (bbInstalled) return true
+  showToast(t('asset.toastModelBbNotInstalled'))
+  return false
+}
+
+/* 3D 视口未激活（用户尚未打开过「3D 视口」面板或预览 3D tab）时自动激活：
+   优先点击预览面板 3D tab（等价用户点击，含 tab 切换），回退独立视口面板宿主。
+   返回 true 表示视口已就绪，可重试模型展示 */
+function tryActivateModelViewport() {
+  if (isViewportVisible()) return true
+  const pvBtn = document.querySelector('.pv-tabs button[data-pv-tab="3d"]')
+  if (pvBtn) { pvBtn.click(); return true }
+  const host = document.getElementById('material3dStandaloneHost')
+  if (host) { activateMaterial3DHost(host); return true }
+  return false
+}
+
+/* 3D 视口查看 MC 包内 .json 模型（models/ 路径或 items/ 物品定义；parent 链 + elements + 包内贴图） */
+async function viewMcModelAsset(source, packName, rel, name) {
+  try {
+    let r = await viewMcModelInViewport({ api: packApiFor(source), packName, rel })
+    if (!r.shown && tryActivateModelViewport()) {
+      r = await viewMcModelInViewport({ api: packApiFor(source), packName, rel })
+    }
+    if (r.shown) showToast(t('asset.toastModelViewport', { name }))
+    else showToast(t('asset.toastModelViewportNoView'))
+  } catch (e) {
+    showToast(t('asset.toastModelOpenFail') + ': ' + (e.message || e))
+  }
+}
+
+/* 3D 视口查看 Blockbench .bbmodel */
+async function viewBbModelAsset(id, name) {
+  try {
+    let r = await viewBbModelInViewport({ id })
+    if (!r.shown && tryActivateModelViewport()) {
+      r = await viewBbModelInViewport({ id })
+    }
+    if (r.shown) showToast(t('asset.toastModelViewport', { name }))
+    else showToast(t('asset.toastModelViewportNoView'))
+  } catch (e) {
+    showToast(t('asset.toastModelOpenFail') + ': ' + (e.message || e))
+  }
+}
+
+async function openMcModelInBlockbench(source, packName, rel, name) {
+  if (!ensureBbInstalled()) return
+  try {
+    const res = await fetch(packRawUrl(packApiFor(source), packName, rel) + '&any=1')
+    if (!res.ok) throw new Error('HTTP ' + res.status)
+    const data = await res.json()
+    if (!data || typeof data !== 'object') throw new Error('invalid model json')
+    openModelInBlockbench(data)
+    showToast(t('asset.toastModelSent', { name }))
+  } catch (e) {
+    showToast(t('asset.toastModelOpenFail') + ': ' + (e.message || e))
+  }
+}
+
+async function openBbModel(id, name) {
+  if (!ensureBbInstalled()) return
+  try {
+    const data = await assetApiCall('GET', BB_API + '/models/' + encodeURIComponent(id))
+    if (!data || !data.json || typeof data.json !== 'object') throw new Error('bad model data')
+    openModelInBlockbench(data.json)
+    showToast(t('asset.toastModelSent', { name }))
+  } catch (e) {
+    showToast(t('asset.toastModelOpenFail') + ': ' + (e.message || e))
+  }
 }
 
 function el(tag, cls, html) {
@@ -212,7 +327,8 @@ function sortItems(items) {
 }
 
 function itemFromStored(s) {
-  let onAdd, onBrowse, name = s.name
+  let onAdd, onBrowse, onBlockbench, name = s.name
+  let modelThumb = null
   if (s.type === 'preset') {
     const id = s.key.slice(8)
     if (id.startsWith('cp:')) {
@@ -234,6 +350,20 @@ function itemFromStored(s) {
   } else if (s.type === 'mc') {
     onAdd = () => { if (s.path) window.api.showInFolder(s.path) }
     onBrowse = () => openPackBrowser({ key: s.key, name: s.name, type: 'mc', path: s.path, badge: s.badge })
+  } else if (s.type === 'model') {
+    const pm = parsePackModelPath(s.path)
+    if (pm) {
+      onAdd = () => viewMcModelAsset(pm.source, pm.packName, pm.rel, s.name)
+      onBlockbench = () => openMcModelInBlockbench(pm.source, pm.packName, pm.rel, s.name)
+      modelThumb = { kind: 'mc', api: packApiFor(pm.source), packName: pm.packName, rel: pm.rel, path: s.path, mtime: s.mtime || 0 }
+    } else if (typeof s.path === 'string' && s.path.startsWith('bb:')) {
+      const bid = s.path.slice(3)
+      onAdd = () => viewBbModelAsset(bid, s.name)
+      onBlockbench = () => openBbModel(bid, s.name)
+      modelThumb = { kind: 'bb', id: bid, path: s.path, mtime: s.mtime || 0 }
+    } else {
+      onAdd = () => { if (s.path) window.api.showInFolder(s.path) }
+    }
   } else {
     const pp = parsePackTexPath(s.path)
     if (pp) {
@@ -243,7 +373,7 @@ function itemFromStored(s) {
       onAdd = () => addTextureAt(s.path, s.name)
     }
   }
-  return { key: s.key, name, thumb: s.thumb, type: s.type, path: s.path, mtime: s.mtime || 0, role: s.role, color: s.color, badge: s.badge, onAdd, onBrowse }
+  return { key: s.key, name, thumb: s.thumb, type: s.type, path: s.path, mtime: s.mtime || 0, role: s.role, color: s.color, badge: s.badge, modelThumb, onAdd, onBrowse, onBlockbench }
 }
 
 function storeFromItem(it) {
@@ -275,6 +405,65 @@ function pushRecent(item) {
   if (categoryFilter === 'recent') rebuild()
 }
 
+/* ── 制作包（我的开发包）：自选储存 + 聚合导出为 MC 资源包 ── */
+
+function isCraft(item) { return (craftItems || []).some(c => c.key === item.key) }
+
+async function addToCraft(item) {
+  if (!isValidAssetKey(item.key)) return
+  if (isCraft(item)) { showToast(t('asset.toastCraftAlready')); return }
+  try {
+    await assetApiCall('POST', '/api/craft-pack/copy', { item: storeFromItem(item) })
+    showToast(t('asset.toastCraftAdded', { name: item.name }))
+    await loadCraft()
+    rebuild()
+  } catch (e) {
+    showToast(t('asset.toastCraftAddFail') + ': ' + e.message)
+  }
+}
+
+async function removeFromCraft(item) {
+  try {
+    await assetApiCall('DELETE', '/api/craft-pack/items/' + encodeURIComponent(item.key))
+    showToast(t('asset.toastCraftRemoved'))
+    await loadCraft()
+    rebuild()
+  } catch (e) {
+    showToast(t('asset.toastCraftRemoveFail') + ': ' + e.message)
+  }
+}
+
+async function clearCraft() {
+  if (!craftItems || !craftItems.length) return
+  if (!await uiConfirm({ title: t('asset.craftSection'), message: t('asset.craftClearConfirm', { n: craftItems.length }), danger: true })) return
+  try {
+    await assetApiCall('DELETE', '/api/craft-pack/items')
+    await loadCraft()
+    rebuild()
+  } catch (e) {
+    showToast(t('asset.toastCraftClearFail') + ': ' + e.message)
+  }
+}
+
+/* 导出制作包：自选 + 收藏 + 最近（全部储存）聚合为 mc-packs 下的真实 MC 资源包 */
+async function exportCraftPack() {
+  const total = (craftItems || []).length + favorites.length + recent.length
+  if (!total) { showToast(t('asset.craftNothingToExport')); return }
+  const name = await uiPrompt({ title: t('asset.craftExport'), label: t('asset.craftExportNamePrompt'), value: t('asset.craftDefaultName') })
+  if (name === null) return
+  const n = name.trim()
+  if (!n) { showToast(t('asset.craftNameEmpty')); return }
+  try {
+    const r = await assetApiCall('POST', '/api/craft-pack/export', { name: n })
+    showToast(t('asset.toastCraftExported', { name: r.name, ok: r.written, skip: r.skipped }))
+    invalidatePackPickers()
+    await Promise.all([loadCraft(), loadMc()])
+    rebuild()
+  } catch (e) {
+    showToast(t('asset.toastCraftExportFail', { msg: e.message }))
+  }
+}
+
 function makeCard(item) {
   const card = el('div', 'asset-card')
   card.draggable = true
@@ -283,9 +472,7 @@ function makeCard(item) {
   card.dataset.key = item.key
 
   const th = el('div', 'ac-thumb')
-  if (item.color) {
-    th.style.background = `linear-gradient(135deg, ${item.color}, ${shade(item.color, -30)})`
-  } else if (item.thumb) {
+  if (item.thumb) {
     const img = el('img')
     img.loading = 'lazy'
     img.alt = ''
@@ -295,8 +482,13 @@ function makeCard(item) {
       th.appendChild(el('span', 'ac-icon', '<svg class="ico"><use href="#i-image"/></svg>'))
     })
     th.appendChild(img)
+  } else if (item.color && !item.icon) {
+    th.style.background = `linear-gradient(135deg, ${item.color}, ${shade(item.color, -30)})`
+    if (item.modelThumb) { th.classList.add('ac-thumb-3d'); th._modelThumbItem = item }
   } else {
-    th.appendChild(el('span', 'ac-icon', '<svg class="ico"><use href="#i-image"/></svg>'))
+    if (item.color) th.style.background = `linear-gradient(135deg, ${item.color}, ${shade(item.color, -30)})`
+    th.appendChild(el('span', 'ac-icon', `<svg class="ico"><use href="#${item.icon || 'i-image'}"/></svg>`))
+    if (item.modelThumb) { th.classList.add('ac-thumb-3d'); th._modelThumbItem = item }
   }
   card.appendChild(th)
   card.appendChild(el('div', 'ac-name', item.name))
@@ -314,9 +506,9 @@ function makeCard(item) {
   card.addEventListener('click', () => {
     if (item.onBrowse) {
       if (clickTimer) clearTimeout(clickTimer)
-      clickTimer = setTimeout(() => { clickTimer = null; showDetail(item) }, BROWSE_CLICK_DELAY)
+      clickTimer = setTimeout(() => { clickTimer = null; openDetail(item) }, BROWSE_CLICK_DELAY)
     } else {
-      showDetail(item)
+      openDetail(item)
     }
   })
   card.addEventListener('dblclick', (e) => {
@@ -362,6 +554,15 @@ function saveTexCollapsed(set) {
   try { localStorage.setItem('matoga:assetTexCollapsed', JSON.stringify([...set])) } catch {}
 }
 let texCollapsedSet = loadTexCollapsed()
+
+/* 模型子分组（Blockbench / 包类别）的折叠状态 */
+function loadModelCollapsed() {
+  try { return new Set(JSON.parse(localStorage.getItem('matoga:assetModelCollapsed')) || []) } catch { return new Set() }
+}
+function saveModelCollapsed(set) {
+  try { localStorage.setItem('matoga:assetModelCollapsed', JSON.stringify([...set])) } catch {}
+}
+let modelCollapsedSet = loadModelCollapsed()
 
 function buildSection(catKey, title, items, errMsg, loading) {
   const sorted = sortItems(items)
@@ -553,16 +754,16 @@ function collectTexGroups() {
   return [...dirGroups, ...packGroups]
 }
 
-function buildTexGroup(g) {
+function buildAssetGroup(g, collapsedSet, saveFn) {
   const grp = el('div', 'asset-lib-group')
   grp.dataset.group = g.key
-  if (texCollapsedSet.has(g.key)) grp.classList.add('collapsed')
+  if (collapsedSet.has(g.key)) grp.classList.add('collapsed')
   const head = el('div', 'asset-lib-group-head',
     `<span class="caret">▾</span><span class="gl" title="${escAttr(g.label)}">${escAttr(g.label)}</span><span class="cnt">${g.items.length}</span>`)
   head.addEventListener('click', () => {
     grp.classList.toggle('collapsed')
-    if (grp.classList.contains('collapsed')) { texCollapsedSet.add(g.key); saveTexCollapsed(texCollapsedSet) }
-    else { texCollapsedSet.delete(g.key); saveTexCollapsed(texCollapsedSet) }
+    if (grp.classList.contains('collapsed')) { collapsedSet.add(g.key); saveFn(collapsedSet) }
+    else { collapsedSet.delete(g.key); saveFn(collapsedSet) }
   })
   grp.appendChild(head)
 
@@ -576,12 +777,17 @@ function buildTexGroup(g) {
     more.addEventListener('click', () => {
       more.remove()
       for (const it of sorted.slice(TEX_GROUP_PAGE)) grid.appendChild(makeCard(it))
+      observeModelThumbs(grid)
       applyFilter()
     })
     grid.appendChild(more)
   }
   grp.appendChild(grid)
   return grp
+}
+
+function buildTexGroup(g) {
+  return buildAssetGroup(g, texCollapsedSet, saveTexCollapsed)
 }
 
 function buildTexSection() {
@@ -618,6 +824,103 @@ function buildTexSection() {
   const wrap = el('div', 'asset-lib-groups')
   for (const g of groups) wrap.appendChild(buildTexGroup(g))
   if (loadErrors.tex) wrap.appendChild(el('div', 'asset-lib-hint error', t('asset.loadFailed', { msg: loadErrors.tex })))
+  sec.appendChild(wrap)
+  return sec
+}
+
+/* ── 模型节：Blockbench .bbmodel + MC 材质包/官方包内 assets/<ns>/models/*.json，按来源/包类别/名称前缀分组 ── */
+
+function collectModelGroups() {
+  const groups = []
+  const byKey = new Map()
+  const addGroup = (key, label) => {
+    let g = byKey.get(key)
+    if (!g) { g = { key, label, items: [] }; byKey.set(key, g); groups.push(g) }
+    return g
+  }
+
+  /* Blockbench 发送的 .bbmodel 模型（data/blockbench-models） */
+  const bbGroup = addGroup('bb', t('asset.bbModelGroup'))
+  for (const m of bbModels || []) {
+    if (!m || !m.id) continue
+    bbGroup.items.push({
+      key: 'model:bb:' + m.id, name: m.name || m.id, thumb: null, icon: 'i-cube',
+      color: '#8f7cf0', type: 'model', path: 'bb:' + m.id, mtime: m.mtime || 0,
+      role: 'model', badge: m.model_format || m.format || null,
+      modelThumb: { kind: 'bb', id: m.id, path: 'bb:' + m.id, mtime: m.mtime || 0 },
+      onAdd: () => viewBbModelAsset(m.id, m.name || m.id),
+      onBlockbench: () => openBbModel(m.id, m.name || m.id),
+    })
+  }
+
+  /* MC 材质包 + 官方包（/api/asset/model）：每包按 models/ 第一级类别分组 */
+  for (const p of modelPacks || []) {
+    for (const g of p.groups || []) {
+      const gk = 'modelpack:' + p.source + ':' + p.name + '/' + g.key
+      const label = g.key ? p.name + ' · ' + g.key : p.name
+      const grp = addGroup(gk, label)
+      for (const f of g.files || []) {
+        /* 防御：仅 .json 扩展名才作为模型展示 */
+        if (!f.name || !MODEL_JSON_RE.test(f.name)) continue
+        const modelPath = 'packmodel:' + p.source + ':' + p.name + '/' + f.path
+        grp.items.push({
+          key: 'model:' + modelPath, name: f.name, thumb: null, icon: 'i-cube',
+          color: '#6f9ff0', type: 'model', path: modelPath, mtime: f.mtime || 0,
+          role: 'model', badge: g.key || null,
+          modelThumb: { kind: 'mc', api: packApiFor(p.source), packName: p.name, rel: f.path, path: modelPath, mtime: f.mtime || 0 },
+          onAdd: () => viewMcModelAsset(p.source, p.name, f.path, f.name),
+          onBlockbench: () => openMcModelInBlockbench(p.source, p.name, f.path, f.name),
+        })
+      }
+    }
+  }
+
+  const bb = groups.filter(g => g.key === 'bb')
+  const rest = groups.filter(g => g.key !== 'bb').sort((a, b) => a.label.localeCompare(b.label, 'zh'))
+  /* 每组内按名称前缀进一步细分（区分 oak/stone 等不同系列；全部同桶时保持原组） */
+  const out = []
+  for (const g of [...bb, ...rest]) {
+    if (!g.items.length) continue
+    out.push(...splitGroupsByPrefix(g.key, g.label, g.items, t('asset.modelUngrouped')))
+  }
+  return out
+}
+
+function buildModelSection() {
+  const groups = collectModelGroups()
+  const total = groups.reduce((s, g) => s + g.items.length, 0)
+  const loading = modelPacks === null || bbModels === null
+
+  const sec = el('div', 'asset-lib-section')
+  sec.dataset.cat = 'model'
+  if (collapsedSet.has('model')) sec.classList.add('collapsed')
+  const head = el('div', 'asset-lib-section-head',
+    `<span class="caret">▾</span><span>${t('asset.modelSection')}</span><span class="cnt">${total}</span>`)
+  head.addEventListener('click', () => {
+    sec.classList.toggle('collapsed')
+    if (sec.classList.contains('collapsed')) { collapsedSet.add('model'); saveCollapsed(collapsedSet) }
+    else { collapsedSet.delete('model'); saveCollapsed(collapsedSet) }
+  })
+  sec.appendChild(head)
+
+  if (!total && loading) {
+    const grid = el('div', 'asset-lib-grid')
+    grid.appendChild(el('div', 'asset-lib-hint', t('asset.loading')))
+    sec.appendChild(grid)
+    return sec
+  }
+  if (!total && loadErrors.model) {
+    const grid = el('div', 'asset-lib-grid')
+    grid.appendChild(el('div', 'asset-lib-hint error', t('asset.loadFailed', { msg: loadErrors.model })))
+    sec.appendChild(grid)
+    return sec
+  }
+  if (!total) return null
+
+  const wrap = el('div', 'asset-lib-groups')
+  for (const g of groups) wrap.appendChild(buildAssetGroup(g, modelCollapsedSet, saveModelCollapsed))
+  if (loadErrors.model) wrap.appendChild(el('div', 'asset-lib-hint error', t('asset.loadFailed', { msg: loadErrors.model })))
+  observeModelThumbs(wrap)
   sec.appendChild(wrap)
   return sec
 }
@@ -804,8 +1107,13 @@ function packEntryRawUrl(packName, relPath) {
   return packRawUrl(browse ? browse.api : MC_OFFICIAL_API, packName, relPath)
 }
 
-function isAddableTexturePath(p) {
+function isAddableAssetPath(p) {
   return p === 'pack.png' || p.startsWith('assets/')
+}
+
+/* 包浏览中的模型文件判定：assets/<ns>/models/** 下的 .json */
+function isModelBrowsePath(rel) {
+  return typeof rel === 'string' && MODEL_DIR_PATH_RE.test(rel) && MODEL_JSON_RE.test(rel)
 }
 
 function pbLoadView() {
@@ -993,7 +1301,8 @@ function buildBrowseFolderCard(d) {
 function buildBrowseFileRow(item, pack, file, grid) {
   const rel = browseEntryPath(file.name)
   const isImgFile = IMG_EXTS.has((file.name.split('.').pop() || '').toLowerCase())
-  const addable = isImgFile && isAddableTexturePath(rel)
+  const isModelFile = isModelBrowsePath(rel)
+  const addable = (isImgFile || isModelFile) && isAddableAssetPath(rel)
   const row = el('div', 'pb-file' + (grid ? ' card' : ''))
   const th = el('div', 'pf-thumb')
   if (isImgFile) {
@@ -1003,19 +1312,28 @@ function buildBrowseFileRow(item, pack, file, grid) {
     img.src = packEntryRawUrl(item.name, rel)
     img.addEventListener('error', () => { th.innerHTML = '<svg class="ico"><use href="#i-file"/></svg>' })
     th.appendChild(img)
+  } else if (isModelFile) {
+    th.classList.add('model')
+    th.innerHTML = '<svg class="ico"><use href="#i-cube"/></svg>'
   } else {
     th.innerHTML = '<svg class="ico"><use href="#i-file"/></svg>'
   }
   row.appendChild(th)
   row.appendChild(el('span', 'fn', file.name))
   row.appendChild(el('span', 'fs', file.size ? formatSize(file.size) : ''))
-  row.title = rel + (file.size ? ' · ' + formatSize(file.size) : '') + (addable ? ' · ' + t('asset.browseAddTex') : '')
+  const addHint = isModelFile ? t('asset.browseAddModel') : t('asset.browseAddTex')
+  row.title = rel + (file.size ? ' · ' + formatSize(file.size) : '') + (addable ? ' · ' + addHint : '')
 
   if (addable) {
     const add = el('button', 'pf-add', '<svg class="ico"><use href="#i-plus"/></svg>')
-    add.title = t('asset.browseAddTex')
+    add.title = addHint
     add.addEventListener('click', (e) => {
       e.stopPropagation()
+      if (isModelFile) {
+        pushRecent(item)
+        viewMcModelAsset(item.type, item.name, rel, file.name)
+        return
+      }
       const p = pack || { name: item.name }
       pushRecent(item)
       addPackTextureToCanvas(item, p, { path: rel, name: file.name })
@@ -1030,7 +1348,12 @@ function buildBrowseFileRow(item, pack, file, grid) {
   })
   row.addEventListener('dblclick', (e) => {
     e.preventDefault()
-    if (!isImgFile || !isAddableTexturePath(rel)) {
+    if (isModelFile && isAddableAssetPath(rel)) {
+      pushRecent(item)
+      viewMcModelAsset(item.type, item.name, rel, file.name)
+      return
+    }
+    if (!isImgFile || !isAddableAssetPath(rel)) {
       showToast(t('asset.toastFileNotAddable'))
       return
     }
@@ -1189,6 +1512,8 @@ async function deleteProjectAsset(p) {
     recent = recent.filter(r => r.key !== 'project:' + p.id)
     persistFavorites()
     persistRecent()
+    try { await assetApiCall('DELETE', '/api/craft-pack/items/' + encodeURIComponent('project:' + p.id)) } catch {}
+    loadCraft().then(() => { if (categoryFilter === 'craft') rebuild() })
     refreshProjectsQuiet()
   } catch (e) {
     showToast(t('asset.toastProjectDeleteFail') + ': ' + e.message)
@@ -1265,6 +1590,69 @@ function buildRecentSection() {
   return buildSection('recent', t('asset.recentSection'), recent.map(itemFromStored), null, false)
 }
 
+/* 制作包（我的开发包）：统计行 + 已导出包列表 + 自选储存网格 */
+function buildCraftSection() {
+  const sec = el('div', 'asset-lib-section')
+  sec.dataset.cat = 'craft'
+  if (collapsedSet.has('craft')) sec.classList.add('collapsed')
+  const cnt = (craftItems || []).length
+  const head = el('div', 'asset-lib-section-head',
+    `<span class="caret">▾</span><span>${t('asset.craftSection')}</span><span class="cnt">${cnt}</span>`)
+  head.addEventListener('click', () => {
+    sec.classList.toggle('collapsed')
+    if (sec.classList.contains('collapsed')) { collapsedSet.add('craft'); saveCollapsed(collapsedSet) }
+    else { collapsedSet.delete('craft'); saveCollapsed(collapsedSet) }
+  })
+  sec.appendChild(head)
+
+  const actions = el('div', 'asset-lib-sec-actions')
+  const exportBtn = el('button', 'asset-lib-sec-btn', t('asset.craftExport'))
+  exportBtn.title = t('asset.craftExportTitle')
+  exportBtn.addEventListener('click', (e) => { e.stopPropagation(); exportCraftPack() })
+  actions.appendChild(exportBtn)
+  if (cnt) {
+    const clearBtn = el('button', 'asset-lib-sec-btn', t('asset.craftClear'))
+    clearBtn.title = t('asset.craftClearTitle')
+    clearBtn.addEventListener('click', (e) => { e.stopPropagation(); clearCraft() })
+    actions.appendChild(clearBtn)
+  }
+  sec.appendChild(actions)
+
+  /* 导出范围统计：自选 + 收藏 + 最近 = 全部储存 */
+  sec.appendChild(el('div', 'craft-stat', t('asset.craftStat',
+    { n: cnt, fav: favorites.length, rec: recent.length })))
+
+  /* 已导出制作包（craft-packs 下含 matoga-craft.json 的真实 MC 资源包） */
+  if (craftPacks && craftPacks.length) {
+    const list = el('div', 'craft-pack-list')
+    list.appendChild(el('div', 'craft-pack-list-title', t('asset.craftExportedTitle')))
+    for (const p of craftPacks.slice(0, 8)) {
+      const row = el('div', 'craft-pack-row')
+      row.appendChild(el('span', 'craft-pack-name', p.name))
+      row.appendChild(el('span', 'craft-pack-meta',
+        t('asset.craftPackMeta', { n: p.written, skip: p.skipped }) + (p.exportedAt ? ' · ' + formatDate(p.exportedAt) : '')))
+      const openBtn = el('button', 'asset-lib-sec-btn', t('asset.craftOpenFolder'))
+      openBtn.title = t('asset.craftOpenFolderTitle')
+      openBtn.addEventListener('click', () => { if (p.dir) window.api.showInFolder(p.dir) })
+      row.appendChild(openBtn)
+      list.appendChild(row)
+    }
+    sec.appendChild(list)
+  }
+
+  const grid = el('div', 'asset-lib-grid')
+  if (viewMode === 'list') grid.classList.add('list-view')
+  if (craftItems === null) {
+    grid.appendChild(el('div', 'asset-lib-hint', t('asset.loading')))
+  } else if (!cnt) {
+    grid.appendChild(el('div', 'asset-lib-hint', t('asset.craftEmpty')))
+  } else {
+    for (const it of sortItems(craftItems.map(itemFromStored))) grid.appendChild(makeCard(it))
+  }
+  sec.appendChild(grid)
+  return sec
+}
+
 function rebuild() {
   const body = document.getElementById('assetLibraryBody')
   if (!body) return
@@ -1272,17 +1660,20 @@ function rebuild() {
   const scrollTop = body.scrollTop
   body.innerHTML = ''
   const sections = [
+    buildCraftSection(),
     buildFavSection(),
     buildRecentSection(),
     buildProjectSection(),
     buildPresetSection(),
     buildTexSection(),
+    buildModelSection(),
     buildHdriSection(),
     buildMcSection(),
     buildOfficialSection(),
   ].filter(Boolean)
   for (const s of sections) body.appendChild(s)
   body.scrollTop = scrollTop
+  observeModelThumbs(body)
   applyFilter()
 }
 
@@ -1333,14 +1724,19 @@ function showCtxMenu(e, item) {
   hideCtxMenu()
   ctxMenu = el('div', 'asset-ctx-menu')
   const opts = []
-  const isPackTex = !!parsePackTexPath(item.path)
-  if (item.path && !isPackTex) {
+  const virtual = isVirtualAssetPath(item)
+  if (item.path && !virtual) {
     opts.push({ label: t('asset.ctxLocate'), fn: () => window.api.showInFolder(item.path) })
     opts.push({ label: t('asset.ctxCopyPath'), fn: () => copyText(item.path) })
   }
   opts.push({ label: t('asset.ctxCopyName'), fn: () => copyText(item.name) })
   opts.push({ label: isFav(item) ? t('asset.ctxUnfav') : t('asset.ctxFav'), fn: () => toggleFav(item) })
-  opts.push({ label: t('asset.ctxSendCanvas'), fn: () => { pushRecent(item); item.onAdd() } })
+  opts.push({ label: isCraft(item) ? t('asset.ctxRemoveCraft') : t('asset.ctxAddCraft'), fn: () => isCraft(item) ? removeFromCraft(item) : addToCraft(item) })
+  if (item.type === 'model') {
+    opts.push({ label: t('asset.ctxSendBlockbench'), fn: () => { pushRecent(item); (item.onBlockbench || item.onAdd)() } })
+  } else {
+    opts.push({ label: t('asset.ctxSendCanvas'), fn: () => { pushRecent(item); item.onAdd() } })
+  }
   if (item.type === 'project') {
     opts.push({ label: t('asset.ctxUpdateProject'), fn: () => updateProjectWithCanvas(item) })
     opts.push({ label: t('asset.ctxRenameProject'), fn: () => renameProjectAsset(item) })
@@ -1396,6 +1792,22 @@ async function loadMc() {
   }
 }
 
+/* 制作包：自选清单 + 已导出包列表 */
+async function loadCraft() {
+  try {
+    const data = await assetApiCall('GET', '/api/craft-pack')
+    craftItems = (data && data.items) || []
+  } catch {
+    if (craftItems === null) craftItems = []
+  }
+  try {
+    const data = await assetApiCall('GET', '/api/craft-pack/packs')
+    craftPacks = (data && data.packs) || []
+  } catch {
+    if (craftPacks === null) craftPacks = []
+  }
+}
+
 /* 总资产库贴图聚合：MC 材质包 + 官方包全部贴图（按包/类别分组） */
 async function loadTexPacks() {
   try {
@@ -1408,8 +1820,30 @@ async function loadTexPacks() {
   }
 }
 
+/* 总资产库模型聚合：包内 .json 模型（/api/asset/model）+ Blockbench .bbmodel（/api/blockbench/models） */
+async function loadModelAssets() {
+  try {
+    const data = await assetApiCall('GET', '/api/asset/model')
+    modelPacks = (data && data.packs) || []
+    loadErrors.model = null
+  } catch (e) {
+    loadErrors.model = e.message || '未知错误'
+    if (modelPacks === null) modelPacks = []
+  }
+  try {
+    const st = await assetApiCall('GET', BB_API + '/status')
+    bbInstalled = !!(st && st.installed)
+  } catch { bbInstalled = false }
+  try {
+    const data = await assetApiCall('GET', BB_API + '/models')
+    bbModels = (data && data.models) || []
+  } catch {
+    bbModels = []
+  }
+}
+
 export async function refreshAssetLibrary() {
-  await Promise.all([loadHdri(), loadMc(), loadOfficial(), loadProjects(), loadTexPacks(), loadCanvasPresets()])
+  await Promise.all([loadHdri(), loadMc(), loadOfficial(), loadProjects(), loadCraft(), loadTexPacks(), loadModelAssets(), loadCanvasPresets()])
   rebuild()
 }
 
@@ -1433,7 +1867,7 @@ function buildToolbar() {
   if (!bar) return
   bar.innerHTML = ''
 
-  const cats = [['all', t('asset.catAll')], ['project', t('asset.catProject')], ['tex', t('asset.catTex')], ['hdri', t('asset.catHdri')], ['mc', t('asset.catMc')], ['official', t('asset.catOfficial')], ['preset', t('asset.catPreset')], ['fav', t('asset.catFav')], ['recent', t('asset.catRecent')]]
+  const cats = [['all', t('asset.catAll')], ['craft', t('asset.catCraft')], ['project', t('asset.catProject')], ['tex', t('asset.catTex')], ['model', t('asset.catModel')], ['hdri', t('asset.catHdri')], ['mc', t('asset.catMc')], ['official', t('asset.catOfficial')], ['preset', t('asset.catPreset')], ['fav', t('asset.catFav')], ['recent', t('asset.catRecent')]]
   const catGroup = el('div', 'asset-lib-tags')
   for (const [v, label] of cats) {
     const btn = el('button', 'asset-lib-tag' + (categoryFilter === v ? ' active' : ''), label)
@@ -1497,9 +1931,70 @@ function detailRow(label, value) {
   return row
 }
 
-function showDetail(item) {
+/* 模型详情元信息：MC .json 模型（parent / 贴图引用 / 元素数） */
+function modelMetaRows(j) {
+  if (!j || typeof j !== 'object') return []
+  const rows = []
+  if (typeof j.parent === 'string' && j.parent) rows.push([t('asset.detailModelParent'), j.parent])
+  const texRefs = (j.textures && typeof j.textures === 'object') ? Object.entries(j.textures) : []
+  if (texRefs.length) {
+    const shown = texRefs.slice(0, 8).map(([k, v]) => k + ': ' + v).join(' · ')
+    rows.push([t('asset.detailModelTexRefs'), shown + (texRefs.length > 8 ? ' …' : '')])
+  }
+  if (Array.isArray(j.elements)) rows.push([t('asset.detailModelElements'), String(j.elements.length)])
+  return rows
+}
+
+/* 模型详情元信息：Blockbench .bbmodel（格式 / 分辨率 / 元素与贴图数） */
+function bbModelMetaRows(j) {
+  if (!j || typeof j !== 'object') return []
+  const rows = []
+  const fmt = j.meta && (j.meta.model_format || j.meta.format)
+  if (fmt) rows.push([t('asset.detailModelFormat'), fmt])
+  if (typeof j.resolution === 'number') rows.push([t('asset.detailModelResolution'), String(j.resolution)])
+  if (Array.isArray(j.elements)) rows.push([t('asset.detailModelElements'), String(j.elements.length)])
+  if (Array.isArray(j.textures)) rows.push([t('asset.detailTextures'), String(j.textures.length)])
+  return rows
+}
+
+async function fetchModelMetaRows(item) {
+  const pm = parsePackModelPath(item.path)
+  if (pm) {
+    const res = await fetch(packRawUrl(packApiFor(pm.source), pm.packName, pm.rel) + '&any=1')
+    if (!res.ok) throw new Error('HTTP ' + res.status)
+    return modelMetaRows(await res.json())
+  }
+  if (typeof item.path === 'string' && item.path.startsWith('bb:')) {
+    const data = await assetApiCall('GET', BB_API + '/models/' + encodeURIComponent(item.path.slice(3)))
+    return bbModelMetaRows(data && data.json)
+  }
+  return []
+}
+
+/* 卡片点击入口：模型详情需先拉取 JSON 元信息（parent / 贴图引用等），其余直接展示 */
+function openDetail(item) {
+  if (item && item.type === 'model') showModelDetail(item)
+  else showDetail(item)
+}
+
+async function showModelDetail(item) {
+  if (!Array.isArray(item._metaRows)) {
+    try { item._metaRows = await fetchModelMetaRows(item) }
+    catch { item._metaRows = [] }
+  }
+  showDetail(item, item._metaRows)
+  /* 详情大图：懒加载 3D 缩略图，就绪后刷新详情面板（stage 直接显示渲染结果） */
+  if (item.modelThumb && !item.thumb) {
+    ensureModelThumb(item)
+      .then(url => { if (url && detailCurrent === item) showDetail(item, item._metaRows) })
+      .catch(() => {})
+  }
+}
+
+function showDetail(item, extraMetaRows) {
   // 原「资产详情」抽屉窗口已移除：详情在「节点预览」浮动窗中展示
-  const typeKeys = { tex: 'asset.typeTex', hdri: 'asset.typeHdri', mc: 'asset.typeMc', official: 'asset.typeOfficial', preset: 'asset.typePreset', project: 'asset.typeProject' }
+  const typeKeys = { tex: 'asset.typeTex', model: 'asset.typeModel', hdri: 'asset.typeHdri', mc: 'asset.typeMc', official: 'asset.typeOfficial', preset: 'asset.typePreset', project: 'asset.typeProject' }
+  const virtual = isVirtualAssetPath(item)
   const payload = {
     kind: 'asset',
     name: item.name,
@@ -1516,11 +2011,11 @@ function showDetail(item) {
     fav: isFav(item),
     onAdd: () => { pushRecent(item); item.onAdd() },
     onFav: () => { toggleFav(item) },
-    /* zip 包内贴图为虚拟路径（pack:…）：无磁盘定位 / 文件 stat 可言 */
-    onLocate: (item.path && !parsePackTexPath(item.path)) ? () => window.api.showInFolder(item.path) : null,
-    onCopyPath: (item.path && !parsePackTexPath(item.path)) ? () => copyText(item.path) : null,
+    /* zip 包内贴图 / 包内模型 / bbmodel 引用为虚拟路径：无磁盘定位 / 文件 stat 可言 */
+    onLocate: (item.path && !virtual) ? () => window.api.showInFolder(item.path) : null,
+    onCopyPath: (item.path && !virtual) ? () => copyText(item.path) : null,
     onCopyName: () => copyText(item.name),
-    fetchInfo: (item.path && item.type !== 'preset' && !parsePackTexPath(item.path))
+    fetchInfo: (item.path && item.type !== 'preset' && !virtual)
       ? (cb) => {
           assetApiCall('GET', '/api/asset/info?path=' + encodeURIComponent(item.path))
             .then(info => {
@@ -1531,6 +2026,12 @@ function showDetail(item) {
             .catch(() => cb(null))
         }
       : null,
+  }
+  if (Array.isArray(extraMetaRows) && extraMetaRows.length) {
+    payload.metaRows = extraMetaRows
+  }
+  if (item.type === 'model' && typeof item.onBlockbench === 'function') {
+    payload.onBlockbench = item.onBlockbench
   }
   if ((item.type === 'official' || item.type === 'mc') && item.pack) {
     const p = item.pack
@@ -1577,7 +2078,7 @@ function showDetail(item) {
 
 function refreshDetailFav() {
   if (!detailCurrent) return
-  showDetail(detailCurrent)
+  openDetail(detailCurrent)
 }
 
 function hideDetail() {
@@ -1605,7 +2106,7 @@ export function initAssetLibrary() {
     buildToolbar()
     if (browse) { renderBrowse(); return }
     rebuild()
-    if (detailCurrent) showDetail(detailCurrent)
+    if (detailCurrent) openDetail(detailCurrent)
   })
   lastTexSig = sigEntries()
   rebuild()

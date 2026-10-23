@@ -50,7 +50,7 @@ async function generateAndSave(fullPath) {
     const info = await window.api.thumbInfo(fullPath)
     if (info && info.exists && !info.stale && info.thumbUrl) return info.thumbUrl
   } catch {}
-  const dataUrl = await generateThumbDataUrl(fileUrl(fullPath))
+  const dataUrl = await generateThumbDataUrl(fileUrl(fullPath), fullPath)
   try {
     const saved = await window.api.saveThumb(fullPath, dataUrl)
     if (saved && saved.success && saved.thumbUrl) return saved.thumbUrl
@@ -58,20 +58,44 @@ async function generateAndSave(fullPath) {
   return dataUrl
 }
 
-function generateThumbDataUrl(srcUrl) {
+/* 读取动画贴图元数据（同目录 <name>.png.mcmeta；非动画 / 读取失败 → null）。
+    仅竖长条贴图（h ≥ 2w，MC 动画贴图形态）探测，普通贴图零额外请求 */
+async function fetchAnimFrameSize(fullPath, w, h) {
+  if (h < w * 2) return null
+  try {
+    const res = await fetch('/api/file/raw?path=' + encodeURIComponent(fullPath + '.mcmeta'))
+    if (!res.ok) return null
+    const meta = await res.json()
+    const anim = meta && meta.animation
+    if (!anim || typeof anim !== 'object') return null
+    const fw = Number.isFinite(+anim.width) && +anim.width > 0 ? Math.floor(+anim.width) : w
+    const fh = Number.isFinite(+anim.height) && +anim.height > 0 ? Math.floor(+anim.height) : fw
+    if (fw <= 0 || fh <= 0 || fw > w || fh > h) return null
+    return { fw, fh }
+  } catch { return null }
+}
+
+/* 生成缩略图：动画贴图（竖长条 + mcmeta animation）裁剪首帧（顶部 fw×fh 区域），
+    否则整幅等比缩放 */
+function generateThumbDataUrl(srcUrl, fullPath) {
   return new Promise((resolve, reject) => {
     const img = new Image()
     img.crossOrigin = 'anonymous'
-    img.onload = () => {
-      const scale = Math.min(THUMB_W / img.naturalWidth, THUMB_W / img.naturalHeight, 1)
-      const w = Math.max(1, Math.round(img.naturalWidth * scale))
-      const h = Math.max(1, Math.round(img.naturalHeight * scale))
-      const canvas = document.createElement('canvas')
-      canvas.width = w; canvas.height = h
-      const ctx = canvas.getContext('2d')
-      ctx.drawImage(img, 0, 0, w, h)
-      try { resolve(canvas.toDataURL('image/jpeg', 0.8)) }
-      catch (e) { reject(e) }
+    img.onload = async () => {
+      try {
+        const anim = fullPath ? await fetchAnimFrameSize(fullPath, img.naturalWidth, img.naturalHeight) : null
+        const srcW = anim ? anim.fw : img.naturalWidth
+        const srcH = anim ? anim.fh : img.naturalHeight
+        const scale = Math.min(THUMB_W / srcW, THUMB_W / srcH, 1)
+        const w = Math.max(1, Math.round(srcW * scale))
+        const h = Math.max(1, Math.round(srcH * scale))
+        const canvas = document.createElement('canvas')
+        canvas.width = w; canvas.height = h
+        const ctx = canvas.getContext('2d')
+        if (anim) ctx.drawImage(img, 0, 0, anim.fw, anim.fh, 0, 0, w, h)
+        else ctx.drawImage(img, 0, 0, w, h)
+        resolve(canvas.toDataURL('image/jpeg', 0.8))
+      } catch (e) { reject(e) }
     }
     img.onerror = reject
     img.src = srcUrl

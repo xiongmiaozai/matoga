@@ -60,9 +60,14 @@ export async function undo() {
   }
 }
 
-export async function loadFromPath(side, folderPath) {
+export async function loadFromPath(side, folderPath, opts) {
   setLoading(side, true)
-  const recursive = recursiveChk.checked
+  const forceRecursive = !!(opts && opts.forceRecursive)
+  if (forceRecursive && recursiveChk && !recursiveChk.checked) {
+    recursiveChk.checked = true
+    window.api.setConfig({ recursive: true })
+  }
+  const recursive = forceRecursive || recursiveChk.checked
   const ignore = getIgnorePatterns()
   const res = recursive ? await window.api.readRecursive(folderPath, ignore) : await window.api.readEntries(folderPath, ignore)
   setLoading(side, false)
@@ -219,9 +224,14 @@ async function executeCopySequential(pairs) {
 }
 
 export async function reloadAndCompare() {
+  const prevKey = state.selected && state.selected.key
   if (state.leftPath) await loadFromPath('left', state.leftPath)
   if (state.rightPath) await loadFromPath('right', state.rightPath)
   if (state.leftPath && state.rightPath) await compare()
+  if (prevKey) {
+    const g = state.result.find(g => g.key === prevKey)
+    if (g) { state.selected = g; renderSidebar() }
+  }
 }
 
 export async function copySingleFile(srcPath, destPath, backupPath) {
@@ -253,6 +263,21 @@ export async function deleteTexture(filePath) {
   const r = await window.api.deleteFile(filePath)
   if (r.success) { pushHistory([{ destPath: filePath, backupPath: bk.backupPath }]); showToast(t('toast.deletedTex')); await reloadAndCompare() }
   else showToast(t('toast.deleteFailMsg', { msg: r.error }))
+}
+
+export async function copySingleToRight(srcPath, destPath) {
+  if (!await uiConfirm({ title: t('common.batchCopy'), message: t('confirm.copySingleRight') })) return
+  const r = await window.api.copyFile(srcPath, destPath)
+  if (r.success) { pushHistory([{ destPath, backupPath: null }]); showToast(t('toast.replacedTex')); await reloadAndCompare() }
+  else showToast(t('toast.replaceFail', { msg: r.error }))
+}
+
+export async function addTextureToRight(destPath) {
+  const newFile = await window.api.selectFile()
+  if (!newFile) return
+  const r = await window.api.copyFile(newFile, destPath)
+  if (r.success) { pushHistory([{ destPath, backupPath: null }]); showToast(t('toast.addedTex')); await reloadAndCompare() }
+  else showToast(t('toast.replaceFail', { msg: r.error }))
 }
 
 export async function batchCopyToSide(destSide) {
@@ -288,7 +313,7 @@ export function exportResult() {
   lines.push(t('export.header'))
   lines.push('-'.repeat(70))
   for (const g of state.result) {
-    const type = g.isMaterial ? t('type.material') : g.isDir ? t('type.folder') : t('type.file')
+    const type = g.isMaterial ? t('type.material') : g.isModel ? t('type.model') : g.isDir ? t('type.folder') : t('type.file')
     const lc = g.isMaterial ? leftRoles(g).length : (hasAny(g.left) ? 1 : 0)
     const rc = g.isMaterial ? rightRoles(g).length : (hasAny(g.right) ? 1 : 0)
     lines.push([KIND_TEXT[g.kind], type, g.key, lc, rc].join('\t'))
@@ -310,7 +335,7 @@ export function exportHtml() {
   const statusColor = { have: '#14ae67', diff: '#f7a600', partial: '#b8860b', miss: '#e5484d', extra: '#d97706' }
   let rows = ''
   for (const g of state.result) {
-    const type = g.isMaterial ? t('type.material') : g.isDir ? t('type.folder') : t('type.file')
+    const type = g.isMaterial ? t('type.material') : g.isModel ? t('type.model') : g.isDir ? t('type.folder') : t('type.file')
     const color = statusColor[g.kind] || '#999'
     let leftThumb = '—', rightThumb = '—'
     const ml = g.isMaterial ? (g.left && g.left.main) : (g.left && (g.left.file || g.left.dir))

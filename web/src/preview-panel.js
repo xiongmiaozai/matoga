@@ -19,6 +19,7 @@ import {
   setHdrRotation, setHdrUsage, getHdrInfo,
   setSkyTurbidity, setSkyRayleigh, setSkyMieCoefficient, setSkyMieDirectionalG, setSkySunElevation, setSkySunAzimuth, setSkyTint,
   setAutoRotate, setWireframe, screenshot, toggleFullscreen,
+  setFreeCameraMode, isFreeCameraMode,
   setOpacityMode, setOpacity, setTransmission, setIOR, setClearcoat,
   setTextureFilter, setMipmapsEnabled, setAnisotropyLevel, getMaxAnisotropy,
   isMaterial3DReady, activateMaterial3DHost
@@ -264,6 +265,14 @@ export async function initPreviewPanel() {
   const mipmapChk = $('m3dMipmaps'); if (mipmapChk) mipmapChk.addEventListener('change', (e) => setMipmapsEnabled(e.target.checked))
   const shotBtn = $('m3dShotBtn'); if (shotBtn) shotBtn.addEventListener('click', screenshot)
   const fsBtn = $('m3dFullscreenBtn'); if (fsBtn) fsBtn.addEventListener('click', toggleFullscreen)
+  document.querySelectorAll('#m3dFreeCamBtn').forEach(btn => {
+    btn.classList.toggle('active', isFreeCameraMode())
+    btn.addEventListener('click', () => setFreeCameraMode(!isFreeCameraMode()))
+  })
+  document.addEventListener('material3d:freecam', (e) => {
+    document.querySelectorAll('#m3dFreeCamBtn').forEach(b => b.classList.toggle('active', e.detail.enabled))
+    showToast(t(e.detail.enabled ? 'm3d.freeCamHint' : 'm3d.freeCamOff'))
+  })
 
   const hdrBtn = $('m3dHdrBtn'); if (hdrBtn) hdrBtn.addEventListener('click', async () => {
     const filePath = await window.api.selectHDRFile()
@@ -328,6 +337,13 @@ export async function initPreviewPanel() {
   })
   const paramsBtn = $('m3dParamsBtn'); if (paramsBtn) paramsBtn.addEventListener('click', () => $('m3dParamsOverlay').classList.toggle('show'))
   const paramsClose = $('m3dParamsClose'); if (paramsClose) paramsClose.addEventListener('click', () => $('m3dParamsOverlay').classList.remove('show'))
+  /* UV 贴图视图浮窗（HUD 按钮，按需加载；无模型时浮窗显示空态提示） */
+  const uvBtn = $('m3dUvBtn'); if (uvBtn) uvBtn.addEventListener('click', async () => {
+    try {
+      const m = await import('./uv-view.js')
+      m.toggleUvView()
+    } catch (e) { console.error('[preview-panel] uv-view', e) }
+  })
   ;(() => {
     const ov = $('m3dParamsOverlay'), drag = $('m3dParamsDrag'), container = $('material3dContainer')
     if (!ov || !drag || !container) return

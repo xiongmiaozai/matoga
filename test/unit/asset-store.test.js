@@ -194,14 +194,31 @@ test('sanitize: official 类型保留 badge 版本徽标', async () => {
   assert.equal(d.favorites[0].badge, '1.21 – 1.21.1')
 })
 
-test('VALID_TYPES: 包含六种类型', () => {
+test('VALID_TYPES: 包含七种类型', () => {
   assert.ok(store.VALID_TYPES.has('tex'))
   assert.ok(store.VALID_TYPES.has('hdri'))
   assert.ok(store.VALID_TYPES.has('mc'))
   assert.ok(store.VALID_TYPES.has('official'))
+  assert.ok(store.VALID_TYPES.has('model'))
   assert.ok(store.VALID_TYPES.has('preset'))
   assert.ok(store.VALID_TYPES.has('project'))
-  assert.equal(store.VALID_TYPES.size, 6)
+  assert.equal(store.VALID_TYPES.size, 7)
+})
+
+test('model 类型: key 前缀识别 / 收藏持久化 / 分类分组', async () => {
+  assert.equal(store.detectType('model:bb:abc123'), 'model')
+  assert.equal(store.detectType('model:packmodel:mc:MyPack/assets/minecraft/models/block/stone.json'), 'model')
+  assert.equal(store.isValidKey('model:bb:abc123'), true)
+  const modelItem = { key: 'model:packmodel:official:26.3-Fabric/assets/minecraft/models/item/stick.json', name: 'stick.json', type: 'model', path: 'packmodel:official:26.3-Fabric/assets/minecraft/models/item/stick.json', badge: 'item' }
+  await store.setFavorites([modelItem])
+  await store.setRecent([modelItem])
+  const d = store.get()
+  assert.equal(d.favorites.length, 1)
+  assert.equal(d.favorites[0].type, 'model')
+  assert.equal(d.favorites[0].badge, 'item')
+  assert.equal(store.getByType('model').favorites.length, 1)
+  const groups = store.classifyByType([modelItem])
+  assert.equal(groups.model.length, 1)
 })
 
 test('teardown: 恢复真实 favorites/recent', () => {

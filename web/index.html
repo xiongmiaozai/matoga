@@ -89,6 +89,7 @@
     <symbol id="i-node" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8.5 6h7M7.2 8.2l3.6 7.6M16.8 8.2l-3.6 7.6"/></symbol>
     <symbol id="i-tree" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="10" width="6" height="4" rx="1"/><rect x="16" y="3" width="6" height="4" rx="1"/><rect x="16" y="10" width="6" height="4" rx="1"/><rect x="16" y="17" width="6" height="4" rx="1"/><path d="M8 12h3M11 12V5h5M11 12h5M11 12v7h5"/></symbol>
     <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-move" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/></symbol>
   </svg>
 
   <header class="app-header">
@@ -188,6 +189,15 @@
             <button id="mcPacksPickBtn" class="btn btn-ghost btn-sm" data-i18n="settings.pick">选</button>
             <button id="mcPacksCreateBtn" class="btn btn-ghost btn-sm" data-i18n="settings.create">建</button>
             <button id="mcPacksOpenBtn" class="btn btn-ghost btn-sm" data-i18n="settings.open">开</button>
+          </div>
+        </div>
+        <div class="path-setting">
+          <span class="path-setting-label" data-i18n="settings.craftPacks">制作包</span>
+          <div class="path-setting-row">
+            <input type="text" id="craftPacksPathInput" class="input-text" data-i18n-placeholder="common.path" placeholder="路径" />
+            <button id="craftPacksPickBtn" class="btn btn-ghost btn-sm" data-i18n="settings.pick">选</button>
+            <button id="craftPacksCreateBtn" class="btn btn-ghost btn-sm" data-i18n="settings.create">建</button>
+            <button id="craftPacksOpenBtn" class="btn btn-ghost btn-sm" data-i18n="settings.open">开</button>
           </div>
         </div>
         <div class="path-setting">

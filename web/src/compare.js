@@ -6,11 +6,12 @@
 
 import { state, compareBtn2, hashChk, exportBtn, exportHtmlBtn, batchRightBtn, batchLeftBtn, STATUS_ORDER, ROLES } from './core.js'
 import { buildGroups, materialKind, singleKind, mainEntryOf, hasAny, leftRoles, rightRoles } from './utils.js'
+import { isModelEntry } from './model-diff.js'
 import { renderResult, renderSidebar } from './render.js'
 import { t } from './i18n.js'
 
 export function computeCounts() {
-  const c = { have: 0, diff: 0, partial: 0, miss: 0, extra: 0, leftTex: 0, rightTex: 0, rightMatch: 0, pbrExtra: 0 }
+  const c = { have: 0, diff: 0, partial: 0, miss: 0, extra: 0, leftTex: 0, rightTex: 0, rightMatch: 0, pbrExtra: 0, leftModel: 0, rightModel: 0, modelMatch: 0 }
   for (const g of state.result) {
     c[g.kind]++
     if (g.isMaterial) {
@@ -21,6 +22,11 @@ export function computeCounts() {
         if (lr.includes(r)) c.rightMatch++
         else c.pbrExtra++
       }
+    } else if (g.isModel) {
+      const lHas = hasAny(g.left), rHas = hasAny(g.right)
+      if (lHas) c.leftModel++
+      if (rHas) c.rightModel++
+      if (lHas && rHas) c.modelMatch++
     } else if (g.isFile) {
       const lHas = hasAny(g.left), rHas = hasAny(g.right)
       if (lHas) c.leftTex++
@@ -42,9 +48,11 @@ export async function compare() {
     const lg = leftGroups.get(key), rg = rightGroups.get(key)
     const isMaterial = (lg && (lg.main || lg.normal || lg.specular)) || (rg && (rg.main || rg.normal || rg.specular))
     const isDir = (lg && lg.dir) || (rg && rg.dir)
+    const isModel = isModelEntry(lg && lg.file) || isModelEntry(rg && rg.file)
     let g
     if (isDir) g = { key, isDir: true, left: lg, right: rg, kind: singleKind(lg, rg) }
     else if (isMaterial) g = { key, isMaterial: true, left: lg, right: rg, kind: materialKind(lg, rg) }
+    else if (isModel) g = { key, isModel: true, left: lg, right: rg, kind: singleKind(lg, rg) }
     else g = { key, isFile: true, left: lg, right: rg, kind: singleKind(lg, rg) }
     result.push(g)
   }
@@ -102,7 +110,7 @@ export function sortResult(arr) {
     let v
     if (key === 'status') v = STATUS_ORDER[g.kind]
     else if (key === 'name') v = g.key
-    else if (key === 'type') v = g.isMaterial ? 0 : g.isDir ? 1 : 2
+    else if (key === 'type') v = g.isMaterial ? 0 : g.isModel ? 1 : g.isDir ? 2 : 3
     else if (key === 'size') v = (mainEntryOf(g)?.size || 0)
     else if (key === 'mtime') v = (mainEntryOf(g)?.mtime || 0)
     else if (key === 'left') v = hasAny(g.left) ? 0 : 1

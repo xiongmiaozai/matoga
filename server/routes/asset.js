@@ -4,11 +4,15 @@
  * SPDX-License-Identifier: MIT
  *
  * GET    /api/asset               获取收藏夹与最近使用
- * GET    /api/asset/type/:type    按分类获取（tex/hdri/mc/preset）
+ * GET    /api/asset/type/:type    按分类获取（tex/hdri/mc/model/preset）
  * GET    /api/asset/tex           聚合全部贴图（MC 材质包 + 官方包，按包/类别分组）
+ * GET    /api/asset/model         聚合全部模型（MC 材质包 + 官方包内 assets/<ns>/models/*.json）
  * PUT    /api/asset/favorites     保存收藏夹 { items: [...] }
  * PUT    /api/asset/recent        保存最近使用 { items: [...] }
  * GET    /api/asset/info?path=    获取文件 stat（大小/时间），用于详情面板
+ * GET    /api/asset/model-thumb-info?key=&mtime=  模型缩略图缓存查询（虚拟路径键；渲染器版本落后或 mtime 更新 → stale；返回 frameCount/frameDelay 供动画模型轮播）
+ * GET    /api/asset/model-thumb?key=&frame=      读取模型缩略图 PNG（多帧动画缩略图按 frame 取帧，缺省帧 0）
+ * POST   /api/asset/model-thumb   保存前端离屏渲染的模型缩略图 { key, mtime, dataUrl } 或多帧 { key, mtime, frames: [{ dataUrl, delay }] }（sidecar 记录渲染器版本与帧数）
  */
 
 const express = require('express')
@@ -19,6 +23,7 @@ const { guardRead } = require('../middleware/validate')
 const store = require('../config/asset-store')
 const configStore = require('../config/config-store')
 const mcmeta = require('../services/mcmeta-service')
+const modelThumb = require('../services/model-thumb-service')
 
 const router = express.Router()
 
@@ -32,27 +37,37 @@ router.get('/type/:type', wrap(async (req, res) => {
   ok(res, store.getByType(type))
 }))
 
+/* 聚合 mcPacksPath / officialPacksPath 下的全部包，逐包调用 lister（tex / model） */
+async function collectPacks(root, lister) {
+  if (!root || typeof root !== 'string') return []
+  let names
+  try { names = await fs.promises.readdir(root, { withFileTypes: true }) } catch { return [] }
+  const packs = []
+  for (const d of names) {
+    if (d.name.startsWith('.')) continue
+    const st = await fs.promises.stat(path.join(root, d.name)).catch(() => null)
+    if (!st) continue
+    const ext = (d.name.split('.').pop() || '').toLowerCase()
+    if (!st.isDirectory() && !mcmeta.ZIP_EXTS.has(ext)) continue
+    try { packs.push(await lister(root, d.name)) } catch {}
+  }
+  packs.sort((a, b) => a.name.localeCompare(b.name, 'zh'))
+  return packs
+}
+
 /* 聚合 MC 材质包 + 官方材质包的全部贴图：每包按 textures/ 第一级类别分组（无分页） */
 router.get('/tex', wrap(async (req, res) => {
   const cfg = configStore.get()
-  async function collect(root) {
-    if (!root || typeof root !== 'string') return []
-    let names
-    try { names = await fs.promises.readdir(root, { withFileTypes: true }) } catch { return [] }
-    const packs = []
-    for (const d of names) {
-      if (d.name.startsWith('.')) continue
-      const st = await fs.promises.stat(path.join(root, d.name)).catch(() => null)
-      if (!st) continue
-      const ext = (d.name.split('.').pop() || '').toLowerCase()
-      if (!st.isDirectory() && !mcmeta.ZIP_EXTS.has(ext)) continue
-      try { packs.push(await mcmeta.listPackTexGroups(root, d.name)) } catch {}
-    }
-    packs.sort((a, b) => a.name.localeCompare(b.name, 'zh'))
-    return packs
-  }
-  const mc = (await collect(cfg.mcPacksPath)).map(p => ({ ...p, source: 'mc' }))
-  const official = (await collect(cfg.officialPacksPath)).map(p => ({ ...p, source: 'official' }))
+  const mc = (await collectPacks(cfg.mcPacksPath, mcmeta.listPackTexGroups)).map(p => ({ ...p, source: 'mc' }))
+  const official = (await collectPacks(cfg.officialPacksPath, mcmeta.listPackTexGroups)).map(p => ({ ...p, source: 'official' }))
+  ok(res, { packs: [...mc, ...official] })
+}))
+
+/* 聚合 MC 材质包 + 官方材质包的全部模型：每包按 models/ 第一级类别分组（无分页） */
+router.get('/model', wrap(async (req, res) => {
+  const cfg = configStore.get()
+  const mc = (await collectPacks(cfg.mcPacksPath, mcmeta.listPackModelGroups)).map(p => ({ ...p, source: 'mc' }))
+  const official = (await collectPacks(cfg.officialPacksPath, mcmeta.listPackModelGroups)).map(p => ({ ...p, source: 'official' }))
   ok(res, { packs: [...mc, ...official] })
 }))
 
@@ -76,6 +91,37 @@ router.get('/info', wrap(async (req, res) => {
   } catch {
     ok(res, { exists: false, isDirectory: false, size: 0, mtime: 0 })
   }
+}))
+
+/* 模型缩略图（虚拟路径键：packmodel:<source>:<pack>/<rel> / bb:<id>）：
+   key 仅参与 md5（文件名恒为 hex），不进入文件系统路径，无目录穿越面 */
+const MODEL_THUMB_KEY_RE = /^(packmodel:(mc|official):[^:]+\/.+|bb:.+)$/
+
+function guardModelThumbKey(raw) {
+  const key = typeof raw === 'string' ? raw : ''
+  if (!key || key.length > 512 || !MODEL_THUMB_KEY_RE.test(key)) return null
+  return key
+}
+
+router.get('/model-thumb-info', wrap(async (req, res) => {
+  const key = guardModelThumbKey(req.query.key)
+  if (!key) return fail(res, 'ERR_INVALID_PARAM', 'invalid model thumb key')
+  ok(res, await modelThumb.thumbInfo(key, req.query.mtime))
+}))
+
+router.get('/model-thumb', wrap(async (req, res) => {
+  const key = guardModelThumbKey(req.query.key)
+  if (!key) return fail(res, 'ERR_INVALID_PARAM', 'invalid model thumb key')
+  try { await modelThumb.sendThumb(res, key, req.query.frame) }
+  catch { fail(res, 'ERR_FS_NOT_FOUND', 'model thumb not generated yet') }
+}))
+
+router.post('/model-thumb', wrap(async (req, res) => {
+  const key = guardModelThumbKey(req.body && req.body.key)
+  if (!key) return fail(res, 'ERR_INVALID_PARAM', 'invalid model thumb key')
+  const r = await modelThumb.saveThumb(key, req.body && req.body.mtime, req.body)
+  if (!r.success) return fail(res, 'ERR_INVALID_PARAM', r.error)
+  ok(res, r)
 }))
 
 module.exports = router
