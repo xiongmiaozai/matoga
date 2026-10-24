@@ -33,6 +33,31 @@ export function fileUrl(p) {
   return '/api/file/raw?path=' + encodeURIComponent(p)
 }
 
+export function apiUrl(p) {
+  return (typeof window !== 'undefined' && window.matogaCore && window.matogaCore.url) ? window.matogaCore.url(p) : p
+}
+
+/* 资产库贴图跨面板拖拽：自定义 MIME（JSON { name, url, path }），供 UV 编辑器等接收方直接使用 */
+export const TEX_DRAG_MIME = 'text/matoga-tex'
+
+export function setTexDragData(dt, tex) {
+  if (!dt || !tex || typeof tex.url !== 'string' || !tex.url) return false
+  try {
+    dt.setData(TEX_DRAG_MIME, JSON.stringify({ name: tex.name || '', url: tex.url, path: tex.path || null }))
+    return true
+  } catch { return false }
+}
+
+export function getTexDragData(dt) {
+  if (!dt) return null
+  try {
+    const raw = dt.getData(TEX_DRAG_MIME)
+    if (!raw) return null
+    const tex = JSON.parse(raw)
+    return (tex && typeof tex.url === 'string' && tex.url) ? tex : null
+  } catch { return null }
+}
+
 export function escAttr(s) {
   return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
 }
@@ -133,10 +158,51 @@ export function folderOf(g) {
 }
 
 export function modelTypeOf(g) {
-  const m = g.key.match(/^assets\/[^/]+\/models\/([^/]+)/)
+  const m = g.key.match(/^assets\/[^/]+\/models\/([^/]+)\//)
   if (m) return m[1]
   if (/^assets\/[^/]+\/items\//.test(g.key)) return 'item'
   return null
+}
+
+/* ── 内容分类（block / item）：按 MC 资源包路径约定判定，供资源库卡片标记 ──
+    textures/block|item/ 与 models/block|item/ 覆盖贴图与旧版模型，
+    assets/<ns>/items/ 为 1.21.4+ 物品定义；路径段边界匹配，
+    兼容磁盘绝对路径与 pack:/packmodel: 前缀路径 */
+const CONTENT_KIND_PATH_RES = [
+  [/(?:^|\/)textures\/block\//, 'block'],
+  [/(?:^|\/)textures\/item\//, 'item'],
+  [/(?:^|\/)models\/block\//, 'block'],
+  [/(?:^|\/)models\/item\//, 'item'],
+  [/(?:^|\/)assets\/[^/]+\/items\//, 'item'],
+]
+
+export function contentKindOfPath(p) {
+  if (!p || typeof p !== 'string') return null
+  for (const [re, kind] of CONTENT_KIND_PATH_RES) {
+    if (re.test(p)) return kind
+  }
+  return null
+}
+
+export function modelBaseNameOf(g) {
+  const idx = g.key.lastIndexOf('/')
+  const base = idx >= 0 ? g.key.slice(idx + 1) : g.key
+  return base.replace(/\.json$/i, '')
+}
+
+export function groupTypeOf(g) {
+  if (g.isMaterial) return 'material'
+  if (g.isModel) return 'model'
+  if (g.isDir) return 'dir'
+  return 'file'
+}
+
+export function groupContentKind(g) {
+  return contentKindOfPath(g.key)
+}
+
+export function groupTagOf(g, customTags) {
+  return (customTags && customTags[g.key]) || null
 }
 
 export function getIgnorePatterns() {

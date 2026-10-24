@@ -93,9 +93,9 @@ router.get('/info', wrap(async (req, res) => {
   }
 }))
 
-/* 模型缩略图（虚拟路径键：packmodel:<source>:<pack>/<rel> / bb:<id>）：
-   key 仅参与 md5（文件名恒为 hex），不进入文件系统路径，无目录穿越面 */
-const MODEL_THUMB_KEY_RE = /^(packmodel:(mc|official):[^:]+\/.+|bb:.+)$/
+/* 模型缩略图（虚拟路径键：packmodel:<source>:<pack>/<rel> / bb:<id> / im:<id> / cm:<id>）：
+   key 仅参与 md5（文件名恒为 hex，按类型落入专属子目录），不进入文件系统路径，无目录穿越面 */
+const MODEL_THUMB_KEY_RE = /^(packmodel:(mc|official):[^:]+\/.+|bb:.+|im:.+|cm:.+)$/
 
 function guardModelThumbKey(raw) {
   const key = typeof raw === 'string' ? raw : ''

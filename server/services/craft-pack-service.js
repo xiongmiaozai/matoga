@@ -8,7 +8,7 @@
  *  - exportPack() 将全部储存聚合导出为 craftPacksPath 下的真实 MC 资源包（与 mc-packs 平级的独立目录）：
  *      pack.mcmeta（pack_format + description）
  *      assets/<ns>/textures/**（贴图：包内虚拟路径保留原结构，磁盘文件入 assets/matoga/textures/）
- *      assets/<ns>/models/**（模型：包内 .json 保留原结构，Blockbench 模型入 assets/matoga/models/）
+ *      assets/<ns>/models/**（模型：包内 .json 保留原结构）
  *      hdri/**（HDRI 环境贴图：MC 会忽略该目录，仅作储存）
  *    整包媒体（mc/official）与虚拟资产（preset/project）无法落盘，跳过并说明原因。
  *  - 导出包写入 matoga-craft.json 标记（导出时间 + 条目清单），listCraftPacks() 据此识别；
@@ -25,7 +25,7 @@ const { guardRead } = require('../middleware/validate')
 const configStore = require('../config/config-store')
 const assetStore = require('../config/asset-store')
 const mcmeta = require('./mcmeta-service')
-const blockbench = require('./blockbench-service')
+
 
 const DIR = path.join(DATA_ROOT, 'data', 'craft-pack')
 const SELECTION_FILE = path.join(DIR, 'selection.json')
@@ -76,6 +76,7 @@ function sanitizeItem(item) {
     thumb: typeof item.thumb === 'string' ? item.thumb : null,
     type,
     path: typeof item.path === 'string' ? item.path : null,
+    craftPath: typeof item.craftPath === 'string' ? item.craftPath : undefined,
     mtime: typeof item.mtime === 'number' ? item.mtime : 0,
     role: typeof item.role === 'string' ? item.role : undefined,
     color: typeof item.color === 'string' ? item.color : undefined,
@@ -168,6 +169,7 @@ function parsePackRef(p, prefix) {
 function rootForSource(source, cfg) {
   if (source === 'mc') return cfg.mcPacksPath
   if (source === 'official') return cfg.officialPacksPath
+  if (source === 'craft') return cfg.craftPacksPath
   return null
 }
 
@@ -212,13 +214,7 @@ async function resolveEntry(item, cfg) {
       const { buf } = await mcmeta.readPackFile(root, pm.packName, pm.rel, { anyExt: true })
       return { dest: rel, bytes: buf }
     }
-    /* 模型：Blockbench 模型（bb:<id>）→ assets/matoga/models/<名>.bbmodel */
-    if (item.type === 'model' && typeof p === 'string' && p.startsWith('bb:')) {
-      const loaded = await blockbench.loadModel(p.slice(3))
-      const base = String(item.name || 'model').replace(/[^\w.\-]+/g, '_').replace(/^\.+/, '') || 'model'
-      const name = base.endsWith('.bbmodel') ? base : base + '.bbmodel'
-      return { dest: 'assets/matoga/models/' + name, bytes: Buffer.from(loaded.raw, 'utf8') }
-    }
+
     /* 贴图：磁盘绝对路径 → assets/matoga/textures/<文件名> */
     if (item.type === 'tex' && typeof p === 'string' && path.isAbsolute(p)) {
       const buf = await readDiskFile(p, IMG_EXTS)
@@ -249,6 +245,29 @@ async function resolveEntry(item, cfg) {
 function normalizeAssetsRel(abs) {
   const m = /[\\/]?(assets[\\/][^\\/]+[\\/]models[\\/].+)$/.exec(String(abs))
   return m ? m[1].replace(/\\/g, '/') : null
+}
+
+/* ── 定位路径解析：条目 → 可在文件管理器中打开的磁盘绝对路径 ──
+ * locatePath 仅用于 API 响应，不写入 selection.json：
+ *  1. craftPath 指向制作包内副本且文件仍在 → craftPath（uniqueDest 改名 / 手动整理后会失效）
+ *  2. 失效则回退源路径：磁盘绝对路径原样返回；包内虚拟路径（pack:/packmodel:）拼出真实文件路径
+ *  3. 虚拟资产（preset/project 等）无法定位 → null
+ */
+function locateItem(item, cfg) {
+  if (!item || typeof item !== 'object') return null
+  if (typeof item.craftPath === 'string' && item.craftPath && fs.existsSync(item.craftPath)) return item.craftPath
+  const p = item.path
+  if (typeof p !== 'string' || !p) return null
+  if (path.isAbsolute(p)) return p
+  for (const prefix of ['pack:', 'packmodel:']) {
+    if (!p.startsWith(prefix)) continue
+    const ref = parsePackRef(p, prefix)
+    if (!ref) continue
+    const root = rootForSource(ref.source, cfg)
+    if (!root) continue
+    return path.join(root, ref.packName, ref.rel)
+  }
+  return null
 }
 
 /* ── 存入制作包：单个资产或整包直接复制到当前制作包项目目录（持续累积） ── */
@@ -336,6 +355,7 @@ async function copyToCraftPack(item) {
   fs.mkdirSync(path.dirname(full), { recursive: true })
   fs.writeFileSync(full, r.bytes)
 
+  s.craftPath = full
   await addItem(s)
   logger.info('craft', `copied "${s.name}" → ${DEFAULT_NAME}/${dest}`)
   return { name: DEFAULT_NAME, dir: packDir, dest, written: 1 }
@@ -356,13 +376,21 @@ async function uniquePackName(root, name) {
   throw new AppError('ERR_FS', 'cannot allocate pack dir name')
 }
 
+/* 导出快照名与当前制作项目目录（DEFAULT_NAME）同名会互相覆盖混淆，自动追加时间戳区分 */
+function stamp() {
+  const d = new Date()
+  const p = (n) => String(n).padStart(2, '0')
+  return '' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds())
+}
+
 async function exportPack(opts = {}) {
   const cfg = configStore.get()
   const root = cfg.craftPacksPath
   if (!root || typeof root !== 'string') throw new AppError('ERR_INVALID_PARAM', 'craftPacksPath not configured')
 
-  const name = (opts.name && String(opts.name).trim()) || DEFAULT_NAME
+  let name = (opts.name && String(opts.name).trim()) || DEFAULT_NAME
   if (!mcmeta.validPackName(name)) throw new AppError('ERR_INVALID_PARAM', 'invalid pack name')
+  if (name === DEFAULT_NAME) name = DEFAULT_NAME + '-' + stamp()
 
   const packFormat = Number.isFinite(+opts.packFormat) && +opts.packFormat > 0
     ? Math.floor(+opts.packFormat) : DEFAULT_PACK_FORMAT
@@ -509,5 +537,5 @@ async function getCurrentCraftPack() {
 module.exports = {
   DIR, SELECTION_FILE, MARKER_FILE, MAX_ITEMS, DEFAULT_NAME, DEFAULT_PACK_FORMAT,
   getSelection, setSelection, addItem, removeItem, clearSelection,
-  aggregateStorage, copyToCraftPack, exportPack, listCraftPacks, getCurrentCraftPack, resolveEntry,
+  aggregateStorage, copyToCraftPack, exportPack, listCraftPacks, getCurrentCraftPack, resolveEntry, locateItem,
 }

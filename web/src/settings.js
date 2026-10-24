@@ -8,8 +8,6 @@ import { $, showToast } from './core.js'
 import { refreshHdrPreset } from './hdri-preset.js'
 import { t, setLocale, getLocale, onLocaleChange, applyI18n } from './i18n.js'
 
-let themeChangeCallbacks = []
-
 export function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme)
   document.body.setAttribute('data-theme', theme)
@@ -18,10 +16,7 @@ export function applyTheme(theme) {
   const chk = $('settingThemeChk')
   if (chk) chk.checked = theme === 'dark'
   window.api.setConfig({ theme })
-  themeChangeCallbacks.forEach(cb => cb(theme))
 }
-
-export function onThemeChange(cb) { themeChangeCallbacks.push(cb) }
 
 export function toggleTheme() {
   const current = document.documentElement.getAttribute('data-theme')

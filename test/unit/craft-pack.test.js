@@ -180,6 +180,7 @@ test('listCraftPacks: 识别含 matoga-craft.json 的导出包', async () => {
   assert.equal(path.basename(first.dir), 'TestCraft')
 })
 
+
 test('copyToCraftPack: 单个资产直接复制到当前制作包目录', async () => {
   await craft.clearSelection()
   const r = await craft.copyToCraftPack({
@@ -203,6 +204,45 @@ test('copyToCraftPack: 同名文件追加序号不覆盖', async () => {
   })
   assert.ok(r.dest.includes('stone-2.png'), '重名追加 -2')
   assert.ok(fs.existsSync(path.join(MC_ROOT, '我的制作包', r.dest)))
+})
+
+test('copyToCraftPack: 自选清单记录 craftPath 指向制作包内副本', async () => {
+  const sel = craft.getSelection()
+  const it = sel.find(s => s.name === 'stone.png')
+  assert.ok(it, '存在 stone 条目')
+  assert.ok(typeof it.craftPath === 'string', 'craftPath 已记录')
+  assert.ok(it.craftPath.includes('我的制作包'), 'craftPath 指向制作包目录')
+  assert.ok(fs.existsSync(it.craftPath), 'craftPath 文件实际存在')
+})
+
+test('locateItem: craftPath 优先 / 失效回退源路径与虚拟路径解析', async () => {
+  const cfg = configStore.get()
+
+  /* 有效 craftPath（制作包内副本）优先 */
+  const st = craft.getSelection().find(s => s.name === 'stone.png')
+  assert.ok(st && st.craftPath, '前置：stone 条目带 craftPath')
+  assert.equal(craft.locateItem(st, cfg), st.craftPath)
+
+  /* craftPath 失效（文件已被改名/删除）→ 回退源路径 */
+  assert.equal(craft.locateItem({ path: diskTex, craftPath: '/not/exist/x.png' }, cfg), diskTex)
+
+  /* 磁盘绝对路径原样返回 */
+  assert.equal(craft.locateItem({ path: diskTex }, cfg), diskTex)
+
+  /* 包内虚拟路径 → mcPacksPath/<包>/<包内相对路径> */
+  assert.equal(craft.locateItem({ path: 'pack:mc:MyPack/assets/minecraft/textures/block/stone.png' }, cfg),
+    path.join(MC_ROOT, 'MyPack', 'assets/minecraft/textures/block/stone.png'))
+  assert.equal(craft.locateItem({ path: 'packmodel:mc:MyPack/assets/minecraft/models/item/m.json' }, cfg),
+    path.join(MC_ROOT, 'MyPack', 'assets/minecraft/models/item/m.json'))
+
+  /* craft 来源虚拟路径 → craftPacksPath/<包>/<包内相对路径> */
+  assert.equal(craft.locateItem({ path: 'pack:craft:我的制作包/assets/minecraft/textures/block/stone.png' }, cfg),
+    path.join(MC_ROOT, '我的制作包', 'assets/minecraft/textures/block/stone.png'))
+
+  /* 虚拟资产 / 无路径 / 坏条目 → null */
+  assert.equal(craft.locateItem({ path: 'preset:metal' }, cfg), null)
+  assert.equal(craft.locateItem({ path: null }, cfg), null)
+  assert.equal(craft.locateItem(null, cfg), null)
 })
 
 test('copyToCraftPack: 虚拟资产无法复制报错', async () => {
@@ -242,6 +282,32 @@ test('getCurrentCraftPack: 返回当前制作项目（持续累积，非导出�
   assert.equal(r.pack.name, '我的制作包')
   assert.equal(r.pack.dir, craftDir)
   assert.ok(r.pack.fileCount >= 1, '统计 assets 文件数')
+})
+
+test('exportPack: 与当前制作项目同名时自动加时间戳，不覆盖项目目录', async () => {
+  await craft.clearSelection()
+  await craft.copyToCraftPack({
+    key: 'tex:pack:mc:MyPack/assets/minecraft/textures/block/stone.png',
+    name: 'stone.png', type: 'tex',
+    path: 'pack:mc:MyPack/assets/minecraft/textures/block/stone.png',
+  })
+  const craftDir = path.join(MC_ROOT, '我的制作包')
+  assert.ok(fs.existsSync(craftDir), '当前制作项目目录已就绪')
+
+  const r = await craft.exportPack({ name: '我的制作包', items: [
+    { key: 'tex:' + diskTex, name: 'my_diffuse.png', type: 'tex', path: diskTex },
+  ] })
+  assert.match(r.name, /^我的制作包-\d{8}-\d{6}$/, '自动追加 YYYYMMDD-HHMMSS 时间戳')
+  assert.ok(fs.existsSync(path.join(MC_ROOT, r.name, 'matoga-craft.json')), '导出快照独立成目录')
+  assert.ok(!fs.existsSync(path.join(craftDir, 'matoga-craft.json')), '当前制作项目未被导出污染')
+  assert.ok(fs.existsSync(path.join(craftDir, 'pack.mcmeta')), '当前制作项目原样保留')
+
+  /* 同名导出产生的快照可被 listCraftPacks 识别，且不与当前项目目录混淆 */
+  const { packs } = await craft.listCraftPacks()
+  const snap = packs.find(p => p.name === r.name)
+  assert.ok(snap, '时间戳快照出现在已导出列表')
+  assert.equal(path.basename(snap.dir), r.name)
+  assert.ok(!packs.some(p => p.name === '我的制作包'), '当前制作项目（无标记）不混入导出列表')
 })
 
 test('teardown: 恢复真实数据', async () => {

@@ -4,5 +4,5 @@
   "icon": "i-node",
   "html": "panel.html",
   "mount": "body",
-  "order": 7
+  "order": 8
 }

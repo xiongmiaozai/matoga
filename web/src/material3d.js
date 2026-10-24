@@ -92,6 +92,7 @@ let clearcoatValue = 0.0
 let textureFilter = 'nearest'
 let mipmapsEnabled = true
 let anisotropyLevel = 4
+let alignOfficial = false
 let maxAnisotropy = 1
 
 let rotX = 0, rotY = 0, targetRotX = 0, targetRotY = 0
@@ -506,10 +507,24 @@ function detectFormat(image) {
   const ctx = canvas.getContext('2d', { willReadFrequently: true })
   ctx.drawImage(image, 0, 0, w, h)
   const data = ctx.getImageData(0, 0, w, h).data
-  let alphaNon255 = 0, blueHigh = 0, total = 0
-  for (let i = 0; i < data.length; i += 4) { total++; if (data[i + 3] < 250) alphaNon255++; if (data[i + 2] > 64) blueHigh++ }
-  const alphaRatio = alphaNon255 / total, blueRatio = blueHigh / total
-  if (alphaRatio > 0.05 || blueRatio > 0.5) return 'labpbr'
+  const total = w * h
+  let alphaNonFull = 0, alphaMidrange = 0
+  let blueSum = 0, blueSumSq = 0
+  for (let i = 0; i < data.length; i += 4) {
+    const a = data[i + 3]
+    if (a < 250) {
+      alphaNonFull++
+      if (a > 10 && a < 245) alphaMidrange++
+    }
+    const b = data[i + 2]
+    blueSum += b; blueSumSq += b * b
+  }
+  const alphaNonFullRatio = alphaNonFull / total
+  const alphaMidRatio = alphaNonFull > 0 ? alphaMidrange / alphaNonFull : 0
+  const blueMean = blueSum / total
+  const blueVar = blueSumSq / total - blueMean * blueMean
+  const blueStd = Math.sqrt(Math.max(0, blueVar))
+  if ((alphaNonFullRatio > 0.02 && alphaMidRatio < 0.3) || (blueStd > 20 && blueMean > 25)) return 'labpbr'
   return 'old'
 }
 
@@ -592,20 +607,21 @@ function extractHeightFromNormal(image) {
   const src = ctx.getImageData(0, 0, w, h).data
   const n = w * h
   const gx = new Float32Array(n), gy = new Float32Array(n)
-  for (let i = 0; i < n; i++) { const j = i * 4; gx[i] = (src[j] - 128) / 127.5; gy[i] = (src[j + 1] - 128) / 127.5 }
+  for (let i = 0; i < n; i++) { const j = i * 4; gx[i] = (src[j] - 127.5) / 127.5; gy[i] = (src[j + 1] - 127.5) / 127.5 }
   const height = new Float32Array(n)
   for (let y = 0; y < h; y++) {
     const row = y * w
     let rowSum = 0
     for (let x = 0; x < w; x++) rowSum += gx[row + x]
     const mean = rowSum / w
-    for (let x = 1; x < w; x++) height[row + x] = height[row + x - 1] + gx[row + x] - mean
+    height[row] = 0
+    for (let x = 1; x < w; x++) height[row + x] = height[row + x - 1] + (gx[row + x - 1] + gx[row + x]) * 0.5 - mean
   }
   const rowOff = new Float32Array(h)
   for (let y = 1; y < h; y++) {
-    const r1 = y * w
+    const r1 = y * w, r0 = (y - 1) * w
     let diff = 0
-    for (let x = 0; x < w; x++) diff += gy[r1 + x]
+    for (let x = 0; x < w; x++) diff += (gy[r0 + x] + gy[r1 + x]) * 0.5
     rowOff[y] = rowOff[y - 1] + diff / w
   }
   let minH = Infinity, maxH = -Infinity
@@ -695,6 +711,15 @@ function applyHeightFilter(tex) {
 
 function applyTextureFilter(tex) {
   if (!tex) return
+  if (alignOfficial) {
+    tex.generateMipmaps = true
+    tex.magFilter = THREE.NearestFilter
+    tex.minFilter = THREE.NearestMipmapLinearFilter
+    tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping
+    tex.anisotropy = Math.min(anisotropyLevel, maxAnisotropy)
+    tex.needsUpdate = true
+    return
+  }
   const useMipmap = mipmapsEnabled && (textureFilter === 'trilinear' || textureFilter === 'anisotropic')
   tex.generateMipmaps = useMipmap
   if (textureFilter === 'nearest') {
@@ -1013,6 +1038,8 @@ export function initMaterial3D(containerEl) {
 
 function applySourceSide() {
   if (!initialized) return
+  if (customModelGroup) return
+
   if (sourceSide === 'dual') {
     meshLeft.visible = true; meshRight.visible = true; meshLeft.position.x = -1.1; meshRight.position.x = 1.1
     meshLeft.scale.setScalar(0.75); meshRight.scale.setScalar(0.75)
@@ -1218,6 +1245,7 @@ export function setClearcoat(val) { clearcoatValue = val; if (initialized) { for
 export function setTextureFilter(mode) { textureFilter = mode; applyFilterToAllTextures() }
 export function setMipmapsEnabled(on) { mipmapsEnabled = on; applyFilterToAllTextures() }
 export function setAnisotropyLevel(val) { anisotropyLevel = Math.max(1, Math.round(val)); applyFilterToAllTextures() }
+export function setAlignOfficial(val) { alignOfficial = !!val; applyFilterToAllTextures() }
 export function getMaxAnisotropy() { return maxAnisotropy }
 export function screenshot() {
   if (!initialized || !renderer) return
@@ -1395,6 +1423,44 @@ export function showCustomModel(group) {
     labelLeft.visible = false; labelRight.visible = false
     customModelGroup = wrapper
     scene.add(wrapper)
+
+    return true
+  } catch { return false }
+}
+
+export function showCustomModelPair(leftGroup, rightGroup) {
+  if (!initialized) return false
+  if (!leftGroup && !rightGroup) return false
+  clearCustomModel()
+  try {
+    const wrapper = new THREE.Group()
+    let added = 0
+    const place = (grp, x) => {
+      if (!grp) return
+      const box = new THREE.Box3().setFromObject(grp)
+      if (box.isEmpty()) return
+      const size = box.getSize(new THREE.Vector3())
+      const center = box.getCenter(new THREE.Vector3())
+      const maxDim = Math.max(size.x, size.y, size.z) || 1
+      const scale = 1.5 / maxDim
+      grp.position.set(-center.x, -center.y, -center.z)
+      grp.scale.setScalar(scale)
+      const sub = new THREE.Group()
+      sub.add(grp)
+      const halfY = (size.y * scale) / 2
+      sub.position.set(x, -1.28 + halfY, 0)
+      wrapper.add(sub)
+      added++
+    }
+    place(leftGroup, -1.1)
+    place(rightGroup, 1.1)
+    if (added === 0) return false
+    meshLeft.visible = false; meshRight.visible = false
+    labelLeft.visible = true; labelRight.visible = true
+    labelLeft.position.set(-1.1, -0.95, 0); labelRight.position.set(1.1, -0.95, 0)
+    customModelGroup = wrapper
+    scene.add(wrapper)
+
     return true
   } catch { return false }
 }
@@ -1508,6 +1574,40 @@ export function setSpecularFromUrl(url) {
 export function clearSpecularTexture() {
   if (!initialized) return
   for (const m of [meshLeft, meshRight]) clearSpecTexture(m.material)
+}
+
+export function applyPbrMapsToModelMaterial(mat, normalUrl, specUrl) {
+  if (!mat) return
+  if (normalUrl) {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      if (mat.userData.replaced) return
+      disposeTexture(mat.normalMap)
+      const nTex = reconstructNormal(img)
+      nTex.magFilter = THREE.NearestFilter; nTex.minFilter = THREE.NearestFilter
+      mat.normalMap = nTex
+      if (mat.normalScale) mat.normalScale.set(1.0, 1.0)
+      mat.needsUpdate = true
+    }
+    img.src = normalUrl
+  }
+  if (specUrl) {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      if (mat.userData.replaced) return
+      disposeTexture(mat.roughnessMap); disposeTexture(mat.metalnessMap)
+      const rTex = extractRoughness(img)
+      const mTex = extractMetalness(img)
+      rTex.magFilter = THREE.NearestFilter; rTex.minFilter = THREE.NearestFilter
+      mTex.magFilter = THREE.NearestFilter; mTex.minFilter = THREE.NearestFilter
+      mat.roughnessMap = rTex
+      mat.metalnessMap = mTex
+      mat.needsUpdate = true
+    }
+    img.src = specUrl
+  }
 }
 export function applyNodePBR(p) {
   if (!initialized || !p) return

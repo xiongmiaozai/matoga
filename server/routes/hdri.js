@@ -5,7 +5,7 @@
  */
 
 const express = require('express')
-const path = require('path')
+
 const { ok, fail, wrap } = require('../middleware/errors')
 const { guardRead } = require('../middleware/validate')
 const hdriService = require('../services/hdri-service')

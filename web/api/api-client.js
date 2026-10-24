@@ -163,11 +163,13 @@
       } catch (e) { return { success: false, error: e.message } }
     },
     deleteFile: (p) => wrapFs(() => call('POST', '/api/file/delete', { path: p })).then(r => { if (r.success) hashCache.delete(p); return r }),
+    writeFile: (p, dataUrl) => wrapFs(() => call('POST', '/api/file/write', { path: p, dataUrl })),
 
     getPathForFile: () => null,
 
     selectFile: () => matogaUpload.pickFile(['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tif', 'tiff', 'avif']),
     selectHDRFile: () => matogaUpload.pickFile(['hdr', 'exr']),
+    selectModelFile: () => matogaUpload.pickFile(['json', 'bbmodel']),
     pickFolder: () => window.matogaFolderTree.pick(null),
     createFolder: (p) => wrapFs(() => call('POST', '/api/fs/create', { path: p })),
 

@@ -57,6 +57,7 @@ const PACK_FORMAT_VERSIONS = [
   { format: 55, versions: '1.21.5' },
   { format: 63, versions: '1.21.6' },
   { format: 64, versions: '1.21.7 – 1.21.8' },
+  { format: 97, versions: '26.3' },
 ]
 
 const FORMAT_INDEX = new Map(PACK_FORMAT_VERSIONS.map(e => [e.format, e.versions]))

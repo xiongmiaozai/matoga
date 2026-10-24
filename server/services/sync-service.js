@@ -36,7 +36,7 @@ function execute(pairs, jobId, emit) {
         else { job.fail++; emit(progress(jobId, job, p.name, 'copy_fail', null, p.dest)) }
       } catch (e) {
         job.fail++
-        emit(progress(jobId, job, p.name, 'error', null, e.code || e.message))
+        emit(progress(jobId, job, p.name, 'error', null, null, e.code || e.message))
       }
     }
     emit({ type: 'done', jobId, ok: job.ok, fail: job.fail, cancelled: job.cancelled })

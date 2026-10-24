@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-const { AppError } = require('../../shared/errors')
+const { AppError, CODES } = require('../../shared/errors')
 const { logger } = require('./logger')
 
 function ok(res, data) {
@@ -20,7 +20,7 @@ function wrap(handler) {
     try {
       await handler(req, res)
     } catch (e) {
-      if (e instanceof AppError) {
+      if (e instanceof AppError || (e && CODES[e.code])) {
         fail(res, e.code, e.message)
       } else {
         logger.error('http', `${req.method} ${req.originalUrl} — ${e.stack || e.message}`)

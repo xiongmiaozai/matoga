@@ -24,6 +24,7 @@ dist-electron/
 out/
 build/
 release/
+releases/
 
 # Electron 打包产物
 *.app

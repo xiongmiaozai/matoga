@@ -5,31 +5,67 @@
  */
 
 import {
-  state, $, ROLE_LABEL, KIND_TEXT,
+  state, $, ROLE_LABEL, KIND_TEXT, STATUS_ORDER,
   leftBtn, rightBtn, onlyMissingChk, summaryEl, resultBody,
-  leftPathEl, rightPathEl,
-  searchInput
+  leftPathEl, rightPathEl
 } from './core.js'
 import {
   formatSize, formatDate, isImageFile, fileUrl, escAttr,
   folderOf, mainEntryOf, hasAny, leftRoles, rightRoles, subKind,
-  openPreview, relPath, joinPath, modelTypeOf
+  openPreview, relPath, joinPath, modelTypeOf, modelBaseNameOf,
+  groupTypeOf, groupContentKind, groupTagOf
 } from './utils.js'
 import { sortResult } from './compare.js'
-import { replaceWithExternalFile, deleteTexture, handleAction, showPixelDiff, copySingleToRight, addTextureToRight } from './actions.js'
+import { replaceWithExternalFile, deleteTexture, handleAction, showPixelDiff, copySingleToRight, addTextureToRight, createBlankTextureToRight, saveOptions } from './actions.js'
 import { initMaterial3D, updateMaterial3D, clearCustomModel } from './material3d.js'
 import { enhancePreview } from './preview2d.js'
 import { observeThumbs } from './thumb-loader.js'
 import { observeModelThumbs } from './model-thumb.js'
 import { parseModelText, buildModelSummary, diffLines, escHtml, isModelEntry } from './model-diff.js'
-import { viewMcModelInViewport, isViewportVisible, resolveModelTexList, textureAssetPath } from './mc-model-viewer.js'
+import { viewMcModelPairInViewport, viewMcModelTexCompareInViewport, isViewportVisible, resolveModelTexList, textureAssetPath } from './mc-model-viewer.js'
 import { t, onLocaleChange } from './i18n.js'
+import { modelPrefixOf } from './model-prefix.js'
 
-const ALLOWED_MODEL_TYPES = new Set(['block', 'item'])
+const _rowMap = new Map()
+let _filteredCache = null
+let _renderedCount = 0
+let _lastBaseSet = []
+
+function _showMoreHandler() {
+  state.renderLimit += 200
+  if (state.viewMode !== 'byFolder' && _filteredCache) {
+    const moreRow = resultBody.querySelector('.show-more-row')
+    if (moreRow) moreRow.remove()
+    const frag = document.createDocumentFragment()
+    const start = _renderedCount
+    let added = 0
+    let truncated = false
+    for (let i = start; i < _filteredCache.length; i++) {
+      if (added >= 200) { truncated = true; break }
+      appendGroupRows(frag, _filteredCache[i]); added++
+    }
+    _renderedCount += added
+    for (const r of frag.children) if (r._group) _rowMap.set(r._group.key, r)
+    resultBody.appendChild(frag)
+    if (truncated) {
+      const newMoreRow = document.createElement('tr')
+      newMoreRow.className = 'show-more-row'
+      newMoreRow.innerHTML = `<td colspan="8" style="text-align:center;padding:8px;"><button class="btn btn-ghost btn-sm">${t('render.showMore', { rendered: _renderedCount, total: _filteredCache.length })}</button></td>`
+      newMoreRow.querySelector('button').addEventListener('click', _showMoreHandler)
+      resultBody.appendChild(newMoreRow)
+    }
+    observeThumbs(resultBody)
+    observeModelThumbs(resultBody)
+  } else {
+    renderResult()
+  }
+}
+
 
 onLocaleChange(() => {
   leftPathEl.textContent = state.leftPath || t('common.empty')
   rightPathEl.textContent = state.rightPath || t('common.empty')
+  renderCategoryBar(_lastBaseSet)
 })
 
 export function setLoading(side, on) {
@@ -83,12 +119,12 @@ function renderModelThumbCell(entry, root, side) {
   return `<div class="ac-thumb thumb-model thumb-${side}" data-mroot="${escAttr(root)}" data-mrel="${escAttr(entry.name)}" data-mtime="${entry.mtime || 0}"></div>`
 }
 
-function renderModelThumbPair(le, re, leftRoot, rightRoot) {
+function renderModelThumbPair(le, re, leftRoot, rightRoot, rightFallback) {
   const hasL = isModelEntry(le), hasR = isModelEntry(re)
   if (!hasL && !hasR) return '<span class="cell-empty">—</span>'
   const lt = hasL ? renderModelThumbCell(le, leftRoot, 'left') : '<span class="thumb-ph thumb-left-ph">L</span>'
   const rt = hasR ? renderModelThumbCell(re, rightRoot, 'right') : '<span class="thumb-ph thumb-right-ph">R</span>'
-  return `<div class="thumb-pair">${lt}${rt}</div>`
+  return `<div class="thumb-pair${rightFallback ? ' thumb-pair-fallback' : ''}">${lt}${rt}</div>`
 }
 
 export function appendGroupRows(frag, g) {
@@ -108,7 +144,7 @@ export function appendGroupRows(frag, g) {
   const arrow = expandable ? `<span class="expand-arrow">${expanded ? '▾' : '▸'}</span>` : ''
   const folder = folderOf(g)
   const displayName = state.viewMode === 'byFolder' && folder !== t('render.rootFolder') ? g.key.slice(folder.length + 1) : g.key
-  const nameHtml = `${arrow}<span class="cell-name" title="${g.key}">${displayName || g.key}</span>`
+  const nameHtml = `${arrow}<span class="cell-name" title="${escAttr(g.key)}">${escHtml(displayName || g.key)}</span>`
   const typeHtml = g.isMaterial ? `<span class="type-mat"><svg class="ico"><use href="#i-layers"/></svg>${t('type.material')}</span>` : g.isModel ? `<span class="type-model"><svg class="ico"><use href="#i-cube"/></svg>${t('type.model')}</span>` : g.isDir ? `<span class="type-dir"><svg class="ico"><use href="#i-folder"/></svg>${t('type.folder')}</span>` : `<span class="type-file"><svg class="ico"><use href="#i-image"/></svg>${t('type.file')}</span>`
   const me = mainLeft || mainRight
   const sizeHtml = (g.kind === 'diff' && mainLeft && mainRight && mainLeft.size !== mainRight.size)
@@ -156,10 +192,23 @@ export function appendSubRows(frag, g) {
   }
 }
 
+function modelTexRoleThumbs(grp, role) {
+  const lEntry = grp && grp.left && grp.left[role]
+  const rReal = grp && grp.right && grp.right[role]
+  const rEntry = rReal || lEntry
+  if (!lEntry && !rEntry) return ''
+  const thumbL = lEntry ? `<img class="thumb thumb-left" src="${escAttr(fileUrl(lEntry.fullPath))}" alt="" />` : '<span class="thumb-ph thumb-left-ph">L</span>'
+  const thumbR = rEntry ? `<img class="thumb thumb-right" src="${escAttr(fileUrl(rEntry.fullPath))}" alt="" />` : '<span class="thumb-ph thumb-right-ph">R</span>'
+  return `<div class="model-tex-thumbs${!rReal && lEntry ? ' model-tex-role-fallback' : ''}">${thumbL}${thumbR}</div>`
+}
+
 async function loadModelCardTexs(card, g) {
   const le = g.left && g.left.file, re = g.right && g.right.file
   const leftList = le && isModelEntry(le) ? await resolveModelTexList({ fileRoot: state.leftPath, rel: le.name }).catch(() => null) : null
-  const rightList = re && isModelEntry(re) ? await resolveModelTexList({ fileRoot: state.rightPath, rel: re.name }).catch(() => null) : null
+  const hasRightModel = re && isModelEntry(re)
+  let rightList = hasRightModel ? await resolveModelTexList({ fileRoot: state.rightPath, rel: re.name }).catch(() => null) : null
+
+
   if (!card.isConnected) return
   const groupMap = new Map()
   for (const grp of state.result) groupMap.set(grp.key, grp)
@@ -189,13 +238,38 @@ async function loadModelCardTexs(card, g) {
     const grp = groupMap.get(key)
     const kind = grp ? grp.kind : 'miss'
     const texEl = document.createElement('div')
-    texEl.className = 'model-tex-item row-' + kind
+    const rMain = grp && grp.right && grp.right.main
+    let rightUrl = rMain ? fileUrl(rMain.fullPath) : info.leftUrl
+    let texFallback = !rMain && !!info.leftUrl
+    texEl.className = 'model-tex-item row-' + kind + (texFallback ? ' model-tex-fallback' : '')
     const thumbL = info.leftUrl ? `<img class="thumb thumb-left" src="${escAttr(info.leftUrl)}" alt="" />` : '<span class="thumb-ph thumb-left-ph">L</span>'
-    const thumbR = info.rightUrl ? `<img class="thumb thumb-right" src="${escAttr(info.rightUrl)}" alt="" />` : '<span class="thumb-ph thumb-right-ph">R</span>'
+    const thumbR = rightUrl ? `<img class="thumb thumb-right" src="${escAttr(rightUrl)}" alt="" />` : '<span class="thumb-ph thumb-right-ph">R</span>'
     const texName = (info.name || ap).replace(/^minecraft:/, '')
-    texEl.innerHTML = `<div class="model-tex-thumbs">${thumbL}${thumbR}</div><span class="model-tex-name" title="${escAttr(ap || info.name)}">${escHtml(texName)}</span>`
+    let matHtml = ''
+    if (grp) {
+      const nHtml = modelTexRoleThumbs(grp, 'normal')
+      const sHtml = modelTexRoleThumbs(grp, 'specular')
+      if (nHtml || sHtml) {
+        matHtml = '<div class="model-tex-mat">'
+        if (nHtml) matHtml += `<div class="model-tex-role"><span class="role-tag role-normal">N</span>${nHtml}</div>`
+        if (sHtml) matHtml += `<div class="model-tex-role"><span class="role-tag role-specular">S</span>${sHtml}</div>`
+        matHtml += '</div>'
+      }
+    }
+    texEl.innerHTML = `<div class="model-tex-thumbs">${thumbL}${thumbR}</div>${matHtml}<span class="model-tex-name" title="${escAttr(ap || info.name)}">${escHtml(texName)}</span>`
     texEl.title = `${texName} · ${KIND_TEXT[kind] || kind}`
-    if (grp) texEl.addEventListener('click', (e) => { e.stopPropagation(); selectGroup(grp, false) })
+    if (grp) texEl.addEventListener('click', (e) => {
+      e.stopPropagation()
+      state.selected = g
+      const cards = document.querySelectorAll('.model-card.selected')
+      cards.forEach(c => { if (c._group !== g) c.classList.remove('selected') })
+      const cardEl = texEl.closest('.model-card')
+      if (cardEl) cardEl.classList.add('selected')
+      const texsHost = texEl.parentElement
+      if (texsHost) texsHost.querySelectorAll('.model-tex-item.tex-active').forEach(el => el.classList.remove('tex-active'))
+      texEl.classList.add('tex-active')
+      loadModelTexEffectPreview(g, info.leftUrl, rightUrl)
+    })
     frag.appendChild(texEl)
   }
   texsEl.innerHTML = ''
@@ -212,9 +286,10 @@ function appendModelCard(container, g) {
   const card = document.createElement('div')
   card.className = 'model-card row-' + g.kind
   if (state.selected && state.selected.key === g.key) card.classList.add('selected')
-  const previewHtml = renderModelThumbPair(mainLeft, mainRight, state.leftPath, state.rightPath)
+  const useLeftForRight = !mainRight && !!mainLeft
+  const previewHtml = renderModelThumbPair(mainLeft, mainRight || mainLeft, state.leftPath, mainRight ? state.rightPath : state.leftPath, useLeftForRight)
   const shortName = g.key.replace(/^assets\/[^/]+\/models\//, '').replace(/^assets\/[^/]+\/items\//, '').replace(/\.json$/, '')
-  card.innerHTML = `<div class="model-card-head">${statusBadge(g.kind)}<span class="model-card-name" title="${g.key}">${escHtml(shortName)}</span></div><div class="model-card-preview">${previewHtml}</div><div class="model-card-texs"><span class="model-texs-loading">${t('render.modelTexLoading')}</span></div>`
+  card.innerHTML = `<div class="model-card-head">${statusBadge(g.kind)}<span class="model-card-name" title="${escAttr(g.key)}">${escHtml(shortName)}</span></div><div class="model-card-preview">${previewHtml}</div><div class="model-card-texs"><span class="model-texs-loading">${t('render.modelTexLoading')}</span></div>`
   card.querySelectorAll('.ac-thumb[data-mrel]').forEach(th => {
     th._modelThumbItem = { modelThumb: modelThumbSpec({ name: th.dataset.mrel, mtime: +th.dataset.mtime || 0 }, th.dataset.mroot) }
   })
@@ -243,16 +318,10 @@ export function renderModelTypeResult() {
   let models = result.filter(g => g.isModel)
   const onlyDiff = onlyMissingChk.checked
   if (onlyDiff) models = models.filter(g => g.kind !== 'have')
-  const sf = state.statusFilter
-  if (sf === 'missing') models = models.filter(g => g.kind === 'miss' || g.kind === 'partial')
-  else if (sf === 'diff') models = models.filter(g => g.kind === 'diff')
-  else if (sf === 'extra') models = models.filter(g => g.kind === 'extra')
-  const q = state.searchText.trim().toLowerCase()
-  if (q) models = models.filter(g => g.key.toLowerCase().includes(q))
-  models = models.filter(g => { const tp = modelTypeOf(g); return tp && ALLOWED_MODEL_TYPES.has(tp) })
+  models = models.filter(g => !state.hiddenKeys.has(g.key))
   sortResult(models)
   if (models.length === 0) {
-    const msg = !state.leftPath || !state.rightPath ? t('render.dragHint') : result.length === 0 ? t('render.bothEmpty') : q ? t('render.noMatch') : t('render.noModel')
+    const msg = !state.leftPath || !state.rightPath ? t('render.dragHint') : result.length === 0 ? t('render.bothEmpty') : t('render.noModel')
     body.innerHTML = `<div class="model-grid-empty">${msg}</div>`
     return
   }
@@ -267,10 +336,7 @@ export function renderModelTypeResult() {
   const limit = state.renderLimit
   let rendered = 0
   let truncated = false
-  for (const tp of types) {
-    if (rendered >= limit) { truncated = true; break }
-    const items = typeMap.get(tp)
-    const collapsed = state.collapsedFolders.has(tp)
+  const buildSummary = (items) => {
     const fc = { have: 0, diff: 0, partial: 0, miss: 0, extra: 0 }
     for (const g of items) fc[g.kind]++
     const sp = []
@@ -279,19 +345,76 @@ export function renderModelTypeResult() {
     if (fc.partial) sp.push(`<span class="fc fc-partial">◐${fc.partial}</span>`)
     if (fc.miss) sp.push(`<span class="fc fc-miss">✗${fc.miss}</span>`)
     if (fc.extra) sp.push(`<span class="fc fc-extra">＋${fc.extra}</span>`)
+    return sp.join(' ')
+  }
+  const renderCardsInto = (container, items) => {
+    for (const g of items) {
+      if (rendered >= limit) { truncated = true; break }
+      appendModelCard(container, g)
+      rendered++
+    }
+  }
+  const groupByPrefix = (items) => {
+    const buckets = new Map()
+    const ungrouped = []
+    for (const g of items) {
+      const pfx = modelPrefixOf(modelBaseNameOf(g))
+      if (pfx == null) ungrouped.push(g)
+      else {
+        let b = buckets.get(pfx)
+        if (!b) { b = []; buckets.set(pfx, b) }
+        b.push(g)
+      }
+    }
+    if (buckets.size + (ungrouped.length ? 1 : 0) <= 1) return null
+    const out = [...buckets.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([pfx, its]) => ({ prefix: pfx, items: its }))
+    if (ungrouped.length) out.push({ prefix: null, items: ungrouped })
+    return out
+  }
+  for (const tp of types) {
+    if (rendered >= limit) { truncated = true; break }
+    const items = typeMap.get(tp)
+    const collapsed = state.collapsedFolders.has(tp)
     const section = document.createElement('div')
     section.className = 'model-type-section'
-    section.innerHTML = `<div class="model-type-header"><span class="model-type-arrow">${collapsed ? '▸' : '▾'}</span><svg class="ico ico-sm"><use href="#i-cube"/></svg><span class="model-type-name">${tp}</span><span class="model-type-count">${t('render.modelTypeCount', { n: items.length })}</span><span class="model-type-summary">${sp.join(' ')}</span></div>`
+    section.innerHTML = `<div class="model-type-header"><span class="model-type-arrow">${collapsed ? '▸' : '▾'}</span><svg class="ico ico-sm"><use href="#i-cube"/></svg><span class="model-type-name">${tp}</span><span class="model-type-count">${t('render.modelTypeCount', { n: items.length })}</span><span class="model-type-summary">${buildSummary(items)}</span></div>`
     section.querySelector('.model-type-header').addEventListener('click', () => {
       if (state.collapsedFolders.has(tp)) state.collapsedFolders.delete(tp)
       else state.collapsedFolders.add(tp)
       renderModelTypeResult()
     })
     if (!collapsed) {
-      const cards = document.createElement('div')
-      cards.className = 'model-cards'
-      for (const g of items) { if (rendered >= limit) { truncated = true; break }; appendModelCard(cards, g); rendered++ }
-      section.appendChild(cards)
+      const prefixGroups = groupByPrefix(items)
+      if (!prefixGroups) {
+        const cards = document.createElement('div')
+        cards.className = 'model-cards'
+        renderCardsInto(cards, items)
+        section.appendChild(cards)
+      } else {
+        for (const pg of prefixGroups) {
+          if (rendered >= limit) { truncated = true; break }
+          const subKey = tp + '#' + (pg.prefix || '')
+          const subCollapsed = state.collapsedFolders.has(subKey)
+          const label = pg.prefix || t('render.modelUngrouped')
+          const sub = document.createElement('div')
+          sub.className = 'model-prefix-section'
+          sub.innerHTML = `<div class="model-prefix-header"><span class="model-type-arrow">${subCollapsed ? '▸' : '▾'}</span><span class="model-prefix-name">${escHtml(label)}</span><span class="model-type-count">${t('render.modelTypeCount', { n: pg.items.length })}</span><span class="model-type-summary">${buildSummary(pg.items)}</span></div>`
+          sub.querySelector('.model-prefix-header').addEventListener('click', () => {
+            if (state.collapsedFolders.has(subKey)) state.collapsedFolders.delete(subKey)
+            else state.collapsedFolders.add(subKey)
+            renderModelTypeResult()
+          })
+          if (!subCollapsed) {
+            const cards = document.createElement('div')
+            cards.className = 'model-cards'
+            renderCardsInto(cards, pg.items)
+            sub.appendChild(cards)
+          }
+          section.appendChild(sub)
+        }
+      }
     }
     frag.appendChild(section)
   }
@@ -308,22 +431,126 @@ export function renderModelTypeResult() {
   observeModelThumbs(body)
 }
 
+function applyCategoryFilter(arr) {
+  const f = state.categoryFilter
+  if (!f) return arr
+  const out = []
+  for (const g of arr) {
+    if (f.type !== 'all' && groupTypeOf(g) !== f.type) continue
+    if (f.content !== 'all') {
+      const ck = groupContentKind(g)
+      if (f.content === 'other' ? ck !== null : ck !== f.content) continue
+    }
+    if (f.status !== 'all' && g.kind !== f.status) continue
+    if (f.folder !== 'all' && folderOf(g) !== f.folder) continue
+    if (f.tag !== 'all') {
+      const tg = groupTagOf(g, state.customTags)
+      if (f.tag === 'none' ? tg !== null : tg !== f.tag) continue
+    }
+    out.push(g)
+  }
+  return out
+}
+
+function buildCatRow(dim, labelKey, items, currentVal, scrollable) {
+  const label = `<span class="cat-row-label" data-i18n="${labelKey}">${t(labelKey)}</span>`
+  const btns = items.map(([val, textKey, count, rawText]) => {
+    const text = rawText != null ? escHtml(rawText) : `<span data-i18n="${textKey}">${t(textKey)}</span>`
+    const active = currentVal === val ? ' active' : ''
+    const cnt = count != null ? `<span class="cat-cnt">${count}</span>` : ''
+    return `<button class="cat-btn${active}" data-dim="${dim}" data-val="${escAttr(val)}"><span class="cat-name">${text}</span>${cnt}</button>`
+  }).join('')
+  return `<div class="cat-row${scrollable ? ' cat-row-scroll' : ''}">${label}<div class="cat-btns">${btns}</div></div>`
+}
+
+function renderCategoryBar(baseSet) {
+  _lastBaseSet = baseSet || []
+  const bar = $('categoryBar')
+  if (!bar) return
+  const f = state.categoryFilter || { type: 'all', content: 'all', status: 'all', folder: 'all', tag: 'all' }
+  const total = _lastBaseSet.length
+  if (total === 0) { bar.innerHTML = ''; return }
+
+  const typeCounts = { material: 0, model: 0, dir: 0, file: 0 }
+  const contentCounts = { block: 0, item: 0, other: 0 }
+  const statusCounts = { have: 0, diff: 0, partial: 0, miss: 0, extra: 0 }
+  const folderCounts = new Map()
+  const tagCounts = new Map()
+  let hasCustomTag = false
+  for (const g of _lastBaseSet) {
+    typeCounts[groupTypeOf(g)]++
+    const ck = groupContentKind(g)
+    if (ck === 'block') contentCounts.block++
+    else if (ck === 'item') contentCounts.item++
+    else contentCounts.other++
+    statusCounts[g.kind]++
+    const fo = folderOf(g)
+    folderCounts.set(fo, (folderCounts.get(fo) || 0) + 1)
+    const tg = groupTagOf(g, state.customTags)
+    if (tg) { tagCounts.set(tg, (tagCounts.get(tg) || 0) + 1); hasCustomTag = true }
+  }
+
+  const rows = []
+  rows.push(buildCatRow('type', 'category.typeLabel', [
+    ['all', 'common.all', total],
+    ['material', 'type.material', typeCounts.material],
+    ['model', 'type.model', typeCounts.model],
+    ['dir', 'type.folder', typeCounts.dir],
+    ['file', 'type.file', typeCounts.file],
+  ], f.type))
+  if (contentCounts.block || contentCounts.item) {
+    rows.push(buildCatRow('content', 'category.contentLabel', [
+      ['all', 'common.all', total],
+      ['block', 'category.block', contentCounts.block],
+      ['item', 'category.item', contentCounts.item],
+      ['other', 'category.other', contentCounts.other],
+    ], f.content))
+  }
+  rows.push(buildCatRow('status', 'category.statusLabel', [
+    ['all', 'common.all', total],
+    ['have', 'status.haveShort', statusCounts.have],
+    ['diff', 'status.diffShort', statusCounts.diff],
+    ['partial', 'status.partialShort', statusCounts.partial],
+    ['miss', 'status.missShort', statusCounts.miss],
+    ['extra', 'status.extraShort', statusCounts.extra],
+  ], f.status))
+  if (folderCounts.size > 1) {
+    const items = [['all', 'common.all', total]]
+    const folders = [...folderCounts.keys()].sort((a, b) => a.localeCompare(b, 'zh'))
+    for (const fo of folders) items.push([fo, null, folderCounts.get(fo), fo])
+    rows.push(buildCatRow('folder', 'category.folderLabel', items, f.folder, true))
+  }
+  if (hasCustomTag) {
+    let tagged = 0
+    for (const v of tagCounts.values()) tagged += v
+    const noneCount = total - tagged
+    const items = [['all', 'common.all', total], ['none', 'category.untagged', noneCount]]
+    const tags = [...tagCounts.keys()].sort((a, b) => a.localeCompare(b, 'zh'))
+    for (const tg of tags) items.push([tg, null, tagCounts.get(tg), tg])
+    rows.push(buildCatRow('tag', 'category.tagLabel', items, f.tag, true))
+  }
+
+  bar.innerHTML = rows.join('')
+  bar.querySelectorAll('.cat-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const dim = btn.dataset.dim, val = btn.dataset.val
+      if (state.categoryFilter[dim] === val) return
+      state.categoryFilter[dim] = val
+      state.renderLimit = 200
+      saveOptions()
+      renderResult()
+    })
+  })
+}
+
 export function renderResult() {
   renderModelTypeResult()
   const result = state.result
   const onlyDiff = onlyMissingChk.checked
   let filtered = onlyDiff ? result.filter(g => g.kind !== 'have') : result.slice()
-  const sf = state.statusFilter
-  if (sf === 'missing') filtered = filtered.filter(g => g.kind === 'miss' || g.kind === 'partial')
-  else if (sf === 'diff') filtered = filtered.filter(g => g.kind === 'diff')
-  else if (sf === 'extra') filtered = filtered.filter(g => g.kind === 'extra')
-  const tf = state.typeFilter
-  if (tf === 'material') filtered = filtered.filter(g => g.isMaterial)
-  else if (tf === 'model') filtered = filtered.filter(g => g.isModel)
-  else if (tf === 'image') filtered = filtered.filter(g => !g.isMaterial && !g.isDir && !g.isModel)
-  else if (tf === 'folder') filtered = filtered.filter(g => g.isDir)
-  const q = state.searchText.trim().toLowerCase()
-  if (q) filtered = filtered.filter(g => g.key.toLowerCase().includes(q))
+  filtered = filtered.filter(g => !state.hiddenKeys.has(g.key))
+  renderCategoryBar(filtered)
+  filtered = applyCategoryFilter(filtered)
   sortResult(filtered)
 
   const counts = state.counts || { have: 0, diff: 0, partial: 0, miss: 0, extra: 0, leftTex: 0, rightTex: 0, rightMatch: 0, pbrExtra: 0, leftModel: 0, rightModel: 0, modelMatch: 0 }
@@ -365,14 +592,12 @@ export function renderResult() {
     <span class="s-item">＋ <span class="s-num">${counts.extra}</span></span>
   `
 
-  renderChart(true)
+  renderChart()
 
   if (filtered.length === 0) {
     const msg = !state.leftPath || !state.rightPath
       ? t('render.dragHint')
       : result.length === 0 ? t('render.bothEmpty')
-      : q ? t('render.noMatch')
-      : (tf !== 'all' && result.some(g => tf === 'material' ? g.isMaterial : tf === 'model' ? g.isModel : tf === 'image' ? (!g.isMaterial && !g.isDir && !g.isModel) : g.isDir)) ? t('render.noTypeMatch')
       : (onlyDiff ? t('render.allConsistent') : t('render.noData'))
     resultBody.innerHTML = `<tr class="empty-row"><td colspan="8">${msg}</td></tr>`
     return
@@ -390,7 +615,37 @@ export function renderResult() {
       if (!folderMap.has(f)) folderMap.set(f, [])
       folderMap.get(f).push(g)
     }
-    const folders = [...folderMap.keys()].sort((a, b) => a.localeCompare(b, 'zh'))
+    const folders = [...folderMap.keys()]
+    const _sKey = state.sortKey, _sDir = state.sortDir === 'asc' ? 1 : -1
+    if (_sKey === 'name' || !_sKey) {
+      folders.sort((a, b) => a.localeCompare(b, 'zh') * _sDir)
+    } else {
+      const fk = new Map()
+      for (const f of folders) {
+        const items = folderMap.get(f)
+        let v
+        if (_sKey === 'status') {
+          v = Infinity
+          for (const g of items) { const s = STATUS_ORDER[g.kind]; if (s < v) v = s }
+        } else if (_sKey === 'size') {
+          v = 0
+          for (const g of items) { const s = mainEntryOf(g)?.size || 0; if (s > v) v = s }
+        } else if (_sKey === 'mtime') {
+          v = 0
+          for (const g of items) { const s = mainEntryOf(g)?.mtime || 0; if (s > v) v = s }
+        } else if (_sKey === 'left') {
+          v = 1; for (const g of items) if (hasAny(g.left)) { v = 0; break }
+        } else if (_sKey === 'right') {
+          v = 1; for (const g of items) if (hasAny(g.right)) { v = 0; break }
+        } else v = 0
+        fk.set(f, v)
+      }
+      folders.sort((a, b) => {
+        let v = fk.get(a) - fk.get(b)
+        if (v === 0) v = a.localeCompare(b, 'zh')
+        return v * _sDir
+      })
+    }
     for (const f of folders) {
       if (rendered >= limit) { truncated = true; break }
       const items = folderMap.get(f)
@@ -407,9 +662,25 @@ export function renderResult() {
       ftr.className = 'folder-group-row'
       ftr.innerHTML = `<td colspan="8"><span class="folder-arrow">${collapsed ? '▸' : '▾'}</span><span class="folder-ico">📁</span><span class="folder-name">${f}</span><span class="folder-count">${t('render.folderCount', { n: items.length })}</span><span class="folder-summary">${sp.join(' ')}</span></td>`
       ftr.addEventListener('click', () => {
-        if (state.collapsedFolders.has(f)) state.collapsedFolders.delete(f)
+        const wasCollapsed = state.collapsedFolders.has(f)
+        if (wasCollapsed) state.collapsedFolders.delete(f)
         else state.collapsedFolders.add(f)
-        renderResult()
+        const arrow = ftr.querySelector('.folder-arrow')
+        if (wasCollapsed) {
+          const subFrag = document.createDocumentFragment()
+          for (const g of items) appendGroupRows(subFrag, g)
+          ftr.after(subFrag)
+          for (const r of subFrag.children) if (r._group) _rowMap.set(r._group.key, r)
+          observeThumbs(resultBody)
+          observeModelThumbs(resultBody)
+          if (arrow) arrow.textContent = '▾'
+        } else {
+          let next = ftr.nextSibling
+          while (next && !next.classList.contains('folder-group-row') && !next.classList.contains('show-more-row')) {
+            const rm = next; next = next.nextSibling; rm.remove()
+          }
+          if (arrow) arrow.textContent = '▸'
+        }
       })
       frag.appendChild(ftr)
       if (collapsed) continue
@@ -424,12 +695,16 @@ export function renderResult() {
     const moreRow = document.createElement('tr')
     moreRow.className = 'show-more-row'
     moreRow.innerHTML = `<td colspan="8" style="text-align:center;padding:8px;"><button class="btn btn-ghost btn-sm">${t('render.showMore', { rendered, total: filtered.length })}</button></td>`
-    moreRow.querySelector('button').addEventListener('click', () => { state.renderLimit += 200; renderResult() })
+    moreRow.querySelector('button').addEventListener('click', _showMoreHandler)
     frag.appendChild(moreRow)
   }
 
   resultBody.innerHTML = ''
   resultBody.appendChild(frag)
+  _rowMap.clear()
+  for (const r of resultBody.children) if (r._group) _rowMap.set(r._group.key, r)
+  _filteredCache = filtered
+  _renderedCount = rendered
   observeThumbs(resultBody)
   observeModelThumbs(resultBody)
 
@@ -439,10 +714,7 @@ export function selectGroup(g, toggle = true) {
   state.selected = g
   const prevRow = resultBody.querySelector('tr.row-selected:not(.sub-row)')
   if (prevRow && prevRow._group !== g) prevRow.classList.remove('row-selected')
-  let curRow = null
-  for (const r of resultBody.children) {
-    if (r._group === g && !r.classList.contains('sub-row')) { curRow = r; break }
-  }
+  let curRow = _rowMap.get(g.key) || null
   if (curRow) curRow.classList.add('row-selected')
   if (toggle && g.isMaterial && curRow) {
     const arrow = curRow.querySelector('.expand-arrow')
@@ -488,25 +760,37 @@ function bindEmptyCellActions(panel, g) {
     let le = null
     if (g.isMaterial) le = g.left && g.left[role]
     else le = g.left && (g.left.file || g.left.dir)
-    if (!le || le.isDirectory) return
-    const rel = relPath(state.leftPath, le.fullPath)
-    const dest = joinPath(state.rightPath, rel)
+    const hasLeft = le && !le.isDirectory
+    const canBlank = g.isMaterial && (role === 'normal' || role === 'specular')
+    if (!hasLeft && !canBlank) return
     const empty = rightCell.querySelector('.pv-empty')
     if (empty) empty.remove()
     const actions = document.createElement('div')
     actions.className = 'pv-empty-actions'
-    const copyBtn = document.createElement('button')
-    copyBtn.className = 'pv-empty-btn pv-empty-copy'
-    copyBtn.textContent = t('preview.copyFromLeft')
-    copyBtn.title = t('preview.copyFromLeftTitle')
-    copyBtn.addEventListener('click', (e) => { e.stopPropagation(); copySingleToRight(le.fullPath, dest) })
-    actions.appendChild(copyBtn)
-    const addBtn = document.createElement('button')
-    addBtn.className = 'pv-empty-btn pv-empty-add'
-    addBtn.textContent = t('preview.addTex')
-    addBtn.title = t('preview.addTexTitle')
-    addBtn.addEventListener('click', (e) => { e.stopPropagation(); addTextureToRight(dest) })
-    actions.appendChild(addBtn)
+    if (hasLeft) {
+      const rel = relPath(state.leftPath, le.fullPath)
+      const dest = joinPath(state.rightPath, rel)
+      const copyBtn = document.createElement('button')
+      copyBtn.className = 'pv-empty-btn pv-empty-copy'
+      copyBtn.textContent = t('preview.copyFromLeft')
+      copyBtn.title = t('preview.copyFromLeftTitle')
+      copyBtn.addEventListener('click', (e) => { e.stopPropagation(); copySingleToRight(le.fullPath, dest) })
+      actions.appendChild(copyBtn)
+      const addBtn = document.createElement('button')
+      addBtn.className = 'pv-empty-btn pv-empty-add'
+      addBtn.textContent = t('preview.addTex')
+      addBtn.title = t('preview.addTexTitle')
+      addBtn.addEventListener('click', (e) => { e.stopPropagation(); addTextureToRight(dest) })
+      actions.appendChild(addBtn)
+    }
+    if (canBlank) {
+      const createBtn = document.createElement('button')
+      createBtn.className = 'pv-empty-btn pv-empty-create'
+      createBtn.textContent = t('preview.createBlank')
+      createBtn.title = role === 'normal' ? t('preview.createBlankNormalTitle') : t('preview.createBlankSpecularTitle')
+      createBtn.addEventListener('click', (e) => { e.stopPropagation(); createBlankTextureToRight(g, role) })
+      actions.appendChild(createBtn)
+    }
     rightCell.appendChild(actions)
   })
 }
@@ -537,12 +821,15 @@ function mdRow(l, r, cls) {
   return `<div class="md-cell ${l ? cls : 'md-gap'}">${l ? escHtml(l) : ''}</div><div class="md-cell ${r ? cls : 'md-gap'}">${r ? escHtml(r) : ''}</div>`
 }
 
-function renderModelDiffGrid(grid, lt, rt) {
+function renderModelDiffGrid(grid, lt, rt, g) {
   const a = typeof lt === 'string' && lt ? parseModelText(lt).pretty.split('\n') : []
   const b = typeof rt === 'string' && rt ? parseModelText(rt).pretty.split('\n') : []
   const truncated = a.length > MD_MAX_LINES || b.length > MD_MAX_LINES
   const as = a.slice(0, MD_MAX_LINES), bs = b.slice(0, MD_MAX_LINES)
-  let html = `<div class="md-cell md-head">${t('common.left')}</div><div class="md-cell md-head">${t('common.right')}</div>`
+  const importBtn = (g && g.isModel && state.rightPath)
+    ? `<button class="md-head-btn" data-act="upload-model-right" title="${escAttr(t('detail.uploadModel'))}"><svg class="ico ico-sm"><use href="#i-plus"/></svg><span>${escHtml(t('detail.uploadModel'))}</span></button>`
+    : ''
+  let html = `<div class="md-cell md-head">${t('common.left')}</div><div class="md-cell md-head md-head-right"><span>${t('common.right')}</span>${importBtn}</div>`
   if (!as.length && !bs.length) {
     html += `<div class="md-cell md-empty">${t('render.noData')}</div><div class="md-cell md-empty"></div>`
   } else {
@@ -560,6 +847,8 @@ function renderModelDiffGrid(grid, lt, rt) {
   }
   if (truncated) html += `<div class="md-cell md-trunc">${t('preview.modelTruncated', { n: MD_MAX_LINES })}</div><div class="md-cell md-trunc"></div>`
   grid.innerHTML = html
+  const importBtnEl = grid.querySelector('.md-head-right [data-act="upload-model-right"]')
+  if (importBtnEl) importBtnEl.addEventListener('click', (ev) => { ev.stopPropagation(); handleAction('upload-model-right', g) })
 }
 
 async function loadModelDiffView(g, panel) {
@@ -572,7 +861,7 @@ async function loadModelDiffView(g, panel) {
   sumEl.innerHTML =
     `<div class="pv-model-sum-row"><span class="pv-model-tag">${t('common.left')}</span><span>${escHtml(modelSumLine(lt))}</span></div>` +
     `<div class="pv-model-sum-row"><span class="pv-model-tag">${t('common.right')}</span><span>${escHtml(modelSumLine(rt))}</span></div>`
-  renderModelDiffGrid(grid, lt, rt)
+  renderModelDiffGrid(grid, lt, rt, g)
 }
 
 /* 3D 视口未激活时自动切到预览面板 3D tab（等价用户点击）；返回视口是否就绪 */
@@ -583,19 +872,33 @@ function tryActivateCompareModelViewport() {
   return false
 }
 
-/* 选中模型行：将主模型（优先左侧，左侧缺失用右侧）送入 3D 视口展示。
-   左右双模型对比暂不支持（material3d 单自定义模型通道）；2D tab 仍保留 JSON 文本差异 */
+/* 选中模型行：左右模型并排送入 3D 视口对比展示；右侧缺失时回退用左侧模型。
+   2D tab 仍保留 JSON 文本差异 */
 async function loadModelPreview(g) {
   if (state.selected !== g) return
+  const mySeq = ++state.modelLoadSeq
   const le = g.left && g.left.file, re = g.right && g.right.file
-  const e = le || re
-  if (!e || !isModelEntry(e)) return
-  const root = (e === le) ? state.leftPath : state.rightPath
+  const left = le && isModelEntry(le) ? { fileRoot: state.leftPath, rel: le.name } : null
+  let right = re && isModelEntry(re) ? { fileRoot: state.rightPath, rel: re.name } : null
+  if (!left && !right) return
+  if (!right && left) right = left
   if (!tryActivateCompareModelViewport()) return
   try {
-    await viewMcModelInViewport({ fileRoot: root, rel: e.name })
+    await viewMcModelPairInViewport({ left, right, isStale: () => state.modelLoadSeq !== mySeq })
     if (state.selected !== g) clearCustomModel()
   } catch {}
+}
+
+/* 点击模型卡片下方的贴图条目：3D 视口贴图效果对比。
+   左=左模型+左贴图，右=右模型+右贴图（模型或贴图缺失均回退左侧），展示替换后模型的贴图渲染效果 */
+async function loadModelTexEffectPreview(g, leftTexUrl, rightTexUrl) {
+  const mySeq = ++state.modelLoadSeq
+  const le = g.left && g.left.file, re = g.right && g.right.file
+  const left = le && isModelEntry(le) ? { fileRoot: state.leftPath, rel: le.name } : null
+  const right = re && isModelEntry(re) ? { fileRoot: state.rightPath, rel: re.name } : null
+  if (!left && !right) return
+  if (!tryActivateCompareModelViewport()) return
+  try { await viewMcModelTexCompareInViewport({ left, right, rightRoot: state.rightPath, leftTexUrl, rightTexUrl, isStale: () => state.modelLoadSeq !== mySeq }) } catch {}
 }
 
 /* 列出左右模型各自引用的材质贴图（名称 + 缩略图），与 3D 预览 / JSON 差异同区展示。
@@ -655,9 +958,14 @@ export function renderSidebar() {
   let html = ''
   const diffPairs = []
   if (g.isMaterial) {
+    const hasMain = (g.left && g.left.main) || (g.right && g.right.main)
     for (const role of ['main', 'normal', 'specular']) {
       const le = g.left && g.left[role], re = g.right && g.right[role]
-      if (!le && !re) continue
+      if (!le && !re) {
+        if ((role === 'normal' || role === 'specular') && hasMain && state.rightPath)
+          html += `<div class="pv-row pv-row-empty" data-role="${role}"><span class="pv-role">${ROLE_LABEL[role]}</span>${pvCell(null, t('common.left'))}${pvCell(null, t('common.right'))}</div>`
+        continue
+      }
       html += `<div class="pv-row" data-role="${role}"><span class="pv-role">${ROLE_LABEL[role]}</span>${pvCell(le, t('common.left'))}${pvCell(re, t('common.right'))}</div>`
       if (le && re && !le.isDirectory && !re.isDirectory && isImageFile(le.name) && isImageFile(re.name))
         diffPairs.push([le, re, ROLE_LABEL[role]])
@@ -738,6 +1046,7 @@ export function renderSidebar() {
   if (g.right && target) btns += `<button class="btn btn-sm" data-act="open-right">${t('detail.openRight')}</button><button class="btn btn-ghost btn-sm" data-act="loc-right">${t('detail.locRight')}</button>`
   if (g.left && hasAny(g.left) && state.rightPath) btns += `<button class="btn btn-accent btn-sm" data-act="copy-to-right">${t('detail.copyRight')}</button>`
   if (g.right && hasAny(g.right) && state.leftPath) btns += `<button class="btn btn-accent btn-sm" data-act="copy-to-left">${t('detail.copyLeft')}</button>`
+  if (g.isModel && state.rightPath) btns += `<button class="btn btn-accent btn-sm" data-act="upload-model-right">${t('detail.uploadModel')}</button>`
   btns += `<button class="btn btn-ghost btn-sm" data-act="copy">${t('detail.copyName')}</button>`
   action.innerHTML = btns
   action.querySelectorAll('button').forEach(b => {
@@ -756,7 +1065,6 @@ export function updateSortIndicators() {
 export function initViewTabs() {
   const tabs = document.querySelectorAll('.view-tab')
   const tableView = $('tableView')
-  const modelView = $('modelView')
   const chartView = $('chartView')
   const tableToolbar = $('tableToolbar')
   const statsDashboard = $('statsDashboard')
@@ -765,20 +1073,18 @@ export function initViewTabs() {
       tabs.forEach(t => t.classList.remove('active'))
       tab.classList.add('active')
       const view = tab.dataset.view
-      const isTableLike = view === 'table' || view === 'model'
       if (tableView) tableView.classList.toggle('active', view === 'table')
-      if (modelView) modelView.classList.toggle('active', view === 'model')
       if (chartView) chartView.classList.toggle('active', view === 'chart')
-      if (tableToolbar) tableToolbar.style.display = isTableLike ? '' : 'none'
-      if (statsDashboard) statsDashboard.style.display = isTableLike ? '' : 'none'
+      if (tableToolbar) tableToolbar.style.display = view === 'table' ? '' : 'none'
+      if (statsDashboard) statsDashboard.style.display = view === 'table' ? '' : 'none'
       if (view === 'chart') renderChart()
-      if (view === 'model') renderModelTypeResult()
     })
   })
   document.addEventListener('keydown', (e) => {
     if ((e.metaKey || e.ctrlKey) && (e.key === '1' || e.key === '2' || e.key === '3')) {
-      const idx = e.key === '1' ? 0 : e.key === '2' ? 1 : 2
-      if (tabs[idx]) tabs[idx].click()
+      if (e.key === '1') { if (tabs[0]) tabs[0].click() }
+      else if (e.key === '2') { document.dispatchEvent(new CustomEvent('workspace:focus-panel', { detail: { id: 'modelCategory' } })) }
+      else { if (tabs[1]) tabs[1].click() }
       e.preventDefault()
     }
   })
@@ -825,13 +1131,9 @@ function barChart(items) {
   }).join('')
 }
 
-function renderChart(lazy = false) {
+function renderChart() {
   const el = $('chartContent')
   if (!el) return
-  if (lazy) {
-    const cv = $('chartView')
-    if (cv && !cv.classList.contains('active')) return
-  }
   const c = state.counts || { have: 0, diff: 0, partial: 0, miss: 0, extra: 0, leftTex: 0, rightTex: 0, rightMatch: 0, pbrExtra: 0 }
   const total = c.have + c.diff + c.partial + c.miss + c.extra
   const leftGroups = c.have + c.diff + c.partial + c.miss
@@ -925,7 +1227,7 @@ function renderChart(lazy = false) {
     const segs = ['have', 'diff', 'partial', 'miss', 'extra'].map(k =>
       fs[k] > 0 ? `<div class="stack-seg" style="flex:${fs[k]};background:${stackColors[k]}" title="${stackLabels[k]}: ${fs[k]}"></div>` : ''
     ).join('')
-    return `<div class="stack-row" style="cursor:pointer"><span class="stack-label" title="${folder}">${folder}</span>` +
+    return `<div class="stack-row"><span class="stack-label" title="${folder}">${folder}</span>` +
       `<div class="stack-track">${segs}</div><span class="stack-val">${fs.total}</span></div>`
   }).join('')
 
@@ -960,7 +1262,7 @@ function renderChart(lazy = false) {
   )
   const typeDonut = donutChart(typeSegs)
   const typeLegend = typeSegs.map(s =>
-    `<div class="legend-item legend-drill" data-ext="${s.label}"><span class="legend-dot" style="background:${s.color}"></span>.${s.label} <b>${s.value}</b></div>`
+    `<div class="legend-item"><span class="legend-dot" style="background:${s.color}"></span>.${s.label} <b>${s.value}</b></div>`
   ).join('')
 
   const sizeBuckets = [
@@ -994,31 +1296,4 @@ function renderChart(lazy = false) {
     `<div class="chart-card chart-full"><div class="chart-card-title">${t('render.chartHeatmap')}</div><div class="chart-heat">${heatHeader}${heatRows}</div></div>` +
     `</div>`
 
-  if (!el._chartDelegated) {
-    el._chartDelegated = true
-    el.addEventListener('click', (ev) => {
-      const drill = ev.target.closest('.legend-drill')
-      if (drill) {
-        searchInput.value = '.' + drill.dataset.ext
-        state.searchText = '.' + drill.dataset.ext
-        switchToTable()
-        return
-      }
-      const row = ev.target.closest('.stack-row')
-      if (row) {
-        const label = row.querySelector('.stack-label')
-        if (label) {
-          searchInput.value = label.textContent
-          state.searchText = label.textContent
-          switchToTable()
-        }
-      }
-    })
-  }
-}
-
-function switchToTable() {
-  const tableTab = document.querySelector('.view-tab[data-view="table"]')
-  if (tableTab) tableTab.click()
-  renderResult()
 }

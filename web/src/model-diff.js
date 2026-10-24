@@ -10,7 +10,7 @@
  * - diffLines：行级 LCS 差异（same / del / add），超限返回 null 由上层退化为并排显示
  */
 
-export const MODEL_PATH_RE = /^assets\/[^/]+\/(models\/.+|items\/[^/]+)\.json$/i
+export const MODEL_PATH_RE = /^assets\/[^/]+\/(models\/[^/]+\/.+|items\/[^/]+)\.json$/i
 
 export function isModelEntry(e) {
   return !!e && !e.isDirectory && typeof e.name === 'string' && MODEL_PATH_RE.test(e.name)

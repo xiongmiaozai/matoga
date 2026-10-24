@@ -4,5 +4,5 @@
   "icon": "i-folder",
   "html": "panel.html",
   "mount": "body",
-  "order": 9
+  "order": 10
 }

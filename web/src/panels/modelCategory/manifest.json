@@ -1,0 +1,8 @@
+{
+  "id": "modelCategory",
+  "title": "模型分类",
+  "icon": "i-cube",
+  "html": "panel.html",
+  "mount": "#workspace",
+  "order": 5
+}

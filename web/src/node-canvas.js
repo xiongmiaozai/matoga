@@ -7,6 +7,7 @@
 import * as m3d from './material3d.js';
 import { enhancePreview } from './preview2d.js';
 import { uiPrompt, uiConfirm } from './ui-dialog.js';
+import { apiUrl } from './utils.js';
 
 
 let _initialized = false;
@@ -15,6 +16,19 @@ const $ = (s) => document.querySelector(s);
 const NS = 'http://www.w3.org/2000/svg';
 
 /* ── 节点类型定义 ───────────────────────────── */
+function _noiseNode(o) {
+  const def = { title: o.title, group: o.group };
+  if (o.subgroup !== undefined) def.subgroup = o.subgroup;
+  def.color = 'var(--type-number)';
+  def.inputs = [{ n: 'uv', t: 'vector' }];
+  def.outputs = [{ n: 'out', t: 'number' }, { n: 'tex', t: 'texture' }];
+  def.widget = (n) => o.widget(n);
+  def.eval = (i, n) => {
+    const uv = Array.isArray(i.uv) ? i.uv : [0.5, 0.5];
+    return { out: _noiseValue(o.type, uv[0], uv[1], n.props), tex: _noiseTexUrl(n) };
+  };
+  return def;
+}
 const NODE_DEFS = {
   // 输入
   number: { title:'数值', group:'输入', color:'var(--type-number)',
@@ -152,20 +166,8 @@ const NODE_DEFS = {
     } },
 
   // 程序化纹理
-  noise: { title:'噪声 (Perlin)', group:'纹理', subgroup:'基础', color:'var(--type-number)',
-    inputs:[{n:'uv',t:'vector'}], outputs:[{n:'out',t:'number'},{n:'tex',t:'texture'}],
-    widget:(n)=>noiseWidget(n),
-    eval:(i,n)=>{
-      const uv = Array.isArray(i.uv) ? i.uv : [0.5,0.5];
-      return {out:_noiseValue('noise', uv[0], uv[1], n.props), tex:_noiseTexUrl(n)};
-    } },
-  voronoi: { title:'Voronoi', group:'纹理', subgroup:'其他', color:'var(--type-number)',
-    inputs:[{n:'uv',t:'vector'}], outputs:[{n:'out',t:'number'},{n:'tex',t:'texture'}],
-    widget:(n)=>voronoiWidget(n),
-    eval:(i,n)=>{
-      const uv = Array.isArray(i.uv) ? i.uv : [0.5,0.5];
-      return {out:_noiseValue('voronoi', uv[0], uv[1], n.props), tex:_noiseTexUrl(n)};
-    } },
+  noise: _noiseNode({ type:'noise', title:'噪声 (Perlin)', group:'纹理', subgroup:'基础', widget:noiseWidget }),
+  voronoi: _noiseNode({ type:'voronoi', title:'Voronoi', group:'纹理', subgroup:'其他', widget:voronoiWidget }),
   gradient: { title:'渐变', group:'纹理', subgroup:'其他', color:'var(--type-color)',
     inputs:[{n:'colorA',t:'color'},{n:'colorB',t:'color'},{n:'t',t:'number'}],
     outputs:[{n:'out',t:'color'}],
@@ -179,90 +181,18 @@ const NODE_DEFS = {
       const a = col(i.colorA), b = col(i.colorB);
       return {out:[_lerp(a[0],b[0],tt), _lerp(a[1],b[1],tt), _lerp(a[2],b[2],tt)]};
     } },
-  simplex: { title:'Simplex 噪声', group:'纹理', subgroup:'基础', color:'var(--type-number)',
-    inputs:[{n:'uv',t:'vector'}], outputs:[{n:'out',t:'number'},{n:'tex',t:'texture'}],
-    widget:(n)=>noiseWidget(n),
-    eval:(i,n)=>{
-      const uv = Array.isArray(i.uv) ? i.uv : [0.5,0.5];
-      return {out:_noiseValue('simplex', uv[0], uv[1], n.props), tex:_noiseTexUrl(n)};
-    } },
-  ridge: { title:'山脊噪声', group:'纹理', subgroup:'分形', color:'var(--type-number)',
-    inputs:[{n:'uv',t:'vector'}], outputs:[{n:'out',t:'number'},{n:'tex',t:'texture'}],
-    widget:(n)=>noiseWidget(n),
-    eval:(i,n)=>{
-      const uv = Array.isArray(i.uv) ? i.uv : [0.5,0.5];
-      return {out:_noiseValue('ridge', uv[0], uv[1], n.props), tex:_noiseTexUrl(n)};
-    } },
-  warp: { title:'域扭曲', group:'纹理', subgroup:'扭曲', color:'var(--type-number)',
-    inputs:[{n:'uv',t:'vector'}], outputs:[{n:'out',t:'number'},{n:'tex',t:'texture'}],
-    widget:(n)=>warpWidget(n),
-    eval:(i,n)=>{
-      const uv = Array.isArray(i.uv) ? i.uv : [0.5,0.5];
-      return {out:_noiseValue('warp', uv[0], uv[1], n.props), tex:_noiseTexUrl(n)};
-    } },
-  white: { title:'白噪 (White)', group:'纹理', subgroup:'基础', color:'var(--type-number)',
-    inputs:[{n:'uv',t:'vector'}], outputs:[{n:'out',t:'number'},{n:'tex',t:'texture'}],
-    widget:(n)=>whiteWidget(n),
-    eval:(i,n)=>{
-      const uv = Array.isArray(i.uv) ? i.uv : [0.5,0.5];
-      return {out:_noiseValue('white', uv[0], uv[1], n.props), tex:_noiseTexUrl(n)};
-    } },
-  cell: { title:'格子 (Cell)', group:'纹理', subgroup:'其他', color:'var(--type-number)',
-    inputs:[{n:'uv',t:'vector'}], outputs:[{n:'out',t:'number'},{n:'tex',t:'texture'}],
-    widget:(n)=>cellWidget(n),
-    eval:(i,n)=>{
-      const uv = Array.isArray(i.uv) ? i.uv : [0.5,0.5];
-      return {out:_noiseValue('cell', uv[0], uv[1], n.props), tex:_noiseTexUrl(n)};
-    } },
-  billow: { title:'絮状噪声 (Billow)', group:'纹理', subgroup:'分形', color:'var(--type-number)',
-    inputs:[{n:'uv',t:'vector'}], outputs:[{n:'out',t:'number'},{n:'tex',t:'texture'}],
-    widget:(n)=>noiseWidget(n),
-    eval:(i,n)=>{
-      const uv = Array.isArray(i.uv) ? i.uv : [0.5,0.5];
-      return {out:_noiseValue('billow', uv[0], uv[1], n.props), tex:_noiseTexUrl(n)};
-    } },
-  cubic: { title:'三次值噪 (Cubic)', group:'纹理', subgroup:'基础', color:'var(--type-number)',
-    inputs:[{n:'uv',t:'vector'}], outputs:[{n:'out',t:'number'},{n:'tex',t:'texture'}],
-    widget:(n)=>noiseWidget(n),
-    eval:(i,n)=>{
-      const uv = Array.isArray(i.uv) ? i.uv : [0.5,0.5];
-      return {out:_noiseValue('cubic', uv[0], uv[1], n.props), tex:_noiseTexUrl(n)};
-    } },
-  pingpong: { title:'乒乓噪声 (PingPong)', group:'纹理', subgroup:'分形', color:'var(--type-number)',
-    inputs:[{n:'uv',t:'vector'}], outputs:[{n:'out',t:'number'},{n:'tex',t:'texture'}],
-    widget:(n)=>pingpongWidget(n),
-    eval:(i,n)=>{
-      const uv = Array.isArray(i.uv) ? i.uv : [0.5,0.5];
-      return {out:_noiseValue('pingpong', uv[0], uv[1], n.props), tex:_noiseTexUrl(n)};
-    } },
-  voronoise: { title:'超模式 (Voronoise)', group:'纹理', subgroup:'分形', color:'var(--type-number)',
-    inputs:[{n:'uv',t:'vector'}], outputs:[{n:'out',t:'number'},{n:'tex',t:'texture'}],
-    widget:(n)=>voronoiseWidget(n),
-    eval:(i,n)=>{
-      const uv = Array.isArray(i.uv) ? i.uv : [0.5,0.5];
-      return {out:_noiseValue('voronoise', uv[0], uv[1], n.props), tex:_noiseTexUrl(n)};
-    } },
-  reaction: { title:'反应扩散 (Reaction)', group:'特效', color:'var(--type-number)',
-    inputs:[{n:'uv',t:'vector'}], outputs:[{n:'out',t:'number'},{n:'tex',t:'texture'}],
-    widget:(n)=>reactionWidget(n),
-    eval:(i,n)=>{
-      const uv = Array.isArray(i.uv) ? i.uv : [0.5,0.5];
-      return {out:_noiseValue('reaction', uv[0], uv[1], n.props), tex:_noiseTexUrl(n)};
-    } },
-  lightning: { title:'闪电 (Lightning)', group:'特效', color:'var(--type-number)',
-    inputs:[{n:'uv',t:'vector'}], outputs:[{n:'out',t:'number'},{n:'tex',t:'texture'}],
-    widget:(n)=>lightningWidget(n),
-    eval:(i,n)=>{
-      const uv = Array.isArray(i.uv) ? i.uv : [0.5,0.5];
-      return {out:_noiseValue('lightning', uv[0], uv[1], n.props), tex:_noiseTexUrl(n)};
-    } },
-  mandel: { title:'分形陷阱 (Mandel)', group:'特效', color:'var(--type-number)',
-    inputs:[{n:'uv',t:'vector'}], outputs:[{n:'out',t:'number'},{n:'tex',t:'texture'}],
-    widget:(n)=>mandelWidget(n),
-    eval:(i,n)=>{
-      const uv = Array.isArray(i.uv) ? i.uv : [0.5,0.5];
-      return {out:_noiseValue('mandel', uv[0], uv[1], n.props), tex:_noiseTexUrl(n)};
-    } },
+  simplex: _noiseNode({ type:'simplex', title:'Simplex 噪声', group:'纹理', subgroup:'基础', widget:noiseWidget }),
+  ridge: _noiseNode({ type:'ridge', title:'山脊噪声', group:'纹理', subgroup:'分形', widget:noiseWidget }),
+  warp: _noiseNode({ type:'warp', title:'域扭曲', group:'纹理', subgroup:'扭曲', widget:warpWidget }),
+  white: _noiseNode({ type:'white', title:'白噪 (White)', group:'纹理', subgroup:'基础', widget:whiteWidget }),
+  cell: _noiseNode({ type:'cell', title:'格子 (Cell)', group:'纹理', subgroup:'其他', widget:cellWidget }),
+  billow: _noiseNode({ type:'billow', title:'絮状噪声 (Billow)', group:'纹理', subgroup:'分形', widget:noiseWidget }),
+  cubic: _noiseNode({ type:'cubic', title:'三次值噪 (Cubic)', group:'纹理', subgroup:'基础', widget:noiseWidget }),
+  pingpong: _noiseNode({ type:'pingpong', title:'乒乓噪声 (PingPong)', group:'纹理', subgroup:'分形', widget:pingpongWidget }),
+  voronoise: _noiseNode({ type:'voronoise', title:'超模式 (Voronoise)', group:'纹理', subgroup:'分形', widget:voronoiseWidget }),
+  reaction: _noiseNode({ type:'reaction', title:'反应扩散 (Reaction)', group:'特效', widget:reactionWidget }),
+  lightning: _noiseNode({ type:'lightning', title:'闪电 (Lightning)', group:'特效', widget:lightningWidget }),
+  mandel: _noiseNode({ type:'mandel', title:'分形陷阱 (Mandel)', group:'特效', widget:mandelWidget }),
   palette: { title:'余弦调色板 (Palette)', group:'特效', color:'var(--type-color)',
     inputs:[{n:'t',t:'number'}], outputs:[{n:'color',t:'color'},{n:'tex',t:'texture'}],
     widget:(n)=>paletteWidget(n),
@@ -2227,6 +2157,7 @@ function sync2D(results, info){
   const c = document.getElementById('previewPanel');
   if(!c) return;
   const rows = buildPreview2DRows(info);
+  c.querySelectorAll('.pv-row').forEach(row => { if (row._splitCleanup) row._splitCleanup() });
   c.innerHTML = '';
   if(rows.length===0){
     c.innerHTML = '<div style="color:var(--text-dim);font-size:11px;padding:20px;text-align:center">暂无主贴图 / 法线 / 高光输出<br>连线「主贴图输出」「法线输出 -n」「高光输出 -s」节点即可在此预览<br>其他贴图请在各节点预览中查看</div>';
@@ -3053,8 +2984,10 @@ $('#btn-clear').addEventListener('click', ()=>{
   })();
 });
 $('#btn-layout').addEventListener('click', autoLayout);
-$('#btn-save').addEventListener('click', saveGraph);
-$('#btn-load').addEventListener('click', loadGraph);
+const _btnSave = $('#btn-save');
+if (_btnSave) _btnSave.addEventListener('click', saveGraph);
+const _btnLoad = $('#btn-load');
+if (_btnLoad) _btnLoad.addEventListener('click', loadGraph);
 $('#zoom-in').addEventListener('click', ()=>setZoom(state.viewport.zoom*1.2));
 $('#zoom-out').addEventListener('click', ()=>setZoom(state.viewport.zoom/1.2));
 $('#btn-lib').addEventListener('click', ()=>{
@@ -3868,9 +3801,7 @@ function _generateProjectThumb(){
   });
 }
 
-function _projApiUrl(p){
-  return (window.matogaCore && window.matogaCore.url) ? window.matogaCore.url(p) : p;
-}
+
 
 /* 记忆最近一次打开/保存的项目 id（config.lastNodeProject），供启动时自动恢复 */
 function _rememberProject(id){
@@ -4019,7 +3950,7 @@ export async function saveNodeProject(name, id, opts){
   const graph = _graphToComfy();
   const textures = _collectProjectTextures(graph);
   const thumbnail = await _generateProjectThumb();
-  const res = await fetch(_projApiUrl('/api/node-projects'), {
+  const res = await fetch(apiUrl('/api/node-projects'), {
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body: JSON.stringify({ id: id||undefined, name, graph, thumbnail, textures }),
@@ -4035,7 +3966,7 @@ export async function saveNodeProject(name, id, opts){
 }
 
 export async function loadNodeProject(id){
-  const res = await fetch(_projApiUrl('/api/node-projects/'+encodeURIComponent(id)));
+  const res = await fetch(apiUrl('/api/node-projects/'+encodeURIComponent(id)));
   const j = await res.json();
   if(!j || !j.ok) throw new Error((j && j.msg) || '加载失败');
   const data = j.data;
@@ -4054,18 +3985,18 @@ export async function loadNodeProject(id){
   return data;
 }
 
-export function addNodeAt(type){
+export function addNodeAt(type, x, y){
   if(!canvasWrap) return null;
   const r = canvasWrap.getBoundingClientRect();
   const wp = screenToWorld(r.left + r.width/2, r.top + r.height/2);
-  return createNode(type, wp.x, wp.y);
+  return createNode(type, x != null ? x : wp.x, y != null ? y : wp.y);
 }
 
-export function addTextureAt(path, name){
+export function addTextureAt(path, name, x, y){
   if(!canvasWrap) return null;
   const r = canvasWrap.getBoundingClientRect();
   const wp = screenToWorld(r.left + r.width/2, r.top + r.height/2);
-  const node = createNode('texture', wp.x, wp.y);
+  const node = createNode('texture', x != null ? x : wp.x, y != null ? y : wp.y);
   if(node){
     node.props.tex = (typeof path==='string' && path.startsWith('data:')) ? path : texUrl(path);
     node.props._name = name || '';

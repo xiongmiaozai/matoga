@@ -4,5 +4,5 @@
   "icon": "i-layers",
   "html": "panel.html",
   "mount": "body",
-  "order": 8
+  "order": 9
 }

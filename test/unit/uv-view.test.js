@@ -149,6 +149,8 @@ globalThis.Image = class {
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 let uv = null
 let fw = null
+let fwMod = null
+let utils = null
 
 const LAYOUT = {
   type: 'mc', uvScale: 16,
@@ -177,9 +179,12 @@ function parts() {
 
 test('setup: 加载 uv-view（依赖 stub 模式）', async () => {
   uv = await import(pathToFileURL(path.join(ROOT, 'web/src/uv-view.js')).href)
+  fwMod = await import(pathToFileURL(path.join(ROOT, 'web/src/floating-window.js')).href)
+  utils = await import(pathToFileURL(path.join(ROOT, 'web/src/utils.js')).href)
   assert.equal(typeof uv.initUvView, 'function')
   assert.equal(typeof uv.toggleUvView, 'function')
   assert.equal(typeof uv.refreshUvView, 'function')
+  assert.equal(typeof fwMod.getWindow, 'function')
 })
 
 test('initUvView: 窗口创建挂载 body 且幂等', () => {
@@ -348,11 +353,11 @@ async function setupEdit() {
   const toolbar = wrap.children[0]
   const canvasWrap = wrap.children[1]
   const canvas = canvasWrap.children[0]
-  /* toolbar: 0 chips / 1 zoomSeg / 2 grid / 3 edit / 4 upload / 5 export / 6 template / 7 editBar */
+  /* toolbar: 0 chips / 1 zoomSeg / 2 grid / 3 edit / 4 upload / 5 library / 6 export / 7 template / 8 editBar */
   const editBtn = toolbar.children[3]
-  const exportBtn = toolbar.children[5]
-  const templateBtn = toolbar.children[6]
-  const editBar = toolbar.children[7]
+  const exportBtn = toolbar.children[6]
+  const templateBtn = toolbar.children[7]
+  const editBar = toolbar.children[8]
   if (/active/.test(editBtn.className)) editBtn.click()   /* 归位：确保从关到开 */
   await sleep(10)
   if (!/active/.test(editBtn.className)) editBtn.click()
@@ -447,6 +452,166 @@ test('编辑：拖放图片 → 自定义贴图替换（dataURL + 3D 换图调�
   assert.ok(!layout.textures[0].mcmetaUrl, 'mcmeta 引用清除')
   assert.ok((globalThis.__uvEditCalls || []).some(c => c.fn === 'tex' && c.texIndex === 0 && c.dataUrl === 'data:image/png;base64,TEST'), '3D 贴图替换调用')
   globalThis.FileReader = realFileReader
+})
+
+test('编辑：资产库贴图拖入 → raw URL 直接替换当前槽位（3D 换图联动）', async () => {
+  const { layout, canvasWrap } = await setupEdit()
+  const rawUrl = '/api/file/raw?path=/packs/stone.png'
+  fire(canvasWrap, 'drop', {
+    preventDefault() {},
+    dataTransfer: {
+      getData: (type) => type === 'text/matoga-tex'
+        ? JSON.stringify({ name: 'stone.png', url: rawUrl, path: '/packs/stone.png' })
+        : '',
+    },
+  })
+  await sleep(30)
+  assert.equal(layout.textures[0].url, rawUrl, '贴图 URL 替换为资产库 raw URL')
+  assert.equal(layout.textures[0].name, 'stone', '名称取贴图文件名（去扩展）')
+  assert.ok(!layout.textures[0].mcmetaUrl, 'mcmeta 引用清除')
+  assert.ok((globalThis.__uvEditCalls || []).some(c => c.fn === 'tex' && c.texIndex === 0 && c.dataUrl === rawUrl), '3D 贴图替换调用（raw URL 形式）')
+})
+
+test('编辑：右键贴图 chip → 移除材质（URL 清空 + 3D 清除材质调用 + 槽位索引不变）', async () => {
+  const { layout, toolbar } = await setupEdit()
+  const chips = toolbar.children[0]
+  fire(chips.children[0], 'contextmenu', { preventDefault() {} })
+  await sleep(30)
+  assert.equal(layout.textures[0].url, '', '贴图槽位 URL 清空')
+  assert.ok(!layout.textures[0].mcmetaUrl, 'mcmeta 引用清除')
+  assert.equal(layout.textures.length, 1, '槽位本身不删除（face.tex 索引不变）')
+  assert.ok((globalThis.__uvEditCalls || []).some(c => c.fn === 'clear' && c.texIndex === 0), '3D 材质清除调用（空串 → clearModelTexture）')
+  const rebuilt = toolbar.children[0]
+  assert.match(rebuilt.children[0].textContent, /⊘/, 'chip 显示移除标记 ⊘')
+})
+
+test('编辑：移除材质后拖入贴图 → 槽位恢复（再上传/贴图库选择同理）', async () => {
+  const { layout, toolbar, canvasWrap } = await setupEdit()
+  fire(toolbar.children[0].children[0], 'contextmenu', { preventDefault() {} })
+  await sleep(30)
+  assert.equal(layout.textures[0].url, '', '移除后 URL 为空')
+  const rawUrl = '/api/mc-packs/vanilla/raw?path=stone.png'
+  fire(canvasWrap, 'drop', {
+    preventDefault() {},
+    dataTransfer: {
+      getData: (type) => type === 'text/matoga-tex'
+        ? JSON.stringify({ name: 'stone.png', url: rawUrl })
+        : '',
+    },
+  })
+  await sleep(30)
+  assert.equal(layout.textures[0].url, rawUrl, '拖入贴图恢复槽位 URL')
+  assert.equal(layout.textures[0].name, 'stone', '名称恢复')
+  assert.ok((globalThis.__uvEditCalls || []).some(c => c.fn === 'tex' && c.texIndex === 0 && c.dataUrl === rawUrl), '恢复触发 3D 换图')
+  assert.ok(!/⊘/.test(toolbar.children[0].children[0].textContent), 'chip 移除标记消失')
+})
+
+test('贴图拖拽工具：setTexDragData / getTexDragData 往返 + 容错', () => {
+  const mkDt = () => {
+    const store = new Map()
+    return {
+      setData: (k, v) => store.set(k, String(v)),
+      getData: (k) => store.has(k) ? store.get(k) : '',
+    }
+  }
+  const dt = mkDt()
+  assert.equal(utils.setTexDragData(dt, { name: 'a.png', url: '/api/x.png', path: 'p' }), true, '写入成功')
+  assert.deepEqual(utils.getTexDragData(dt), { name: 'a.png', url: '/api/x.png', path: 'p' }, '读回一致')
+  assert.equal(utils.setTexDragData(null, { url: '/x' }), false, '无 dataTransfer 安全返回')
+  assert.equal(utils.setTexDragData(dt, { name: 'x' }), false, '无 url 不写入')
+  assert.equal(utils.getTexDragData(dt).name, 'a.png', '无效写入不覆盖既有数据')
+  assert.equal(utils.getTexDragData({ getData: () => 'not json' }), null, '损坏 JSON → null')
+  assert.equal(utils.getTexDragData({ getData: () => JSON.stringify({ name: 'x' }) }), null, '缺 url → null')
+  assert.equal(utils.getTexDragData({ getData: () => '' }), null, '空数据 → null')
+  assert.equal(utils.getTexDragData(null), null, '无 dataTransfer → null')
+})
+
+test('编辑：拖放多张图片 → 从当前贴图槽位起顺序替换（超出槽位忽略）', async () => {
+  const realFileReader = globalThis.FileReader
+  let seq = 0
+  globalThis.FileReader = class {
+    readAsDataURL() {
+      seq++
+      this.result = 'data:image/png;base64,M' + seq
+      setTimeout(() => this.onload && this.onload({ target: { result: this.result } }), 0)
+    }
+  }
+  const layout = {
+    type: 'mc', uvScale: 16,
+    textures: [
+      { name: 'a', url: 'http://test/a.png' },
+      { name: 'b', url: 'http://test/b.png' },
+      { name: 'c', url: 'http://test/c.png' },
+    ],
+    elements: [
+      { faces: { north: { tex: 0, uv: [0, 0, 8, 8], rotation: 0, mirror: false } } },
+      { faces: { up: { tex: 2, uv: [0, 0, 16, 16], rotation: 0, mirror: false } } },
+    ],
+  }
+  globalThis.__uvTestActive = true
+  globalThis.__uvTestLayout = layout
+  globalThis.__uvEditCalls = []
+  uv.refreshUvView()
+  fw.open()
+  await sleep(30)
+  const wrap = fw.body.children[0]
+  const canvasWrap = wrap.children[1]
+  fire(canvasWrap, 'drop', { preventDefault() {}, dataTransfer: { files: [
+    { name: 'x.png', type: 'image/png' },
+    { name: 'y.png', type: 'image/png' },
+    { name: 'z.png', type: 'image/png' },
+    { name: 'extra.png', type: 'image/png' },
+    { name: 'skip.txt', type: 'text/plain' },
+  ] } })
+  await sleep(80)
+  assert.equal(layout.textures[0].url, 'data:image/png;base64,M1', '槽位 0 替换')
+  assert.equal(layout.textures[1].url, 'data:image/png;base64,M2', '槽位 1 替换')
+  assert.equal(layout.textures[2].url, 'data:image/png;base64,M3', '槽位 2 替换')
+  assert.equal(layout.textures.length, 3, '不新增贴图槽位')
+  assert.equal(layout.textures[0].name, 'x', '名称取文件名（去扩展）')
+  const texCalls = (globalThis.__uvEditCalls || []).filter(c => c.fn === 'tex')
+  assert.equal(texCalls.length, 3, '3D 换图联动 3 次（extra 超槽位 / txt 非图片被忽略）')
+  assert.ok(texCalls.some(c => c.texIndex === 1 && c.dataUrl === 'data:image/png;base64,M2'), '槽位索引正确传递')
+  globalThis.FileReader = realFileReader
+})
+
+test('贴图库按钮 → 选择器浮窗 → 选择贴图替换当前槽位（raw URL + 3D 联动）', async () => {
+  const realFetch = globalThis.fetch
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      ok: true,
+      data: {
+        packs: [{
+          source: 'official', name: 'vanilla', kind: 'zip',
+          groups: [{ key: 'block', files: [{ name: 'stone.png', path: 'block/stone.png' }] }],
+        }],
+      },
+    }),
+  })
+  const { layout, toolbar } = await setupEdit()
+  const libraryBtn = toolbar.children[5]
+  assert.ok(libraryBtn, '贴图库按钮存在（upload 之后）')
+  assert.match(libraryBtn.textContent, /贴图库|library|uv\.library/i)
+  libraryBtn.click()
+  await sleep(120)   /* 动态 import uv-tex-picker + fetch 贴图包 + 渲染网格 */
+
+  const pickerDom = bodyEl.children.find(c => c.dataset && c.dataset.fwId === 'uvTexPicker')
+  assert.ok(pickerDom, '选择器浮窗创建并挂载 body')
+  const pickerWin = fwMod.getWindow('uvTexPicker')
+  assert.ok(pickerWin, '选择器浮窗 api 可获取')
+  const pwrap = pickerWin.body.children[0]
+  const gridWrap = pwrap.children[1]           /* 0 toolbar / 1 gridWrap */
+  const cells = gridWrap.children[0].children  /* gridWrap: 0 gridEl / 1 empty / 2 moreBtn */
+  assert.equal(cells.length, 1, '包内 1 张贴图渲染')
+  cells[0].click()
+  await sleep(30)
+
+  assert.equal(layout.textures[0].url, '/api/mc-official/vanilla/raw?path=' + encodeURIComponent('block/stone.png'), '槽位替换为贴图库 raw URL')
+  assert.equal(layout.textures[0].name, 'stone', '名称取贴图名（去扩展）')
+  assert.ok(!layout.textures[0].mcmetaUrl, 'mcmeta 引用清除')
+  assert.ok((globalThis.__uvEditCalls || []).some(c => c.fn === 'tex' && c.texIndex === 0 && c.dataUrl === layout.textures[0].url), '3D 换图联动调用（URL 形式）')
+  globalThis.fetch = realFetch
 })
 
 test('编辑：导出按钮 → Blob 下载（URL.createObjectURL 调用）', async () => {
@@ -553,7 +718,7 @@ test('编辑：重制（Remake）→ 按元素尺寸重算默认 UV', async () =
   await sleep(30)
   const toolbar = fw.body.children[0].children[0]
   const editBtn = toolbar.children[3]
-  const editBar = toolbar.children[7]
+  const editBar = toolbar.children[8]
   if (/active/.test(editBtn.className)) editBtn.click()
   await sleep(10)
   if (!/active/.test(editBtn.className)) editBtn.click()
@@ -588,7 +753,7 @@ test('编辑：重制兜底（无元素引用 / 面名不适用）→ 全幅 UV'
   await sleep(30)
   const toolbar = fw.body.children[0].children[0]
   const editBtn = toolbar.children[3]
-  const editBar = toolbar.children[7]
+  const editBar = toolbar.children[8]
   if (/active/.test(editBtn.className)) editBtn.click()
   await sleep(10)
   if (!/active/.test(editBtn.className)) editBtn.click()

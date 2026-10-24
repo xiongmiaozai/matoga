@@ -41,6 +41,8 @@ test('isModelEntry: 非模型路径拒绝', () => {
   assert.equal(isModelEntry(e('models/block/stone.json')), false)
   assert.equal(isModelEntry(e('assets/minecraft/items/sub/thing.json')), false)
   assert.equal(isModelEntry(e('assets/minecraft/models/block/stone.png')), false)
+  assert.equal(isModelEntry(e('assets/minecraft/models/stone.json')), false)
+  assert.equal(isModelEntry(e('assets/minecraft/models/.json')), false)
   assert.equal(isModelEntry(e('')), false)
 })
 

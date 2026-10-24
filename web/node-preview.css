@@ -153,6 +153,8 @@
   box-shadow: 0 1px 4px rgba(124,189,86,.3);
 }
 .np-btn.primary:hover{ filter: brightness(1.1); color: #fff }
+.np-btn.danger{ border-color: var(--danger); color: var(--danger) }
+.np-btn.danger:hover{ background: rgba(198,58,58,.14); border-color: var(--danger); color: var(--danger) }
 
 /* ── 空状态 ── */
 .np-empty{

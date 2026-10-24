@@ -3,9 +3,9 @@
  * Copyright (c) 2026 芝世 (xiongmiaozai). All rights reserved.
  * SPDX-License-Identifier: MIT
  *
- * 模型资产是虚拟路径（packmodel:<source>:<pack>/<rel> / bb:<id>），无磁盘文件可 stat，
+ * 模型资产是虚拟路径（packmodel:<source>:<pack>/<rel> / im:<id> / cm:<id>），无磁盘文件可 stat，
  * 与 thumb-service（真实文件路径 → data/thumbs/*.jpg）不同：键 = md5(虚拟路径)，
- * staleness 用前端传入的模型源 mtime（/api/asset/model 与 blockbench listModels 已返回）
+ * staleness 用前端传入的模型源 mtime（/api/asset/model 与 imported listModels 已返回）
  * 与 sidecar <md5>.json 中记录的 mtime 对比。
  *
  * 动画模型多帧：POST 可带 frames 数组（帧 0 写 <md5>.png 保持单帧路径兼容，
@@ -32,9 +32,30 @@ const crypto = require('crypto')
 const { DATA_ROOT } = require('../paths')
 
 const MODEL_THUMB_DIR = path.join(DATA_ROOT, 'data', 'model-thumbs')
+/* 缩略图按模型类型分离专属子目录：导入模型 / 自定义模型 / 材质包内模型
+   各自独立缓存，互不共用（key 前缀 → 目录）。misc 为兜底（未知前缀）。 */
+const THUMB_KIND_DIRS = {
+  imported: path.join(MODEL_THUMB_DIR, 'imported'),
+  custom: path.join(MODEL_THUMB_DIR, 'custom'),
+  mc: path.join(MODEL_THUMB_DIR, 'mc'),
+  misc: MODEL_THUMB_DIR,
+}
 const MAX_DATA_URL = 5 * 1024 * 1024
 const MAX_FRAMES = 8
 const RENDERER_VERSION = 5
+
+function kindFor(key) {
+  const s = String(key || '')
+
+  if (s.startsWith('im:')) return 'imported'
+  if (s.startsWith('cm:')) return 'custom'
+  if (s.startsWith('packmodel:')) return 'mc'
+  return 'misc'
+}
+
+function dirFor(key) {
+  return THUMB_KIND_DIRS[kindFor(key)] || MODEL_THUMB_DIR
+}
 
 function hashFor(key) {
   return crypto.createHash('md5').update(String(key)).digest('hex')
@@ -42,11 +63,12 @@ function hashFor(key) {
 
 function pngPathFor(key, frame = 0) {
   const h = hashFor(key)
-  return frame > 0 ? path.join(MODEL_THUMB_DIR, `${h}.f${frame}.png`) : path.join(MODEL_THUMB_DIR, h + '.png')
+  const d = dirFor(key)
+  return frame > 0 ? path.join(d, `${h}.f${frame}.png`) : path.join(d, h + '.png')
 }
 
 function metaPathFor(key) {
-  return path.join(MODEL_THUMB_DIR, hashFor(key) + '.json')
+  return path.join(dirFor(key), hashFor(key) + '.json')
 }
 
 function parseFrameParam(v) {
@@ -94,7 +116,7 @@ async function saveThumb(key, mtime, payload) {
     items.push(base64)
   }
   const frameDelay = Math.max(0, Math.floor(Number(frames[0] && frames[0].delay) || 0))
-  await fs.promises.mkdir(MODEL_THUMB_DIR, { recursive: true })
+  await fs.promises.mkdir(dirFor(key), { recursive: true })
   /* 帧数减少时清除多余旧帧（sidecar 先读后写，读失败视为单帧旧缓存） */
   try {
     const oldMeta = JSON.parse(await fs.promises.readFile(metaPathFor(key), 'utf8'))
@@ -131,4 +153,4 @@ function invalidate(key) {
   } catch {}
 }
 
-module.exports = { thumbInfo, saveThumb, sendThumb, invalidate, pngPathFor, metaPathFor, MODEL_THUMB_DIR, RENDERER_VERSION }
+module.exports = { thumbInfo, saveThumb, sendThumb, invalidate, pngPathFor, metaPathFor, kindFor, dirFor, MODEL_THUMB_DIR, THUMB_KIND_DIRS, RENDERER_VERSION }

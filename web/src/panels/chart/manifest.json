@@ -1,0 +1,8 @@
+{
+  "id": "chart",
+  "title": "可视化",
+  "icon": "i-pie",
+  "html": "panel.html",
+  "mount": "#workspace",
+  "order": 6
+}

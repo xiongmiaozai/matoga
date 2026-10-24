@@ -50,8 +50,10 @@
             <button data-src="left" data-i18n="common.left">左</button>
             <button class="active" data-src="dual" data-i18n="m3d.srcDual">双</button>
             <button data-src="right" data-i18n="common.right">右</button>
+
           </div>
           <div class="m3d-hud-spacer"></div>
+
           <button class="m3d-hud-btn" id="m3dUvBtn" data-i18n-title="m3d.uv" title="UV 贴图"><svg class="ico ico-sm"><use href="#i-grid"/></svg></button>
           <button class="m3d-hud-btn" id="m3dShotBtn" data-i18n-title="m3d.shot" title="截图"><svg class="ico ico-sm"><use href="#i-camera"/></svg></button>
           <button class="m3d-hud-btn" id="m3dFreeCamBtn" data-i18n-title="m3d.freeCam" title="自由视角"><svg class="ico ico-sm"><use href="#i-move"/></svg></button>
@@ -92,6 +94,10 @@
               </div>
             </div>
             <div class="m3d-tab-pane" data-pane="parallax">
+              <div class="m3d-parallax-status">
+                <div class="m3d-parallax-status-bar"><div class="m3d-parallax-status-fill" id="m3dParallaxStatusFill"></div></div>
+                <div class="m3d-height-status" id="m3dHeightStatus" data-i18n="m3d.heightNotDetected">未检测</div>
+              </div>
               <div class="m3d-ctrl-group">
                 <label class="m3d-checkbox"><input type="checkbox" id="m3dParallaxEnable" checked /> <span data-i18n="m3d.parallaxEnable">启用视差</span></label>
               </div>

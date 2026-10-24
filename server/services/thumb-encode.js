@@ -87,17 +87,17 @@ function downsample(srcW, srcH, data, dstW, dstH) {
   for (let dy = 0; dy < dstH; dy++) {
     for (let dx = 0; dx < dstW; dx++) {
       const sx0 = Math.floor(dx * srcW / dstW)
+      const sx1 = Math.max(sx0 + 1, Math.min(srcW, Math.floor((dx + 1) * srcW / dstW)))
       const sy0 = Math.floor(dy * srcH / dstH)
-      const sx1 = Math.min(srcW - 1, sx0 + 1)
-      const sy1 = Math.min(srcH - 1, sy0 + 1)
+      const sy1 = Math.max(sy0 + 1, Math.min(srcH, Math.floor((dy + 1) * srcH / dstH)))
       let r = 0, g = 0, b = 0, a = 0
-      for (let yy = sy0; yy <= sy1; yy++) {
-        for (let xx = sx0; xx <= sx1; xx++) {
+      for (let yy = sy0; yy < sy1; yy++) {
+        for (let xx = sx0; xx < sx1; xx++) {
           const si = (yy * srcW + xx) * 4
           r += data[si]; g += data[si + 1]; b += data[si + 2]; a += data[si + 3]
         }
       }
-      const n = (sy1 - sy0 + 1) * (sx1 - sx0 + 1)
+      const n = (sy1 - sy0) * (sx1 - sx0)
       const di = (dy * dstW + dx) * 4
       out[di] = r / n; out[di + 1] = g / n; out[di + 2] = b / n; out[di + 3] = a / n
     }
@@ -118,8 +118,8 @@ function rgbaDownsample(srcW, srcH, rgba, dstW, dstH) {
   for (let dy = 0; dy < dstH; dy++) {
     for (let dx = 0; dx < dstW; dx++) {
       let r = 0, g = 0, b = 0, n = 0
-      const sx0 = Math.floor(dx * srcW / dstW), sx1 = Math.min(srcW, Math.floor((dx + 1) * srcW / dstW))
-      const sy0 = Math.floor(dy * srcH / dstH), sy1 = Math.min(srcH, Math.floor((dy + 1) * srcH / dstH))
+      const sx0 = Math.floor(dx * srcW / dstW), sx1 = Math.max(sx0 + 1, Math.min(srcW, Math.floor((dx + 1) * srcW / dstW)))
+      const sy0 = Math.floor(dy * srcH / dstH), sy1 = Math.max(sy0 + 1, Math.min(srcH, Math.floor((dy + 1) * srcH / dstH)))
       for (let yy = sy0; yy < sy1; yy++) for (let xx = sx0; xx < sx1; xx++) {
         const idx = (yy * srcW + xx) * 4; r += rgba[idx]; g += rgba[idx + 1]; b += rgba[idx + 2]; n++
       }

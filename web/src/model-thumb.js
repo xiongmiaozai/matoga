@@ -22,7 +22,7 @@
 import * as THREE from 'three'
 import {
   resolveMcModelAsset, mcMatFor, bbMatFor, buildModelGroup, buildItemSpriteGroup,
-  applyItemTransformation, fetchBbModelJson, getModelTexAnims,
+  applyItemTransformation, fetchImportedModelJson, getModelTexAnims,
   applyTexAnimFrame, animFrameIndexAt,
 } from './mc-model-viewer.js'
 
@@ -85,12 +85,16 @@ function enqueueRender(task) {
 }
 
 async function buildGroupFor(spec) {
-  if (spec.kind === 'bb') {
-    const json = await fetchBbModelJson(spec.id)
-    if (!json || !Array.isArray(json.elements) || !json.elements.length) throw new Error('empty bbmodel')
-    const uvScale = Number.isFinite(+json.resolution) && +json.resolution > 0 ? +json.resolution : 16
-    const group = buildModelGroup(json.elements, bbMatFor(json.textures, 'bbm:' + spec.id), uvScale)
-    if (!group.children.length) throw new Error('empty bbmodel group')
+  if (spec.kind === 'im') {
+    const json = await fetchImportedModelJson(spec.id)
+    if (!json || !Array.isArray(json.elements) || !json.elements.length) throw new Error('empty model')
+    const isBb = !!(json.meta && (json.meta.format === 'bbmodel' || json.meta.model_format))
+    const matFor = isBb
+      ? bbMatFor(json.textures, 'bbm:' + spec.id)
+      : mcMatFor((json.textures && typeof json.textures === 'object') ? json.textures : {}, undefined, undefined)
+    const uvScale = isBb && Number.isFinite(+json.resolution) && +json.resolution > 0 ? +json.resolution : 16
+    const group = buildModelGroup(json.elements, matFor, uvScale)
+    if (!group.children.length) throw new Error('empty model group')
     return { group, sprite: false }
   }
   /* models/ 路径或 items/ 物品定义（1.21.4+）：统一经 resolveMcModelAsset，composite 多部件合并 */

@@ -15,16 +15,17 @@ export const state = {
   counts: null,
   sortKey: 'status',
   sortDir: 'asc',
-  searchText: '',
   selected: null,
   copySource: null,
   expandedKeys: new Set(),
   viewMode: 'all',
   collapsedFolders: new Set(),
-  statusFilter: 'all',
-  typeFilter: 'all',
+  hiddenKeys: new Set(),
   history: [],
-  renderLimit: 200
+  renderLimit: 200,
+  modelLoadSeq: 0,
+  categoryFilter: { type: 'all', content: 'all', status: 'all', folder: 'all', tag: 'all' },
+  customTags: {}
 }
 
 export const $ = (id) => document.getElementById(id)
@@ -46,7 +47,7 @@ export const onlyMissingChk = $('onlyMissingChk')
 export const hashChk = $('hashChk')
 export const ignoreChk = $('ignoreChk')
 export const ignoreInput = $('ignoreInput')
-export const searchInput = $('searchInput')
+
 
 export const leftPathEl = $('leftPath')
 export const rightPathEl = $('rightPath')

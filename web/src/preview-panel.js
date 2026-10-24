@@ -344,6 +344,7 @@ export async function initPreviewPanel() {
       m.toggleUvView()
     } catch (e) { console.error('[preview-panel] uv-view', e) }
   })
+
   ;(() => {
     const ov = $('m3dParamsOverlay'), drag = $('m3dParamsDrag'), container = $('material3dContainer')
     if (!ov || !drag || !container) return

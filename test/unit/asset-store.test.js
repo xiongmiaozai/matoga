@@ -194,7 +194,7 @@ test('sanitize: official 类型保留 badge 版本徽标', async () => {
   assert.equal(d.favorites[0].badge, '1.21 – 1.21.1')
 })
 
-test('VALID_TYPES: 包含七种类型', () => {
+test('VALID_TYPES: 包含八种类型', () => {
   assert.ok(store.VALID_TYPES.has('tex'))
   assert.ok(store.VALID_TYPES.has('hdri'))
   assert.ok(store.VALID_TYPES.has('mc'))
@@ -202,7 +202,8 @@ test('VALID_TYPES: 包含七种类型', () => {
   assert.ok(store.VALID_TYPES.has('model'))
   assert.ok(store.VALID_TYPES.has('preset'))
   assert.ok(store.VALID_TYPES.has('project'))
-  assert.equal(store.VALID_TYPES.size, 7)
+  assert.ok(store.VALID_TYPES.has('craft'))
+  assert.equal(store.VALID_TYPES.size, 8)
 })
 
 test('model 类型: key 前缀识别 / 收藏持久化 / 分类分组', async () => {

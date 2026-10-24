@@ -261,16 +261,4 @@ export function toggleWindow(id){
   const w = _windows.get(id)
   if(w) w.toggle()
 }
-export function openWindow(id){
-  const w = _windows.get(id)
-  if(w) w.open()
-}
 export function getWindow(id){ return _windows.get(id) }
-
-export function resetFloatingWindowGeometry(){
-  const s = storage()
-  if(!s) return
-  try{
-    _windows.forEach((w) => { s.removeItem('matoga.fw.' + w.id) })
-  }catch(e){}
-}

@@ -16,8 +16,7 @@
     "electron:dev": "node electron/launch.js --dev",
     "dist:win": "electron-builder --win",
     "dist:mac": "electron-builder --mac",
-    "dist:linux": "electron-builder --linux",
-    "bb:fetch": "node scripts/fetch-blockbench.mjs --out=data/blockbench-web"
+    "dist:linux": "electron-builder --linux"
   },
   "keywords": [
     "folder",
@@ -46,7 +45,10 @@
     "assets": [
       "web/**/*",
       "node_modules/three/build/three.module.js",
-      "node_modules/golden-layout/dist/**/*"
+      "node_modules/three/build/three.core.js",
+      "node_modules/golden-layout/dist/esm/**/*",
+      "node_modules/golden-layout/dist/css/**/*",
+      "node_modules/golden-layout/dist/img/**/*"
     ],
     "targets": [
       "node22-win-x64",
@@ -66,7 +68,16 @@
       "shared/**/*",
       "web/**/*",
       "electron/main.js",
-      "package.json"
+      "package.json",
+      "!node_modules/three/examples/**/*",
+      "!node_modules/three/src/**/*",
+      "!node_modules/three/build/three.webgpu.js",
+      "!node_modules/three/build/three.webgpu.nodes.js",
+      "!node_modules/three/build/three.tsl.js",
+      "!node_modules/three/build/three.cjs",
+      "!node_modules/golden-layout/src/**/*",
+      "!node_modules/golden-layout/dist/cjs/**/*",
+      "!node_modules/golden-layout/dist/types/**/*"
     ],
     "extraResources": [
       {
@@ -78,12 +89,14 @@
         "to": "mc-packs"
       },
       {
-        "from": "craft-packs",
-        "to": "craft-packs"
-      },
-      {
         "from": "official-packs",
-        "to": "official-packs"
+        "to": "official-packs",
+        "filter": [
+          "**/*",
+          "!**/net/**",
+          "!**/com/**",
+          "!**/META-INF/**"
+        ]
       }
     ],
     "win": {

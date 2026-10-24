@@ -118,7 +118,11 @@ function get() {
 }
 
 function savePreset(name, config) {
-  if (!name || typeof name !== 'string') throw new Error('ERR_INVALID_PARAM')
+  if (!name || typeof name !== 'string') {
+    const e = new Error('ERR_INVALID_PARAM')
+    e.code = 'ERR_INVALID_PARAM'
+    throw e
+  }
   migrateIfNeeded()
   writeQueue = writeQueue.then(() => {
     try {
@@ -150,7 +154,11 @@ function deletePreset(name) {
 }
 
 function renamePreset(oldName, newName) {
-  if (!newName || typeof newName !== 'string') throw new Error('ERR_INVALID_PARAM')
+  if (!newName || typeof newName !== 'string') {
+    const e = new Error('ERR_INVALID_PARAM')
+    e.code = 'ERR_INVALID_PARAM'
+    throw e
+  }
   migrateIfNeeded()
   writeQueue = writeQueue.then(() => {
     try {

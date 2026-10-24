@@ -13,7 +13,7 @@
 import { applyI18n } from './i18n.js'
 
 let _manifests = null
-const _loaded = new Map()
+
 
 export async function loadPanelManifests() {
   if (_manifests) return _manifests
@@ -68,7 +68,7 @@ export async function loadPanel(p) {
     if (p.dynamic && p.jsUrl) {
       const mod = await import(p.jsUrl)
       if (mod && typeof mod.init === 'function') await mod.init()
-      _loaded.set(p.id, mod)
+
     }
     return true
   } catch (e) {
@@ -96,8 +96,6 @@ export async function initPanelLoader() {
   return panels
 }
 
-export function getLoadedPanel(id) { return _loaded.get(id) }
 export function getPanelDefs() {
   return (_manifests || []).map(p => ({ id: p.id, title: p.title, icon: p.icon }))
 }
-export function getPanelManifests() { return _manifests || [] }

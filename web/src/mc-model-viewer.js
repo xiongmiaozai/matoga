@@ -21,7 +21,7 @@
  */
 
 import * as THREE from 'three'
-import { showCustomModel, hasVisibleViewport } from './material3d.js'
+import { showCustomModel, showCustomModelPair, hasVisibleViewport, applyPbrMapsToModelMaterial } from './material3d.js'
 
 /* fileUrl / joinPath 内联（与 utils.js 同实现）：避免 import utils.js 触发 core.js 的
    DOM 依赖，保持本模块在 node 单测（NR_M3D_STUB）环境下可加载 */
@@ -56,8 +56,13 @@ function apiUrl(p) {
 }
 
 /* 资源 raw URL 构造：包模式走 /api/pack/<name>/raw?path=<rel>（any=1 放行 .mcmeta 等扩展）；
-   文件根模式（对比结果等任意文件夹）走 /api/file/raw?path=<join(root,rel)>（file 接口直接读任意路径，无需 any） */
+    文件根模式（对比结果等任意文件夹）走 /api/file/raw?path=<join(root,rel)>（file 接口直接读任意路径，无需 any）；
+    扩展引用（data:/file:/URL）直接可加载，原样返回 */
 function rawUrl(api, packName, rel, fileRoot, any) {
+  if (isSpecialTexPath(rel)) {
+    if (/^file:/i.test(rel)) return fileUrl(rel.replace(/^file:/i, ''))
+    return rel
+  }
   if (fileRoot) return fileUrl(joinPath(fileRoot, rel))
   const q = any ? '&any=1' : ''
   return apiUrl(`${api}/${encodeURIComponent(packName)}/raw?path=${encodeURIComponent(rel)}${q}`)
@@ -65,6 +70,7 @@ function rawUrl(api, packName, rel, fileRoot, any) {
 
 /* 贴图缓存键：包模式与文件根模式命名空间隔离，避免对比场景与包场景贴图混缓存 */
 function texCacheKey(api, packName, texPath, fileRoot) {
+  if (isSpecialTexPath(texPath)) return 'sp:' + texPath
   return fileRoot ? `file:${fileRoot}:${texPath}` : `${api}:${packName}:${texPath}`
 }
 
@@ -96,8 +102,17 @@ export function parentModelPath(parent) {
 }
 
 /* 贴图引用 → 包内贴图路径："minecraft:block/stone" → assets/minecraft/textures/block/stone.png；
-   引用已带图片扩展名（社区包写法）不再追加，防 stone.png.png */
+    引用已带图片扩展名（社区包写法）不再追加，防 stone.png.png */
 const TEX_REF_EXT_RE = /\.(png|jpe?g|webp|gif|bmp|tiff?|avif)$/i
+
+/* matoga 扩展贴图引用（模型 textures 表值直接可加载，跳过命名空间解析）：
+    data:<dataURL> 内嵌 / file:<绝对磁盘路径> / 站内 URL（/api/...） / 外部 http(s) URL。
+    UV 编辑器替换的任意来源贴图以此形式持久化到模型 JSON，重新打开自动加载 */
+const SPECIAL_TEX_RE = /^(data:|file:|https?:\/\/|\/)/i
+
+function isSpecialTexPath(p) {
+  return typeof p === 'string' && SPECIAL_TEX_RE.test(p)
+}
 
 export function textureAssetPath(ref) {
   if (typeof ref !== 'string' || !ref) return null
@@ -106,6 +121,69 @@ export function textureAssetPath(ref) {
   if (ci >= 0) { ns = ref.slice(0, ci); rest = ref.slice(ci + 1) }
   if (!rest) return null
   return `assets/${ns}/textures/${TEX_REF_EXT_RE.test(rest) ? rest : rest + '.png'}`
+}
+
+/* 引用值 → 贴图路径（扩展引用原样；标准引用走命名空间解析） */
+export function texPathForRef(ref) {
+  if (typeof ref !== 'string') return null
+  if (isSpecialTexPath(ref)) return ref
+  return textureAssetPath(ref) || ref
+}
+
+/* 包内贴图路径 → 标准 MC 引用（assets/<ns>/textures/<rest>.png → <ns>:<rest>） */
+function packRelToMcRef(rel) {
+  const m = String(rel).match(/^assets\/([^/]+)\/textures\/(.+)\.(png|jpe?g|webp|gif|bmp)$/i)
+  return m ? (m[1] + ':' + m[2]) : null
+}
+
+/* 替换贴图 URL → 模型贴图引用（智能引用）：
+    '' → 移除；dataURL → data: 内嵌；外部 http(s) → 原样；
+    站内 file raw URL → file:<磁盘路径>；站内包 raw URL → 模型包上下文
+    （ctx = { api, packName }，可缺省）匹配时转标准 MC 引用（保持 MC 兼容），
+    跨包保留站内 URL（重新打开可直接加载） */
+export function texUrlToRef(url, ctx) {
+  if (typeof url !== 'string') return null
+  if (!url) return ''
+  if (/^data:/i.test(url)) return url
+  let path = url
+  if (/^https?:\/\//i.test(url)) {
+    /* 外部 URL 原样保留；LAN apiUrl 包装（http 前缀 + token）的站内 URL 剥离前缀 */
+    const ai = url.indexOf('/api/')
+    if (ai < 0) return url
+    path = url.slice(ai)
+  }
+  if (!path.startsWith('/api/')) return path   /* 相对/未知形式原样 */
+  const fm = path.match(/^\/api\/file\/raw\?path=([^&]+)/)
+  if (fm) return 'file:' + decodeURIComponent(fm[1])
+  const bm = path.match(/^\/api\/(mc-packs|mc-official)\/([^/]+)\/raw\?path=([^&]+)/)
+  if (bm) {
+    const std = packRelToMcRef(decodeURIComponent(bm[3]))
+    if (std && ctx && ctx.api === '/api/' + bm[1] && ctx.packName === decodeURIComponent(bm[2])) return std
+    return path   /* 跨包：保留站内 URL 引用（重新打开可直接加载） */
+  }
+  return path
+}
+
+/* 模型 textures 表贴图引用写回：解析命中 oldTexPath 的键改写为 newRef。
+    直接持有该路径的键（含 #互引链命中）统一改写到新值；oldTexPath = '' 匹配被移除的空键 */
+export function writeMcTexRef(textures, oldTexPath, newRef) {
+  if (!textures || typeof textures !== 'object' || typeof oldTexPath !== 'string' || typeof newRef !== 'string') return 0
+  let n = 0
+  for (const k in textures) {
+    const val = textures[k]
+    if (typeof val !== 'string') continue
+    if (oldTexPath === '') {
+      if (val === '') { textures[k] = newRef; n++ }
+      continue
+    }
+    if (!val) continue
+    const hit = isSpecialTexPath(val)
+      ? val === oldTexPath
+      : (val === oldTexPath || textureAssetPath(val) === oldTexPath)
+    if (hit) { textures[k] = newRef; n++; continue }
+    if (val.startsWith('#') && resolveTextureRef(textures, '#' + k) === oldTexPath) { textures[k] = newRef; n++ }
+  }
+  return n
 }
 
 /* #引用键未定义时的方向别名回退（社区模型常见断链：faces 引用 #up/#north 而
@@ -128,12 +206,15 @@ export function resolveTextureRef(textures, ref, seen) {
     const key = ref.slice(1)
     const val = (textures && typeof textures === 'object') ? textures[key] : undefined
     if (typeof val === 'string' && val) return resolveTextureRef(textures, val, guard)
+    if (val && typeof val === 'object' && typeof val.sprite === 'string' && val.sprite) return resolveTextureRef(textures, val.sprite, guard)
     for (const alt of TEX_REF_FALLBACK[key] || []) {
       const hit = resolveTextureRef(textures, '#' + alt, guard)
       if (hit) return hit
     }
     return null
   }
+  /* 扩展引用（data:/file:/URL）直接作为贴图路径，不走命名空间解析 */
+  if (isSpecialTexPath(ref)) return ref
   return textureAssetPath(ref)
 }
 
@@ -178,6 +259,7 @@ const BUILTIN_PARENT_MODELS = {
   'assets/minecraft/models/block/block.json': {},
   'assets/minecraft/models/item/generated.json': {},
   'assets/minecraft/models/item/handheld.json': { parent: 'minecraft:item/generated' },
+  'assets/minecraft/models/item/template_shulker_box.json': {},
 }
 
 /* fetch 模型 JSON 并沿 parent 链合并：elements 取最近定义层，textures 子覆盖父。
@@ -263,13 +345,59 @@ export function isItemDefPath(rel) {
   return typeof rel === 'string' && /^assets\/[^/]+\/items\/[^/]+\.json$/.test(rel)
 }
 
+/* 模板模型文件名判定（template_*）：vanilla 约定模板自身不定义 textures，由子模型注入 */
+export function isTemplateModelName(rel) {
+  if (typeof rel !== 'string') return false
+  const name = rel.slice(rel.lastIndexOf('/') + 1)
+  return name.startsWith('template_')
+}
+
+/* 模板模型（template_*）直接预览时 textures 全空 → 所有面回退灰色占位。借用同级目录下
+   引用该模板为 parent 的子模型的 textures，让模板也能显示真实贴图。仅包模式生效
+   （fileRoot 模式无列目录接口）；最多探测 60 个候选 .json，命中首个含贴图的子模型即止 */
+export async function borrowTemplateTextures(api, packName, rel, fileRoot) {
+  if (fileRoot || typeof api !== 'string' || typeof packName !== 'string' || !packName) return null
+  const li = rel.lastIndexOf('/')
+  if (li < 0) return null
+  const dir = rel.slice(0, li)
+  const selfName = rel.slice(li + 1)
+  const m = rel.match(/^assets\/([^/]+)\/models\/(.+)\.json$/)
+  if (!m) return null
+  const withNs = m[1] + ':' + m[2]
+  const noNs = m[2]
+  let entries
+  try {
+    entries = await fetchOkData(`${api}/${encodeURIComponent(packName)}/entries?dir=${encodeURIComponent(dir)}`)
+  } catch { return null }
+  const files = (entries && Array.isArray(entries.files)) ? entries.files : []
+  const candidates = files.map(f => f && f.name).filter(n =>
+    typeof n === 'string' && n.endsWith('.json') && n !== selfName && !n.startsWith('template_'))
+  for (const name of candidates.slice(0, 60)) {
+    const childRel = dir + '/' + name
+    let child
+    try { child = await fetchJson(rawUrl(api, packName, childRel, fileRoot, true)) } catch { continue }
+    if (!child || typeof child !== 'object' || typeof child.parent !== 'string') continue
+    const cp = child.parent
+    const cpNoNs = cp.includes(':') ? cp.slice(cp.indexOf(':') + 1) : cp
+    if (cp !== withNs && cp !== noNs && cpNoNs !== withNs && cpNoNs !== noNs) continue
+    const ct = (child.textures && typeof child.textures === 'object') ? child.textures : null
+    if (ct && Object.keys(ct).length) return ct
+  }
+  return null
+}
+
 /* 统一模型资产解析入口：rel 为 models/ 路径或 items/ 定义路径。
     返回 { parts: [{ elements, textures, transform }] }（多 parts 仅出现在 composite）；
     模型文件不存在 / 非法 → parts 空（shown:false 语义） */
 export async function resolveMcModelAsset(api, packName, rel, fileRoot) {
   if (!isItemDefPath(rel)) {
     try {
-      const { elements, textures } = await resolveMcModel(api, packName, rel, 0, fileRoot)
+      let { elements, textures } = await resolveMcModel(api, packName, rel, 0, fileRoot)
+      /* 模板模型贴图借用：有几何体 + textures 全空 + 文件名 template_* → 借子模型 textures */
+      if (elements.length && !Object.keys(textures).length && isTemplateModelName(rel)) {
+        const borrowed = await borrowTemplateTextures(api, packName, rel, fileRoot)
+        if (borrowed) textures = expandTextureAliases(borrowed)
+      }
       return { parts: [{ elements, textures, transform: null }] }
     } catch {
       return { parts: [] }
@@ -632,8 +760,9 @@ function attachPackTexture(tex, metaPromise) {
   }).catch(() => { applyTexParams(tex); return null })
 }
 
-/* 贴图同目录动画元数据 URL（raw 接口 any=1 放行 .mcmeta 扩展名） */
+/* 贴图同目录动画元数据 URL（raw 接口 any=1 放行 .mcmeta 扩展名）；扩展引用无动画元数据 */
 function packMcmetaUrl(api, packName, texPath, fileRoot) {
+  if (isSpecialTexPath(texPath)) return null
   return rawUrl(api, packName, texPath + '.mcmeta', fileRoot, true)
 }
 
@@ -642,30 +771,58 @@ function packMcmetaUrl(api, packName, texPath, fileRoot) {
     失败置 mat.userData.texFailed。
     userData.texReady：贴图加载流程 promise（终态必 resolve：成功设 map / 失败置 texFailed），
     离屏缩略图据此事件驱动等待（替代轮询 mat.map） */
-export function mcMatFor(textures, api, packName, fileRoot) {
+export function mcMatFor(textures, api, packName, fileRoot, fallbackRoot, overrideUrl) {
   return (key, face) => {
     if (!face || typeof face !== 'object' || typeof face.texture !== 'string') return null
     const texPath = resolveTextureRef(textures, face.texture)
     if (!texPath) return PLACEHOLDER_MAT
-    const ck = texCacheKey(api, packName, texPath, fileRoot)
-    const url = rawUrl(api, packName, texPath, fileRoot, false)
+    const ck = overrideUrl ? 'ov:' + overrideUrl : texCacheKey(api, packName, texPath, fileRoot)
+    const url = overrideUrl || rawUrl(api, packName, texPath, fileRoot, false)
     const metaPromise = loadAnimMetaCached(ck + ':mcmeta', packMcmetaUrl(api, packName, texPath, fileRoot))
     const mat = makeModelMaterial(null)
-    mat.userData.texReady = loadTextureCached(ck, url).then(tex => {
-      if (mat.userData.replaced) return   /* 编辑器已换贴图：晚到的异步加载不覆盖 */
-      if (!tex) { mat.userData.texFailed = true; return }
-      return attachPackTexture(tex, metaPromise).then(() => {
+    if (!overrideUrl && !isSpecialTexPath(texPath)) {
+      const dot = texPath.lastIndexOf('.')
+      if (dot >= 0) {
+        const base = texPath.slice(0, dot), ext = texPath.slice(dot)
+        applyPbrMapsToModelMaterial(mat, rawUrl(api, packName, base + '_n' + ext, fileRoot, false), rawUrl(api, packName, base + '_s' + ext, fileRoot, false))
+      }
+    }
+    mat.userData.texReady = loadTextureCached(ck, url).then(async tex => {
+      if (mat.userData.replaced) return
+      if (tex) {
+        await attachPackTexture(tex, metaPromise)
         if (mat.userData.replaced) return
         mat.map = tex; mat.needsUpdate = true
-      })
+        return
+      }
+      if (!overrideUrl && fallbackRoot) {
+        const fbCk = texCacheKey(api, packName, texPath, fallbackRoot)
+        const fbUrl = rawUrl(api, packName, texPath, fallbackRoot, false)
+        const fbTex = await loadTextureCached(fbCk, fbUrl)
+        if (mat.userData.replaced || !fbTex) { if (!fbTex) mat.userData.texFailed = true; return }
+        await attachPackTexture(fbTex, loadAnimMetaCached(fbCk + ':mcmeta', packMcmetaUrl(api, packName, texPath, fallbackRoot)))
+        if (mat.userData.replaced) return
+        mat.map = fbTex; mat.needsUpdate = true
+        return
+      }
+      mat.userData.texFailed = true
     })
     return mat
   }
 }
 
+/* sprite 回退贴图键选择：优先 layer0（item/generated），缺失时回退 particle
+   （shulker_box 等特殊渲染方块模型链仅含 particle 键，无 layer0 → 原先无法识别贴图） */
+export function spriteTexKey(textures) {
+  if (!textures || typeof textures !== 'object') return null
+  if (textures.layer0 != null) return '#layer0'
+  if (textures.particle != null) return '#particle'
+  return null
+}
+
 /* item/generated 类模型（无 elements）：layer0 贴图竖直 sprite 平面 */
 export function buildItemSpriteGroup(textures, api, packName, fileRoot) {
-  const texPath = resolveTextureRef(textures, textures.layer0 != null ? '#layer0' : null)
+  const texPath = resolveTextureRef(textures, spriteTexKey(textures))
   if (!texPath) return null
   const geo = new THREE.PlaneGeometry(1.2, 1.2)
   const mat = makeModelMaterial(null)
@@ -720,12 +877,26 @@ function normFaceRotation(rot) {
 }
 
 function texDisplayName(texPath) {
+  if (isSpecialTexPath(texPath)) {
+    /* 扩展引用显示名：data: → data / file: 与 URL → 取文件名去扩展 */
+    if (/^data:/i.test(texPath)) return 'data'
+    let raw = texPath
+    try {
+      if (/^file:/i.test(texPath)) raw = texPath.replace(/^file:/i, '')
+      else if (/^https?:\/\//i.test(texPath)) raw = new URL(texPath).pathname
+      else raw = decodeURIComponent(new URL(texPath, 'http://matoga.local').searchParams.get('path') || texPath)
+    } catch {}
+    return (String(raw).split('/').pop() || 'texture').replace(TEX_REF_EXT_RE, '')
+  }
   return texPath.replace(/^assets\/[^/]+\/textures\//, '').replace(TEX_REF_EXT_RE, '')
 }
 
-/* MC elements + textures 表 → 布局（贴图去重：texPath → 索引） */
+/* MC elements + textures 表 → 布局（贴图去重：texPath → 索引）。
+    texPaths：布局贴图索引 → 解析出的贴图路径（含扩展引用），供 UV 编辑器
+    替换贴图时把新引用写回模型 textures 表（保存/导出持久化） */
 export function buildMcLayout(elements, textures, api, packName, fileRoot) {
   const texList = []
+  const texPaths = []
   const texIndex = new Map()
   const texIndexOf = (texPath) => {
     if (!texIndex.has(texPath)) {
@@ -735,6 +906,7 @@ export function buildMcLayout(elements, textures, api, packName, fileRoot) {
         url: rawUrl(api, packName, texPath, fileRoot, false),
         mcmetaUrl: packMcmetaUrl(api, packName, texPath, fileRoot),
       })
+      texPaths.push(texPath)
     }
     return texIndex.get(texPath)
   }
@@ -756,13 +928,13 @@ export function buildMcLayout(elements, textures, api, packName, fileRoot) {
     }
     if (Object.keys(out).length) outElements.push({ faces: out, el })
   }
-  return { type: 'mc', uvScale: 16, textures: texList, elements: outElements }
+  return { type: 'mc', uvScale: 16, textures: texList, texPaths, elements: outElements }
 }
 
 /* item/generated sprite 回退布局：layer0 整幅贴图单面（spriteEl 为合成 element 引用，供贴图替换联动） */
 export function buildSpriteLayout(textures, api, packName, spriteEl, fileRoot) {
   textures = (textures && typeof textures === 'object') ? textures : {}
-  const texPath = resolveTextureRef(textures, textures.layer0 != null ? '#layer0' : null)
+  const texPath = resolveTextureRef(textures, spriteTexKey(textures))
   if (!texPath) return null
   return {
     type: 'mc', uvScale: 16, sprite: true,
@@ -771,17 +943,20 @@ export function buildSpriteLayout(textures, api, packName, spriteEl, fileRoot) {
       url: rawUrl(api, packName, texPath, fileRoot, false),
       mcmetaUrl: packMcmetaUrl(api, packName, texPath, fileRoot),
     }],
+    texPaths: [texPath],
     elements: [{ faces: { sprite: { tex: 0, uv: [0, 0, 16, 16], rotation: 0, mirror: false } }, el: spriteEl || null }],
   }
 }
 
-/* bbmodel → 布局（无效贴图项过滤但保持索引对齐：faces.texture 引用原始数组下标） */
+/* bbmodel → 布局（无效贴图项过滤但保持索引对齐：faces.texture 引用原始数组下标）。
+    texOrigin：原始 json.textures 下标 → 布局贴图索引（-1 无效项），供 UV 编辑器
+    把替换后的内嵌贴图（dataURL）写回原始 bbmodel JSON 保存 */
 export function buildBbLayout(json) {
   json = (json && typeof json === 'object') ? json : {}
   const uvScale = Number.isFinite(+json.resolution) && +json.resolution > 0 ? +json.resolution : 16
   const raw = Array.isArray(json.textures) ? json.textures : []
   const texList = []
-  const indexMap = raw.map(tex => {
+  const texOrigin = raw.map(tex => {
     if (tex && typeof tex.source === 'string' && tex.source.startsWith('data:')) {
       texList.push({ name: tex.name || ('texture ' + texList.length), url: tex.source })
       return texList.length - 1
@@ -799,14 +974,14 @@ export function buildBbLayout(json) {
     for (const key of FACE_KEYS) {
       const face = faces[key]
       if (!face || typeof face !== 'object' || face.texture == null) continue
-      const ti = indexMap[+face.texture]
+      const ti = texOrigin[+face.texture]
       if (ti == null || ti < 0) continue
       const uv = parseUv(face.uv) || defaultFaceUv(key, from, to, uvScale) || [0, 0, uvScale, uvScale]
       out[key] = { tex: ti, uv, rotation: normFaceRotation(face.rotation), mirror: uv[2] < uv[0] }
     }
     if (Object.keys(out).length) outElements.push({ faces: out, el })
   }
-  return { type: 'bb', uvScale, textures: texList, elements: outElements }
+  return { type: 'bb', uvScale, textures: texList, texOrigin, elements: outElements }
 }
 
 /* ── 模型编辑联动（uv-view 编辑 → 3D 实时更新 + 导出）──────────
@@ -817,7 +992,9 @@ export function buildBbLayout(json) {
 const activeElementMeshes = new Map()   /* 原始 element → mesh（当前展示模型） */
 let activeExportModel = null            /* 导出信息：{ type:'mc', parts, filename } | { type:'bb', json, filename } */
 
-/* 展示成功后绑定：收集 mesh.userData.mcElement → mesh 映射 + 导出信息（bindActiveModel 也可供测试注入） */
+/* 展示成功后绑定：收集 mesh.userData.mcElement → mesh 映射 + 导出信息（bindActiveModel 也可供测试注入）；
+    exportModel.ctx = { api, packName } 模型包上下文（mc 包模式传入，替换贴图时用于
+    判断能否把新贴图转成标准 MC 引用；im/bb 等无包上下文不传 → 一律扩展引用形式） */
 export function bindActiveModel(group, exportModel) {
   activeElementMeshes.clear()
   activeExportModel = exportModel || null
@@ -882,14 +1059,26 @@ function swapFaceTexture(mat, tex) {
   return true
 }
 
-/* 贴图替换：dataURL → 更新 layout 中引用 texIndex 的所有面材质（含 sprite 单材质面） */
-export async function updateModelTexture(texIndex, dataUrl, layout) {
+/* 材质贴图清除（编辑器移除材质）：map 置 null → 纯色面 */
+function clearFaceTexture(mat) {
+  if (!mat || (mat.userData && mat.userData.shared)) return false
+  mat.userData.replaced = true
+  if (mat.map && animatedTexs.has(mat.map)) animatedTexs.delete(mat.map)
+  mat.map = null
+  mat.needsUpdate = true
+  return true
+}
+
+/* 贴图替换：dataURL 或可加载 URL（贴图库 raw URL）→ 更新 layout 中引用 texIndex 的所有面材质（含 sprite 单材质面）。
+    替换成功后把新贴图引用写回模型 textures 表（智能引用：同包 → 标准 MC 引用，
+    其他 → 扩展引用），导出/保存即持久化，重新打开模型自动加载 */
+export async function updateModelTexture(texIndex, texUrl, layout) {
   const lay = layout || lastLayout
   if (!lay || !Array.isArray(lay.elements)) return false
-  if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return false
+  if (typeof texUrl !== 'string' || !(texUrl.startsWith('data:') || /^https?:\/\//i.test(texUrl) || texUrl.startsWith('/'))) return false
   let tex = null
   try {
-    tex = await new THREE.TextureLoader().loadAsync(dataUrl)
+    tex = await new THREE.TextureLoader().loadAsync(texUrl)
   } catch { return false }
   if (!tex) return false
   applyTexParams(tex)
@@ -913,7 +1102,77 @@ export async function updateModelTexture(texIndex, dataUrl, layout) {
       }
     }
   }
+  writeBackTexRef(texIndex, texUrl, lay)
   return touched > 0
+}
+
+/* 移除材质：清空 layout 中引用 texIndex 的所有面材质贴图（面变纯色；含 sprite 单材质面）。
+    引用同步写回空值（重新打开模型 → 面灰色） */
+export function clearModelTexture(texIndex, layout) {
+  const lay = layout || lastLayout
+  if (!lay || !Array.isArray(lay.elements)) return false
+  let touched = 0
+  for (const layEl of lay.elements) {
+    const mesh = (layEl && layEl.el) ? activeElementMeshes.get(layEl.el) : null
+    if (!mesh) continue
+    for (const key in layEl.faces) {
+      const lf = layEl.faces[key]
+      if (!lf || lf.tex !== texIndex) continue
+      const mi = MAT_INDEX[key]
+      if (mi != null && Array.isArray(mesh.material)) {
+        let mat = mesh.material[mi]
+        if (!mat || (mat.userData && mat.userData.shared)) {
+          mat = makeModelMaterial(null)
+          mesh.material[mi] = mat
+        }
+        if (clearFaceTexture(mat)) touched++
+      } else if (mi == null && mesh.material && !Array.isArray(mesh.material)) {
+        if (clearFaceTexture(mesh.material)) touched++
+      }
+    }
+  }
+  writeBackTexRef(texIndex, '', lay)
+  return touched > 0
+}
+
+/* 贴图引用写回（uv 编辑替换/移除 → 模型数据持久化）：
+    mc：texPaths 定位旧路径 → 解析命中键改写为智能引用（texPaths 同步更新支持连续替换）；
+    bb：texOrigin 定位原始下标写 source（dataURL 直接写；站内 URL 异步 fetch 转 dataURL，
+    转换失败保留 URL 兜底） */
+function writeBackTexRef(texIndex, texUrl, lay) {
+  const m = activeExportModel
+  if (!m || !lay) return
+  if (m.type === 'bb' && m.json && Array.isArray(lay.texOrigin) && Array.isArray(m.json.textures)) {
+    const src = String(texUrl || '')
+    for (let rawIdx = 0; rawIdx < lay.texOrigin.length; rawIdx++) {
+      if (lay.texOrigin[rawIdx] !== texIndex || !m.json.textures[rawIdx]) continue
+      if (src.startsWith('data:')) {
+        m.json.textures[rawIdx].source = src
+      } else if (src.startsWith('/')) {
+        fetch(apiUrl(src))
+          .then(r => (r.ok ? r.blob() : null))
+          .then(blob => (blob ? new Promise((resolve) => {
+            const rd = new FileReader()
+            rd.onload = () => resolve(String(rd.result))
+            rd.onerror = () => resolve(null)
+            rd.readAsDataURL(blob)
+          }) : null))
+          .then(dataUrl => { if (dataUrl) m.json.textures[rawIdx].source = dataUrl })
+          .catch(() => {})
+      }
+    }
+    return
+  }
+  if (m.type === 'mc' && Array.isArray(lay.texPaths) && Array.isArray(m.parts)) {
+    const oldPath = lay.texPaths[texIndex]
+    if (typeof oldPath !== 'string') return
+    const ref = texUrlToRef(texUrl, m.ctx)
+    if (ref == null) return
+    for (const p of m.parts) {
+      if (p && p.textures) writeMcTexRef(p.textures, oldPath, ref)
+    }
+    lay.texPaths[texIndex] = texPathForRef(ref)
+  }
 }
 
 /* UV 视图 hover/选中 → 3D 视口对应面 emissive 高亮 */
@@ -974,9 +1233,10 @@ function notifyModelShown(layout) {
 
 /* ── 对外入口 ─────────────────────────────────────── */
 
-/* 获取 Blockbench .bbmodel JSON（供缩略图离屏渲染复用） */
-export async function fetchBbModelJson(id) {
-  const data = await fetchOkData('/api/blockbench/models/' + encodeURIComponent(id))
+
+/* 获取导入模型 JSON（data/imported-models，可能是 .bbmodel 或 MC .json；供缩略图/视口复用） */
+export async function fetchImportedModelJson(id) {
+  const data = await fetchOkData('/api/imported-models/' + encodeURIComponent(id))
   const json = data && data.json
   return (json && typeof json === 'object') ? json : null
 }
@@ -996,7 +1256,7 @@ export async function viewMcModelInViewport({ api, packName, rel, fileRoot }) {
       partLayout = buildMcLayout(part.elements, part.textures, api, packName, fileRoot)
     } else {
       /* sprite 合成 element（mesh 挂引用 → 贴图替换联动；UV 编辑不适用） */
-      const spriteEl = { faces: { sprite: { texture: (part.textures && part.textures.layer0 != null) ? '#layer0' : undefined } } }
+      const spriteEl = { faces: { sprite: { texture: spriteTexKey(part.textures) || undefined } } }
       sub = buildItemSpriteGroup(part.textures, api, packName, fileRoot)
       if (sub && sub.children[0]) sub.children[0].userData.mcElement = spriteEl
       noElements = true
@@ -1017,10 +1277,78 @@ export async function viewMcModelInViewport({ api, packName, rel, fileRoot }) {
   const shown = showCustomModel(group)
   if (shown) {
     lastLayout = layout
-    notifyModelShown(layout)
-    bindActiveModel(group, { type: 'mc', parts, filename: rel.split('/').pop() || 'model.json' })
+    notifyModelShown(lastLayout)
+    bindActiveModel(group, { type: 'mc', parts, filename: rel.split('/').pop() || 'model.json', ctx: { api, packName } })
   }
   return { shown, noElements }
+}
+
+
+async function buildMcGroupFromRel(fileRoot, rel, texRoot, overrideUrl) {
+  const texSource = texRoot || fileRoot
+  const fbRoot = (texRoot && !overrideUrl) ? fileRoot : undefined
+  const { parts } = await resolveMcModelAsset(undefined, undefined, rel, fileRoot)
+  let layout = null
+  const subs = []
+  let anyTransform = false
+  for (const part of parts) {
+    let sub = null
+    let partLayout = null
+    if (part.elements.length) {
+      sub = buildModelGroup(part.elements, mcMatFor(part.textures, undefined, undefined, texSource, fbRoot, overrideUrl), 16)
+      partLayout = buildMcLayout(part.elements, part.textures, undefined, undefined, texSource)
+    } else {
+      const spriteEl = { faces: { sprite: { texture: spriteTexKey(part.textures) || undefined } } }
+      sub = buildItemSpriteGroup(part.textures, undefined, undefined, texSource)
+      if (sub && sub.children[0]) sub.children[0].userData.mcElement = spriteEl
+      partLayout = buildSpriteLayout(part.textures, undefined, undefined, spriteEl, texSource)
+    }
+    if (!sub || !sub.children.length) continue
+    if (part.transform) { applyItemTransformation(sub, part.transform); anyTransform = true }
+    if (!layout && partLayout) layout = partLayout
+    subs.push(sub)
+  }
+  if (!subs.length) return null
+  let group
+  if (subs.length === 1 && !anyTransform) group = subs[0]
+  else { group = new THREE.Group(); for (const s of subs) group.add(s) }
+  return { group, layout, parts, filename: rel.split('/').pop() || 'model.json' }
+}
+
+export async function viewMcModelPairInViewport({ left, right, isStale }) {
+  const [lr, rr] = await Promise.all([
+    left ? buildMcGroupFromRel(left.fileRoot, left.rel).catch(() => null) : Promise.resolve(null),
+    right ? buildMcGroupFromRel(right.fileRoot, right.rel).catch(() => null) : Promise.resolve(null),
+  ])
+  if (isStale && isStale()) return { shown: false }
+  if (!lr && !rr) return { shown: false }
+  const shown = showCustomModelPair(lr && lr.group, rr && rr.group)
+  if (shown) {
+    lastLayout = (lr && lr.layout) || (rr && rr.layout)
+    notifyModelShown(lastLayout)
+    if (lr) bindActiveModel(lr.group, { type: 'mc', parts: lr.parts, filename: lr.filename })
+    else if (rr) bindActiveModel(rr.group, { type: 'mc', parts: rr.parts, filename: rr.filename })
+  }
+  return { shown }
+}
+
+/* 贴图效果对比：左=左模型+左贴图，右=右模型+右贴图（模型或贴图缺失回退左侧）。
+   右侧展示替换后模型与贴图的组合效果；左侧模型缺失时两侧几何均取右侧模型 */
+export async function viewMcModelTexCompareInViewport({ left, right, rightRoot, leftTexUrl, rightTexUrl, isStale }) {
+  const rGeo = right || left
+  const [lr, rr] = await Promise.all([
+    left ? buildMcGroupFromRel(left.fileRoot, left.rel, null, leftTexUrl).catch(() => null) : Promise.resolve(null),
+    rGeo ? buildMcGroupFromRel(rGeo.fileRoot, rGeo.rel, rGeo === right ? rightRoot : rGeo.fileRoot, rightTexUrl).catch(() => null) : Promise.resolve(null),
+  ])
+  if (isStale && isStale()) return { shown: false }
+  if (!lr && !rr) return { shown: false }
+  const shown = showCustomModelPair(lr && lr.group, rr && rr.group)
+  if (shown) {
+    lastLayout = (lr && lr.layout) || (rr && rr.layout)
+    notifyModelShown(lastLayout)
+    if (lr) bindActiveModel(lr.group, { type: 'mc', parts: lr.parts, filename: lr.filename })
+  }
+  return { shown }
 }
 
 /* 获取模型引用的材质贴图列表（不展示，供预览面板列出"对应的材质有哪些"）：
@@ -1034,7 +1362,7 @@ export async function resolveModelTexList({ api, packName, rel, fileRoot }) {
     if (part.elements.length) {
       lay = buildMcLayout(part.elements, part.textures, api, packName, fileRoot)
     } else {
-      const spriteEl = { faces: { sprite: { texture: (part.textures && part.textures.layer0 != null) ? '#layer0' : undefined } } }
+      const spriteEl = { faces: { sprite: { texture: spriteTexKey(part.textures) || undefined } } }
       lay = buildSpriteLayout(part.textures, api, packName, spriteEl, fileRoot)
     }
     if (!lay || !Array.isArray(lay.textures)) continue
@@ -1045,21 +1373,78 @@ export async function resolveModelTexList({ api, packName, rel, fileRoot }) {
   return [...seen].map(([name, url]) => ({ name, url }))
 }
 
-/* Blockbench .bbmodel → 3D 视口；返回 { shown } */
-export async function viewBbModelInViewport({ id }) {
-  const data = await fetchOkData('/api/blockbench/models/' + encodeURIComponent(id))
-  const json = data && data.json
-  if (!json || typeof json !== 'object' || !Array.isArray(json.elements) || !json.elements.length) {
-    return { shown: false }
+
+/* 导入模型（data/imported-models/<id>/model.*，.bbmodel 或 MC .json）→ 3D 视口；返回 { shown } */
+export async function viewImportedModelInViewport({ id }) {
+  const json = await fetchImportedModelJson(id)
+  if (!json || typeof json !== 'object') return { shown: false }
+  const isBb = !!(json.meta && (json.meta.format === 'bbmodel' || json.meta.model_format))
+  if (isBb) {
+    if (!Array.isArray(json.elements) || !json.elements.length) return { shown: false }
+    const uvScale = Number.isFinite(+json.resolution) && +json.resolution > 0 ? +json.resolution : 16
+    const group = buildModelGroup(json.elements, bbMatFor(json.textures, 'bbm:' + id), uvScale)
+    if (!group.children.length) return { shown: false }
+    const shown = showCustomModel(group)
+    if (shown) {
+      lastLayout = buildBbLayout(json)
+      notifyModelShown(lastLayout)
+      bindActiveModel(group, { type: 'bb', json, filename: (id || 'model') + '.bbmodel' })
+    }
+    return { shown }
   }
-  const uvScale = Number.isFinite(+json.resolution) && +json.resolution > 0 ? +json.resolution : 16
-  const group = buildModelGroup(json.elements, bbMatFor(json.textures, 'bbm:' + id), uvScale)
+  /* MC .json：自包含 elements（导入文件无包上下文，贴图引用按命名空间解析，缺失回退占位） */
+  if (!Array.isArray(json.elements) || !json.elements.length) return { shown: false }
+  const textures = (json.textures && typeof json.textures === 'object') ? json.textures : {}
+  const group = buildModelGroup(json.elements, mcMatFor(textures, undefined, undefined), 16)
   if (!group.children.length) return { shown: false }
   const shown = showCustomModel(group)
   if (shown) {
-    lastLayout = buildBbLayout(json)
+    const parts = [{ elements: json.elements, textures }]
+    lastLayout = buildMcLayout(json.elements, textures, undefined, undefined)
     notifyModelShown(lastLayout)
-    bindActiveModel(group, { type: 'bb', json, filename: (id || 'model') + '.bbmodel' })
+    bindActiveModel(group, { type: 'mc', parts, filename: (id || 'model') + '.json' })
+  }
+  return { shown }
+}
+
+/* 自定义模型（data/custom-models/<id>/model.json）→ 3D 视口；返回 { shown }
+    模型 JSON 自包含 elements（模板已内联展开）；若有 parent 且无 elements，
+    沿官方包 parent 链合并；贴图从官方包加载（api/packName 可缺省 → 占位灰） */
+export async function viewCustomModelInViewport({ id, api, packName }) {
+  const model = await fetchOkData('/api/custom-models/' + encodeURIComponent(id) + '/raw')
+  if (!model || typeof model !== 'object') return { shown: false }
+  let elements = Array.isArray(model.elements) ? model.elements : null
+  let textures = (model.textures && typeof model.textures === 'object') ? model.textures : {}
+  if (model.parent) {
+    const parentRel = parentModelPath(model.parent)
+    if (parentRel) {
+      try {
+        const p = await resolveMcModelRaw(api, packName, parentRel, 0, undefined)
+        if (!elements && p.elements.length) elements = p.elements
+        const merged = { ...p.textures }
+        for (const k in textures) merged[k] = textures[k]
+        textures = merged
+      } catch {}
+    }
+  }
+  textures = expandTextureAliases(textures)
+  let group = null
+  let layout = null
+  if (elements && elements.length) {
+    group = buildModelGroup(elements, mcMatFor(textures, api, packName), 16)
+    layout = buildMcLayout(elements, textures, api, packName)
+  } else {
+    const spriteEl = { faces: { sprite: { texture: spriteTexKey(textures) || undefined } } }
+    group = buildItemSpriteGroup(textures, api, packName)
+    if (group && group.children[0]) group.children[0].userData.mcElement = spriteEl
+    layout = buildSpriteLayout(textures, api, packName, spriteEl)
+  }
+  if (!group || !group.children.length) return { shown: false }
+  const shown = showCustomModel(group)
+  if (shown) {
+    lastLayout = layout
+    notifyModelShown(layout)
+    bindActiveModel(group, { type: 'mc', parts: [{ elements: elements || [], textures, transform: null }], filename: (id || 'custom') + '.json', ctx: { api, packName } })
   }
   return { shown }
 }

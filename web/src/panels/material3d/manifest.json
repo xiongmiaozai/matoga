@@ -6,6 +6,6 @@
   "css": "panel.css",
   "js": "panel.js",
   "mount": ".sidebar-right",
-  "order": 6,
+  "order": 7,
   "dynamic": true
 }

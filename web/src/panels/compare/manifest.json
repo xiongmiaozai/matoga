@@ -1,6 +1,6 @@
 {
   "id": "compare",
-  "title": "对比结果",
+  "title": "贴图对比",
   "icon": "i-compare",
   "html": "panel.html",
   "mount": "#workspace",

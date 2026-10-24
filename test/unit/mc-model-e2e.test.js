@@ -124,6 +124,13 @@ test('setup: 构造测试包 / 起服务 / patch TextureLoader', async () => {
     textures: { tex: 'minecraft:block/fire_0' },
     elements: [{ from: [0, 0, 0], to: [16, 16, 16], faces: { south: { texture: '#tex' } } }],
   }))
+  /* shulker_box 特殊渲染方块：模型链仅含 particle 键（无 layer0/elements），
+     parent 指向包内不存在的 template_shulker_box（测试内置兜底 + particle sprite 回退） */
+  put(MC_ROOT, 'MyPack/assets/minecraft/textures/block/yellow_shulker_box.png', PNG)
+  put(MC_ROOT, 'MyPack/assets/minecraft/models/item/yellow_shulker_box.json', JSON.stringify({
+    parent: 'minecraft:item/template_shulker_box',
+    textures: { particle: 'minecraft:block/yellow_shulker_box' },
+  }))
   put(MC_ROOT, 'MyPack/version.json', Buffer.from('{}'))
 
   const configStore = require('../../server/config/config-store')
@@ -306,6 +313,19 @@ test('内置 vanilla 基类回退：cube_bottom_top 键传递（end/side）', as
   assert.ok(mesh.material[4].map instanceof THREE.Texture, 'south 面贴图应用')
   assert.ok(texUrls.some(u => u.endsWith('sandstone_top.png')), 'end 键传递 → top 贴图请求')
   assert.ok(texUrls.some(u => u.endsWith('sandstone_side.png')), 'side 键传递 → side 贴图请求')
+})
+
+test('shulker_box particle 回退 + template_shulker_box 内置兜底：sprite 展示 particle 贴图', async () => {
+  texUrls.length = 0
+  const { r, group } = await view('assets/minecraft/models/item/yellow_shulker_box.json')
+  assert.equal(r.shown, true, 'particle 回退使 sprite 可展示（原先 shown:false → 贴图无法识别）')
+  assert.equal(r.noElements, true, '无 elements → sprite 分支')
+  assert.equal(group.children.length, 1)
+  const mesh = group.children[0]
+  assert.equal(mesh.geometry.type, 'PlaneGeometry', 'sprite 平面几何')
+  assert.ok(texUrls.some(u => u.endsWith('yellow_shulker_box.png')), 'particle 贴图已请求')
+  await new Promise(res => setTimeout(res, 10))
+  assert.ok(mesh.material.map instanceof THREE.Texture, 'particle 贴图异步应用到 sprite')
 })
 
 test('动画模型：getModelTexAnims 收集 + 多帧采样计划（缩略图动图数据源）', async () => {

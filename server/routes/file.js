@@ -5,6 +5,7 @@
  */
 
 const express = require('express')
+const fs = require('fs')
 const path = require('path')
 const { ok, fail, wrap } = require('../middleware/errors')
 const { guardRead, guardWrite } = require('../middleware/validate')
@@ -68,6 +69,21 @@ router.post('/thumb', wrap(async (req, res) => {
     return fail(res, 'ERR_INVALID_PARAM', 'invalid dataUrl')
   }
   ok(res, await thumbService.saveThumb(p, dataUrl))
+}))
+
+router.post('/write', wrap(async (req, res) => {
+  const p = guardWrite(req.body && req.body.path)
+  const dataUrl = req.body && req.body.dataUrl
+  if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/')) {
+    return fail(res, 'ERR_INVALID_PARAM', 'invalid dataUrl')
+  }
+  const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1)
+  if (!base64) return fail(res, 'ERR_INVALID_PARAM', 'empty image data')
+  const buf = Buffer.from(base64, 'base64')
+  await fs.promises.mkdir(path.dirname(p), { recursive: true })
+  await fs.promises.writeFile(p, buf)
+  fileService.invalidateHash(p)
+  ok(res, { path: p, size: buf.length })
 }))
 
 module.exports = router

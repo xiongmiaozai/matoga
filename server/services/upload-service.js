@@ -25,7 +25,10 @@ function cleanup() {
 function begin() {
   const now = Date.now()
   for (const [id, s] of sessions) {
-    if (now - s.created > TTL_MS) sessions.delete(id)
+    if (now - s.created > TTL_MS) {
+      try { fs.rmSync(s.rootPath, { recursive: true, force: true }) } catch {}
+      sessions.delete(id)
+    }
   }
   const uploadId = crypto.randomUUID()
   const rootPath = path.join(UPLOAD_DIR, uploadId)

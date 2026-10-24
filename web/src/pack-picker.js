@@ -5,27 +5,21 @@
  *
  * 快速选包：folder-card-head 中左右两侧的「选择」旁下拉入口，
  * 分组列出 mc-packs（MC 资产包）、official-packs（官方包）目录下的包，
- * 以及制作包（craft-pack 当前制作项目 craft-packs/我的制作包/），
  * 点击即以该包路径作为该侧对比目录加载（loadFromPath）。
 
- * 数据复用 /api/mc-packs/list、/api/mc-official/list（同构 { root, exists, packs }）
- * 与 /api/craft-pack/current（当前制作项目，经 pick 适配为统一包项）。
+ * 数据复用 /api/mc-packs/list、/api/mc-official/list（同构 { root, exists, packs }）。
  */
 
 import { showToast } from './core.js'
 import { loadFromPath } from './actions.js'
 import { t, onLocaleChange } from './i18n.js'
+import { apiUrl } from './utils.js'
 
 const GROUPS = [
   { key: 'mc',       api: '/api/mc-packs/list',    labelKey: 'sidebar.mcPacksGroup',       emptyKey: 'sidebar.quickMcEmpty',
     pick: (d) => (d && d.packs) || [] },
   { key: 'official', api: '/api/mc-official/list', labelKey: 'sidebar.officialGroup',      emptyKey: 'sidebar.quickOfficialEmpty',
     pick: (d) => (d && d.packs) || [] },
-  { key: 'craft',    api: '/api/craft-pack/current', labelKey: 'sidebar.craftGroup',         emptyKey: 'sidebar.quickCraftEmpty',
-    pick: (d) => {
-      const p = d && d.pack
-      return p ? [{ name: p.name, fullPath: p.dir, packFormat: p.packFormat, fileCount: p.fileCount, recursive: true }] : []
-    } },
 
 ]
 
@@ -37,9 +31,7 @@ let openSide = null
 let openBtn = null
 let seq = 0
 
-function apiUrl(p) {
-  return (window.matogaCore && window.matogaCore.url) ? window.matogaCore.url(p) : p
-}
+
 
 async function fetchGroup(group) {
   const hit = cache.get(group.key)

@@ -11,7 +11,8 @@ import { renderResult, renderSidebar, updateSortIndicators, selectGroup, initVie
 import {
   loadFromPath, loadFolder, updateCompareButton, saveOptions,
   undo, updateUndoBtn, swapFolders, exportResult, exportHtml,
-  batchCopyToSide, reloadAndCompare, handleAction
+  batchCopyToSide, reloadAndCompare, handleAction,
+  setGroupTag, clearGroupTag
 } from './src/actions.js'
 import {
   setGeometry, setMetalness, setRoughness, setNormalScale, setEmissiveIntensity,
@@ -39,24 +40,23 @@ import { initPanelLoader } from './src/panel-loader.js'
 import { initPackPickers } from './src/pack-picker.js'
 import { toggleWindow } from './src/floating-window.js'
 import { initAssetLibrary } from './src/asset-library.js'
+import { uiPrompt } from './src/ui-dialog.js'
 
 import {
   leftBtn, rightBtn, exportBtn, exportHtmlBtn,
   clearMemBtn, batchRightBtn, batchLeftBtn, undoBtn,
   compareBtn2, swapBtn2,
   recursiveChk, onlyMissingChk, hashChk, ignoreChk, ignoreInput,
-  searchInput, resultBody, leftPathEl, rightPathEl
+  resultBody, leftPathEl, rightPathEl
 } from './src/core.js'
 
 {
   const nrBtn = document.getElementById('nodeRelBtn')
   const npBtn = document.getElementById('nodePreviewBtn')
-  const bbBtn = document.getElementById('blockbenchBtn')
   if (nrBtn) nrBtn.addEventListener('click', () => toggleWindow('nodeRel'))
   if (npBtn) npBtn.addEventListener('click', () => toggleWindow('nodePreview'))
-  if (bbBtn) bbBtn.addEventListener('click', () => toggleWindow('blockbench'))
   document.addEventListener('fw:toggle', (e) => {
-    const btn = e.detail.id === 'nodeRel' ? nrBtn : (e.detail.id === 'nodePreview' ? npBtn : (e.detail.id === 'blockbench' ? bbBtn : null))
+    const btn = e.detail.id === 'nodeRel' ? nrBtn : (e.detail.id === 'nodePreview' ? npBtn : null)
     if (btn) btn.classList.toggle('fw-active', !!e.detail.open)
   })
 }
@@ -79,13 +79,6 @@ exportBtn.addEventListener('click', exportResult)
 onlyMissingChk.addEventListener('change', () => { saveOptions(); renderResult() })
 hashChk.addEventListener('change', () => { saveOptions(); if (state.leftPath && state.rightPath) compare() })
 
-let _searchTimer = null
-searchInput.addEventListener('input', () => {
-  state.searchText = searchInput.value
-  state.renderLimit = 200
-  clearTimeout(_searchTimer)
-  _searchTimer = setTimeout(renderResult, 150)
-})
 
 document.querySelectorAll('input[name="viewMode"]').forEach(r => {
   r.addEventListener('change', () => { state.viewMode = r.value; state.collapsedFolders.clear(); saveOptions(); renderResult() })
@@ -134,27 +127,6 @@ updateSortIndicators()
 $('previewModal').addEventListener('click', closePreview)
 $('previewClose').addEventListener('click', (e) => { e.stopPropagation(); closePreview() })
 
-document.querySelectorAll('.status-filter-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.status-filter-btn').forEach(b => b.classList.remove('active'))
-    btn.classList.add('active')
-    state.statusFilter = btn.dataset.filter
-    state.renderLimit = 200
-    saveOptions()
-    renderResult()
-  })
-})
-
-document.querySelectorAll('.type-filter-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.type-filter-btn').forEach(b => b.classList.remove('active'))
-    btn.classList.add('active')
-    state.typeFilter = btn.dataset.typeFilter
-    state.renderLimit = 200
-    saveOptions()
-    renderResult()
-  })
-})
 
 ignoreChk.addEventListener('change', () => { saveOptions(); if (state.leftPath) loadFromPath('left', state.leftPath); if (state.rightPath) loadFromPath('right', state.rightPath) })
 let _ignoreTimer = null
@@ -176,13 +148,6 @@ undoBtn.addEventListener('click', () => { undo().catch(err => showToast(t('toast
 if (compareBtn2) compareBtn2.addEventListener('click', compare)
 if (swapBtn2) swapBtn2.addEventListener('click', swapFolders)
 
-
-document.querySelectorAll('[data-toggle-card]').forEach(el => {
-  el.addEventListener('click', () => {
-    const card = el.closest('.panel-card-collapsible')
-    if (card) card.classList.toggle('collapsed')
-  })
-})
 
 
 ;(() => {
@@ -230,8 +195,9 @@ document.querySelectorAll('[data-toggle-card]').forEach(el => {
 })()
 
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') { closePreview(); return }
-  if ((e.metaKey || e.ctrlKey) && e.key === 'f') { e.preventDefault(); searchInput.focus(); return }
+  if (e.key === 'Escape') {
+    closePreview(); return
+  }
   if ((e.metaKey || e.ctrlKey) && e.key === 'z') { e.preventDefault(); undo().catch(err => showToast(t('toast.undoError', { msg: err.message }))); return }
   const tag = e.target.tagName
   if (tag === 'INPUT' || tag === 'TEXTAREA') return
@@ -307,9 +273,27 @@ function initCtxMenu() {
       else if (act === 'copy-to-left') enabled = !!(g.right && state.leftPath)
       else if (act === 'copy-source') enabled = !!(g.left || g.right)
       else if (act === 'paste-source') enabled = !!state.copySource
+      else if (act === 'hide') enabled = !state.hiddenKeys.has(g.key)
+      else if (act === 'unhide') enabled = state.hiddenKeys.has(g.key)
+      else if (act === 'set-tag') enabled = true
+      else if (act === 'clear-tag') enabled = !!state.customTags[g.key]
       item.classList.toggle('disabled', !enabled)
       item.onclick = enabled ? () => {
-        if (act === 'copy-source') {
+        if (act === 'hide') {
+          state.hiddenKeys.add(g.key)
+          saveOptions()
+          renderResult()
+        } else if (act === 'unhide') {
+          state.hiddenKeys.delete(g.key)
+          saveOptions()
+          renderResult()
+        } else if (act === 'set-tag') {
+          uiPrompt({ title: t('ctx.setTag'), label: t('ctx.setTagLabel'), value: state.customTags[g.key] || '', placeholder: t('ctx.setTagPh'), okText: t('common.confirm'), cancelText: t('common.cancel') }).then(tag => {
+            if (tag != null && tag.trim()) setGroupTag(g, tag.trim())
+          })
+        } else if (act === 'clear-tag') {
+          clearGroupTag(g)
+        } else if (act === 'copy-source') {
           const side = g.left ? 'left' : 'right'
           state.copySource = { key: g.key, side }
           showToast(t('toast.copySourceSet', { name: g.key, dest: t('common.' + (side === 'left' ? 'right' : 'left')) }))
@@ -366,18 +350,8 @@ function initCtxMenu() {
   }
   if (cfg.sortKey) state.sortKey = cfg.sortKey
   if (cfg.sortDir) state.sortDir = cfg.sortDir
-  if (cfg.statusFilter) {
-    state.statusFilter = cfg.statusFilter
-    document.querySelectorAll('.status-filter-btn').forEach(b => {
-      b.classList.toggle('active', b.dataset.filter === cfg.statusFilter)
-    })
-  }
-  if (cfg.typeFilter) {
-    state.typeFilter = cfg.typeFilter
-    document.querySelectorAll('.type-filter-btn').forEach(b => {
-      b.classList.toggle('active', b.dataset.typeFilter === cfg.typeFilter)
-    })
-  }
+
+  if (Array.isArray(cfg.hiddenKeys)) state.hiddenKeys = new Set(cfg.hiddenKeys)
   updateSortIndicators()
 
   const tasks = []

@@ -10,7 +10,7 @@ const { middleware: auth } = require('./middleware/auth')
 const { fail } = require('./middleware/errors')
 const configStore = require('./config/config-store')
 const { trust } = require('./middleware/validate')
-const fs = require('fs')
+
 
 const ROOT = path.join(__dirname, '..')
 
@@ -33,13 +33,17 @@ function createApp() {
   api.use('/workspace', require('./routes/workspace'))
   api.use('/asset', require('./routes/asset'))
   api.use('/craft-pack', require('./routes/craft-pack'))
+  api.use('/craft-packs', require('./routes/craft-packs'))
 
   api.use('/mc-official', require('./routes/mc-official'))
   api.use('/mc-packs', require('./routes/mc-packs'))
+
   api.use('/node-projects', require('./routes/node-projects'))
   api.use('/shell', require('./routes/shell'))
   api.use('/upload', require('./routes/upload'))
-  api.use('/blockbench', require('./routes/blockbench'))
+
+  api.use('/imported-models', require('./routes/imported-models'))
+  api.use('/custom-models', require('./routes/custom-models'))
   api.use('/panels', require('./routes/panels'))
   app.use('/api', api)
 
@@ -48,18 +52,6 @@ function createApp() {
   app.use('/vendor/golden-layout', express.static(path.join(ROOT, 'node_modules', 'golden-layout', 'dist', 'esm'), { extensions: ['js'], setHeaders: (res) => res.set('Cache-Control', 'no-store') }))
   app.use('/vendor/golden-layout-css', express.static(path.join(ROOT, 'node_modules', 'golden-layout', 'dist', 'css'), { setHeaders: (res) => res.set('Cache-Control', 'no-store') }))
 
-  // Blockbench 模型开发板块：自托管 Web 产物 + 桥接插件 + 占位回退
-  const bbSvc = require('./services/blockbench-service')
-  app.use('/blockbench/plugins', express.static(path.join(ROOT, 'web', 'blockbench-plugins'), { setHeaders: (res) => res.set('Cache-Control', 'no-store') }))
-  app.use('/blockbench', express.static(bbSvc.BB_WEB_DIR, { index: 'index.html', setHeaders: (res) => res.set('Cache-Control', 'no-store') }))
-  app.use('/blockbench', (req, res, next) => {
-    if (req.method === 'GET' && (req.path === '/' || req.path === '/index.html')) {
-      if (!fs.existsSync(path.join(bbSvc.BB_WEB_DIR, 'index.html'))) {
-        return res.sendFile(path.join(ROOT, 'web', 'blockbench-placeholder.html'))
-      }
-    }
-    next()
-  })
 
   app.use(express.static(path.join(ROOT, 'web'), {
     index: 'index.html',

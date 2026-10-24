@@ -1,7 +1,7 @@
 /**
  * UV 贴图布局单测（mc-model-viewer 的 buildMcLayout / buildSpriteLayout / buildBbLayout）：
  * - buildMcLayout：#引用解析 → 贴图去重、uv 缺省全幅、rotation 归一化、mirror 标记、faces.all 展开
- * - buildSpriteLayout：layer0 → 单贴图 sprite 面；无 layer0 → null
+ * - buildSpriteLayout：layer0 → 单贴图 sprite 面；无 layer0 → null；particle 回退（shulker_box）
  * - buildBbLayout：无效贴图过滤但索引对齐、resolution uvScale、uv 缺省全幅
  * 运行于 NR_M3D_STUB=1（material3d 替换为 no-op，three 从 node_modules 解析）。
  */
@@ -20,6 +20,7 @@ test('setup: 加载 mc-model-viewer（material3d stub 模式）', async () => {
   globalThis.__mcml = m
   assert.equal(typeof m.buildMcLayout, 'function')
   assert.equal(typeof m.buildSpriteLayout, 'function')
+  assert.equal(typeof m.spriteTexKey, 'function')
   assert.equal(typeof m.buildBbLayout, 'function')
   assert.equal(typeof m.getLastModelLayout, 'function')
   assert.equal(m.getLastModelLayout(), null, '初始无布局')
@@ -109,6 +110,31 @@ test('buildSpriteLayout: layer0 → 单贴图 sprite 面；无 layer0 → null',
   assert.equal(f.tex, 0)
   assert.equal(buildSpriteLayout({}, '/api/mc-packs', 'MyPack'), null)
   assert.equal(buildSpriteLayout(null, '/api/mc-packs', 'MyPack'), null)
+})
+
+test('spriteTexKey: layer0 优先，缺失时回退 particle，均无 → null', () => {
+  const { spriteTexKey } = globalThis.__mcml
+  assert.equal(spriteTexKey({ layer0: 'minecraft:item/stick' }), '#layer0')
+  assert.equal(spriteTexKey({ particle: 'minecraft:block/stone' }), '#particle')
+  /* layer0 + particle 同时存在：layer0 优先（item/generated 契约） */
+  assert.equal(spriteTexKey({ layer0: 'a', particle: 'b' }), '#layer0')
+  assert.equal(spriteTexKey({}), null)
+  assert.equal(spriteTexKey(null), null)
+  assert.equal(spriteTexKey(undefined), null)
+})
+
+test('buildSpriteLayout: particle 回退（shulker_box 模型链仅含 particle 键）', () => {
+  const { buildSpriteLayout } = globalThis.__mcml
+  /* vanilla models/item/yellow_shulker_box.json 合并后：无 layer0，仅 particle → block/yellow_shulker_box */
+  const layout = buildSpriteLayout({ particle: 'minecraft:block/yellow_shulker_box' }, '/api/mc-packs', 'MyPack')
+  assert.ok(layout, 'particle 键应触发 sprite 回退（原先返回 null → 贴图无法识别）')
+  assert.equal(layout.sprite, true)
+  assert.equal(layout.textures.length, 1)
+  assert.equal(layout.textures[0].name, 'block/yellow_shulker_box')
+  assert.ok(layout.textures[0].url.includes('yellow_shulker_box.png'))
+  /* layer0 仍优先于 particle */
+  const l2 = buildSpriteLayout({ layer0: 'minecraft:item/stick', particle: 'minecraft:block/stone' }, '/api/mc-packs', 'MyPack')
+  assert.equal(l2.textures[0].name, 'item/stick')
 })
 
 test('buildBbLayout: 索引对齐（无效贴图过滤）+ resolution uvScale + uv 缺省', () => {

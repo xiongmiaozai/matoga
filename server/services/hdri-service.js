@@ -76,7 +76,7 @@ async function thumbInfo(fullPath) {
 
 async function saveThumb(fullPath, dataUrl) {
   await fs.promises.mkdir(THUMB_DIR, { recursive: true })
-  const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, '')
+  const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1)
   if (!base64 || base64.length > 10 * 1024 * 1024) return { success: false, error: 'invalid thumb data' }
   await fs.promises.writeFile(thumbPathFor(fullPath), Buffer.from(base64, 'base64'))
   const thumbUrl = '/api/hdri/thumb?path=' + encodeURIComponent(fullPath)

@@ -1,0 +1,11 @@
+{
+  "id": "uvEditor",
+  "title": "UV 编辑器",
+  "icon": "i-grid",
+  "html": "panel.html",
+  "css": "panel.css",
+  "js": "panel.js",
+  "mount": "body",
+  "order": 12,
+  "dynamic": true
+}

@@ -27,7 +27,9 @@ const SCHEMA = {
   sortKey: 'status',
   sortDir: 'asc',
   statusFilter: 'all',
-  typeFilter: 'all'
+  typeFilter: 'all',
+  contentFilter: 'all',
+  categoryFilter: { type: 'all', content: 'all', status: 'all', folder: 'all', tag: 'all' }
 }
 
 let writeQueue = Promise.resolve()

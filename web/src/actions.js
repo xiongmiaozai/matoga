@@ -8,7 +8,7 @@ import {
   state, showToast, undoBtn, compareBtn2, swapBtn2,
   recursiveChk, hashChk, onlyMissingChk, ignoreChk, ignoreInput,
   leftPathEl, rightPathEl,
-  KIND_TEXT
+  KIND_TEXT, ROLES
 } from './core.js'
 import {
   formatSize, formatDate, isImageFile, fileUrl, hasAny,
@@ -18,8 +18,6 @@ import { compare } from './compare.js'
 import { applyEntries, setLoading, renderResult, renderSidebar } from './render.js'
 import { t, getLocale } from './i18n.js'
 import { uiConfirm } from './ui-dialog.js'
-
-const ROLES = ['main', 'normal', 'specular']
 
 export function pushHistory(entries) {
   state.history.push({ entries, time: Date.now() })
@@ -99,9 +97,29 @@ export function saveOptions() {
     viewMode: state.viewMode,
     sortKey: state.sortKey,
     sortDir: state.sortDir,
-    statusFilter: state.statusFilter,
-    typeFilter: state.typeFilter
+
+    hiddenKeys: [...state.hiddenKeys],
+    categoryFilter: state.categoryFilter,
+    customTags: state.customTags
   })
+}
+
+export function setGroupTag(g, tag) {
+  if (!g || !tag) return
+  state.customTags[g.key] = tag
+  saveOptions()
+  renderResult()
+  if (state.selected && state.selected.key === g.key) renderSidebar()
+  showToast(t('toast.tagSet', { name: g.key, tag }))
+}
+
+export function clearGroupTag(g) {
+  if (!g) return
+  delete state.customTags[g.key]
+  saveOptions()
+  renderResult()
+  if (state.selected && state.selected.key === g.key) renderSidebar()
+  showToast(t('toast.tagCleared', { name: g.key }))
 }
 
 export function handleAction(act, g) {
@@ -117,6 +135,7 @@ export function handleAction(act, g) {
   }
   else if (act === 'copy-to-right') copyToSide(g, 'right')
   else if (act === 'copy-to-left') copyToSide(g, 'left')
+  else if (act === 'upload-model-right') uploadModelToRight(g)
 }
 
 export async function copyToSide(g, destSide) {
@@ -234,17 +253,6 @@ export async function reloadAndCompare() {
   }
 }
 
-export async function copySingleFile(srcPath, destPath, backupPath) {
-  let bkPath = null
-  if (backupPath) {
-    const bk = await window.api.backupFile(backupPath)
-    if (!bk.success) { showToast(t('toast.backupFailCancel')); return }
-    bkPath = bk.backupPath
-  }
-  const r = await window.api.copyFile(srcPath, destPath)
-  if (r.success) { pushHistory([{ destPath, backupPath: bkPath }]); showToast(t('toast.replacedTex')); await reloadAndCompare() }
-  else showToast(t('toast.replaceFail', { msg: r.error }))
-}
 
 export async function replaceWithExternalFile(currentPath) {
   const newFile = await window.api.selectFile()
@@ -277,6 +285,54 @@ export async function addTextureToRight(destPath) {
   if (!newFile) return
   const r = await window.api.copyFile(newFile, destPath)
   if (r.success) { pushHistory([{ destPath, backupPath: null }]); showToast(t('toast.addedTex')); await reloadAndCompare() }
+  else showToast(t('toast.replaceFail', { msg: r.error }))
+}
+
+export async function uploadModelToRight(g) {
+  if (!state.rightPath) { showToast(t('toast.destNotSelected')); return }
+  const newFile = await window.api.selectModelFile()
+  if (!newFile) return
+  const destPath = joinPath(state.rightPath, g.key)
+  const lastSep = Math.max(destPath.lastIndexOf('/'), destPath.lastIndexOf('\\'))
+  if (lastSep > 0) await window.api.createFolder(destPath.slice(0, lastSep))
+  const re = g.right && (g.right.file || g.right.dir)
+  let bkPath = null
+  if (re && !re.isDirectory) {
+    const bk = await window.api.backupFile(re.fullPath)
+    if (!bk.success) { showToast(t('toast.backupFailCancel2')); return }
+    bkPath = bk.backupPath
+  }
+  const r = await window.api.copyFile(newFile, destPath)
+  if (r.success) { pushHistory([{ destPath, backupPath: bkPath }]); showToast(t('toast.addedModel')); await reloadAndCompare() }
+  else showToast(t('toast.replaceFail', { msg: r.error }))
+}
+
+export function blankTexDataUrl(role) {
+  const c = document.createElement('canvas')
+  c.width = 16; c.height = 16
+  const ctx = c.getContext('2d')
+  ctx.fillStyle = role === 'normal' ? '#8080ff' : '#000000'
+  ctx.fillRect(0, 0, 16, 16)
+  return c.toDataURL('image/png')
+}
+
+export async function createBlankTextureToRight(g, role) {
+  if (!state.rightPath) { showToast(t('toast.destNotSelected')); return }
+  const mainEntry = (g.right && g.right.main) || (g.left && g.left.main)
+  if (!mainEntry) { showToast(t('toast.noMainTex')); return }
+  const dot = mainEntry.name.lastIndexOf('.')
+  const ext = dot >= 0 ? mainEntry.name.slice(dot) : '.png'
+  const suf = role === 'normal' ? '_n' : '_s'
+  const destPath = joinPath(state.rightPath, g.key + suf + ext)
+  const re = g.right && g.right[role]
+  let bkPath = null
+  if (re && !re.isDirectory) {
+    const bk = await window.api.backupFile(re.fullPath)
+    if (!bk.success) { showToast(t('toast.backupFailCancel2')); return }
+    bkPath = bk.backupPath
+  }
+  const r = await window.api.writeFile(destPath, blankTexDataUrl(role))
+  if (r.success) { pushHistory([{ destPath, backupPath: bkPath }]); showToast(t('toast.createdBlankTex')); await reloadAndCompare() }
   else showToast(t('toast.replaceFail', { msg: r.error }))
 }
 
@@ -333,7 +389,7 @@ export function exportHtml() {
   const c = state.counts || {}
   const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   const statusColor = { have: '#14ae67', diff: '#f7a600', partial: '#b8860b', miss: '#e5484d', extra: '#d97706' }
-  let rows = ''
+  const rows = []
   for (const g of state.result) {
     const type = g.isMaterial ? t('type.material') : g.isModel ? t('type.model') : g.isDir ? t('type.folder') : t('type.file')
     const color = statusColor[g.kind] || '#999'
@@ -342,10 +398,10 @@ export function exportHtml() {
     const mr = g.isMaterial ? (g.right && g.right.main) : (g.right && (g.right.file || g.right.dir))
     if (ml && !ml.isDirectory && isImageFile(ml.name)) leftThumb = `<img src="${fileUrl(ml.fullPath)}" style="width:48px;height:48px;object-fit:cover;border-radius:4px;" />`
     if (mr && !mr.isDirectory && isImageFile(mr.name)) rightThumb = `<img src="${fileUrl(mr.fullPath)}" style="width:48px;height:48px;object-fit:cover;border-radius:4px;" />`
-    rows += `<tr><td style="color:${color};font-weight:600;">${esc(KIND_TEXT[g.kind])}</td><td>${leftThumb}</td><td>${rightThumb}</td><td>${esc(g.key)}</td><td>${type}</td><td>${formatSize((ml || mr)?.size)}</td></tr>`
+    rows.push(`<tr><td style="color:${color};font-weight:600;">${esc(KIND_TEXT[g.kind])}</td><td>${leftThumb}</td><td>${rightThumb}</td><td>${esc(g.key)}</td><td>${type}</td><td>${formatSize((ml || mr)?.size)}</td></tr>`)
   }
   const summary = t('export.htmlSummary', { left: esc(state.leftPath), right: esc(state.rightPath), have: c.have||0, diff: c.diff||0, partial: c.partial||0, miss: c.miss||0, extra: c.extra||0 })
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${t('export.htmlTitle')}</title><style>body{font-family:system-serif;padding:20px;}h1{font-size:18px;}table{width:100%;border-collapse:collapse;font-size:13px;}th,td{padding:6px 10px;border-bottom:1px solid #eee;text-align:left;}th{background:#f5f7fa;}.sum{margin:10px 0;padding:10px;background:#f5f7fa;border-radius:8px;}</style></head><body><h1>${t('export.htmlH1')}</h1><div class="sum">${summary}</div><table><thead><tr>${t('export.htmlHeader')}</tr></thead><tbody>${rows}</tbody></table></body></html>`
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${t('export.htmlTitle')}</title><style>body{font-family:system-serif;padding:20px;}h1{font-size:18px;}table{width:100%;border-collapse:collapse;font-size:13px;}th,td{padding:6px 10px;border-bottom:1px solid #eee;text-align:left;}th{background:#f5f7fa;}.sum{margin:10px 0;padding:10px;background:#f5f7fa;border-radius:8px;}</style></head><body><h1>${t('export.htmlH1')}</h1><div class="sum">${summary}</div><table><thead><tr>${t('export.htmlHeader')}</tr></thead><tbody>${rows.join('')}</tbody></table></body></html>`
   const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -395,41 +451,41 @@ export function showPixelDiff(pairs, panel) {
     const content = document.createElement('div')
     container.appendChild(content)
 
+    const MAX_DIFF_DIM = 512
+    const computed = valid.map(([imgL, imgR, label]) => {
+      const ow = Math.max(imgL.naturalWidth, imgR.naturalWidth)
+      const oh = Math.max(imgL.naturalHeight, imgR.naturalHeight)
+      const sc = Math.min(1, MAX_DIFF_DIM / Math.max(ow, oh))
+      const w = Math.max(1, Math.round(ow * sc)), h = Math.max(1, Math.round(oh * sc))
+      const cL = document.createElement('canvas'), cR = document.createElement('canvas')
+      cL.width = cR.width = w; cL.height = cR.height = h
+      const xL = cL.getContext('2d'), xR = cR.getContext('2d')
+      xL.drawImage(imgL, 0, 0, w, h); xR.drawImage(imgR, 0, 0, w, h)
+      const dL = xL.getImageData(0, 0, w, h), dR = xR.getImageData(0, 0, w, h)
+      const diff = new Uint8ClampedArray(w * h)
+      const histData = new Uint32Array(256)
+      let totalDiff = 0
+      const channelDiff = [0, 0, 0]
+      for (let i = 0, p = 0; i < dL.data.length; i += 4, p++) {
+        const dr = Math.abs(dL.data[i] - dR.data[i])
+        const dg = Math.abs(dL.data[i + 1] - dR.data[i + 1])
+        const db = Math.abs(dL.data[i + 2] - dR.data[i + 2])
+        const d = (dr + dg + db) / 3
+        totalDiff += d; channelDiff[0] += dr; channelDiff[1] += dg; channelDiff[2] += db
+        diff[p] = d; histData[Math.min(255, Math.round(d))]++
+      }
+      return { w, h, ow, oh, dL, dR, diff, histData, totalDiff, channelDiff, label }
+    })
+
     function render() {
       content.innerHTML = ''
-      for (const [imgL, imgR, label] of valid) {
-        const w = Math.max(imgL.naturalWidth, imgR.naturalWidth)
-        const h = Math.max(imgL.naturalHeight, imgR.naturalHeight)
-        const cL = document.createElement('canvas'), cR = document.createElement('canvas'), cD = document.createElement('canvas')
-        cL.width = cR.width = cD.width = w; cL.height = cR.height = cD.height = h
-        const xL = cL.getContext('2d'), xR = cR.getContext('2d'), xD = cD.getContext('2d')
-        xL.drawImage(imgL, 0, 0); xR.drawImage(imgR, 0, 0)
-        const dL = xL.getImageData(0, 0, w, h), dR = xR.getImageData(0, 0, w, h)
-
-        let totalDiff = 0
-        const histData = new Uint32Array(256)
-        const channelDiff = [0, 0, 0]
-        const dD = xD.createImageData(w, h)
-        for (let i = 0; i < dL.data.length; i += 4) {
-          const dr = Math.abs(dL.data[i] - dR.data[i])
-          const dg = Math.abs(dL.data[i + 1] - dR.data[i + 1])
-          const db = Math.abs(dL.data[i + 2] - dR.data[i + 2])
-          const d = (dr + dg + db) / 3
-          totalDiff += d; channelDiff[0] += dr; channelDiff[1] += dg; channelDiff[2] += db
-          histData[Math.min(255, Math.round(d))]++
-          if (currentMode === 'diff') { dD.data[i] = d; dD.data[i + 1] = d; dD.data[i + 2] = d; dD.data[i + 3] = 255 }
-          else if (currentMode === 'heat') {
-            const tt = d / 255
-            dD.data[i] = tt < 0.5 ? 0 : Math.round((tt - 0.5) * 510)
-            dD.data[i + 1] = tt < 0.5 ? Math.round(tt * 510) : Math.round((1 - tt) * 510)
-            dD.data[i + 2] = tt < 0.5 ? Math.round((0.5 - tt) * 510) : 0
-            dD.data[i + 3] = 255
-          }
-        }
+      for (const c of computed) {
+        const { w, h, ow, oh, dL, dR, diff, histData, totalDiff, channelDiff, label } = c
         const pct = (totalDiff / (w * h * 255) * 100).toFixed(2)
         const row = document.createElement('div')
         row.style.cssText = 'margin-bottom:12px;'
-        row.innerHTML = `<div style="color:#fff;font-size:11px;margin-bottom:4px;">${t('diff.rowLabel', { label, pct, r: (channelDiff[0]/(w*h*255)*100).toFixed(1), g: (channelDiff[1]/(w*h*255)*100).toFixed(1), b: (channelDiff[2]/(w*h*255)*100).toFixed(1) })}</div>`
+        const dimNote = (w !== ow || h !== oh) ? ` (${w}×${h})` : ''
+        row.innerHTML = `<div style="color:#fff;font-size:11px;margin-bottom:4px;">${t('diff.rowLabel', { label, pct, r: (channelDiff[0]/(w*h*255)*100).toFixed(1), g: (channelDiff[1]/(w*h*255)*100).toFixed(1), b: (channelDiff[2]/(w*h*255)*100).toFixed(1) })}${dimNote}</div>`
 
         if (currentMode === 'hist') {
           const cH = document.createElement('canvas')
@@ -468,6 +524,22 @@ export function showPixelDiff(pairs, panel) {
           })
           row.appendChild(wrap)
         } else {
+          const cL = document.createElement('canvas'), cR = document.createElement('canvas'), cD = document.createElement('canvas')
+          cL.width = cR.width = cD.width = w; cL.height = cR.height = cD.height = h
+          cL.getContext('2d').putImageData(dL, 0, 0); cR.getContext('2d').putImageData(dR, 0, 0)
+          const xD = cD.getContext('2d')
+          const dD = xD.createImageData(w, h)
+          for (let p = 0, i = 0; p < diff.length; p++, i += 4) {
+            const d = diff[p]
+            if (currentMode === 'diff') { dD.data[i] = d; dD.data[i + 1] = d; dD.data[i + 2] = d; dD.data[i + 3] = 255 }
+            else {
+              const tt = d / 255
+              dD.data[i] = tt < 0.5 ? 0 : Math.round((tt - 0.5) * 510)
+              dD.data[i + 1] = tt < 0.5 ? Math.round(tt * 510) : Math.round((1 - tt) * 510)
+              dD.data[i + 2] = tt < 0.5 ? Math.round((0.5 - tt) * 510) : 0
+              dD.data[i + 3] = 255
+            }
+          }
           xD.putImageData(dD, 0, 0)
           const canvases = document.createElement('div')
           canvases.style.cssText = 'display:flex;gap:6px;'

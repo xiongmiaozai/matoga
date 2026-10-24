@@ -16,7 +16,8 @@ const { PKG } = require('./paths')
 const args = process.argv.slice(2)
 const lan = args.includes('--lan')
 const portArgIdx = args.indexOf('--port')
-const requestedPort = portArgIdx >= 0 ? parseInt(args[portArgIdx + 1], 10) : 5273
+const parsedPort = portArgIdx >= 0 ? parseInt(args[portArgIdx + 1], 10) : 5273
+const requestedPort = Number.isInteger(parsedPort) ? parsedPort : 5273
 const maxAttempts = 10
 
 function localIp() {
@@ -73,11 +74,11 @@ function openBrowser(url) {
   try {
     const { spawn } = require('child_process')
     if (process.platform === 'win32') {
-      spawn('cmd', ['/c', 'start', '', url], { detached: true, stdio: 'ignore' }).unref()
+      spawn('cmd', ['/c', 'start', '', url], { detached: true, stdio: 'ignore' }).on('error', () => {}).unref()
     } else if (process.platform === 'darwin') {
-      spawn('open', [url], { detached: true, stdio: 'ignore' }).unref()
+      spawn('open', [url], { detached: true, stdio: 'ignore' }).on('error', () => {}).unref()
     } else {
-      spawn('xdg-open', [url], { detached: true, stdio: 'ignore' }).unref()
+      spawn('xdg-open', [url], { detached: true, stdio: 'ignore' }).on('error', () => {}).unref()
     }
   } catch (e) {
     logger.warn('server', 'open browser failed: ' + e.message)

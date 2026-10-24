@@ -7,7 +7,7 @@
  * 可聚合导出为 craft-packs 下的真实 MC 资源包（pack.mcmeta + assets/** + hdri/**）；
  * 存入制作包即直接复制单个资产到当前制作包项目目录（craft-packs/我的制作包/，持续累积）。
  *
- * GET    /api/craft-pack             获取自选清单 { items }
+ * GET    /api/craft-pack             获取自选清单 { items }（条目附加 locatePath：定位用真实文件路径）
  * PUT    /api/craft-pack/items       覆盖保存自选清单 { items: [...] }
  * POST   /api/craft-pack/items       追加条目 { item }（按 key 去重）
  * DELETE /api/craft-pack/items/:key  移除条目（key 需 encodeURIComponent）
@@ -22,11 +22,14 @@
 const express = require('express')
 const { ok, fail, wrap } = require('../middleware/errors')
 const craft = require('../services/craft-pack-service')
+const configStore = require('../config/config-store')
 
 const router = express.Router()
 
 router.get('/', wrap(async (req, res) => {
-  ok(res, { items: craft.getSelection() })
+  /* 附加 locatePath：craftPath 副本失效时回退虚拟路径解析出的真实文件路径（仅响应，不落盘） */
+  const cfg = configStore.get()
+  ok(res, { items: craft.getSelection().map(it => ({ ...it, locatePath: craft.locateItem(it, cfg) })) })
 }))
 
 router.put('/items', wrap(async (req, res) => {

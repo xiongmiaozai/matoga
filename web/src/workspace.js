@@ -96,14 +96,17 @@ let PANEL_DEFS = [
   { id: 'folderCard',     title: '文件夹选择', icon: 'i-folder' },
   { id: 'compareSettings',title: '对比设置',    icon: 'i-compare' },
   { id: 'actions',        title: '操作',        icon: 'i-swap' },
-  { id: 'compare',        title: '对比结果',    icon: 'i-compare' },
+  { id: 'compare',        title: '贴图对比',    icon: 'i-compare' },
+  { id: 'modelCategory',  title: '模型分类',    icon: 'i-cube' },
+  { id: 'chart',          title: '可视化',      icon: 'i-pie' },
   { id: 'preview',        title: '预览',        icon: 'i-image' },
   { id: 'material3d',     title: '3D 视口',     icon: 'i-cube' },
   { id: 'detail',         title: '详情',        icon: 'i-layers' },
   { id: 'nodeCanvas',     title: '节点画布',    icon: 'i-node' },
   { id: 'nodeLibrary',    title: '节点库',      icon: 'i-layers' },
   { id: 'assetLibrary',   title: '总资产库',    icon: 'i-folder' },
-  { id: 'blockbench',     title: 'Blockbench',  icon: 'i-cube' },
+
+  { id: 'uvEditor',       title: 'UV 编辑器',   icon: 'i-grid' },
 
 ]
 
@@ -118,7 +121,7 @@ const DEFAULT_LAYOUT = row([
     stack([comp('compareSettings', '对比设置')]),
     stack([comp('actions', '操作')]),
   ], '1fr'),
-  stack([comp('compare', '对比结果')]),
+  stack([comp('compare', '贴图对比'), comp('modelCategory', '模型分类'), comp('chart', '可视化')]),
   col([
     stack([comp('preview', '预览')]),
     stack([comp('detail', '详情')]),
@@ -164,13 +167,16 @@ function extractPanels() {
     compareSettings: cards[0],
     actions: cards[1],
     compare: document.querySelector('.center'),
+    modelCategory: $('modelCategoryPanelWrap'),
+    chart: $('chartPanelWrap'),
     preview: $('previewPanelWrap'),
     material3d: $('material3dPanelWrap'),
     detail: $('detailPanelWrap'),
     nodeCanvas: $('nodeCanvasPanelWrap'),
     nodeLibrary: $('nodeLibraryPanelWrap'),
     assetLibrary: $('assetLibraryPanelWrap'),
-    blockbench: $('blockbenchPanelWrap'),
+
+    uvEditor: $('uvEditorPanelWrap'),
 
   }
   panelHomes = Object.values(panelEls)
@@ -704,7 +710,7 @@ async function importPreset(onDone) {
 
 async function createNewPreset(onDone) {
   const templates = Object.keys(userPresets)
-  let cfg = { root: row([stack([comp('compare', '对比结果')])]) }
+  let cfg = { root: row([stack([comp('compare', '贴图对比')])]) }
   let nameHint = '我的工作区'
   if (templates.length) {
     const choice = await showPrompt('选择模板创建新工作区:\n' + templates.map((t, i) => (i + 1) + '. ' + t).join('\n') + '\n\n输入模板名或留空创建空白工作区', templates[0])
@@ -951,6 +957,10 @@ export async function initWorkspace() {
     initGoldenLayout(savedConfig)
     renderWorkspaceBar()
     glReady = true
+    document.addEventListener('workspace:focus-panel', (e) => {
+      const id = e.detail && e.detail.id
+      if (id) focusPanel(id)
+    })
     if (layout) layout.updateSizeFromContainer()
     setTimeout(notifyResize, 100)
   } catch (e) {
@@ -961,5 +971,3 @@ export async function initWorkspace() {
     if (barEl) barEl.style.display = 'none'
   }
 }
-
-export function getLayout() { return layout }

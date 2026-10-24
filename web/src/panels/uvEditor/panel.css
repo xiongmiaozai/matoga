@@ -1,0 +1,74 @@
+/* UV 编辑器面板：模型选择 + 编辑器内核宿主布局（画布/工具条样式复用全局 uvv-* 与 panel-*） */
+
+.uv-panel-host {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+}
+
+.uv-panel-host .uvv-wrap {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+}
+
+.uv-model-sel {
+  max-width: 220px;
+  min-width: 120px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, .18);
+  background: rgba(255, 255, 255, .08);
+  color: #e8e8ee;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.uv-model-sel:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.uv-panel-hint {
+  font-size: 11px;
+  color: rgba(255, 255, 255, .55);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.uv-panel-hint.dirty {
+  color: #f0b060;
+}
+
+.uv-panel-spacer {
+  flex: 1;
+}
+
+.uv-save-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, .18);
+  background: rgba(255, 255, 255, .08);
+  color: #e8e8ee;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.uv-save-btn:not(:disabled):hover {
+  background: rgba(255, 255, 255, .16);
+}
+
+.uv-save-btn:disabled {
+  opacity: .45;
+  cursor: default;
+}
+
+.uv-save-btn.dirty {
+  border-color: #f0b060;
+  color: #f0d0a0;
+}

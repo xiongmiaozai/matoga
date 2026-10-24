@@ -836,13 +836,23 @@ body.node-mode #nodeView{ display:flex; }
   color:var(--text-dim); font-weight:600; cursor:pointer; user-select:none;
 }
 .asset-lib-section-head .caret{ transition:transform .2s var(--ease-out); display:inline-block }
-.asset-lib-section.collapsed .caret{ transform:rotate(-90deg) }
-.asset-lib-section.collapsed .asset-lib-grid{ display:none }
-.asset-lib-section.collapsed .asset-lib-sec-actions{ display:none }
+.asset-lib-section.collapsed:not(.search-open) .caret{ transform:rotate(-90deg) }
+.asset-lib-section.collapsed:not(.search-open) .asset-lib-grid{ display:none }
+.asset-lib-section.collapsed:not(.search-open) .asset-lib-sec-actions{ display:none }
 .asset-lib-section-head .cnt{
   font-size:10px; color:var(--text-dim); background:rgba(0,0,0,.3);
   padding:1px 7px; border:1px solid var(--border-soft); border-radius:10px; margin-left:auto;
 }
+.asset-lib-section-btn{
+  display:inline-flex; align-items:center; gap:3px;
+  padding:2px 8px; margin-left:6px;
+  border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--panel-bg); color:var(--text-muted);
+  font-size:10px; text-transform:none; letter-spacing:0; font-weight:500;
+  cursor:pointer; transition:all .15s var(--ease);
+}
+.asset-lib-section-btn:hover{ border-color:var(--primary); color:var(--primary); }
+.asset-lib-section-btn .ico{ width:12px; height:12px; }
 .asset-lib-grid{
   display:grid; grid-template-columns:repeat(auto-fill,minmax(72px,1fr));
   gap:6px; padding:4px 10px 10px;
@@ -855,6 +865,8 @@ body.node-mode #nodeView{ display:flex; }
 .asset-card:hover{ border-color:var(--primary); box-shadow:0 0 0 1px var(--primary), var(--shadow-xs); transform:translateY(-1px) }
 .asset-card:active{ cursor:grabbing }
 .asset-card.dragging{ opacity:.5 }
+.asset-card.is-hidden{ display:none }
+.asset-lib-group.is-hidden,.asset-lib-section.is-hidden,.asset-lib-empty.is-hidden{ display:none }
 .asset-card .ac-thumb{
   width:100%; aspect-ratio:1; background:rgba(0,0,0,.3); border-radius:var(--r-xs);
   display:flex; align-items:center; justify-content:center; overflow:hidden;
@@ -898,6 +910,8 @@ body.node-mode #nodeView{ display:flex; }
 .craft-pack-name{ font-weight:600; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 .craft-pack-meta{ font-size:10px; color:var(--text-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-left:auto }
 .craft-pack-row .asset-lib-sec-btn{ flex:none }
+/* 当前制作项目行（持续累积，非导出快照）：以主色描边与导出快照区分 */
+.craft-current-row{ border-color:var(--accent, #4f8cff); background:rgba(79,140,255,.08) }
 
 /* 资产库贴图子分组 */
 .asset-lib-groups{ display:flex; flex-direction:column; gap:4px; padding:2px 10px 8px }
@@ -909,13 +923,21 @@ body.node-mode #nodeView{ display:flex; }
 }
 .asset-lib-group-head:hover{ color:var(--text) }
 .asset-lib-group-head .caret{ transition:transform .2s var(--ease-out); display:inline-block }
-.asset-lib-group.collapsed .caret{ transform:rotate(-90deg) }
-.asset-lib-group.collapsed .asset-lib-grid{ display:none }
+.asset-lib-group.collapsed:not(.search-open) .caret{ transform:rotate(-90deg) }
+.asset-lib-group.collapsed:not(.search-open) .asset-lib-grid{ display:none }
 .asset-lib-group-head .gl{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 .asset-lib-group-head .cnt{
   font-size:10px; color:var(--text-dim); background:rgba(0,0,0,.3);
   padding:1px 7px; border:1px solid var(--border-soft); border-radius:10px; margin-left:auto; flex:none;
 }
+/* 分组头「打开本地位置」按钮（导入模型 / 自定义模型专属目录） */
+.asset-lib-group-head .asset-lib-group-btn{
+  display:inline-flex; align-items:center; justify-content:center; flex:none;
+  width:18px; height:18px; padding:0; border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--panel-bg); color:var(--text-muted); cursor:pointer; transition:all .15s var(--ease);
+}
+.asset-lib-group-head .asset-lib-group-btn:hover{ border-color:var(--primary); color:var(--primary) }
+.asset-lib-group-head .asset-lib-group-btn .ico{ width:11px; height:11px }
 .asset-lib-group .asset-lib-grid{ padding:6px }
 .asset-lib-more{
   grid-column:1/-1; font-size:10px; padding:4px 9px; border-radius:var(--r-xs); cursor:pointer;
@@ -941,6 +963,8 @@ body.node-mode #nodeView{ display:flex; }
   mask-image:linear-gradient(90deg,transparent 0,#000 12px,#000 calc(100% - 12px),transparent 100%);
 }
 .asset-lib-tags::-webkit-scrollbar{ display:none }
+/* 方块/物品切换按钮组（工具栏右侧行，不参与分类标签行的横向滚动） */
+.asset-lib-kind{ flex:none; }
 .asset-lib-tag{
   height:22px; padding:0 10px; background:transparent; border:none;
   border-radius:var(--r-xs); color:var(--text-muted); font-size:11px; font-weight:500;

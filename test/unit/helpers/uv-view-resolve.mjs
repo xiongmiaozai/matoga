@@ -49,6 +49,11 @@ export function highlightModelFace(el, key, on){
   globalThis.__uvHlCalls.push({ el, key, on })
   return true
 }
+export function clearModelTexture(texIndex, layout){
+  globalThis.__uvEditCalls = globalThis.__uvEditCalls || []
+  globalThis.__uvEditCalls.push({ fn: 'clear', texIndex })
+  return true
+}
 export function defaultFaceUv(key, from, to, uvScale){
   if (!Array.isArray(from) || !Array.isArray(to)) return null
   const fx = +from[0], fy = +from[1], fz = +from[2]

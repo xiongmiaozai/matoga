@@ -89,6 +89,7 @@
     <symbol id="i-node" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8.5 6h7M7.2 8.2l3.6 7.6M16.8 8.2l-3.6 7.6"/></symbol>
     <symbol id="i-tree" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="10" width="6" height="4" rx="1"/><rect x="16" y="3" width="6" height="4" rx="1"/><rect x="16" y="10" width="6" height="4" rx="1"/><rect x="16" y="17" width="6" height="4" rx="1"/><path d="M8 12h3M11 12V5h5M11 12h5M11 12v7h5"/></symbol>
     <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 0 0-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></symbol>
     <symbol id="i-move" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/></symbol>
   </svg>
 
@@ -97,13 +98,10 @@
       <img src="assets/matoga-logo-2x.png" alt="matoga" class="app-logo" />
       <span class="ver" data-i18n="app.version">v3.0</span>
     </div>
-    <div class="header-search">
-      <img src="assets/mc-icons/search.png" alt="" class="mc-ico" />
-      <input type="search" id="searchInput" data-i18n-placeholder="header.search" placeholder="搜索…  ⌘K" />
-    </div>
+
     <div class="header-actions">
 
-      <button id="blockbenchBtn" class="icon-btn" data-i18n-title="header.blockbenchWin" title="Blockbench 窗口"><svg class="ico"><use href="#i-cube"/></svg></button>
+
       <button id="nodeRelBtn" class="icon-btn" data-i18n-title="header.nodeRelWin" title="节点关系窗口"><svg class="ico"><use href="#i-tree"/></svg></button>
       <button id="nodePreviewBtn" class="icon-btn" data-i18n-title="header.nodePreviewWin" title="节点预览窗口"><svg class="ico"><use href="#i-eye"/></svg></button>
       <button id="langBtn" class="icon-btn" data-i18n-title="header.language" title="语言"><img src="assets/mc-icons/globe.png" alt="" class="mc-ico" /></button>
@@ -152,7 +150,6 @@
 
   <!-- 总资产库面板 -->
 
-  <!-- Blockbench 面板已迁移至 web/src/panels/blockbench/，由 panel-loader 动态加载 -->
 
   <div id="settingsDrawer" class="settings-drawer">
     <div class="settings-head">
@@ -243,6 +240,12 @@
     <button class="ctx-item" data-act="paste-source"><svg class="ico ico-sm"><use href="#i-compare"/></svg> <span data-i18n="ctx.paste">粘贴</span></button>
     <div class="ctx-sep"></div>
     <button class="ctx-item" data-act="copy"><svg class="ico ico-sm"><use href="#i-clipboard"/></svg> <span data-i18n="ctx.copyName">复制名称</span></button>
+    <div class="ctx-sep"></div>
+    <button class="ctx-item" data-act="hide"><svg class="ico ico-sm"><use href="#i-eye-off"/></svg> <span data-i18n="ctx.hide">隐藏</span></button>
+    <button class="ctx-item" data-act="unhide"><svg class="ico ico-sm"><use href="#i-eye"/></svg> <span data-i18n="ctx.unhide">取消隐藏</span></button>
+    <div class="ctx-sep"></div>
+    <button class="ctx-item" data-act="set-tag"><svg class="ico ico-sm"><use href="#i-list"/></svg> <span data-i18n="ctx.setTag">设置分类标签</span></button>
+    <button class="ctx-item" data-act="clear-tag"><svg class="ico ico-sm"><use href="#i-list"/></svg> <span data-i18n="ctx.clearTag">清除分类标签</span></button>
   </div>
 
   <div id="previewModal" class="preview-modal">

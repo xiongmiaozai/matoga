@@ -194,9 +194,7 @@ function renderAssetActions(a){
   const btns = []
   btns.push(`<button class="np-btn primary" data-np-asset-act="add">${esc(t(a.type === 'model' ? 'asset.detailViewViewport' : 'asset.detailAddCanvas'))}</button>`)
   btns.push(`<button class="np-btn" data-np-asset-act="fav">${esc(t(a.fav ? 'asset.detailUnfav' : 'asset.detailFav'))}</button>`)
-  if (a.onBlockbench){
-    btns.push(`<button class="np-btn" data-np-asset-act="blockbench">${esc(t('asset.ctxSendBlockbench'))}</button>`)
-  }
+
   if (a.path){
     btns.push(`<button class="np-btn" data-np-asset-act="locate">${esc(t('asset.detailLocate'))}</button>`)
     btns.push(`<button class="np-btn" data-np-asset-act="copyPath">${esc(t('asset.detailCopyPath'))}</button>`)
@@ -204,6 +202,9 @@ function renderAssetActions(a){
   btns.push(`<button class="np-btn" data-np-asset-act="copyName">${esc(t('asset.detailCopyName'))}</button>`)
   if (a.onRename){
     btns.push(`<button class="np-btn" data-np-asset-act="rename">${esc(t('asset.detailRename'))}</button>`)
+  }
+  if (a.onDelete){
+    btns.push(`<button class="np-btn danger" data-np-asset-act="delete">${esc(t('asset.detailDeleteModel'))}</button>`)
   }
   return `
     <div class="np-section">
