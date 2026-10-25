@@ -1,19 +1,19 @@
-# Modularization Plan — 全项目多模块化
+# Modularization Plan — 全项目多模块化（全量版）
 
-> Date: 2026-10-25 · Base: `dad0a8c` (branch `main`, 4 commits ahead of `origin/main`) · Status: PROPOSED
+> Date: 2026-10-26 · Base: `1c02440` (branch `main`) · Status: PROPOSED / IN PROGRESS
 > 前置文档：[module-plan.md](module-plan.md)（目录分层，已完成）、[refactor-report.md](refactor-report.md)（分层执行报告）、[node-canvas-modules.md](node-canvas-modules.md)（首轮文件拆分）
 
 ## 0. 目标与硬约束
 
-目标：把整个工程按文件拆成多模块版本。凡是单个文件职责混杂、体积过大，都要拆成一组高内聚的小模块 + 一个薄主文件（entry / index）。
+把整个工程按文件拆成多模块版本，**范围是全部 187 个 `.js` / `.mjs` / `.css` / `.html` 文件，共 42007 行，无豁免、无行数阈值**。
 
-硬约束（全部来自用户指令与本轮已定规则）：
+硬约束：
 
-1. **只搬代码，不改逻辑。** 拆分是物理搬运 + import 接线，不允许顺手改行为、改默认值、改 API 形状。
-2. **每拆完一个文件就验证一次。** 单测全绿 + 冒烟通过 + 服务能启动，三者缺一不算完成。任何一步验证失败就先修，不进入下一个文件。
+1. **只搬代码，不改逻辑。** 拆分是物理搬运 + import 接线，不允许改行为、改默认值、改 API 形状。
+2. **每拆完一个文件就验证一次。** 单测全绿 + 冒烟通过 + 服务能启动，三者缺一不算完成。验证失败先修，不进入下一个文件。
 3. **全部拆完并自动化验证通过后**，才推送分支、提 PR、合并。
-4. **稳定接口优先。** 拆分后主文件的导出名单（`export function ...`）保持与拆分前完全一致，调用方零改动。新增的内部模块不对调用方暴露。
-5. **不引入构建工具。** 项目是无 bundler 的原生 ESM（web）+ CommonJS（server），拆分只能用 `import`/`require` 静态引用，不新增打包步骤。
+4. **稳定接口优先。** 拆分后主文件/入口的导出名单与拆分前完全一致，调用方零改动。
+5. **不引入构建工具。** 无 bundler 的原生 ESM（web）+ CommonJS（server），拆分只用静态 `import` / `require`。
 
 ## 1. 现状实测
 
@@ -21,86 +21,119 @@
 
 | 范围 | 状态 |
 | --- | --- |
-| 目录分层（core/ server/ web/ electron/ tools/ 资产根英文名） | 已完成（`ae9d346`） |
-| NSIS 安装器（EULA 页 + 进程检测宏） | 已完成（`ab1818f`） |
-| `web/src/node-canvas.js` 首轮拆分（9 个子模块，主文件 3950 → 2644 行） | 已完成（`dad0a8c`） |
-| 单测基线 | 550 pass / 0 fail（`--test-concurrency=1`） |
-| 冒烟基线 | 19 smoke + 10 WS 通过 |
+| 目录分层（core/ server/ web/ electron/ tools/ 资产根英文名） | DONE `ae9d346` |
+| NSIS 安装器（EULA 页 + 进程检测宏） | DONE `ab1818f` |
+| `web/src/node-canvas.js` 首轮拆分（9 子模块，3950 → 2644 行） | DONE `dad0a8c` |
+| 本计划文档 | DONE `1c02440` |
 
-### 1.2 待拆文件清单（按体积分档）
+### 1.2 验证基线（实测）
 
-判据：**≥ 300 行视为需要拆分**。低于 300 行的文件已属单一职责模块，保留不动（在 §6 逐条记录豁免理由）。
-
-**P0 · 超大单文件（> 1000 行，必须拆）**
-
-| 文件 | 行数 | 拆分后预期 |
+| 项 | 结果 | 耗时 |
 | --- | --- | --- |
-| `web/src/node-canvas.js` | 2644 | 二次拆分 → 4 模块 + 主文件 ≤ 900 |
-| `web/src/asset-library.js` | 1958 | 7 模块 + 主文件 ≤ 300 |
-| `web/src/material3d.js` | 1603 | 7 模块 + 主文件 ≤ 600 |
-| `web/src/mc-model-viewer.js` | 1356 | 8 模块 + 主文件（re-export 门面）≤ 100 |
-| `web/src/render.js` | 1213 | 8 模块 + 门面 ≤ 120 |
-| `web/src/uv-editor-core.js` | 1164 | 4 模块 + 主文件 ≤ 300 |
+| `node --test --test-concurrency=1 "test/unit/**/*.test.js"` | 550 pass / 0 fail（53 个测试文件） | 47.4 s |
+| `node test/smoke/run.mjs` | api-smoke + ws-sync 通过 | 1.3 s |
+| `node server/index.js` 启动 + `/api/health` | 待每次拆分后实测 | ~3 s |
 
-**P1 · 大文件（300–1000 行）**
+单文件验证一轮 ≈ 55 s。187 个文件全量验证 ≈ 2.9 小时纯验证时间。
 
-| 文件 | 行数 | 说明 |
-| --- | --- | --- |
-| `web/src/workspace.js` | 894 | GoldenLayout 布局 + 预设管理，职责明显可分 |
-| `web/src/locales/zh.js` `en.js` | 738 / 738 | 按界面域拆成词条模块 |
-| `web/src/actions.js` | 533 | 历史/加载/复制/导出/像素对比五类动作 |
-| `web/src/node-preview.js` | 486 | 预览渲染 + 交互 |
-| `web/src/node-rel.js` | 442 | 节点关系/自动布局 |
-| `web/src/preview-panel.js` | 426 | 预览面板 |
-| `web/src/hdri-preset.js` | 339 | HDRI 预设库 |
-| `web/src/panels/uvEditor/panel.js` | 333 | UV 编辑器面板 |
-| `web/node-canvas.css` | 1243 | 按分节注释切分 |
-| `web/styles.css` | 1202 | 按分节注释切分 |
-| `web/mc-theme.css` | 1268 | 主题变量 + 组件样式 |
-| `web/node-editor.html` | 854 | 抽内联 script/style |
-| `server/services/mcmeta-service.js` | 835 | 解析/校验/输出三段 |
-| `test/unit/uv-view.test.js` | 766 | 按 describe 分组 |
+### 1.3 全量文件清单（187 个 / 42007 行）
 
-**P2 · 中型文件（300–450 行）**
+按目录：
 
-`server/services/craft-pack-service.js` (477)、`server/services/custom-model-service.js` (403)、`web/api/folder-tree.js` (419)、`web/workspace.css` (428)、`web/src/model-thumb.js` (305)、`server/config/node-project-store.js` (270)、`server/services/hdr-decode.js` (254)、`web/node-preview.css` (240)、`web/src/floating-window.js` (241)、`web/src/exr-loader.js` (216)、`web/src/uv-tex-picker.js` (216)、`web/src/create-model-dialog.js` (205)、`web/src/model-export.js` (193)、`web/src/pack-picker.js` (182)、`web/src/utils.js` (182)、`web/api/api-client.js` (201)、`web/src/preview2d.js` (155)、`web/index.html` (310)
-
-## 2. 拆分批次
-
-严格按此顺序推进，每一批内部也一样：一个文件 → 验证 → 提交，再下一个。
-
-| 批次 | 内容 | 前置 | 风险 |
+| 目录 | 文件数 | 行数 | 说明 |
 | --- | --- | --- | --- |
-| **B1** | `node-canvas.js` 二次拆分 | 无（首个，先跑基线） | 低：已有 9 模块经验 |
-| **B2** | `render.js`、`asset-library.js` | B1 | 中：跨模块共享状态较多 |
-| **B3** | `mc-model-viewer.js`、`uv-editor-core.js` | B2 | 中：three.js 资源生命周期 |
-| **B4** | `material3d.js` | B3 | 高：单例式可变状态最多 |
-| **B5** | `workspace.js`、`actions.js`、`node-preview.js`、`node-rel.js`、`preview-panel.js` | B4 | 中 |
-| **B6** | `hdri-preset.js`、`panels/uvEditor/panel.js`、其余 web/src 中文件 | B5 | 低 |
-| **B7** | CSS：`node-canvas.css`、`styles.css`、`mc-theme.css`、`workspace.css` 等 | B6 | 中：级联顺序敏感 |
-| **B8** | HTML：`node-editor.html`、`index.html` 抽内联脚本/样式 | B7 | 中：脚本加载顺序 |
-| **B9** | `locales/zh.js`、`locales/en.js` 按域拆分 | B8 | 低：纯数据 |
-| **B10** | server：`mcmeta-service.js`、`craft-pack-service.js`、`custom-model-service.js`、`node-project-store.js`、`hdr-decode.js`、`folder-tree.js` | B9 | 中：路由契约不变 |
-| **B11** | 测试：`uv-view.test.js` 等按 describe 分组 | B10 | 低 |
-| **B12** | 收尾：全量验证 + 打包校验 + 推送 + PR | 全部 | 见 §5 |
+| `web/` | 78 | 26983 | 前端：src/ 45 js + api/ 2 + 根 10 css/html + panels/ 21 |
+| `test/` | 59 | 8964 | 单测 53 + 冒烟 4 + helpers 2 |
+| `server/` | 45 | 4784 | 后端 CommonJS |
+| `electron/` | 2 | 118 | 桌面壳 |
+| `core/` | 1 | 28 | 共享错误类型 |
+| `tools/` | 1 | 70 | 仓库脚本 |
+| `website/` | 1 | 1060 | landing page |
 
-> 说明：B5 的五个文件是"面板/动作"一族，彼此互有调用，同批处理可以少一轮 import 修正。
+按体积分档（拆分难度递增）：
 
-## 3. 逐文件拆分设计
+| 档 | 行数区间 | 文件数 | 拆分手法 |
+| --- | --- | --- | --- |
+| S | 0–49 | 约 40 | 抽出常量/纯函数到一个兄弟文件 + 薄入口 |
+| M | 50–149 | 约 55 | 按职责切 2–4 个 part + 薄入口 |
+| L | 150–499 | 约 60 | 按职责切 3–7 个 part + 薄入口 |
+| XL | 500–999 | 约 22 | 按域切 4–8 个模块 + 门面 |
+| XXL | ≥1000 | 10 | 按域切 6–12 个模块 + 纯门面 |
 
-### 3.1 `web/src/node-canvas.js` → `web/src/node-canvas/`
+XXL 清单（优先级最高）：
 
-现状：主文件 2644 行，已抽走 algorithms/widgets/viewport/edges/evaluate/history/gestures/status/state 九模块，剩下的是编辑器外壳。
+| 文件 | 行数 |
+| --- | --- |
+| `web/src/node-canvas.js` | 2644 |
+| `web/src/asset-library.js` | 1958 |
+| `web/src/material3d.js` | 1603 |
+| `web/src/mc-model-viewer.js` | 1356 |
+| `web/mc-theme.css` | 1268 |
+| `web/node-canvas.css` | 1243 |
+| `web/src/render.js` | 1213 |
+| `web/styles.css` | 1202 |
+| `web/src/uv-editor-core.js` | 1164 |
+| `website/landing.html` | 1060 |
+
+## 2. 统一拆分规则（适用于全部 187 个文件）
+
+### 2.1 目录约定
+
+对文件 `path/foo.js`：
+
+```
+path/foo/            # 新建，与主文件同名
+  ├── <part-a>.js    # 按职责切的子模块
+  ├── <part-b>.js
+  └── ...
+path/foo.js          # 保留：薄入口（门面 / 接线 / 导出名单不变）
+```
+
+- 子模块文件命名 kebab-case，名字描述职责（`pack-paths.js`、`tex-refs.js`），不用 `a.js` / `part1.js` 这类无信息名。
+- 已有目录的文件（`web/src/node-canvas/*.js`、`web/src/panels/*`）在原地继续细化，不重复套壳。
+
+### 2.2 分档手法
+
+**S 档（0–49 行）**——文件本身已很小，拆法固定为"抽出可独立命名的常量/纯函数"：
+
+- 若有魔法值/配置常量 → `foo/constants.js`。
+- 若有 2 个以上可独立命名的纯函数 → 按函数拆到 `foo/<name>.js`。
+- 主文件保留唯一的对外入口（CommonJS 保持 `module.exports` 形状，ESM 保持 `export` 名单）。
+- **判定规则（可复现）**：主文件拆分后必须 ≤ 原行数 × 0.6，否则视为"未拆"，需再切一刀。若某文件确实只有一个函数且无内聚可切（例：`web/src/hdr-preview-worker.js` 27 行的 worker），则拆出该函数的**纯计算部分**与**消息处理部分**两半。
+
+**M 档（50–149 行）**：按"输入解析 / 核心逻辑 / 输出/副作用"三段切，通常 2–4 个 part。
+
+**L 档（150–499 行）**：先 `grep` 出函数清单，按前缀或领域聚类成 3–7 个 part；典型切法：路径/字符串工具、状态读写、DOM 渲染、事件绑定、对外 API。
+
+**XL 档（500–999 行）**：按域切 4–8 个模块；主文件只留装配与对外导出。
+
+**XXL 档（≥1000 行）**：按 §3 的逐文件设计执行，主文件退化为纯门面。
+
+### 2.3 语言差异
+
+| 类型 | 主文件保留 | 子模块导出 | 注意 |
+| --- | --- | --- | --- |
+| web ESM | `export` 名单完全不变 | `export function` | 循环依赖会静默变空绑定，见 §4 |
+| server CJS | `module.exports` 形状完全不变 | `module.exports = {...}` | 用 `Object.assign(module.exports, require('./foo/x'))` 合并 |
+| CSS | 主文件保留为 `@import` 入口 | 纯规则片段 | 顺序 = 原行号升序，只在顶层选择器间切 |
+| HTML | 保留结构 + 外链 | `*-boot.js` / part 片段 | 内联 `type="module"` 抽成外链 module，不能降级成经典 script |
+| 测试 | 按 `describe` 拆文件，文件名 `被测对象-场景.test.js` | — | 只搬断言，不改断言；总数不变 |
+
+## 3. XXL 文件逐文件设计
+
+### 3.1 `web/src/node-canvas.js`（2644）→ `web/src/node-canvas/`
+
+已抽走 algorithms/widgets/viewport/edges/evaluate/history/gestures/status/state 九模块，剩下是编辑器外壳。
 
 | 新模块 | 内容 |
 | --- | --- |
-| `node-canvas/graph.js` | 图状态读写、节点增删、连线增删、选中态 |
-| `node-canvas/node-dom.js` | 节点 DOM 构建、端口渲染、折叠、拖拽定位 |
-| `node-canvas/menus.js` | 右键菜单、节点库菜单、上下文动作绑定 |
-| `node-canvas/panels.js` | 右侧属性面板装配、面板 ↔ 节点同步 |
-| `node-canvas.js`（主文件） | 初始化、事件总线、接线、对外导出 |
+| `graph.js` | 图状态读写、节点增删、连线增删、选中态 |
+| `node-dom.js` | 节点 DOM 构建、端口渲染、折叠、拖拽定位 |
+| `menus.js` | 右键菜单、节点库菜单、上下文动作绑定 |
+| `panels.js` | 右侧属性面板装配、面板 ↔ 节点同步 |
+| `node-canvas.js` | 初始化、事件总线、接线、对外导出（15 个） |
 
-### 3.2 `web/src/asset-library.js` → `web/src/asset-library/`
+### 3.2 `web/src/asset-library.js`（1958）→ `web/src/asset-library/`
 
 | 新模块 | 内容（依据实测函数位置） |
 | --- | --- |
@@ -109,42 +142,40 @@
 | `asset-view.js` | `tryActivateModelViewport` / `viewMcModelAsset` / `viewImportedModelAsset` |
 | `asset-store.js` | `loadAssetStore` / `assetApiCall` / `itemFromStored` / `storeFromItem` / `sortItems` / 收藏·最近记录持久化 |
 | `asset-card.js` | `el` / `shade` / `makeCard` / `droppedOnCanvas` / `buildSection` |
-| `asset-collapse.js` | 三组折叠态读写（`loadCollapsed`/`saveCollapsed` 等） |
+| `asset-collapse.js` | 三组折叠态读写 |
 | `canvas-presets.js` | `loadCanvasPresets` / `saveCanvasPresetAs` |
-| `asset-library.js`（主文件） | 导出既有公开 API，装配以上模块 |
+| `asset-library.js` | 导出既有公开 API，装配以上模块 |
 
-### 3.3 `web/src/material3d.js` → `web/src/material3d/`
+### 3.3 `web/src/material3d.js`（1603）→ `web/src/material3d/`
 
 | 新模块 | 内容 |
 | --- | --- |
 | `loader-ui.js` | `_loadingEls` / `showLoading` / `hideLoading` / `setLoadingProgress` |
 | `geometry.js` | `scaleUV` / `computeTangents` / `withTangents` |
-| `env-lighting.js` | `createEnvTexture` / 灯光配置克隆与重建 / 预设应用 / 程序化天空 / HDR 环境切换 / 纹理旋转 |
+| `env-lighting.js` | `createEnvTexture` / 灯光配置克隆重建 / 预设应用 / 程序化天空 / HDR 环境切换 / 纹理旋转 |
 | `texture-channels.js` | `imgW`/`imgH` / `extractChannel` / `detectFormat` / 粗糙度·金属度·自发光·法线·高度提取 |
 | `texture-filter.js` | `applyOpacityMode` / `applyHeightFilter` / `applyTextureFilter` / `collectMaterialTextures` / `applyFilterToAllTextures` |
-| `viewport-host.js` | 可见宿主探测 / `moveViewportWidgets` / `setContainer` / `activateMaterial3DHost` / `registerMaterial3DHost` / `ensureHostObserver` |
+| `viewport-host.js` | 宿主探测 / `moveViewportWidgets` / `setContainer` / `activateMaterial3DHost` / `registerMaterial3DHost` / `ensureHostObserver` |
 | `camera.js` | 自由视角、飞行移动、`handleResize`、`animate` |
-| `material3d.js`（主文件） | `initMaterial3D` / `setupControls` / 材质构建 / 纹理装配 / 全部对外 setter |
+| `material3d.js` | `initMaterial3D` / `setupControls` / 材质构建 / 纹理装配 / 全部对外 setter |
 
-> 该文件的可变单例最多（材质、网格、渲染器、各种参数）。拆分原则：**状态留在主文件，行为搬到子模块，通过参数或 getter 拿状态**，避免把模块级 `let` 变成跨文件可写变量。
+> 该文件可变单例最多（材质、网格、渲染器、各参数）。原则：**状态留主文件，行为搬子模块，通过参数或 getter 取状态**。
 
-### 3.4 `web/src/mc-model-viewer.js` → `web/src/mc-model/`
+### 3.4 `web/src/mc-model-viewer.js`（1356）→ `web/src/mc-model/`
 
 | 新模块 | 内容 |
 | --- | --- |
 | `paths.js` | `fileUrl` / `joinPath` / `apiUrl` / `rawUrl` / `texCacheKey` / `fetchJson` / `fetchOkData` / `parentModelPath` |
-| `tex-refs.js` | 贴图引用路径解析与重写：`textureAssetPath` / `texPathForRef` / `packRelToMcRef` / `texUrlToRef` / `writeMcTexRef` / `resolveTextureRef` / `expandTextureAliases` |
-| `model-resolve.js` | 模型继承链解析：`resolveMcModelRaw` / `resolveMcModel` / `resolveItemDefRefs` / `isItemDefPath` / `isTemplateModelName` / `borrowTemplateTextures` / `resolveMcModelAsset` |
+| `tex-refs.js` | `textureAssetPath` / `texPathForRef` / `packRelToMcRef` / `texUrlToRef` / `writeMcTexRef` / `resolveTextureRef` / `expandTextureAliases` |
+| `model-resolve.js` | `resolveMcModelRaw` / `resolveMcModel` / `resolveItemDefRefs` / `isItemDefPath` / `isTemplateModelName` / `borrowTemplateTextures` / `resolveMcModelAsset` |
 | `geometry.js` | `applyItemTransformation` / `parseVec3` / `parseUv` / `defaultFaceUv` / `applyFaceUvs` / `applyElementTransform` / `expandElementFaces` / `buildModelGroup` |
 | `materials.js` | `applyTexParams` / `makeModelMaterial` / `loadTextureCached` / `attachPackTexture` / `mcMatFor` / `bbMatFor` / `spriteTexKey` |
-| `anim.js` | 材质动画：`parseAnimMeta` / `animFrameIndexAt` / `applyTexAnimFrame` / `loadAnimMetaCached` / `scheduleAnimTick` / `getModelTexAnims` |
+| `anim.js` | `parseAnimMeta` / `animFrameIndexAt` / `applyTexAnimFrame` / `loadAnimMetaCached` / `scheduleAnimTick` / `getModelTexAnims` |
 | `layouts.js` | `buildItemSpriteGroup` / `buildMcLayout` / `buildSpriteLayout` / `buildBbLayout` / `bindActiveModel` |
 | `uv-face.js` | `normFaceRotation` / `ensureExplicitFace` / `remapMeshFaceUv` / `texDisplayName` |
-| `mc-model-viewer.js`（主文件） | 纯 re-export 门面：保持全部既有导出名 |
+| `mc-model-viewer.js` | **纯 re-export 门面**，保持 43 个导出名 |
 
-> 该文件导出最多（实测 43 个 `export`），调用方（render.js / asset-library.js / 测试）依赖具体导出名，因此主文件做成**纯门面**，不承载逻辑。`render.js` 12 个导出、`node-canvas.js` 15 个导出同理。
-
-### 3.5 `web/src/render.js` → `web/src/render/`
+### 3.5 `web/src/render.js`（1213）→ `web/src/render/`
 
 | 新模块 | 内容 |
 | --- | --- |
@@ -156,178 +187,136 @@
 | `charts.js` | `donutChart` / `gaugeChart` / `barChart` / `renderChart` |
 | `sidebar.js` | `renderSidebar` / `updateSortIndicators` / `initViewTabs` |
 | `result.js` | `renderResult` / `selectGroup` / `appendGroupRows` / `appendSubRows` / `pvCell` / `bindEmptyCellActions` |
-| `render.js`（主文件） | 门面，保持既有导出 |
+| `render.js` | 门面，保持 12 个导出 |
 
-### 3.6 `web/src/uv-editor-core.js`
+### 3.6 `web/src/uv-editor-core.js`（1164）
 
-单文件内含 `createUvEditor(opts)` 一个工厂，内部是大段闭包。拆分方式是按**闭包内职责**切成纯函数模块，主文件保留工厂与闭包状态：
+`createUvEditor(opts)` 单工厂 + 大闭包。按**闭包内职责**切成参数化纯函数：
 
 | 新模块 | 内容 |
 | --- | --- |
 | `uv-editor/render.js` | 画布与图元绘制 |
 | `uv-editor/events.js` | 指针/滚轮/键盘事件处理纯函数 |
 | `uv-editor/ops.js` | UV 变换运算（缩放/旋转/翻转/对齐/吸附） |
-| `uv-editor-core.js`（主文件） | `createUvEditor` 工厂 + 闭包状态 + 接线 |
+| `uv-editor-core.js` | `createUvEditor` 工厂 + 闭包状态 + 接线 |
 
-> 因为状态在闭包里，子模块只接收显式参数，不碰闭包变量。这是四个 P0 里唯一"不能靠搬函数"完成的，需要逐段改写为参数化函数 —— 属于**本计划唯一允许触碰逻辑形态的地方**，但必须保持外部行为与测试不变。
+> 状态在闭包里，子模块只收显式参数，不碰闭包变量。这是 XXL 里唯一"不能靠搬函数"完成的——需逐段改写为参数化函数，属**本计划唯一允许触碰逻辑形态的地方**，但必须行为与测试不变。
 
-### 3.7 `web/src/workspace.js` → `web/src/workspace/`
+### 3.7 CSS（`mc-theme.css` 1268 / `node-canvas.css` 1243 / `styles.css` 1202）
 
-| 新模块 | 内容 |
-| --- | --- |
-| `dialogs.js` | `showPrompt` / `showConfirm` |
-| `layout-factory.js` | `comp`/`stack`/`col`/`row` / `collectComponentTypes` / `isConfigComplete` / `createLayoutRoot` / `getDefaultConfig` |
-| `panel-clone.js` | `extractPanels` / `restorePanelsToClassic` / `reconcileOrphanPanels` / `registerComponents` / `createPanelClone` / `stripCloneViewport` / `bindCloneDelegation` / `syncCloneFromOriginal` |
-| `persist.js` | `sanitizeConfig` / `applyConfig` / `autoSavePreset` / `suppressAutoSaveBriefly` / `flushAutoSave` / `sanitizeSavedConfig` |
-| `presets.js` | `loadPresets` / `saveCurrentAs` / `saveCurrent` / `deletePreset` / `activatePreset` / `resetCurrent` / `getPresetConfig` / `renamePresetDialog` / `duplicatePreset` / `exportPreset` / `exportAllPresets` / `importPreset` / `createNewPreset` |
-| `bar.js` | `renderWorkspaceBar` / `notifyResize` / `onStateChanged` / `findComponentItem` / `focusPanel` / `addWindowMenu` / `openPresetManager` |
-| `workspace.js`（主文件） | `initWorkspace` + 接线 |
+主文件保留为 `@import` 入口，part 按分节注释切，**顺序 = 原行号升序**：
 
-### 3.8 `web/src/actions.js` → `web/src/actions/`
+- `web/css/node-canvas/` ← 12 part：设计 token / 顶栏工具按钮 / 项目指示器 / 状态栏 / 搜索框 / 分组头 / 节点条目 / 节点库缩略图 / 网格 / 连线层 / 端口 / widget 区 / 折叠
+- `web/css/styles/` ← 25 part：Header / Workspace 三栏 / 卡片 / 快速选包 / 按钮 / 主区 / 右栏面板 / 2D 预览 / 模型对比 / 3D 面板 / Header search / 图标变体 / 预览 Tabs / 选项行 / 折叠卡片 / 空态 / 状态徽章 / 类型图标 / 详情 / 设置抽屉 / Toast·Modal / 滚动条 / 响应式 / HDRI / UV 选择器
+- `web/css/mc-theme/` ← 变量层（`--mc-*` token）+ 组件层
 
-| 新模块 | 内容 |
-| --- | --- |
-| `history.js` | `pushHistory` / `updateUndoBtn` / `undo` |
-| `load.js` | `loadFromPath` / `loadFolder` / `updateCompareButton` / `saveOptions` |
-| `copy.js` | `copyToSide` / `collectCopyPairs` / `executeCopy` / `executeCopyBatch` / `executeCopySequential` / `copySingleToRight` / `addTextureToRight` / `batchCopyToSide` / `swapFolders` |
-| `texture.js` | `replaceWithExternalFile` / `deleteTexture` / `blankTexDataUrl` / `createBlankTextureToRight` / `uploadModelToRight` |
-| `export.js` | `exportResult` / `exportHtml` |
-| `pixel-diff.js` | `showPixelDiff` |
-| `tag.js` | `setGroupTag` / `clearGroupTag` |
-| `actions.js`（主文件） | `handleAction` 分发器 + 门面 |
+风险控制：只在**顶层选择器之间**切，不跨 `@media` / `@keyframes` 块切断。切完做一次视觉比对。
 
-### 3.9 CSS 拆分
+### 3.8 `website/landing.html`（1060）
 
-策略：**主文件保留为入口，内部按分节注释切成 part 文件，用 `@import` 顺序引入**，级联顺序与原文件完全一致（part 文件按原行号升序排列）。
+抽内联 `<style>` → `website/css/landing/*.css`；抽内联 `<script>` → `website/js/*.js`；HTML 只留结构。
 
-- `web/node-canvas.css`（1243）→ `web/css/node-canvas/` 下 12 个 part（设计 token / 顶栏 / 项目指示器 / 状态栏 / 搜索框 / 分组头 / 节点条目 / 缩略图 / 网格 / 连线层 / 端口 / widget 区 / 折叠）
-- `web/styles.css`（1202）→ 25 个 part（Header / 三栏 / 卡片 / 选包 / 按钮 / 主区 / 右栏 / 2D 预览 / 模型对比 / 3D 面板 / 图标 / Tabs / 选项行 / 卡片折叠 / 空态 / 徽章 / 类型图标 / 详情 / 设置抽屉 / Toast·Modal / 滚动条 / 响应式 / HDRI / UV 选择器）
-- `web/mc-theme.css`（1268）→ 变量层 + 组件层
-- `web/workspace.css`（428）→ 按组件分 part
+## 4. 拆分造型规范（首轮经验）
 
-风险控制：每个 part 只允许在**顶层选择器之间**切分，不允许跨 `@media`/`@keyframes` 块切断。切片后必须比对渲染（人工核验一次：打开 `node-editor.html`、`index.html`，截图与拆分前一致）。
+1. **子模块不反向 import 主文件。** 需要主文件能力时用 `set*Hooks()` 注入回调；否则循环依赖在 ESM 里静默变空绑定。
+2. **注入调用放主文件末尾，不放初始化函数里。** 首轮踩过：放 `initNodeCanvas()` 内导致不走初始化的单测拿到空节点定义，一次挂 20 个测试。
+3. **跨模块可变绑定用访问器。** ESM 导入绑定只读，`let pinch` 这类需重新赋值的变量改成 `getPinch()` / `setPinch()`。
+4. **状态归属单一。** 可变闭包/单例状态只留主文件，子模块通过参数或 getter 读，禁止跨文件写同一变量。
+5. **导出名单不变。** 拆分前后对主文件做导出符号 diff（`node -e "console.log(Object.keys(require('./x')))"` 或 ESM 导入后 `Object.keys`），必须完全一致。
+6. **文件命名 kebab-case**，子模块目录与主文件同名。
 
-### 3.10 HTML 拆分
+## 5. 批次划分
 
-- `web/node-editor.html`（854，含 1 段内联 `<script>` + 1 段 `<style>`）→ 抽出 `web/src/node-editor-boot.js` 与既有样式文件；HTML 只保留结构与外链。
-- `web/index.html`（310，3 段内联 script）→ 同样抽出为 `web/src/index-boot.js` 等。
-- 校验：脚本抽离后 `<script type="module">` 的执行时机必须与原来一致（内联 module 是延迟执行的，外链 module 同样延迟），不能改成经典 `<script>`。
+按"风险从低到高、依赖从叶到根"排序。同一批次内仍严格一个文件一轮验证。
 
-### 3.11 locales 拆分
+| 批次 | 范围 | 文件数 | 重点 |
+| --- | --- | --- | --- |
+| **B0** | 基线复测 | — | 确认 550/0 + smoke + health |
+| **B1** | `web/src/node-canvas.js` 二次拆分 + `web/src/node-canvas/*` 九个模块细化 | 10 | 已有经验，最低风险 |
+| **B2** | `web/src/render.js`、`asset-library.js` | 2 | 跨模块共享状态多 |
+| **B3** | `web/src/mc-model-viewer.js`、`uv-editor-core.js` | 2 | three.js 生命周期 / 闭包改写 |
+| **B4** | `web/src/material3d.js` | 1 | 可变单例最多，单独成批 |
+| **B5** | web/src 其余 L/XL 档（workspace/actions/node-preview/node-rel/preview-panel/hdri-preset/model-thumb/panels） | 12 | 面板与动作互有调用 |
+| **B6** | web/src S/M 档其余全部 | 约 25 | 逐个小步 |
+| **B7** | `web/` 根 CSS 4 个 + `web/src/panels/*/panel.css` 2 个 | 6 | 级联顺序 |
+| **B8** | `web/` 根 HTML 2 个 + `web/src/panels/*/panel.html` 16 个 + `website/landing.html` | 19 | 内联抽离 / 结构片段 |
+| **B9** | `web/locales/en.js`、`zh.js` + `web/api/*` | 4 | 词条按域切，加 key 一致性断言 |
+| **B10** | `server/` 全部 45 个（先 services 大文件，后 routes/config/middleware） | 45 | CJS 导出形状不变 |
+| **B11** | `test/` 全部 59 个（先 unit 大文件，后 smoke/helpers） | 59 | 只搬断言，总数不变 |
+| **B12** | `electron/` 2 + `core/` 1 + `tools/` 1 | 4 | 最小，最后收尾 |
+| **B13** | 全量验证 + 打包 + 推送 + PR | — | 见 §6 |
 
-`zh.js` / `en.js` 各 738 行，是扁平词条对象。按界面域切分为 `locales/zh/{common,header,asset,canvas,preview3d,uv,settings,hdri,workspace,dialog}.js`，再在 `zh.js` 里合并成一个对象导出。
+总计 187 个文件。
 
-约束：**两份语言文件的 key 集合必须逐一相等**。当前 `test/unit/` 下**没有**任何 locales 一致性测试（已确认），所以拆分 B9 时需新增一个断言 `keys(zh) === keys(en)` 的单测，防止拆分过程中某一边漏搬词条。
+> B7/B8 的 `panel.html` 多为 8–54 行的结构片段，按 S/M 档规则切分（抽出重复结构块、把内联样式/脚本外置）。
 
-### 3.12 server 拆分
+## 6. 验证协议
 
-| 文件 | 拆分 |
-| --- | --- |
-| `server/services/mcmeta-service.js` (835) | `mcmeta/parse.js`（解析）、`mcmeta/validate.js`（校验与纠错）、`mcmeta/merge.js`（合并/继承）、`mcmeta-service.js`（门面，导出名单不变） |
-| `server/services/craft-pack-service.js` (477) | `craft-pack/scan.js` / `craft-pack/build.js` / 门面 |
-| `server/services/custom-model-service.js` (403) | `custom-model/storage.js` / `custom-model/convert.js` / 门面 |
-| `server/config/node-project-store.js` (270) | `node-project/io.js` / `node-project/schema.js` / 门面 |
-| `server/services/hdr-decode.js` (254) | `hdr/decode.js` / `hdr/encode.js` |
-| `web/api/folder-tree.js` (419) | `folder-tree/walk.js` / `folder-tree/filter.js` / 门面 |
-
-服务端是 CommonJS，拆分后用 `module.exports = { ...require('./mcmeta/parse'), ... }` 保持导出形状；路由文件与 `app.js` 一行都不用改。
-
-### 3.13 测试拆分
-
-`test/unit/uv-view.test.js`（766）按 `describe` 分组拆成 `uv-view-*.test.js` 若干文件。只搬运，不改断言。
-
-## 4. 拆分造型规范（沿用首轮经验）
-
-1. **子模块不反向 import 主文件。** 需要主文件的能力时，用 `set*Hooks()` 注入回调；否则会形成循环依赖，ESM 会静默拿到空绑定。
-2. **注入调用放在主文件末尾，不放初始化函数里。** 首轮踩过：放 `initNodeCanvas()` 内导致不走初始化的单测拿到空节点定义，一次挂 20 个测试。
-3. **跨模块可变绑定用访问器。** ESM 导入绑定只读，`let pinch` 这类需要重新赋值的变量必须改成 `getPinch()` / `setPinch()`。
-4. **状态归属单一。** 可变的闭包/单例状态只留在主文件，子模块通过参数或 getter 读取，禁止跨文件写同一变量。
-5. **导出名单不变。** 拆分前后对主文件做导出符号 diff，必须完全一致（新增内部模块不在此列）。
-6. **文件命名 kebab-case**，子模块目录与主文件同名（`foo.js` → `foo/`）。
-
-## 5. 验证协议
-
-### 5.1 每个文件拆完必跑（缺一不可）
+### 6.1 每个文件拆完必跑（缺一不可）
 
 ```powershell
-# 1) 单测（串行，避免抢 data/ 目录）
-npx node --test --test-concurrency=1 "test/unit/**/*.test.js"     # 期望 550+ pass / 0 fail
+# 1) 单测（串行，避免抢 data/ 目录）—— 47s
+node --test --test-concurrency=1 "test/unit/**/*.test.js"     # 期望 pass ≥550 / fail 0
 
-# 2) 冒烟（19 smoke + 10 WS）
-npm run test:smoke
+# 2) 冒烟（api-smoke + ws-sync）—— 1.3s
+node test/smoke/run.mjs
 
-# 3) 服务启动
-node server/index.js                                              # 监听 5273，GET /api/health 返回 200
+# 3) 服务启动 + 真实请求 —— ~3s
+#    起 node server/index.js，GET /api/health 必须返回 200，然后关闭
 ```
 
-第 3 项要求真实发一次请求确认服务可用，然后关闭进程。**只看到 "listening" 不算通过。**
+**只看到 "listening" 不算通过**，必须拿到 HTTP 200 响应体。
 
-### 5.2 每个批次结束额外跑
+### 6.2 每批次结束额外跑
 
-- 前端页面加载校验：`node-editor.html`、`index.html` 在无头浏览器打开，控制台零报错。
-- 导出符号 diff：`git show HEAD:old-file` 与拆分后的主文件对比 `export` 名单。
-- CSS 批次额外做一次视觉比对（拆分前/后截图同机位）。
+- 导出符号 diff（与批次基线 commit 对比）。
+- 前端页面无头加载：`node-editor.html` / `index.html` 控制台零报错。
+- CSS/HTML 批次：视觉比对（拆分前后同机位截图）。
 
-### 5.3 全部完成后（B12）
+### 6.3 全部完成后（B13）
 
 ```powershell
-npm test                       # 全量
-npm run test:smoke
-node server/index.js + health  # 启动校验
+npm test
+node test/smoke/run.mjs
+node server/index.js + /api/health
 node tools/verify-changelog.mjs
-npm run dist:win               # 打包仍成功（拆分不能破坏 packaging 契约）
-静默安装 /S /D= + 静默卸载 /S   # 安装器回归
+npm run dist:win                  # 打包契约不被破坏
+静默安装 /S /D= + 静默卸载 /S       # 安装器回归
 ```
-
-## 6. 豁免清单（不拆，并记录理由）
-
-| 文件 | 行数 | 理由 |
-| --- | --- | --- |
-| `web/src/node-canvas/{algorithms,widgets,viewport,edges,evaluate,history,gestures,status,state}.js` | 24–614 | 首轮拆分产物，已是单一职责 |
-| `web/src/core.js` (70) / `utils.js` (182) | < 300 | 通用工具，进一步切分只会增加 import 噪音 |
-| `web/src/i18n.js` (61) / `layout-config.js` (71) / `blurhash.js` (64) | < 300 | 单一职责 |
-| `server/*/` 下 < 300 行的服务与路由（约 35 个） | 12–160 | 每个文件已经只做一件事 |
-| `test/unit/*` < 300 行 | — | 测试文件按被测对象组织，无需强行对齐模块 |
-| `dist-electron/` 构建产物 | — | 生成物，不参与源码拆分 |
 
 ## 7. 风险与回滚
 
 | 风险 | 应对 |
 | --- | --- |
-| ESM 循环依赖导致静默空绑定 | §4 规则 1/2 + 每个文件拆完必跑冒烟（冒烟覆盖真实加载顺序） |
-| 闭包状态被跨文件污染（material3d / uv-editor） | 状态留主文件，子模块只收参数；该两文件单独成批，验证粒度更细 |
-| CSS `@import` 顺序错乱导致样式回退 | part 按原行号升序，仅顶层选择器之间切分，批次内做视觉比对 |
-| 拆分中途失败 | **每个文件一个 commit**，随时 `git checkout -- <file>` 回滚单个文件，不影响已完成的批次 |
-| 打包契约被破坏（pkg assets / electron-builder files glob） | 不移动 web/ 与 server/ 的对外路径；只在目录内部增子模块；B12 跑 `dist:win` 验证 |
-| 工作量过大导致中间态不可用 | 严格「一个文件 → 验证 → 提交」，任何时刻 HEAD 都是可运行状态 |
+| ESM 循环依赖导致静默空绑定 | §4 规则 1/2 + 冒烟覆盖真实加载顺序 |
+| 闭包状态被跨文件污染（material3d / uv-editor） | 状态留主文件，子模块只收参数；两者单独成批、验证更细 |
+| CSS `@import` 顺序错乱 | part 按原行号升序，只在顶层选择器间切，批次内视觉比对 |
+| 拆分中途失败 | **每个文件一个 commit**，`git checkout -- <file>` 可单文件回滚 |
+| 打包契约破坏（pkg assets / electron-builder files glob） | 不移动 web/ 与 server/ 对外路径，只在目录内增子模块；B13 跑 dist:win |
+| 187 文件工作量大、中间态不可用 | 严格「一文件 → 验证 → 提交」，任何时刻 HEAD 可运行 |
+| 小文件（<30 行）拆完收益低 | 按 §2.2 S 档规则执行（必须 ≤ 原行数 × 0.6），保证确实拆开 |
 
 ## 8. 完成定义（DoD）
 
-1. §1.2 中 P0/P1/P2 全部文件处理完毕：拆分完成，或在 §6 有明确豁免记录并更新本文档。
-2. 每个文件都有对应的验证记录（单测计数 + 冒烟结果 + 启动确认）。
-3. `npm test` 全绿且用例数 ≥ 550（拆分不得删测试；若拆测试文件，总数不变）。
-4. `npm run test:smoke` 通过；服务能启动并响应 `/api/health`。
+1. §1.3 中 187 个文件全部处理完毕（拆分完成，主文件满足 §2.2 的缩减比例）。
+2. 每个文件有验证记录（单测计数 + 冒烟 + health 状态）。
+3. `npm test` 全绿，用例数 ≥ 550（不得删测试）。
+4. `node test/smoke/run.mjs` 通过；服务能启动并响应 `/api/health`。
 5. `npm run dist:win` 成功，安装/卸载回归通过。
-6. 文档：更新 `docs/modularization-plan.md`（标记 DONE）+ 新增 `docs/modularization-report.md`（逐文件拆分前后行数与验证结果）。
-7. 推送分支 `refactor/v3-full-modularization` 到 fork，PR 描述含拆分清单与验证证据，提交合并。
+6. 文档：本文档标记 DONE + 新增 `docs/modularization-report.md`（逐文件拆分前后行数与验证结果）。
+7. 推送分支 `refactor/v3-full-modularization` 到 fork，PR 描述含全量拆分清单与验证证据，提交合并。
 
-### 8.1 PR 步骤的前置阻塞（必须提前解决）
+### 8.1 PR 前置：workflow scope
 
-当前 `gh` token 的 scope 是 `gist, read:org, repo`，**缺 `workflow`**。待推历史里有提交改过 `.github/workflows/pages.yml`，fork 的 `main` 又是旧的 v1.0.2 独立历史，推送这些提交会被 GitHub 拒绝。
+当前 `gh` token scope 为 `gist, read:org, repo`，**缺 `workflow`**。待推历史里改过 `.github/workflows/pages.yml`，fork 的 `main` 又是旧 v1.0.2 独立历史，推送会被 GitHub 拒绝。
 
-三条路，按推荐排序：
-
-1. 用户执行 `gh auth refresh -h github.com -s workflow`，浏览器点一次授权（最快）。
-2. 提供一个带 `workflow` scope 的 PAT，用它作 push 凭据。
-3. 把 fork 的旧 `main` 重命名归档，然后推送新分支（仍受 workflow scope 限制，解决不了根因，只解决"覆盖旧 main"的顾虑）。
-
-该项在工作流上属于 B12 的硬前置，**在 B1–B11 期间不影响推进**，但需要在 B12 之前解决，否则无法完成"提交 PR 合并"。
+**用户已选择：提供带 `workflow` scope 的 PAT。** 在 B13 开始前提供即可，B1–B12 期间不阻塞。
 
 ## 9. 执行记录
 
-| 批次 | 文件 | 状态 | 验证 |
-| --- | --- | --- | --- |
-| — | node-canvas.js 首轮（9 模块） | DONE | 550 pass / 冒烟通过 / `dad0a8c` |
-| B1 | node-canvas.js 二次拆分 | TODO | — |
-| B2 | render.js / asset-library.js | TODO | — |
-| … | … | TODO | — |
+| 批次 | 文件 | 状态 | 验证 | commit |
+| --- | --- | --- | --- | --- |
+| — | node-canvas.js 首轮（9 模块，3950→2644） | DONE | 550 pass / 冒烟通过 | `dad0a8c` |
+| B0 | 基线复测 | DONE | 550 pass / 0 fail（47.4s）、smoke（1.3s） | — |
+| B1 | node-canvas.js 二次拆分 | TODO | — | — |
+| … | … | TODO | — | — |
