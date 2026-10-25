@@ -22,7 +22,9 @@ yarn-error.log*
 dist/
 dist-electron/
 out/
-build/
+build/*
+!build/license.txt
+!build/installer.nsh
 release/
 releases/
 
