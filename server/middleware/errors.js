@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-const { AppError, CODES } = require('../../shared/errors')
+const { AppError, CODES } = require('../../core/errors')
 const { logger } = require('./logger')
 
 function ok(res, data) {

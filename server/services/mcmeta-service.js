@@ -13,7 +13,7 @@
 const fs = require('fs')
 const path = require('path')
 const zlib = require('zlib')
-const { AppError } = require('../../shared/errors')
+const { AppError } = require('../../core/errors')
 
 const ZIP_EXTS = new Set(['zip', 'mcpack', 'resourcepack'])
 const MCMETA_NAME = 'pack.mcmeta'

@@ -7,7 +7,7 @@
 const fs = require('fs')
 const path = require('path')
 const crypto = require('crypto')
-const { AppError } = require('../../shared/errors')
+const { AppError } = require('../../core/errors')
 const { logger } = require('../middleware/logger')
 const { DATA_ROOT } = require('../paths')
 

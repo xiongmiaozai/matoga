@@ -5,8 +5,9 @@ import { execSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const htmlPath = path.join(__dirname, 'website', 'landing.html')
-const webDir = path.join(__dirname, 'website')
+const ROOT = path.resolve(__dirname, '..')
+const htmlPath = path.join(ROOT, 'website', 'landing.html')
+const webDir = path.join(ROOT, 'website')
 const html = fs.readFileSync(htmlPath, 'utf8')
 
 let pass = 0, fail = 0
