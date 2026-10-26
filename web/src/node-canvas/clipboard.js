@@ -10,6 +10,7 @@ import { refreshSelection } from './nodes.js'
 import { pushHistory } from './history.js'
 
 let _clipboard = null;
+export function hasClipboard(){ return !!_clipboard }
 export function copySelection(){
   if(state.selected.size === 0){ toast('未选中节点'); return; }
   const nodes = [], edges = [];
