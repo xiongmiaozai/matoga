@@ -32,16 +32,7 @@ import { t, onLocaleChange } from './i18n.js'
 import { parseAnimMeta, defaultFaceUv } from './mc-model-viewer.js'
 import { getTexDragData } from './utils.js'
 
-const ZOOM_STEPS = ['fit', 1, 2, 4, 8, 16]
-const IMG_CACHE_MAX = 48
-const UNDO_MAX = 120
-const HANDLE_HIT = 6      /* 手柄命中半径（CSS px） */
-const HANDLE_DRAW = 5     /* 手柄半边长（CSS px） */
-
-const HANDLE_CURSOR = {
-  nw: 'nwse-resize', se: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize',
-  n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize',
-}
+import { ZOOM_STEPS, IMG_CACHE_MAX, UNDO_MAX, HANDLE_HIT, HANDLE_DRAW, HANDLE_CURSOR } from './uvc/consts.js'
 
 /* 贴图 / 动画元数据缓存（跨实例共享，key 均为 URL） */
 const imgCache = new Map()   /* url → { img, ok, done } */
