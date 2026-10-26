@@ -42,6 +42,7 @@ import { exportModel as exportModelImpl, exportUvTemplate as exportUvTemplateImp
 import { buildStatusText } from './uvc/status.js'
 import { buildUvUi } from './uvc/ui-build.js'
 import { createPainter } from './uvc/painter.js'
+import { createSelection } from './uvc/selection.js'
 
 
 export function createUvEditor(opts) {
@@ -228,92 +229,29 @@ export function createUvEditor(opts) {
 
   /* ── 编辑：值应用（layout face + 原始 element 写回 → 联动钩子） ────────── */
 
-  function selectedFace() {
-    return state.selected ? state.selected.face : null
-  }
-
-  function selectedRect() {
-    if (!state.selected) return null
-    return state.rects.find(rc => rc.el === state.selected.el && rc.key === state.selected.key) || null
-  }
-
-  function selectFace(rc) {
-    if (state.selected && state.selected.el === rc.el && state.selected.key === rc.key) return
-    state.selected = { el: rc.el, face: rc.face, key: rc.key, elIdx: rc.elIdx }
-    syncEditInputs()
-    updateActiveHighlight()
-    draw()
-  }
-
-  function clearSelection() {
-    if (!state.selected) return
-    state.selected = null
-    syncEditInputs()
-    updateActiveHighlight()
-    draw()
-  }
-
-  function setEdit(on) {
-    if (on && state.layout && state.layout.sprite) {
-      state.notice = t('uv.spriteNoEdit')
-      updateStatus()
-      return
+  let _selection = null
+  function getSelection() {
+    if (!_selection) {
+      _selection = createSelection({
+        state, hooks, t, pushUndo, syncUndoButtons,
+        getEls: () => ({ canvas, editBtn, editBar, uvInputs }),
+        updateActiveHighlight: (...a) => updateActiveHighlight(...a),
+        draw: (...a) => draw(...a),
+        updateStatus: (...a) => updateStatus(...a),
+      })
     }
-    state.notice = null
-    state.edit = !!(on && state.layout)
-    state.selected = null
-    state.drag = null
-    if (editBtn) editBtn.classList.toggle('active', state.edit)
-    if (editBar) editBar.classList.toggle('show', state.edit)
-    if (canvas) canvas.style.cursor = state.edit ? 'crosshair' : ''
-    syncEditInputs()
-    updateActiveHighlight()
-    draw()
+    return _selection
   }
 
-  /* 编辑数值输入框同步（选中面 → 当前 UV + 撤销/重做按钮态） */
-  function syncEditInputs() {
-    const f = selectedFace()
-    uvInputs.forEach((inp, i) => {
-      inp.disabled = !f
-      if (f && Array.isArray(f.uv)) inp.value = String(fmtUvNum(f.uv[i]))
-    })
-    syncUndoButtons()
-  }
-
-  function applyUvInput() {
-    const f = selectedFace()
-    if (!f || !state.selected) { state.inputOrig = null; return }
-    const uv = uvInputs.map(inp => +inp.value)
-    const scale = (state.layout && state.layout.uvScale) || 16
-    if (!uv.every(n => Number.isFinite(n))) { syncEditInputs(); return }
-    const cuv = uv.map(v => Math.min(Math.max(Math.round(v * 4) / 4, 0), scale))
-    if (cuv.every((v, i) => v === f.uv[i])) { state.inputOrig = null; return }
-    const orig = (state.inputOrig && state.inputOrig.length === 4) ? [...state.inputOrig] : [...f.uv]
-    pushUndo({ layEl: state.selected.el, key: state.selected.key, uv: orig, rotation: f.rotation })
-    state.inputOrig = null
-    applyFaceUvValues(state.selected.el, state.selected.key, cuv, hooks)
-    syncEditInputs()
-    draw()
-  }
-
-  function rotateSelected() {
-    const f = selectedFace()
-    if (!f || !state.selected) return
-    pushUndo({ layEl: state.selected.el, key: state.selected.key, uv: [...f.uv], rotation: f.rotation })
-    applyFaceRotationValue(state.selected.el, state.selected.key, ((f.rotation || 0) + 90) % 360, hooks)
-    updateStatus()
-    draw()
-  }
-
-  function mirrorSelected() {
-    const f = selectedFace()
-    if (!f || !state.selected) return
-    pushUndo({ layEl: state.selected.el, key: state.selected.key, uv: [...f.uv], rotation: f.rotation })
-    applyFaceUvValues(state.selected.el, state.selected.key, [f.uv[2], f.uv[1], f.uv[0], f.uv[3]], hooks)
-    updateStatus()
-    draw()
-  }
+  function selectedFace() { return getSelection().selectedFace() }
+  function selectedRect() { return getSelection().selectedRect() }
+  function selectFace(rc) { return getSelection().selectFace(rc) }
+  function clearSelection() { return getSelection().clearSelection() }
+  function setEdit(on) { return getSelection().setEdit(on) }
+  function syncEditInputs() { return getSelection().syncEditInputs() }
+  function applyUvInput() { return getSelection().applyUvInput() }
+  function rotateSelected() { return getSelection().rotateSelected() }
+  function mirrorSelected() { return getSelection().mirrorSelected() }
 
   /* ── 撤销 / 重做 / 重制 / 重置 ─────────────────────────── */
 
