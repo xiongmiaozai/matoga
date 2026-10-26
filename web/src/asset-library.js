@@ -44,46 +44,13 @@ import {
 } from './asset-lib/helpers.js'
 import { el, shade, loadList, saveList } from './asset-lib/dom.js'
 import { tryActivateModelViewport, viewMcModelAsset, viewImportedModelAsset } from './asset-lib/model-view.js'
+import { S, BROWSE_CLICK_DELAY } from './asset-lib/store.js'
 
 /* ── 模型查看：3D 视口 已移至 asset-lib/model-view.js ── */
 
 /* el / shade / loadList / saveList 已移至 asset-lib/dom.js */
 
-const BROWSE_CLICK_DELAY = 240
-
-/* ── 面板运行时状态（保留在入口模块） ── */
-let searchTerm = ''
-let categoryFilter = 'all'
-/* 方块/物品内容过滤（与分类标签正交的维度）：'all' | 'block' | 'item' */
-let contentKindFilter = 'all'
-let sortKey = 'name'
-let sortDir = 'asc'
-let viewMode = 'grid'
-
-let mcEntries = null
-let officialEntries = null
-let hdriEntries = null
-let projectEntries = null
-let canvasPresets = null      /* 自定义画布预设（config.canvasCustomPresets），null = 未加载 */
-let texPacks = null
-let modelPacks = null         /* /api/asset/model 聚合结果（包内 .json 模型），null = 未加载 */
-let importedModels = null     /* 用户导入模型（/api/imported-models），null = 未加载 */
-let customModels = null       /* 自定义模型（/api/custom-models），null = 未加载 */
-/* 各模型类的专属本地目录（用于「打开本地位置」）：imported=导入模型，custom=自定义模型 */
-let modelDirs = { imported: '', custom: '' }
-let lastTexSig = ''
-let loadErrors = { hdri: null, mc: null, official: null, project: null, tex: null, model: null }
-
-let favorites = loadList('matoga:assetFav')
-let recent = loadList('matoga:assetRecent')
-let serverSynced = false
-
-let ctxMenu = null
-let pollTimer = null
-let detailCurrent = null
-let browse = null       // { item, pack, dir }：总资产库面板内的包内容浏览状态
-let browseSeq = 0
-let clickTimer = null
+/* 面板运行时状态已迁至 asset-lib/store.js（S 对象承载，供子模块共享读写） */
 
 async function assetApiCall(method, path, body) {
   const res = await fetch(apiUrl(path), {
@@ -100,37 +67,37 @@ async function loadAssetStore() {
   try {
     const data = await assetApiCall('GET', '/api/asset')
     if (Array.isArray(data.favorites)) {
-      favorites = data.favorites
-      saveList('matoga:assetFav', favorites)
+      S.favorites = data.favorites
+      saveList('matoga:assetFav', S.favorites)
     }
     if (Array.isArray(data.recent)) {
-      recent = data.recent
-      saveList('matoga:assetRecent', recent)
+      S.recent = data.recent
+      saveList('matoga:assetRecent', S.recent)
     }
-    serverSynced = true
+    S.serverSynced = true
   } catch {
-    serverSynced = false
+    S.serverSynced = false
   }
   rebuild()
 }
 
 function persistFavorites() {
-  saveList('matoga:assetFav', favorites)
-  if (serverSynced) assetApiCall('PUT', '/api/asset/favorites', { items: favorites }).catch(() => {})
+  saveList('matoga:assetFav', S.favorites)
+  if (S.serverSynced) assetApiCall('PUT', '/api/asset/favorites', { items: S.favorites }).catch(() => {})
 }
 
 function persistRecent() {
-  saveList('matoga:assetRecent', recent)
-  if (serverSynced) assetApiCall('PUT', '/api/asset/recent', { items: recent }).catch(() => {})
+  saveList('matoga:assetRecent', S.recent)
+  if (S.serverSynced) assetApiCall('PUT', '/api/asset/recent', { items: S.recent }).catch(() => {})
 }
 
 function sortItems(items) {
   const arr = items.slice()
   arr.sort((a, b) => {
     let cmp
-    if (sortKey === 'mtime') cmp = (a.mtime || 0) - (b.mtime || 0)
+    if (S.sortKey === 'mtime') cmp = (a.mtime || 0) - (b.mtime || 0)
     else cmp = String(a.name).localeCompare(String(b.name), 'zh')
-    return sortDir === 'asc' ? cmp : -cmp
+    return S.sortDir === 'asc' ? cmp : -cmp
   })
   return arr
 }
@@ -141,7 +108,7 @@ function itemFromStored(s) {
   if (s.type === 'preset') {
     const id = s.key.slice(8)
     if (id.startsWith('cp:')) {
-      const cp = (canvasPresets || []).find(p => ('cp:' + p.id) === id)
+      const cp = (S.canvasPresets || []).find(p => ('cp:' + p.id) === id)
       onAdd = cp ? () => loadCanvasPresetGraph(cp.graph) : () => showToast(t('asset.canvasPresetMissing'))
       name = cp ? cp.name : (s.name || name)
     } else {
@@ -190,7 +157,7 @@ function storeFromItem(it) {
 function virtualToRealPath(p) {
   const pp = parsePackTexPath(p) || parsePackModelPath(p)
   if (!pp) return null
-  const entries = pp.source === 'mc' ? mcEntries : (pp.source === 'official' ? officialEntries : null)
+  const entries = pp.source === 'mc' ? S.mcEntries : (pp.source === 'official' ? S.officialEntries : null)
   const pack = (entries || []).find(e => e && e.name === pp.packName && e.fullPath)
   return pack ? pack.fullPath.replace(/[\\/]+$/, '') + '/' + pp.rel : null
 }
@@ -208,15 +175,15 @@ function resolveLocatePath(item) {
   return virtualToRealPath(p)
 }
 
-function isFav(item) { return favorites.some(f => f.key === item.key) }
+function isFav(item) { return S.favorites.some(f => f.key === item.key) }
 
 function toggleFav(item) {
   if (!isValidAssetKey(item.key)) return
   if (isFav(item)) {
-    favorites = favorites.filter(f => f.key !== item.key)
+    S.favorites = S.favorites.filter(f => f.key !== item.key)
     showToast(t('asset.toastFavRemoved'))
   } else {
-    favorites.unshift(storeFromItem(item))
+    S.favorites.unshift(storeFromItem(item))
     showToast(t('asset.toastFavAdded'))
   }
   persistFavorites()
@@ -226,11 +193,11 @@ function toggleFav(item) {
 
 function pushRecent(item) {
   if (!isValidAssetKey(item.key)) return
-  recent = recent.filter(r => r.key !== item.key)
-  recent.unshift(storeFromItem(item))
-  if (recent.length > MAX_RECENT) recent = recent.slice(0, MAX_RECENT)
+  S.recent = S.recent.filter(r => r.key !== item.key)
+  S.recent.unshift(storeFromItem(item))
+  if (S.recent.length > MAX_RECENT) S.recent = S.recent.slice(0, MAX_RECENT)
   persistRecent()
-  if (categoryFilter === 'recent') rebuild()
+  if (S.categoryFilter === 'recent') rebuild()
 }
 
 
@@ -359,7 +326,7 @@ function buildSection(catKey, title, items, errMsg, loading) {
   })
   sec.appendChild(head)
   const grid = el('div', 'asset-lib-grid')
-  if (viewMode === 'list') grid.classList.add('list-view')
+  if (S.viewMode === 'list') grid.classList.add('list-view')
   if (loading && !count) {
     grid.appendChild(el('div', 'asset-lib-hint', t('asset.loading')))
   } else if (errMsg && !count) {
@@ -378,8 +345,8 @@ const CANVAS_PRESET_MAX_BYTES = 8 * 1024 * 1024  /* 后端 body 上限 12MB，�
 async function loadCanvasPresets() {
   try {
     const cfg = await window.api.getConfig()
-    canvasPresets = (cfg && Array.isArray(cfg.canvasCustomPresets)) ? cfg.canvasCustomPresets : []
-  } catch { canvasPresets = [] }
+    S.canvasPresets = (cfg && Array.isArray(cfg.canvasCustomPresets)) ? cfg.canvasCustomPresets : []
+  } catch { S.canvasPresets = [] }
 }
 
 async function saveCanvasPresetAs() {
@@ -396,7 +363,7 @@ async function saveCanvasPresetAs() {
     presets.push({ id: 'cp' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name: n, graph, createdAt: Date.now() })
     if (JSON.stringify(presets).length > CANVAS_PRESET_MAX_BYTES) { showToast(t('asset.canvasPresetTooLarge')); return }
     await window.api.setConfig({ canvasCustomPresets: presets })
-    canvasPresets = presets
+    S.canvasPresets = presets
     showToast(t('asset.canvasPresetSaved'))
     rebuild()
   } catch (e) {
@@ -411,9 +378,9 @@ async function deleteCanvasPreset(item) {
     const cfg = await window.api.getConfig()
     const presets = ((cfg && Array.isArray(cfg.canvasCustomPresets)) ? cfg.canvasCustomPresets : []).filter(p => p.id !== item.canvasPresetId)
     await window.api.setConfig({ canvasCustomPresets: presets })
-    canvasPresets = presets
-    favorites = favorites.filter(f => f.key !== item.key)
-    recent = recent.filter(r => r.key !== item.key)
+    S.canvasPresets = presets
+    S.favorites = S.favorites.filter(f => f.key !== item.key)
+    S.recent = S.recent.filter(r => r.key !== item.key)
     persistFavorites()
     persistRecent()
     showToast(t('asset.canvasPresetDeleted'))
@@ -428,7 +395,7 @@ function buildPresetSection() {
     key: 'preset:' + p.id, name: presetName(p.id), color: p.color, type: 'preset', path: null, mtime: 0, role: 'preset',
     onAdd: () => loadPreset(p.id),
   }))
-  for (const p of canvasPresets || []) {
+  for (const p of S.canvasPresets || []) {
     if (!p || !p.id || !p.graph) continue
     items.push({
       key: 'preset:cp:' + p.id, name: p.name, color: '#8ab4f8', type: 'preset', path: null,
@@ -457,7 +424,7 @@ function buildPresetSection() {
   sec.appendChild(actions)
 
   const grid = el('div', 'asset-lib-grid')
-  if (viewMode === 'list') grid.classList.add('list-view')
+  if (S.viewMode === 'list') grid.classList.add('list-view')
   for (const it of sorted) grid.appendChild(makeCard(it))
   sec.appendChild(grid)
   return sec
@@ -500,7 +467,7 @@ function collectTexGroups() {
 
   /* MC 材质包 + 官方包（/api/asset/tex）：每包按 textures/ 第一级类别分组；
      dir 包有磁盘绝对路径（可直接引用），zip 包走包媒体 raw 接口 */
-  for (const p of texPacks || []) {
+  for (const p of S.texPacks || []) {
     for (const g of p.groups || []) {
       const gk = 'pack:' + p.source + ':' + p.name + '/' + g.key
       const label = g.key ? p.name + ' · ' + g.key : p.name
@@ -556,7 +523,7 @@ function buildAssetGroup(g, collapsedSet, saveFn) {
   grp.appendChild(head)
 
   const grid = el('div', 'asset-lib-grid')
-  if (viewMode === 'list') grid.classList.add('list-view')
+  if (S.viewMode === 'list') grid.classList.add('list-view')
   const sorted = sortItems(g.items)
   const shown = sorted.slice(0, TEX_GROUP_PAGE)
   for (const it of shown) grid.appendChild(makeCard(it))
@@ -581,7 +548,7 @@ function buildTexGroup(g) {
 function buildTexSection() {
   const groups = collectTexGroups()
   const total = groups.reduce((s, g) => s + g.items.length, 0)
-  const loading = texPacks === null
+  const loading = S.texPacks === null
 
   const sec = el('div', 'asset-lib-section')
   sec.dataset.cat = 'tex'
@@ -601,9 +568,9 @@ function buildTexSection() {
     sec.appendChild(grid)
     return sec
   }
-  if (!total && loadErrors.tex) {
+  if (!total && S.loadErrors.tex) {
     const grid = el('div', 'asset-lib-grid')
-    grid.appendChild(el('div', 'asset-lib-hint error', t('asset.loadFailed', { msg: loadErrors.tex })))
+    grid.appendChild(el('div', 'asset-lib-hint error', t('asset.loadFailed', { msg: S.loadErrors.tex })))
     sec.appendChild(grid)
     return sec
   }
@@ -611,7 +578,7 @@ function buildTexSection() {
 
   const wrap = el('div', 'asset-lib-groups')
   for (const g of groups) wrap.appendChild(buildTexGroup(g))
-  if (loadErrors.tex) wrap.appendChild(el('div', 'asset-lib-hint error', t('asset.loadFailed', { msg: loadErrors.tex })))
+  if (S.loadErrors.tex) wrap.appendChild(el('div', 'asset-lib-hint error', t('asset.loadFailed', { msg: S.loadErrors.tex })))
   sec.appendChild(wrap)
   return sec
 }
@@ -620,7 +587,7 @@ function buildTexSection() {
 
 /* 在系统文件管理器中打开某类模型的专属本地目录（imported / custom） */
 function openModelDir(kind) {
-  const dir = modelDirs[kind]
+  const dir = S.modelDirs[kind]
   if (!dir) { showToast(t('asset.openLocalDirUnavailable')); return }
   window.api.openPath(dir).then((err) => { if (err) showToast(t('asset.openLocalDirUnavailable')) })
 }
@@ -637,14 +604,14 @@ function collectModelGroups() {
   /* 导入模型（data/imported-models，用户主动上传的 .bbmodel / MC .json，专属目录） */
   const imGroup = addGroup('im', t('asset.importedModelGroup'))
   imGroup.openDir = () => openModelDir('imported')
-  for (const m of importedModels || []) {
+  for (const m of S.importedModels || []) {
     if (!m || !m.id) continue
     imGroup.items.push({
       key: 'model:im:' + m.id, name: m.name || m.id, thumb: null, icon: 'i-cube',
       color: '#e8993c', type: 'model', path: 'im:' + m.id, mtime: m.mtime || 0,
       role: 'model', badge: m.model_format || m.format || m.ext || null,
       modelThumb: { kind: 'im', id: m.id, path: 'im:' + m.id, mtime: m.mtime || 0 },
-      modelFile: userModelFilePath(modelDirs.imported, m),
+      modelFile: userModelFilePath(S.modelDirs.imported, m),
       modelDelete: { api: IMPORT_API, id: m.id },
       onAdd: () => viewImportedModelAsset(m.id, m.name || m.id),
 
@@ -654,13 +621,13 @@ function collectModelGroups() {
   /* 自定义模型（data/custom-models，从模板创建，专属目录） */
   const cmGroup = addGroup('cm', t('asset.cmModelGroup'))
   cmGroup.openDir = () => openModelDir('custom')
-  for (const m of customModels || []) {
+  for (const m of S.customModels || []) {
     if (!m || !m.id) continue
     cmGroup.items.push({
       key: 'model:cm:' + m.id, name: m.name || m.id, thumb: null, icon: 'i-cube',
       color: '#5fd0a0', type: 'model', path: 'cm:' + m.id, mtime: m.mtime || 0,
       role: 'model', badge: m.template || null,
-      modelFile: userModelFilePath(modelDirs.custom, m),
+      modelFile: userModelFilePath(S.modelDirs.custom, m),
       modelDelete: { api: CUSTOM_API, id: m.id },
       onAdd: () => previewCustomModel(m.id, m.name || m.id),
     })
@@ -668,7 +635,7 @@ function collectModelGroups() {
 
 
   /* MC 材质包 + 官方包（/api/asset/model）：每包按 models/ 第一级类别分组 */
-  for (const p of modelPacks || []) {
+  for (const p of S.modelPacks || []) {
     for (const g of p.groups || []) {
       const gk = 'modelpack:' + p.source + ':' + p.name + '/' + g.key
       const label = g.key ? p.name + ' · ' + g.key : p.name
@@ -729,12 +696,12 @@ async function deleteUserModel(item) {
   if (!await uiConfirm({ title: t('asset.modelSection'), message: t('asset.modelDeleteConfirm', { name: item.name }), danger: true })) return
   try {
     await assetApiCall('DELETE', d.api + '/' + encodeURIComponent(d.id))
-    favorites = favorites.filter(f => f.key !== item.key)
-    recent = recent.filter(r => r.key !== item.key)
+    S.favorites = S.favorites.filter(f => f.key !== item.key)
+    S.recent = S.recent.filter(r => r.key !== item.key)
     persistFavorites()
     persistRecent()
     showToast(t('asset.toastModelDeleted', { name: item.name }))
-    if (detailCurrent === item) hideDetail()
+    if (S.detailCurrent === item) hideDetail()
     await refreshAssetLibrary()
   } catch (e) {
     showToast(t('asset.toastModelDeleteFail', { msg: e.message || '' }))
@@ -744,7 +711,7 @@ async function deleteUserModel(item) {
 function buildModelSection() {
   const groups = collectModelGroups()
   const total = groups.reduce((s, g) => s + g.items.length, 0)
-  const loading = modelPacks === null
+  const loading = S.modelPacks === null
 
   const sec = el('div', 'asset-lib-section')
   sec.dataset.cat = 'model'
@@ -776,9 +743,9 @@ function buildModelSection() {
     sec.appendChild(grid)
     return sec
   }
-  if (!total && loadErrors.model) {
+  if (!total && S.loadErrors.model) {
     const grid = el('div', 'asset-lib-grid')
-    grid.appendChild(el('div', 'asset-lib-hint error', t('asset.loadFailed', { msg: loadErrors.model })))
+    grid.appendChild(el('div', 'asset-lib-hint error', t('asset.loadFailed', { msg: S.loadErrors.model })))
     sec.appendChild(grid)
     return sec
   }
@@ -786,24 +753,24 @@ function buildModelSection() {
 
   const wrap = el('div', 'asset-lib-groups')
   for (const g of groups) wrap.appendChild(buildAssetGroup(g, modelCollapsedSet, saveModelCollapsed))
-  if (loadErrors.model) wrap.appendChild(el('div', 'asset-lib-hint error', t('asset.loadFailed', { msg: loadErrors.model })))
+  if (S.loadErrors.model) wrap.appendChild(el('div', 'asset-lib-hint error', t('asset.loadFailed', { msg: S.loadErrors.model })))
   observeModelThumbs(wrap)
   sec.appendChild(wrap)
   return sec
 }
 
 function buildHdriSection() {
-  const items = (hdriEntries || []).map(e => ({
+  const items = (S.hdriEntries || []).map(e => ({
     key: 'hdri:' + e.fullPath, name: e.name, thumb: hdriThumbUrl(e.fullPath),
     type: 'hdri', path: e.fullPath, mtime: e.mtime || 0, role: 'preset',
     onAdd: () => addNodeAt('hdr'),
   }))
-  return buildSection('hdri', t('asset.hdriSection'), items, loadErrors.hdri, hdriEntries === null)
+  return buildSection('hdri', t('asset.hdriSection'), items, S.loadErrors.hdri, S.hdriEntries === null)
 }
 
 function buildMcSection() {
   /* mc-packs 下每个资源包是一个「包媒体」：整包卡片储存，双击打开浏览包内贴图 */
-  const items = (mcEntries || []).map(p => {
+  const items = (S.mcEntries || []).map(p => {
     const it = {
       key: 'mc:' + p.fullPath, name: p.name,
       thumb: p.firstTexture ? mcRawUrl(p.name, p.firstTexture) : null,
@@ -828,11 +795,11 @@ function buildMcSection() {
   sec.appendChild(head)
 
   const grid = el('div', 'asset-lib-grid')
-  if (viewMode === 'list') grid.classList.add('list-view')
-  if (mcEntries === null) {
+  if (S.viewMode === 'list') grid.classList.add('list-view')
+  if (S.mcEntries === null) {
     grid.appendChild(el('div', 'asset-lib-hint', t('asset.loading')))
-  } else if (loadErrors.mc) {
-    grid.appendChild(el('div', 'asset-lib-hint error', t('asset.loadFailed', { msg: loadErrors.mc })))
+  } else if (S.loadErrors.mc) {
+    grid.appendChild(el('div', 'asset-lib-hint error', t('asset.loadFailed', { msg: S.loadErrors.mc })))
   } else if (!sorted.length) {
     grid.appendChild(el('div', 'asset-lib-hint', t('asset.mcEmpty')))
   } else {
@@ -879,7 +846,7 @@ function officialSuggestName(p) {
 }
 
 function buildOfficialSection() {
-  const items = (officialEntries || []).map(p => {
+  const items = (S.officialEntries || []).map(p => {
     const it = {
       key: 'official:' + p.fullPath, name: p.name,
       thumb: p.firstTexture ? officialRawUrl(p.name, p.firstTexture) : null,
@@ -904,11 +871,11 @@ function buildOfficialSection() {
   sec.appendChild(head)
 
   const grid = el('div', 'asset-lib-grid')
-  if (viewMode === 'list') grid.classList.add('list-view')
-  if (officialEntries === null) {
+  if (S.viewMode === 'list') grid.classList.add('list-view')
+  if (S.officialEntries === null) {
     grid.appendChild(el('div', 'asset-lib-hint', t('asset.loading')))
-  } else if (loadErrors.official) {
-    grid.appendChild(el('div', 'asset-lib-hint error', t('asset.loadFailed', { msg: loadErrors.official })))
+  } else if (S.loadErrors.official) {
+    grid.appendChild(el('div', 'asset-lib-hint error', t('asset.loadFailed', { msg: S.loadErrors.official })))
   } else if (!sorted.length) {
     grid.appendChild(el('div', 'asset-lib-hint', t('asset.officialEmpty')))
   } else {
@@ -921,11 +888,11 @@ function buildOfficialSection() {
 async function loadOfficial() {
   try {
     const data = await assetApiCall('GET', MC_OFFICIAL_API + '/list')
-    officialEntries = (data && data.packs) || []
-    loadErrors.official = null
+    S.officialEntries = (data && data.packs) || []
+    S.loadErrors.official = null
   } catch (e) {
-    loadErrors.official = e.message || '未知错误'
-    if (officialEntries === null) officialEntries = []
+    S.loadErrors.official = e.message || '未知错误'
+    if (S.officialEntries === null) S.officialEntries = []
   }
 }
 
@@ -947,8 +914,8 @@ async function renameOfficialAsset(item, byVersion) {
     const data = await assetApiCall('PUT', MC_OFFICIAL_API + '/rename', { from: item.name, to: n })
     const newKey = 'official:' + (data && data.to ? data.to : oldPath)
     const newBadge = byVersion ? (officialSuggestName(p) || item.badge) : item.badge
-    favorites.forEach(f => { if (f.key === oldKey) { f.key = newKey; f.name = n; f.path = data && data.to || f.path; f.badge = newBadge } })
-    recent.forEach(r => { if (r.key === oldKey) { r.key = newKey; r.name = n; r.path = data && data.to || r.path; r.badge = newBadge } })
+    S.favorites.forEach(f => { if (f.key === oldKey) { f.key = newKey; f.name = n; f.path = data && data.to || f.path; f.badge = newBadge } })
+    S.recent.forEach(r => { if (r.key === oldKey) { r.key = newKey; r.name = n; r.path = data && data.to || r.path; r.badge = newBadge } })
     persistFavorites()
     persistRecent()
     showToast(t('asset.toastOfficialRenamed'))
@@ -961,7 +928,7 @@ async function renameOfficialAsset(item, byVersion) {
 /* ── 包内容浏览（文件管理器式，在总资产库面板内切换视图） ──── */
 
 function packEntryRawUrl(packName, relPath) {
-  return packRawUrl(browse ? browse.api : MC_OFFICIAL_API, packName, relPath)
+  return packRawUrl(S.browse ? S.browse.api : MC_OFFICIAL_API, packName, relPath)
 }
 
 function isAddableAssetPath(p) {
@@ -985,32 +952,32 @@ function pbSaveView(v) {
 }
 
 function openPackBrowser(item) {
-  const list = item.type === 'mc' ? mcEntries : (item.type === 'official' ? officialEntries : null)
+  const list = item.type === 'mc' ? S.mcEntries : (item.type === 'official' ? S.officialEntries : null)
   const pack = item.pack || (list || []).find(p => p.fullPath === item.path) || null
-  browse = { item, pack, dir: null, view: pbLoadView(), filter: '', data: null, api: packApiFor(item.type) }
+  S.browse = { item, pack, dir: null, view: pbLoadView(), filter: '', data: null, api: packApiFor(item.type) }
   renderBrowse()
 }
 
 function browseTo(dir) {
-  if (!browse) return
-  browse.dir = dir
-  browse.filter = ''
-  browse.data = null
+  if (!S.browse) return
+  S.browse.dir = dir
+  S.browse.filter = ''
+  S.browse.data = null
   renderBrowse()
 }
 
 function browseUp() {
-  if (!browse || !browse.dir) return
-  const idx = browse.dir.lastIndexOf('/')
-  browse.dir = idx >= 0 ? browse.dir.slice(0, idx) : null
-  browse.filter = ''
-  browse.data = null
+  if (!S.browse || !S.browse.dir) return
+  const idx = S.browse.dir.lastIndexOf('/')
+  S.browse.dir = idx >= 0 ? S.browse.dir.slice(0, idx) : null
+  S.browse.filter = ''
+  S.browse.data = null
   renderBrowse()
 }
 
 function exitBrowse() {
-  browse = null
-  browseSeq++
+  S.browse = null
+  S.browseSeq++
   const search = document.getElementById('assetLibSearch')
   if (search) search.disabled = false
   const toolbar = document.getElementById('assetLibToolbar')
@@ -1019,9 +986,9 @@ function exitBrowse() {
 }
 
 function browseCrumbs() {
-  const crumbs = [{ name: browse.item.name, dir: null }]
-  if (browse.dir) {
-    const segs = browse.dir.split('/')
+  const crumbs = [{ name: S.browse.item.name, dir: null }]
+  if (S.browse.dir) {
+    const segs = S.browse.dir.split('/')
     segs.forEach((s, i) => crumbs.push({ name: s, dir: segs.slice(0, i + 1).join('/') }))
   }
   return crumbs
@@ -1076,7 +1043,7 @@ function buildBrowseCrumbsBar() {
     if (i > 0) bar.appendChild(el('span', 'pb-sep', '›'))
     const cur = i === crumbs.length - 1
     const btn = el('button', 'pb-crumb' + (cur ? ' cur' : ''), c.name)
-    btn.title = c.dir || browse.item.name
+    btn.title = c.dir || S.browse.item.name
     if (!cur) btn.addEventListener('click', () => browseTo(c.dir))
     bar.appendChild(btn)
   })
@@ -1087,7 +1054,7 @@ function buildBrowseToolbar() {
   const bar = el('div', 'pb-toolbar')
   const up = el('button', 'pb-up', '<svg class="ico"><use href="#i-arrow-up"/></svg>')
   up.title = t('asset.browseUp')
-  if (!browse || !browse.dir) up.disabled = true
+  if (!S.browse || !S.browse.dir) up.disabled = true
   else up.addEventListener('click', browseUp)
   bar.appendChild(up)
   bar.appendChild(buildBrowseCrumbsBar())
@@ -1098,27 +1065,27 @@ function buildBrowseToolbar() {
   const filter = el('input', 'pb-filter')
   filter.type = 'search'
   filter.placeholder = t('asset.browseFilterPh')
-  filter.value = browse ? browse.filter : ''
+  filter.value = S.browse ? S.browse.filter : ''
   filter.addEventListener('input', () => {
-    if (!browse) return
-    browse.filter = filter.value
-    if (browse.data) fillBrowseView(browse.item, browse.pack, browse.data)
+    if (!S.browse) return
+    S.browse.filter = filter.value
+    if (S.browse.data) fillBrowseView(S.browse.item, S.browse.pack, S.browse.data)
   })
   filterWrap.appendChild(filter)
   tools.appendChild(filterWrap)
 
   const seg = el('div', 'pb-viewseg')
   const mkViewBtn = (mode, icon, titleKey) => {
-    const b = el('button', 'pb-vbtn' + (browse && browse.view === mode ? ' active' : ''),
+    const b = el('button', 'pb-vbtn' + (S.browse && S.browse.view === mode ? ' active' : ''),
       `<svg class="ico"><use href="#i-${icon}"/></svg>`)
     b.title = t(titleKey)
     b.dataset.view = mode
     b.addEventListener('click', () => {
-      if (!browse || browse.view === mode) return
-      browse.view = mode
+      if (!S.browse || S.browse.view === mode) return
+      S.browse.view = mode
       pbSaveView(mode)
       seg.querySelectorAll('.pb-vbtn').forEach(x => x.classList.toggle('active', x.dataset.view === mode))
-      if (browse.data) fillBrowseView(browse.item, browse.pack, browse.data)
+      if (S.browse.data) fillBrowseView(S.browse.item, S.browse.pack, S.browse.data)
     })
     return b
   }
@@ -1135,7 +1102,7 @@ function setBrowseStatus(text) {
 }
 
 function browseEntryPath(name) {
-  return browse && browse.dir ? browse.dir + '/' + name : name
+  return S.browse && S.browse.dir ? S.browse.dir + '/' + name : name
 }
 
 function buildBrowseFolderCard(d) {
@@ -1241,7 +1208,7 @@ function fillBrowseView(item, pack, data) {
   const kindEl = document.querySelector('.pack-browser .pb-kind')
   if (kindEl) kindEl.textContent = data.kind === 'zip' ? 'ZIP' : t('asset.officialKindDir')
 
-  const term = browse && browse.filter ? browse.filter.trim().toLowerCase() : ''
+  const term = S.browse && S.browse.filter ? S.browse.filter.trim().toLowerCase() : ''
   const match = (name) => !term || String(name).toLowerCase().includes(term)
   const dirs = (data.dirs || []).filter(d => match(d.name))
   const files = (data.files || []).filter(f => match(f.name))
@@ -1257,7 +1224,7 @@ function fillBrowseView(item, pack, data) {
       list.appendChild(fg)
     }
     if (files.length) {
-      const grid = browse && browse.view === 'grid'
+      const grid = S.browse && S.browse.view === 'grid'
       const fl = el('div', grid ? 'pb-tex-grid' : 'pb-files')
       for (const f of files) fl.appendChild(buildBrowseFileRow(item, pack, f, grid))
       list.appendChild(fl)
@@ -1283,13 +1250,13 @@ function fillBrowseView(item, pack, data) {
 
 async function renderBrowse() {
   const body = document.getElementById('assetLibraryBody')
-  if (!body || !browse) return
+  if (!body || !S.browse) return
   const search = document.getElementById('assetLibSearch')
   if (search) search.disabled = true
   const toolbar = document.getElementById('assetLibToolbar')
   if (toolbar) toolbar.classList.add('pb-off')
-  const seq = ++browseSeq
-  const { item, pack, dir, api } = browse
+  const seq = ++S.browseSeq
+  const { item, pack, dir, api } = S.browse
 
   body.scrollTop = 0
   body.innerHTML = ''
@@ -1307,22 +1274,22 @@ async function renderBrowse() {
     const q = dir ? '?dir=' + encodeURIComponent(dir) : ''
     data = await assetApiCall('GET', api + '/' + encodeURIComponent(item.name) + '/entries' + q)
   } catch (e) {
-    if (seq === browseSeq && browse) fillBrowseError(item, pack, e.message)
+    if (seq === S.browseSeq && S.browse) fillBrowseError(item, pack, e.message)
     return
   }
-  if (seq !== browseSeq || !browse) return
-  browse.data = data
+  if (seq !== S.browseSeq || !S.browse) return
+  S.browse.data = data
   fillBrowseView(item, pack, data)
 }
 
 async function loadProjects() {
   try {
     const data = await assetApiCall('GET', PROJECTS_API)
-    projectEntries = (data && data.projects) || []
-    loadErrors.project = null
+    S.projectEntries = (data && data.projects) || []
+    S.loadErrors.project = null
   } catch (e) {
-    loadErrors.project = e.message || '未知错误'
-    if (projectEntries === null) projectEntries = []
+    S.loadErrors.project = e.message || '未知错误'
+    if (S.projectEntries === null) S.projectEntries = []
   }
 }
 
@@ -1365,8 +1332,8 @@ async function deleteProjectAsset(p) {
   try {
     await assetApiCall('DELETE', PROJECTS_API + '/' + encodeURIComponent(p.id))
     showToast(t('asset.toastProjectDeleted'))
-    favorites = favorites.filter(f => f.key !== 'project:' + p.id)
-    recent = recent.filter(r => r.key !== 'project:' + p.id)
+    S.favorites = S.favorites.filter(f => f.key !== 'project:' + p.id)
+    S.recent = S.recent.filter(r => r.key !== 'project:' + p.id)
     persistFavorites()
     persistRecent()
     try { await assetApiCall('DELETE', '/api/craft-pack/items/' + encodeURIComponent('project:' + p.id)) } catch {}
@@ -1384,8 +1351,8 @@ async function renameProjectAsset(p) {
   if (!n || n === p.name) return
   try {
     await assetApiCall('PUT', PROJECTS_API + '/' + encodeURIComponent(p.id) + '/rename', { name: n })
-    favorites.forEach(f => { if (f.key === 'project:' + p.id) f.name = n })
-    recent.forEach(r => { if (r.key === 'project:' + p.id) r.name = n })
+    S.favorites.forEach(f => { if (f.key === 'project:' + p.id) f.name = n })
+    S.recent.forEach(r => { if (r.key === 'project:' + p.id) r.name = n })
     persistFavorites()
     persistRecent()
     showToast(t('asset.toastProjectRenamed'))
@@ -1396,7 +1363,7 @@ async function renameProjectAsset(p) {
 }
 
 function buildProjectSection() {
-  const items = (projectEntries || []).map(p => ({
+  const items = (S.projectEntries || []).map(p => ({
     key: 'project:' + p.id, name: p.name, thumb: projectThumbUrl(p.id),
     type: 'project', path: p.dir || null, mtime: p.updatedAt || 0, role: 'project',
     id: p.id, nodeCount: p.nodeCount || 0, textureCount: p.textureCount || 0,
@@ -1423,11 +1390,11 @@ function buildProjectSection() {
   sec.appendChild(actions)
 
   const grid = el('div', 'asset-lib-grid')
-  if (viewMode === 'list') grid.classList.add('list-view')
-  if (projectEntries === null) {
+  if (S.viewMode === 'list') grid.classList.add('list-view')
+  if (S.projectEntries === null) {
     grid.appendChild(el('div', 'asset-lib-hint', t('asset.loading')))
-  } else if (loadErrors.project) {
-    grid.appendChild(el('div', 'asset-lib-hint error', t('asset.loadFailed', { msg: loadErrors.project })))
+  } else if (S.loadErrors.project) {
+    grid.appendChild(el('div', 'asset-lib-hint error', t('asset.loadFailed', { msg: S.loadErrors.project })))
   } else if (!sorted.length) {
     grid.appendChild(el('div', 'asset-lib-hint', t('asset.projectEmpty')))
   } else {
@@ -1438,19 +1405,19 @@ function buildProjectSection() {
 }
 
 function buildFavSection() {
-  if (!favorites.length) return null
-  return buildSection('fav', t('asset.favSection'), favorites.map(itemFromStored), null, false)
+  if (!S.favorites.length) return null
+  return buildSection('fav', t('asset.favSection'), S.favorites.map(itemFromStored), null, false)
 }
 
 function buildRecentSection() {
-  if (!recent.length) return null
-  return buildSection('recent', t('asset.recentSection'), recent.map(itemFromStored), null, false)
+  if (!S.recent.length) return null
+  return buildSection('recent', t('asset.recentSection'), S.recent.map(itemFromStored), null, false)
 }
 
 function rebuild() {
   const body = document.getElementById('assetLibraryBody')
   if (!body) return
-  if (browse) return /* 包内容浏览模式独占列表区 */
+  if (S.browse) return /* 包内容浏览模式独占列表区 */
   const scrollTop = body.scrollTop
   body.innerHTML = ''
   const sections = [
@@ -1473,10 +1440,10 @@ function rebuild() {
 function applyFilter() {
   const body = document.getElementById('assetLibraryBody')
   if (!body) return
-  if (browse) return
-  const term = searchTerm.toLowerCase()
+  if (S.browse) return
+  const term = S.searchTerm.toLowerCase()
   const searching = !!term
-  const kind = contentKindFilter
+  const kind = S.contentKindFilter
 
   /* 卡片：命中名称（搜索词）且符合方块/物品过滤才显示 */
   body.querySelectorAll('.asset-card').forEach(card => {
@@ -1499,7 +1466,7 @@ function applyFilter() {
     const cat = sec.dataset.cat
     const catOk = searching
       ? !QUICK_CATS.has(cat)
-      : (categoryFilter === 'all' ? SECTION_CATS.includes(cat) : cat === categoryFilter)
+      : (S.categoryFilter === 'all' ? SECTION_CATS.includes(cat) : cat === S.categoryFilter)
     const hit = !!sec.querySelector('.asset-card:not(.is-hidden)')
     const hint = !!sec.querySelector('.asset-lib-hint')
     sec.classList.toggle('is-hidden', !catOk || (!hit && !hint))
@@ -1514,8 +1481,8 @@ function applyFilter() {
     if (!empty) { empty = el('div', 'asset-lib-empty'); body.appendChild(empty) }
     let msg
     if (term) msg = t('asset.emptyFiltered')
-    else if (contentKindFilter !== 'all') msg = t('asset.emptyKind', { kind: t(contentKindFilter === 'block' ? 'asset.kindBlock' : 'asset.kindItem') })
-    else if (categoryFilter !== 'all') msg = t('asset.emptyCategory', { cat: categoryLabel(categoryFilter) })
+    else if (S.contentKindFilter !== 'all') msg = t('asset.emptyKind', { kind: t(S.contentKindFilter === 'block' ? 'asset.kindBlock' : 'asset.kindItem') })
+    else if (S.categoryFilter !== 'all') msg = t('asset.emptyCategory', { cat: categoryLabel(S.categoryFilter) })
     else msg = t('asset.empty')
     empty.textContent = msg
     empty.style.display = ''
@@ -1531,7 +1498,7 @@ function updateStat(n) {
 
 function showCtxMenu(e, item) {
   hideCtxMenu()
-  ctxMenu = el('div', 'asset-ctx-menu')
+  S.ctxMenu = el('div', 'asset-ctx-menu')
   const opts = []
   /* 定位：craftPath 副本失效时回退源路径/包内虚拟路径解析（服务端 locatePath 优先） */
   const locatePath = resolveLocatePath(item)
@@ -1567,15 +1534,15 @@ function showCtxMenu(e, item) {
   for (const it of opts) {
     const mi = el('div', 'asset-ctx-item', it.label)
     mi.addEventListener('click', () => { hideCtxMenu(); it.fn() })
-    ctxMenu.appendChild(mi)
+    S.ctxMenu.appendChild(mi)
   }
-  document.body.appendChild(ctxMenu)
-  ctxMenu.style.left = Math.min(e.clientX, window.innerWidth - 160) + 'px'
-  ctxMenu.style.top = Math.min(e.clientY, window.innerHeight - 160) + 'px'
+  document.body.appendChild(S.ctxMenu)
+  S.ctxMenu.style.left = Math.min(e.clientX, window.innerWidth - 160) + 'px'
+  S.ctxMenu.style.top = Math.min(e.clientY, window.innerHeight - 160) + 'px'
 }
 
 function hideCtxMenu() {
-  if (ctxMenu) { ctxMenu.remove(); ctxMenu = null }
+  if (S.ctxMenu) { S.ctxMenu.remove(); S.ctxMenu = null }
 }
 
 async function copyText(s) {
@@ -1586,22 +1553,22 @@ async function copyText(s) {
 async function loadHdri() {
   try {
     const data = await assetApiCall('GET', '/api/hdri/list')
-    hdriEntries = (data && data.entries) || []
-    loadErrors.hdri = null
+    S.hdriEntries = (data && data.entries) || []
+    S.loadErrors.hdri = null
   } catch (e) {
-    loadErrors.hdri = e.message || '未知错误'
-    if (hdriEntries === null) hdriEntries = []
+    S.loadErrors.hdri = e.message || '未知错误'
+    if (S.hdriEntries === null) S.hdriEntries = []
   }
 }
 
 async function loadMc() {
   try {
     const data = await assetApiCall('GET', MC_PACKS_API + '/list')
-    mcEntries = (data && data.packs) || []
-    loadErrors.mc = null
+    S.mcEntries = (data && data.packs) || []
+    S.loadErrors.mc = null
   } catch (e) {
-    loadErrors.mc = e.message || '未知错误'
-    if (mcEntries === null) mcEntries = []
+    S.loadErrors.mc = e.message || '未知错误'
+    if (S.mcEntries === null) S.mcEntries = []
   }
 }
 
@@ -1610,11 +1577,11 @@ async function loadMc() {
 async function loadTexPacks() {
   try {
     const data = await assetApiCall('GET', '/api/asset/tex')
-    texPacks = (data && data.packs) || []
-    loadErrors.tex = null
+    S.texPacks = (data && data.packs) || []
+    S.loadErrors.tex = null
   } catch (e) {
-    loadErrors.tex = e.message || '未知错误'
-    if (texPacks === null) texPacks = []
+    S.loadErrors.tex = e.message || '未知错误'
+    if (S.texPacks === null) S.texPacks = []
   }
 }
 
@@ -1622,32 +1589,32 @@ async function loadTexPacks() {
 async function loadModelAssets() {
   try {
     const data = await assetApiCall('GET', '/api/asset/model')
-    modelPacks = (data && data.packs) || []
-    loadErrors.model = null
+    S.modelPacks = (data && data.packs) || []
+    S.loadErrors.model = null
   } catch (e) {
-    loadErrors.model = e.message || '未知错误'
-    if (modelPacks === null) modelPacks = []
+    S.loadErrors.model = e.message || '未知错误'
+    if (S.modelPacks === null) S.modelPacks = []
   }
   try {
     const data = await assetApiCall('GET', IMPORT_API)
-    importedModels = (data && data.models) || []
+    S.importedModels = (data && data.models) || []
   } catch {
-    importedModels = []
+    S.importedModels = []
   }
   try {
     const data = await assetApiCall('GET', '/api/custom-models')
-    customModels = (data && data.models) || []
+    S.customModels = (data && data.models) || []
   } catch {
-    customModels = []
+    S.customModels = []
   }
   try {
     const loc = await assetApiCall('GET', IMPORT_API + '/location')
-    modelDirs.imported = (loc && loc.dir) || ''
-  } catch { modelDirs.imported = '' }
+    S.modelDirs.imported = (loc && loc.dir) || ''
+  } catch { S.modelDirs.imported = '' }
   try {
     const loc = await assetApiCall('GET', '/api/custom-models/location')
-    modelDirs.custom = (loc && loc.dir) || ''
-  } catch { modelDirs.custom = '' }
+    S.modelDirs.custom = (loc && loc.dir) || ''
+  } catch { S.modelDirs.custom = '' }
 }
 
 export async function refreshAssetLibrary() {
@@ -1663,10 +1630,10 @@ function sigEntries() {
 }
 
 function startPoll() {
-  if (pollTimer) return
-  pollTimer = setInterval(() => {
+  if (S.pollTimer) return
+  S.pollTimer = setInterval(() => {
     const sig = sigEntries()
-    if (sig !== lastTexSig) { lastTexSig = sig; rebuild() }
+    if (sig !== S.lastTexSig) { S.lastTexSig = sig; rebuild() }
   }, 1500)
 }
 
@@ -1678,10 +1645,10 @@ function buildToolbar() {
   const cats = [['all', t('asset.catAll')], ['project', t('asset.catProject')], ['tex', t('asset.catTex')], ['model', t('asset.catModel')], ['hdri', t('asset.catHdri')], ['mc', t('asset.catMc')], ['official', t('asset.catOfficial')], ['preset', t('asset.catPreset')], ['fav', t('asset.catFav')], ['recent', t('asset.catRecent')]]
   const catGroup = el('div', 'asset-lib-tags')
   for (const [v, label] of cats) {
-    const btn = el('button', 'asset-lib-tag' + (categoryFilter === v ? ' active' : ''), label)
+    const btn = el('button', 'asset-lib-tag' + (S.categoryFilter === v ? ' active' : ''), label)
     btn.dataset.cat = v
     btn.addEventListener('click', () => {
-      categoryFilter = v
+      S.categoryFilter = v
       catGroup.querySelectorAll('.asset-lib-tag').forEach(b => b.classList.toggle('active', b.dataset.cat === v))
       rebuild()
     })
@@ -1693,12 +1660,12 @@ function buildToolbar() {
   /* 方块/物品切换：与分类标签正交，单选 toggle（再次点击取消） */
   const kindGroup = el('div', 'asset-lib-tags asset-lib-kind')
   for (const [v, label] of [['block', t('asset.kindBlock')], ['item', t('asset.kindItem')]]) {
-    const btn = el('button', 'asset-lib-tag' + (contentKindFilter === v ? ' active' : ''), label)
+    const btn = el('button', 'asset-lib-tag' + (S.contentKindFilter === v ? ' active' : ''), label)
     btn.dataset.kind = v
     btn.title = t('asset.kindFilterTitle')
     btn.addEventListener('click', () => {
-      contentKindFilter = contentKindFilter === v ? 'all' : v
-      kindGroup.querySelectorAll('.asset-lib-tag').forEach(b => b.classList.toggle('active', b.dataset.kind === contentKindFilter))
+      S.contentKindFilter = S.contentKindFilter === v ? 'all' : v
+      kindGroup.querySelectorAll('.asset-lib-tag').forEach(b => b.classList.toggle('active', b.dataset.kind === S.contentKindFilter))
       applyFilter()
     })
     kindGroup.appendChild(btn)
@@ -1708,30 +1675,30 @@ function buildToolbar() {
   for (const [v, label] of [['name', t('asset.sortName')], ['mtime', t('asset.sortMtime')]]) {
     const o = el('option'); o.value = v; o.textContent = label; sort.appendChild(o)
   }
-  sort.value = sortKey
-  sort.addEventListener('change', () => { sortKey = sort.value; rebuild() })
+  sort.value = S.sortKey
+  sort.addEventListener('change', () => { S.sortKey = sort.value; rebuild() })
   const sortWrap = el('div', 'asset-lib-sel-wrap')
   sortWrap.appendChild(sort)
   right.appendChild(sortWrap)
 
   const btnGroup = el('div', 'asset-lib-btn-group')
 
-  const dirBtn = el('button', 'asset-lib-btn' + (sortDir === 'desc' ? ' desc' : ''))
+  const dirBtn = el('button', 'asset-lib-btn' + (S.sortDir === 'desc' ? ' desc' : ''))
   dirBtn.title = t('asset.sortDirTitle')
   dirBtn.innerHTML = '<svg class="ico ico-sm"><use href="#i-arrow-up"/></svg>'
   dirBtn.addEventListener('click', () => {
-    sortDir = sortDir === 'asc' ? 'desc' : 'asc'
-    dirBtn.classList.toggle('desc', sortDir === 'desc')
+    S.sortDir = S.sortDir === 'asc' ? 'desc' : 'asc'
+    dirBtn.classList.toggle('desc', S.sortDir === 'desc')
     rebuild()
   })
   btnGroup.appendChild(dirBtn)
 
   const viewBtn = el('button', 'asset-lib-btn')
   viewBtn.title = t('asset.viewToggleTitle')
-  viewBtn.innerHTML = '<svg class="ico ico-sm"><use href="#i-' + (viewMode === 'grid' ? 'grid' : 'list') + '"/></svg>'
+  viewBtn.innerHTML = '<svg class="ico ico-sm"><use href="#i-' + (S.viewMode === 'grid' ? 'grid' : 'list') + '"/></svg>'
   viewBtn.addEventListener('click', () => {
-    viewMode = viewMode === 'grid' ? 'list' : 'grid'
-    viewBtn.querySelector('use').setAttribute('href', '#i-' + (viewMode === 'grid' ? 'grid' : 'list'))
+    S.viewMode = S.viewMode === 'grid' ? 'list' : 'grid'
+    viewBtn.querySelector('use').setAttribute('href', '#i-' + (S.viewMode === 'grid' ? 'grid' : 'list'))
     rebuild()
   })
   btnGroup.appendChild(viewBtn)
@@ -1809,7 +1776,7 @@ async function showModelDetail(item) {
   /* 详情大图：懒加载 3D 缩略图，就绪后刷新详情面板（stage 直接显示渲染结果） */
   if (item.modelThumb && !item.thumb) {
     ensureModelThumb(item)
-      .then(url => { if (url && detailCurrent === item) showDetail(item, item._metaRows) })
+      .then(url => { if (url && S.detailCurrent === item) showDetail(item, item._metaRows) })
       .catch(() => {})
   }
 }
@@ -1898,30 +1865,30 @@ function showDetail(item, extraMetaRows) {
     payload.onTextureAdd = (tex) => { pushRecent(item); addPackTextureToCanvas(item, p, tex) }
   }
   document.dispatchEvent(new CustomEvent('nodepreview:show-asset', { detail: payload }))
-  detailCurrent = item
+  S.detailCurrent = item
 }
 
 function refreshDetailFav() {
-  if (!detailCurrent) return
-  openDetail(detailCurrent)
+  if (!S.detailCurrent) return
+  openDetail(S.detailCurrent)
 }
 
 function hideDetail() {
   document.dispatchEvent(new CustomEvent('nodepreview:hide-asset'))
-  detailCurrent = null
+  S.detailCurrent = null
 }
 
 export function initAssetLibrary() {
   const search = document.getElementById('assetLibSearch')
-  if (search) search.addEventListener('input', () => { searchTerm = search.value; applyFilter() })
+  if (search) search.addEventListener('input', () => { S.searchTerm = search.value; applyFilter() })
   buildToolbar()
   const refreshBtn = document.getElementById('assetLibRefresh')
-  if (refreshBtn) refreshBtn.addEventListener('click', () => { if (browse) renderBrowse(); else refreshAssetLibrary() })
+  if (refreshBtn) refreshBtn.addEventListener('click', () => { if (S.browse) renderBrowse(); else refreshAssetLibrary() })
   document.addEventListener('custom-model:created', () => { refreshAssetLibrary() })
   document.addEventListener('click', hideCtxMenu)
   document.addEventListener('contextmenu', (e) => { if (!e.target.closest('.asset-card')) hideCtxMenu() })
   document.addEventListener('keydown', (e) => {
-    if (!browse || e.key !== 'Backspace') return
+    if (!S.browse || e.key !== 'Backspace') return
     const ae = document.activeElement
     if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT' || ae.isContentEditable)) return
     e.preventDefault()
@@ -1930,11 +1897,11 @@ export function initAssetLibrary() {
   document.addEventListener('nodeproject:saved', () => { refreshProjectsQuiet() })
   onLocaleChange(() => {
     buildToolbar()
-    if (browse) { renderBrowse(); return }
+    if (S.browse) { renderBrowse(); return }
     rebuild()
-    if (detailCurrent) openDetail(detailCurrent)
+    if (S.detailCurrent) openDetail(S.detailCurrent)
   })
-  lastTexSig = sigEntries()
+  S.lastTexSig = sigEntries()
   rebuild()
   loadAssetStore()
   refreshAssetLibrary()
