@@ -1,0 +1,4 @@
+# Go 构建产物
+matoga.exe
+matoga
+*.exe.tmp
