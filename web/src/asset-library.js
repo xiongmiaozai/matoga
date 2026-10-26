@@ -49,6 +49,42 @@ import { tryActivateModelViewport, viewMcModelAsset, viewImportedModelAsset } fr
 
 /* el / shade / loadList / saveList 已移至 asset-lib/dom.js */
 
+const BROWSE_CLICK_DELAY = 240
+
+/* ── 面板运行时状态（保留在入口模块） ── */
+let searchTerm = ''
+let categoryFilter = 'all'
+/* 方块/物品内容过滤（与分类标签正交的维度）：'all' | 'block' | 'item' */
+let contentKindFilter = 'all'
+let sortKey = 'name'
+let sortDir = 'asc'
+let viewMode = 'grid'
+
+let mcEntries = null
+let officialEntries = null
+let hdriEntries = null
+let projectEntries = null
+let canvasPresets = null      /* 自定义画布预设（config.canvasCustomPresets），null = 未加载 */
+let texPacks = null
+let modelPacks = null         /* /api/asset/model 聚合结果（包内 .json 模型），null = 未加载 */
+let importedModels = null     /* 用户导入模型（/api/imported-models），null = 未加载 */
+let customModels = null       /* 自定义模型（/api/custom-models），null = 未加载 */
+/* 各模型类的专属本地目录（用于「打开本地位置」）：imported=导入模型，custom=自定义模型 */
+let modelDirs = { imported: '', custom: '' }
+let lastTexSig = ''
+let loadErrors = { hdri: null, mc: null, official: null, project: null, tex: null, model: null }
+
+let favorites = loadList('matoga:assetFav')
+let recent = loadList('matoga:assetRecent')
+let serverSynced = false
+
+let ctxMenu = null
+let pollTimer = null
+let detailCurrent = null
+let browse = null       // { item, pack, dir }：总资产库面板内的包内容浏览状态
+let browseSeq = 0
+let clickTimer = null
+
 async function assetApiCall(method, path, body) {
   const res = await fetch(apiUrl(path), {
     method,
