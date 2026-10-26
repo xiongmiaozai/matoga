@@ -23,73 +23,20 @@
 import * as THREE from 'three'
 import { showCustomModel, showCustomModelPair, hasVisibleViewport, applyPbrMapsToModelMaterial } from './material3d.js'
 
+import { apiUrl, fetchJson, fetchOkData, rawUrl, texCacheKey } from './mcv/utils.js'
+import { TEX_REF_EXT_RE, expandTextureAliases, isSpecialTexPath, resolveTextureRef, spriteTexKey, texPathForRef, texUrlToRef, writeMcTexRef } from './mcv/tex-refs.js'
+import { FACE_KEYS, MAT_INDEX, MAX_ELEMENTS, PLACEHOLDER_MAT, applyFaceUvs, buildModelGroup, defaultFaceUv, expandElementFaces, normFaceRotation, parseUv, parseVec3 } from './mcv/geometry.js'
+import { animatedTexs, attachPackTexture, loadAnimMetaCached } from './mcv/anim.js'
+import { applyTexParams } from './mcv/anim.js'
 /* fileUrl / joinPath 内联（与 utils.js 同实现）：避免 import utils.js 触发 core.js 的
    DOM 依赖，保持本模块在 node 单测（NR_M3D_STUB）环境下可加载 */
-function fileUrl(p) { return '/api/file/raw?path=' + encodeURIComponent(p) }
-function joinPath(base, rel) {
-  const b = base.replace(/\\/g, '/').replace(/\/+$/, '')
-  const r = rel.replace(/\\/g, '/').replace(/^\/+/, '')
-  return b + '/' + r
-}
-
 const MAX_PARENT_DEPTH = 8
-const MAX_ELEMENTS = 4096
 const MAX_ITEM_DEF_DEPTH = 12
 const MAX_ITEM_DEF_REFS = 16
-/* 跨模型共享材质：userData.shared 标记（material3d dispose 时跳过，避免重复 dispose 后渲染失效） */
-const HIDDEN_MAT = new THREE.MeshBasicMaterial({ visible: false })
-HIDDEN_MAT.userData.shared = true
-const PLACEHOLDER_MAT = new THREE.MeshStandardMaterial({ color: 0x9a9aa8, roughness: 0.9 })
-PLACEHOLDER_MAT.userData.shared = true
-
-/* BoxGeometry 材质索引顺序（+x,-x,+y,-y,+z,-z）↔ MC 面名 */
-const FACE_KEYS = ['east', 'west', 'up', 'down', 'south', 'north']
-const MAT_INDEX = { east: 0, west: 1, up: 2, down: 3, south: 4, north: 5 }
-
 const texCache = new Map()   /* key → Promise<Texture|null> */
 
 /* 最近一次成功展示的模型 UV 布局（uv-view 浮窗数据源） */
 let lastLayout = null
-
-function apiUrl(p) {
-  return (typeof window !== 'undefined' && window.matogaCore && window.matogaCore.url) ? window.matogaCore.url(p) : p
-}
-
-/* 资源 raw URL 构造：包模式走 /api/pack/<name>/raw?path=<rel>（any=1 放行 .mcmeta 等扩展）；
-    文件根模式（对比结果等任意文件夹）走 /api/file/raw?path=<join(root,rel)>（file 接口直接读任意路径，无需 any）；
-    扩展引用（data:/file:/URL）直接可加载，原样返回 */
-function rawUrl(api, packName, rel, fileRoot, any) {
-  if (isSpecialTexPath(rel)) {
-    if (/^file:/i.test(rel)) return fileUrl(rel.replace(/^file:/i, ''))
-    return rel
-  }
-  if (fileRoot) return fileUrl(joinPath(fileRoot, rel))
-  const q = any ? '&any=1' : ''
-  return apiUrl(`${api}/${encodeURIComponent(packName)}/raw?path=${encodeURIComponent(rel)}${q}`)
-}
-
-/* 贴图缓存键：包模式与文件根模式命名空间隔离，避免对比场景与包场景贴图混缓存 */
-function texCacheKey(api, packName, texPath, fileRoot) {
-  if (isSpecialTexPath(texPath)) return 'sp:' + texPath
-  return fileRoot ? `file:${fileRoot}:${texPath}` : `${api}:${packName}:${texPath}`
-}
-
-async function fetchJson(url) {
-  const res = await fetch(url)
-  if (!res.ok) throw new Error('HTTP ' + res.status)
-  const j = await res.json()
-  /* raw 接口失败响应为 200 + {ok:false} 包裹（fail() 不改状态码）：显式判定失败，
-     否则错误对象被当作模型 JSON 使用 → parent 链静默丢失 elements/textures */
-  if (j && j.ok === false) throw new Error((j && j.msg) || 'bad response')
-  return j
-}
-
-async function fetchOkData(path) {
-  const res = await fetch(apiUrl(path))
-  const j = await res.json()
-  if (!j || !j.ok) throw new Error((j && j.msg) || 'bad response')
-  return j.data
-}
 
 /* parent 引用 → 包内模型路径："minecraft:block/cube" / "block/cube" → assets/minecraft/models/block/cube.json */
 export function parentModelPath(parent) {
@@ -103,140 +50,6 @@ export function parentModelPath(parent) {
 
 /* 贴图引用 → 包内贴图路径："minecraft:block/stone" → assets/minecraft/textures/block/stone.png；
     引用已带图片扩展名（社区包写法）不再追加，防 stone.png.png */
-const TEX_REF_EXT_RE = /\.(png|jpe?g|webp|gif|bmp|tiff?|avif)$/i
-
-/* matoga 扩展贴图引用（模型 textures 表值直接可加载，跳过命名空间解析）：
-    data:<dataURL> 内嵌 / file:<绝对磁盘路径> / 站内 URL（/api/...） / 外部 http(s) URL。
-    UV 编辑器替换的任意来源贴图以此形式持久化到模型 JSON，重新打开自动加载 */
-const SPECIAL_TEX_RE = /^(data:|file:|https?:\/\/|\/)/i
-
-function isSpecialTexPath(p) {
-  return typeof p === 'string' && SPECIAL_TEX_RE.test(p)
-}
-
-export function textureAssetPath(ref) {
-  if (typeof ref !== 'string' || !ref) return null
-  let ns = 'minecraft', rest = ref
-  const ci = ref.indexOf(':')
-  if (ci >= 0) { ns = ref.slice(0, ci); rest = ref.slice(ci + 1) }
-  if (!rest) return null
-  return `assets/${ns}/textures/${TEX_REF_EXT_RE.test(rest) ? rest : rest + '.png'}`
-}
-
-/* 引用值 → 贴图路径（扩展引用原样；标准引用走命名空间解析） */
-export function texPathForRef(ref) {
-  if (typeof ref !== 'string') return null
-  if (isSpecialTexPath(ref)) return ref
-  return textureAssetPath(ref) || ref
-}
-
-/* 包内贴图路径 → 标准 MC 引用（assets/<ns>/textures/<rest>.png → <ns>:<rest>） */
-function packRelToMcRef(rel) {
-  const m = String(rel).match(/^assets\/([^/]+)\/textures\/(.+)\.(png|jpe?g|webp|gif|bmp)$/i)
-  return m ? (m[1] + ':' + m[2]) : null
-}
-
-/* 替换贴图 URL → 模型贴图引用（智能引用）：
-    '' → 移除；dataURL → data: 内嵌；外部 http(s) → 原样；
-    站内 file raw URL → file:<磁盘路径>；站内包 raw URL → 模型包上下文
-    （ctx = { api, packName }，可缺省）匹配时转标准 MC 引用（保持 MC 兼容），
-    跨包保留站内 URL（重新打开可直接加载） */
-export function texUrlToRef(url, ctx) {
-  if (typeof url !== 'string') return null
-  if (!url) return ''
-  if (/^data:/i.test(url)) return url
-  let path = url
-  if (/^https?:\/\//i.test(url)) {
-    /* 外部 URL 原样保留；LAN apiUrl 包装（http 前缀 + token）的站内 URL 剥离前缀 */
-    const ai = url.indexOf('/api/')
-    if (ai < 0) return url
-    path = url.slice(ai)
-  }
-  if (!path.startsWith('/api/')) return path   /* 相对/未知形式原样 */
-  const fm = path.match(/^\/api\/file\/raw\?path=([^&]+)/)
-  if (fm) return 'file:' + decodeURIComponent(fm[1])
-  const bm = path.match(/^\/api\/(mc-packs|mc-official)\/([^/]+)\/raw\?path=([^&]+)/)
-  if (bm) {
-    const std = packRelToMcRef(decodeURIComponent(bm[3]))
-    if (std && ctx && ctx.api === '/api/' + bm[1] && ctx.packName === decodeURIComponent(bm[2])) return std
-    return path   /* 跨包：保留站内 URL 引用（重新打开可直接加载） */
-  }
-  return path
-}
-
-/* 模型 textures 表贴图引用写回：解析命中 oldTexPath 的键改写为 newRef。
-    直接持有该路径的键（含 #互引链命中）统一改写到新值；oldTexPath = '' 匹配被移除的空键 */
-export function writeMcTexRef(textures, oldTexPath, newRef) {
-  if (!textures || typeof textures !== 'object' || typeof oldTexPath !== 'string' || typeof newRef !== 'string') return 0
-  let n = 0
-  for (const k in textures) {
-    const val = textures[k]
-    if (typeof val !== 'string') continue
-    if (oldTexPath === '') {
-      if (val === '') { textures[k] = newRef; n++ }
-      continue
-    }
-    if (!val) continue
-    const hit = isSpecialTexPath(val)
-      ? val === oldTexPath
-      : (val === oldTexPath || textureAssetPath(val) === oldTexPath)
-    if (hit) { textures[k] = newRef; n++; continue }
-    if (val.startsWith('#') && resolveTextureRef(textures, '#' + k) === oldTexPath) { textures[k] = newRef; n++ }
-  }
-  return n
-}
-
-/* #引用键未定义时的方向别名回退（社区模型常见断链：faces 引用 #up/#north 而
-   textures 表内仅有 top/bottom 等非标键，或反向命名）。仅补原本解析失败
-   （灰色占位 / UV 面跳过）的场景，已定义键不受影响；防环 guard 贯穿回退链 */
-const TEX_REF_FALLBACK = {
-  north: ['side', 'all'], south: ['side', 'all'], east: ['side', 'all'], west: ['side', 'all'],
-  side: ['all'], all: ['side'],
-  up: ['top', 'all'], top: ['up', 'all'],
-  down: ['bottom', 'all'], bottom: ['down', 'all'],
-}
-
-/* 解析 "#side" 引用链（textures 表内互引，防环）到最终贴图路径 */
-export function resolveTextureRef(textures, ref, seen) {
-  if (typeof ref !== 'string' || !ref) return null
-  const guard = seen || new Set()
-  if (guard.has(ref)) return null
-  guard.add(ref)
-  if (ref.startsWith('#')) {
-    const key = ref.slice(1)
-    const val = (textures && typeof textures === 'object') ? textures[key] : undefined
-    if (typeof val === 'string' && val) return resolveTextureRef(textures, val, guard)
-    if (val && typeof val === 'object' && typeof val.sprite === 'string' && val.sprite) return resolveTextureRef(textures, val.sprite, guard)
-    for (const alt of TEX_REF_FALLBACK[key] || []) {
-      const hit = resolveTextureRef(textures, '#' + alt, guard)
-      if (hit) return hit
-    }
-    return null
-  }
-  /* 扩展引用（data:/file:/URL）直接作为贴图路径，不走命名空间解析 */
-  if (isSpecialTexPath(ref)) return ref
-  return textureAssetPath(ref)
-}
-
-/* 旧版/社区包的贴图别名展开（vanilla Deserializer 行为）：
-   all → 六方向，side → 四水平方向（putIfAbsent 语义；保留原键以便 "#all" 引用仍可解析） */
-export function expandTextureAliases(textures) {
-  const out = { ...(textures && typeof textures === 'object' ? textures : {}) }
-  const fill = (src, keys) => {
-    if (typeof src !== 'string' || !src) return
-    for (const k of keys) if (out[k] == null) out[k] = src
-  }
-  fill(out.all, ['down', 'up', 'north', 'south', 'east', 'west'])
-  fill(out.side, ['north', 'south', 'east', 'west'])
-  return out
-}
-
-/* ── 内置 vanilla 基础模型（parent 断链兜底）────────────────
-    普通资源包不含 vanilla 基类文件（block/cube 等），模型 parent 链指向它们时
-    fetch 404 → 旧实现静默吞掉 → elements/textures 丢失 → 空模型或贴图全灰。
-    兜底：fetch 失败时按包内相对路径查此表继续解析（包内存在同路径文件时优先包内
-    覆盖版本）；textures 键与 vanilla 一致，配合 expandTextureAliases 展开工作。
-    未收录的衍生基类（cube_column 等）断链时仍按原行为跳过。 */
 const BUILTIN_PARENT_MODELS = {
   'assets/minecraft/models/block/cube.json': {
     elements: [{
@@ -455,154 +268,6 @@ export function applyItemTransformation(group, tr) {
   return group
 }
 
-function parseVec3(v, fallback) {
-  if (Array.isArray(v) && v.length >= 3 && v.every(n => Number.isFinite(+n))) return [+v[0], +v[1], +v[2]]
-  if (typeof v === 'string') {
-    const a = v.split(',').map(s => +s.trim())
-    if (a.length >= 3 && a.every(n => Number.isFinite(n))) return a.slice(0, 3)
-  }
-  return fallback
-}
-
-function parseUv(uv) {
-  const a = Array.isArray(uv) ? uv : (typeof uv === 'string' ? uv.split(',').map(s => +s.trim()) : null)
-  if (a && a.length === 4 && a.every(n => Number.isFinite(n))) return a
-  return null
-}
-
-/* face.rotation（0/90/180/270，顺时针）：几何四角 [TL,TR,BL,BR] 的采样角随之轮转
-   （贴图顺时针转 90° 后，原 BL 像素显示在几何 TL 位置：TL←BL, TR←TL, BL←BR, BR←TR） */
-const FACE_ROT_ORDER = {
-  90:  [2, 0, 3, 1],
-  180: [3, 2, 1, 0],
-  270: [1, 3, 0, 2],
-}
-
-/* vanilla 默认 UV（face 无 uv 字段时按元素 from/to 尺寸计算，v 自顶向下）：
-   水平面 u 取 x 范围、v 取 z 范围（down 垂直翻转）；侧面 v 取 y 范围（16-to.y → 16-from.y）；
-   north/east 面贴图相对世界坐标水平翻转（观察方向所致）。
-   例：蛋糕主体 [1,0,1]→[15,8,15]：up→[1,1,15,15]（cake_top 中央 14×14），
-   side→u 1-15 / v 8-16（cake_side 下半），而非整张 16×16 拉伸。
-   uvScale≠16（bbmodel resolution）时按比例换算 */
-export function defaultFaceUv(key, from, to, uvScale = 16) {
-  if (!Array.isArray(from) || !Array.isArray(to)) return null
-  const fx = +from[0], fy = +from[1], fz = +from[2]
-  const tx = +to[0], ty = +to[1], tz = +to[2]
-  if (![fx, fy, fz, tx, ty, tz].every(Number.isFinite)) return null
-  let uv
-  switch (key) {
-    case 'up':    uv = [fx, fz, tx, tz]; break
-    case 'down':  uv = [fx, 16 - tz, tx, 16 - fz]; break
-    case 'north': uv = [16 - tx, 16 - ty, 16 - fx, 16 - fy]; break
-    case 'south': uv = [fx, 16 - ty, tx, 16 - fy]; break
-    case 'east':  uv = [16 - tz, 16 - ty, 16 - fz, 16 - fy]; break
-    case 'west':  uv = [fz, 16 - ty, tz, 16 - fy]; break
-    default: return null
-  }
-  if (uvScale && uvScale !== 16) {
-    const s = uvScale / 16
-    uv = uv.map(v => v * s)
-  }
-  return uv
-}
-
-/* BoxGeometry 每面 4 顶点 UV（左上/右上/左下/右下）按 MC 像素坐标重映射（uvScale=16 或 bbmodel resolution）
-   无 uv 的 face 用 vanilla 默认 UV（按元素尺寸），防止整张贴图拉伸 */
-function applyFaceUvs(geo, faces, uvScale, from, to) {
-  if (!faces || typeof faces !== 'object') return
-  const uvAttr = geo.attributes.uv
-  if (!uvAttr) return
-  for (const key of FACE_KEYS) {
-    const f = faces[key]
-    if (!f || typeof f !== 'object') continue
-    const uv = parseUv(f.uv) || defaultFaceUv(key, from, to, uvScale)
-    if (!uv) continue
-    /* u1/u2 与 v1/v2 支持翻转（uv[2] < uv[0] 时为水平镜像采样） */
-    const u1 = uv[0] / uvScale, u2 = uv[2] / uvScale
-    const v1 = 1 - uv[1] / uvScale, v2 = 1 - uv[3] / uvScale
-    const corners = [[u1, v1], [u2, v1], [u1, v2], [u2, v2]]
-    const rot = Number.isFinite(+f.rotation) ? ((Math.round(+f.rotation / 90) * 90) % 360 + 360) % 360 : 0
-    const order = FACE_ROT_ORDER[rot] || [0, 1, 2, 3]
-    const i = MAT_INDEX[key] * 4
-    for (let k = 0; k < 4; k++) {
-      const c = corners[order[k]]
-      uvAttr.setXY(i + k, c[0], c[1])
-    }
-  }
-  uvAttr.needsUpdate = true
-}
-
-/* element 变换：MC 单轴旋转 / bbmodel 欧拉旋转均绕 origin，几何中心置于元素中心 */
-function applyElementTransform(mesh, el, center) {
-  const c = [(center[0] - 8) / 16, (center[1] - 8) / 16, (center[2] - 8) / 16]
-  const rot = el.rotation
-  if (!rot) { mesh.position.set(c[0], c[1], c[2]); return }
-  const origin = parseVec3(Array.isArray(rot) ? el.origin : rot.origin, [8, 8, 8]).map(v => (v - 8) / 16)
-  if (Array.isArray(rot)) {
-    mesh.rotation.set(
-      (+rot[0] || 0) * Math.PI / 180,
-      (+rot[1] || 0) * Math.PI / 180,
-      (+rot[2] || 0) * Math.PI / 180,
-    )
-  } else if (rot.axis === 'x' || rot.axis === 'y' || rot.axis === 'z') {
-    mesh.rotation[rot.axis] = (+rot.angle || 0) * Math.PI / 180
-  } else {
-    mesh.position.set(c[0], c[1], c[2]); return
-  }
-  /* position = origin + R(center - origin) */
-  const off = new THREE.Vector3(c[0] - origin[0], c[1] - origin[1], c[2] - origin[2])
-  off.applyEuler(mesh.rotation)
-  mesh.position.set(origin[0] + off.x, origin[1] + off.y, origin[2] + off.z)
-}
-
-/* faces "all" 简写展开（bbmodel / 社区模型）：复制到未定义的方向面（不改原对象） */
-function expandElementFaces(el) {
-  let faces = (el && el.faces && typeof el.faces === 'object') ? el.faces : {}
-  if (faces.all && typeof faces.all === 'object') {
-    faces = { ...faces }
-    for (const k of FACE_KEYS) if (!faces[k]) faces[k] = faces.all
-  }
-  return faces
-}
-
-/* 通用构建：elements（MC 或 bbmodel Cube）→ THREE.Group
-    matFor(faceKey, faceDef, el) 返回该面材质（null/undefined → 隐藏面） */
-export function buildModelGroup(elements, matFor, uvScale = 16) {
-  const group = new THREE.Group()
-  const scale = uvScale || 16
-  const list = (Array.isArray(elements) ? elements : []).slice(0, MAX_ELEMENTS)
-  for (const el of list) {
-    if (!el || typeof el !== 'object') continue
-    const from = parseVec3(el.from, [0, 0, 0])
-    const to = parseVec3(el.to, [16, 16, 16])
-    const sx = Math.abs(to[0] - from[0]) || 0.01, sy = Math.abs(to[1] - from[1]) || 0.01, sz = Math.abs(to[2] - from[2]) || 0.01
-    const geo = new THREE.BoxGeometry(sx / 16, sy / 16, sz / 16)
-    const faces = expandElementFaces(el)
-    applyFaceUvs(geo, faces, scale, from, to)
-    const mats = FACE_KEYS.map(key => {
-      const m = matFor(key, faces[key], el)
-      return m || HIDDEN_MAT
-    })
-    const mesh = new THREE.Mesh(geo, mats)
-    mesh.castShadow = true; mesh.receiveShadow = true
-    /* 原始 element 引用（编辑联动：uv-view 编辑 UV 后按引用定位 mesh 重映射几何 UV） */
-    mesh.userData.mcElement = el
-    mesh.userData.uvScale = scale
-    applyElementTransform(mesh, el, [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2, (from[2] + to[2]) / 2])
-    group.add(mesh)
-  }
-  return group
-}
-
-/* MC 贴图像素风参数（同步/异步两条赋值路径共用） */
-function applyTexParams(tex) {
-  tex.colorSpace = THREE.SRGBColorSpace
-  tex.magFilter = THREE.NearestFilter
-  tex.minFilter = THREE.NearestFilter
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping
-  return tex
-}
-
 function makeModelMaterial(tex) {
   const m = new THREE.MeshPhysicalMaterial({ roughness: 0.9, metalness: 0.0, alphaTest: 0.5 })
   if (tex) m.map = applyTexParams(tex)
@@ -628,137 +293,6 @@ function loadTextureCached(key, url) {
    采样：map.repeat 缩至单帧区域、map.offset.y 平移到当前帧（帧 0 在贴图顶部，
    THREE v 轴向上故 offset = 1-(i+1)·ry）；interpolate 帧间渐变以离散切换近似
    （双采样混合需自定义 shader，从简）。注册表 + rAF 循环按 wall-clock 驱动。 */
-
-const TICKS_PER_SEC = 20
-
-/* mcmeta JSON → 动画定义（非法 / 单帧 → null）；timeline 为 [{ index, ticks }]（ticks ≥ 1 整数） */
-export function parseAnimMeta(meta, texW, texH) {
-  const anim = (meta && typeof meta === 'object') ? meta.animation : null
-  if (!anim || typeof anim !== 'object') return null
-  const w = Number.isFinite(+texW) ? +texW : 0
-  const h = Number.isFinite(+texH) ? +texH : 0
-  if (w <= 0 || h <= 0) return null
-  const fw = Number.isFinite(+anim.width) && +anim.width > 0 ? Math.floor(+anim.width) : w
-  const fh = Number.isFinite(+anim.height) && +anim.height > 0 ? Math.floor(+anim.height) : fw
-  if (fw <= 0 || fh <= 0 || fw > w || fh > h) return null
-  const frameCount = Math.floor(h / fh)
-  if (frameCount <= 1) return null
-  const defaultTicks = Math.max(1, Math.round(Number.isFinite(+anim.frametime) ? +anim.frametime : 1))
-  const timeline = []
-  if (Array.isArray(anim.frames)) {
-    for (const f of anim.frames) {
-      let index = -1, ticks = defaultTicks
-      if (typeof f === 'number' && Number.isFinite(f)) index = Math.floor(f)
-      else if (f && typeof f === 'object' && Number.isFinite(+f.index)) {
-        index = Math.floor(+f.index)
-        if (Number.isFinite(+f.time) && +f.time > 0) ticks = Math.max(1, Math.round(+f.time))
-      }
-      if (index < 0 || index >= frameCount) continue
-      timeline.push({ index, ticks })
-    }
-  }
-  if (!timeline.length) for (let i = 0; i < frameCount; i++) timeline.push({ index: i, ticks: defaultTicks })
-  const totalTicks = timeline.reduce((s, f) => s + f.ticks, 0)
-  return { texW: w, texH: h, frameW: fw, frameH: fh, frameCount, timeline, totalSec: totalTicks / TICKS_PER_SEC }
-}
-
-/* 播放时刻（秒）→ 帧号：帧边界均为整数 tick，换算到 tick 域比较（避免浮点累积误差），循环播放 */
-export function animFrameIndexAt(anim, tSec) {
-  const tl = anim && anim.timeline
-  if (!tl || !tl.length) return 0
-  const totalSec = anim.totalSec
-  const t = totalSec > 0 ? (tSec % totalSec) : 0
-  const tick = Math.max(0, Math.floor(t * TICKS_PER_SEC))
-  let acc = 0
-  for (const f of tl) {
-    acc += f.ticks
-    if (tick < acc) return f.index
-  }
-  return tl[tl.length - 1].index
-}
-
-/* 贴图采样矩阵 → 指定帧（几何 UV 已归一化 [0,1]；越界 clamp）。
-    half-texel inset：采样窗口自帧边界内收半像素（texel 域 [i·fh+0.5, (i+1)·fh-0.5]），
-    NearestFilter 取整后仍覆盖帧内全部行/列（视觉无损失），但窗口永不触碰帧边界——
-    否则边界精确压在 texel 分界上，光栅化插值的浮点误差叠加 RepeatWrapping 会把
-    相邻帧的边缘行采进来（帧数非 2 的幂时 offset 本身就有 float 表示误差），
-    渲染为面边缘的水平/垂直渗色线 */
-export function applyTexAnimFrame(tex, anim, frameIndex) {
-  if (!tex || !anim || !tex.repeat || !tex.offset) return tex
-  const i = Math.min(Math.max(Math.round(+frameIndex || 0), 0), anim.frameCount - 1)
-  const rx = anim.frameW / anim.texW
-  const ry = anim.frameH / anim.texH
-  const ex = 0.5 / anim.texW
-  const ey = 0.5 / anim.texH
-  tex.repeat.set(rx - 2 * ex, ry - 2 * ey)
-  tex.offset.set(ex, 1 - (i + 1) * ry + ey)
-  return tex
-}
-
-/* mcmeta 原始 JSON 缓存（404 / 解析失败 → null 一并缓存：非动画贴图不反复探测） */
-const animMetaCache = new Map()   /* key → Promise<object|null> */
-
-function loadAnimMetaCached(key, url) {
-  if (!animMetaCache.has(key)) animMetaCache.set(key, fetchJson(url).catch(() => null))
-  return animMetaCache.get(key)
-}
-
-/* 动画贴图注册表 + rAF 驱动循环（注册表空时停转；无 rAF 环境（node 单测）安全跳过） */
-const animatedTexs = new Map()   /* THREE.Texture → anim */
-let animRAF = 0
-
-function scheduleAnimTick() {
-  if (animRAF || typeof requestAnimationFrame !== 'function') return
-  animRAF = requestAnimationFrame(() => {
-    animRAF = 0
-    if (!animatedTexs.size) return
-    const now = (typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : Date.now()
-    for (const [tex, anim] of animatedTexs) applyTexAnimFrame(tex, anim, animFrameIndexAt(anim, now / 1000))
-    scheduleAnimTick()
-  })
-}
-
-function texImageSize(tex) {
-  const img = tex && tex.image
-  if (!img) return null
-  const w = +img.naturalWidth || +img.width || 0
-  const h = +img.naturalHeight || +img.height || 0
-  return (w > 0 && h > 0) ? { w, h } : null
-}
-
-/* 收集 group 内动画贴图的 { tex, anim }（去重；离屏缩略图多帧渲染用：
-    逐帧 applyTexAnimFrame + animFrameIndexAt 驱动采样窗口） */
-export function getModelTexAnims(group) {
-  const out = []
-  if (!group || typeof group.traverse !== 'function') return out
-  group.traverse(o => {
-    if (!o || !o.isMesh) return
-    const mats = Array.isArray(o.material) ? o.material : (o.material ? [o.material] : [])
-    for (const m of mats) {
-      if (!m || !m.map || !animatedTexs.has(m.map)) continue
-      if (out.some(e => e.tex === m.map)) continue
-      out.push({ tex: m.map, anim: animatedTexs.get(m.map) })
-    }
-  })
-  return out
-}
-
-/* 贴图加载完成后：按 mcmeta 配置动画采样（首帧 + 注册驱动循环）；非动画仅设像素风参数。
-   metaPromise 由调用方与贴图加载并行发起（此处只做解析与应用），返回 anim | null */
-function attachPackTexture(tex, metaPromise) {
-  if (!tex) return Promise.resolve(null)
-  const size = texImageSize(tex)
-  if (!size) { applyTexParams(tex); return Promise.resolve(null) }
-  return metaPromise.then(meta => {
-    applyTexParams(tex)
-    const anim = parseAnimMeta(meta, size.w, size.h)
-    if (!anim) return null
-    applyTexAnimFrame(tex, anim, 0)
-    animatedTexs.set(tex, anim)
-    scheduleAnimTick()
-    return anim
-  }).catch(() => { applyTexParams(tex); return null })
-}
 
 /* 贴图同目录动画元数据 URL（raw 接口 any=1 放行 .mcmeta 扩展名）；扩展引用无动画元数据 */
 function packMcmetaUrl(api, packName, texPath, fileRoot) {
@@ -813,13 +347,6 @@ export function mcMatFor(textures, api, packName, fileRoot, fallbackRoot, overri
 
 /* sprite 回退贴图键选择：优先 layer0（item/generated），缺失时回退 particle
    （shulker_box 等特殊渲染方块模型链仅含 particle 键，无 layer0 → 原先无法识别贴图） */
-export function spriteTexKey(textures) {
-  if (!textures || typeof textures !== 'object') return null
-  if (textures.layer0 != null) return '#layer0'
-  if (textures.particle != null) return '#particle'
-  return null
-}
-
 /* item/generated 类模型（无 elements）：layer0 贴图竖直 sprite 平面 */
 export function buildItemSpriteGroup(textures, api, packName, fileRoot) {
   const texPath = resolveTextureRef(textures, spriteTexKey(textures))
@@ -871,10 +398,6 @@ export function bbMatFor(bbTextures, cachePrefix) {
      textures: [{ name, url }],                       // 去重贴图（raw URL 或 dataURL）
      elements: [{ faces: { [face]: { tex, uv:[x1,y1,x2,y2], rotation, mirror } } }]
    }  uv 为贴图像素坐标（v 自顶向下），mirror = uv[2] < uv[0] 水平镜像采样 */
-
-function normFaceRotation(rot) {
-  return Number.isFinite(+rot) ? ((Math.round(+rot / 90) * 90) % 360 + 360) % 360 : 0
-}
 
 function texDisplayName(texPath) {
   if (isSpecialTexPath(texPath)) {
@@ -1450,3 +973,10 @@ export async function viewCustomModelInViewport({ id, api, packName }) {
 }
 
 export function isViewportVisible() { return hasVisibleViewport() }
+
+// 兼容既有导入路径：以下导出已迁至子模块
+export { buildModelGroup, defaultFaceUv } from './mcv/geometry.js'
+export { getModelTexAnims, applyTexAnimFrame, animFrameIndexAt, parseAnimMeta } from './mcv/anim.js'
+export { texUrlToRef, writeMcTexRef, texPathForRef, textureAssetPath } from './mcv/tex-refs.js'
+export { resolveTextureRef, expandTextureAliases, spriteTexKey } from './mcv/tex-refs.js'
+
