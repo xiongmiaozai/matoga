@@ -46,6 +46,8 @@ import { createSelection } from './uvc/selection.js'
 import { createHistory } from './uvc/history.js'
 import { createDrag } from './uvc/drag.js'
 import { createTextureIO } from './uvc/texture-io.js'
+import { createRefresher } from './uvc/refresh.js'
+import { createHighlighter } from './uvc/highlight.js'
 
 
 export function createUvEditor(opts) {
@@ -176,59 +178,26 @@ export function createUvEditor(opts) {
 
   /* ── 数据刷新 ─────────────────────────────────── */
 
-  function refresh() {
-    clearHighlight3d()
-    const layout = getLayout()
-    state.layout = layout && Array.isArray(layout.textures) && layout.textures.length ? layout : null
-    state.activeTex = 0
-    state.hover = null
-    state.rects = []
-    state.selected = null
-    state.drag = null
-    state.snapshot = snapshotLayout(state.layout)
-    state.undoStack.length = 0
-    state.redoStack.length = 0
-    state.customTex.clear()
-    state.notice = null
-    syncUndoButtons()
-    notifyDirty()
-    if (state.layout) {
-      for (const tex of state.layout.textures) { if (tex.url) loadTexImage(tex.url, requestDraw) }
+  let _refresher = null
+  function getRefresher() {
+    if (!_refresher) {
+      _refresher = createRefresher({
+        state, t, getLayout, getChipsEl: () => chipsEl,
+        clearHighlight3d: (...a) => clearHighlight3d(...a),
+        syncUndoButtons: (...a) => syncUndoButtons(...a),
+        notifyDirty: (...a) => notifyDirty(...a),
+        requestDraw: (...a) => requestDraw(...a),
+        setEdit: (...a) => setEdit(...a),
+        syncEditInputs: (...a) => syncEditInputs(...a),
+        draw: (...a) => draw(...a),
+        removeTexture: (...a) => removeTexture(...a),
+      })
     }
-    if (!state.layout && state.edit) setEdit(false)
-    rebuildChips()
-    syncEditInputs()
-    draw()
+    return _refresher
   }
 
-  function rebuildChips() {
-    if (!chipsEl) return
-    chipsEl.innerHTML = ''
-    const layout = state.layout
-    if (!layout) return
-    layout.textures.forEach((tex, i) => {
-      const removed = !tex.url
-      const chip = document.createElement('button')
-      chip.className = 'uvv-chip' + (i === state.activeTex ? ' active' : '')
-      chip.textContent = (tex.name || ('#' + i)) + (removed ? ' ⊘' : (state.customTex.has(i) ? ' ✎' : ''))
-      chip.title = (tex.name || '') + ' · ' + t(removed ? 'uv.removed' : 'uv.chipRemoveHint')
-      chip.addEventListener('click', () => {
-        state.activeTex = i
-        state.hover = null
-        state.selected = null
-        syncEditInputs()
-        chipsEl.querySelectorAll('button').forEach(b => b.classList.remove('active'))
-        chip.classList.add('active')
-        draw()
-      })
-      chip.addEventListener('contextmenu', (e) => {
-        e.preventDefault()
-        removeTexture(i)
-      })
-      chipsEl.appendChild(chip)
-    })
-  }
-
+  function refresh() { return getRefresher().refresh() }
+  function rebuildChips() { return getRefresher().rebuildChips() }
 
   /* ── 编辑：值应用（layout face + 原始 element 写回 → 联动钩子） ────────── */
 
@@ -308,8 +277,6 @@ export function createUvEditor(opts) {
      多文件：从当前选中贴图槽位起按顺序替换（画师一次导出多张贴图逐槽位对应）；
      超出贴图槽数的文件忽略——新增空槽位无意义（无 face 引用的贴图不会显示） */
 
-  /* ── 自定义贴图（上传 / 拖放 → dataURL 替换 + 换图钩子） ────────── */
-
   let _texIO = null
   function getTexIO() {
     if (!_texIO) {
@@ -342,26 +309,14 @@ export function createUvEditor(opts) {
 
   /* ── UV ↔ 3D 高亮联动（highlightFace 钩子） ─────────────────────────── */
 
-  function clearHighlight3d() {
-    if (!hlFace) return
-    if (typeof hooks.highlightFace === 'function') {
-      try { hooks.highlightFace(hlFace.el, hlFace.key, false) } catch {}
-    }
-    hlFace = null
+  let _hl = null
+  function getHighlighter() {
+    if (!_hl) _hl = createHighlighter({ state, hooks })
+    return _hl
   }
 
-  function updateActiveHighlight() {
-    const tgt = state.hover || state.selected
-    const elRef = (tgt && tgt.el && tgt.el.el) ? tgt.el.el : null
-    const key = tgt ? tgt.key : null
-    if (hlFace && elRef && hlFace.el === elRef && hlFace.key === key) return
-    clearHighlight3d()
-    if (elRef && typeof hooks.highlightFace === 'function') {
-      try {
-        if (hooks.highlightFace(elRef, key, true)) hlFace = { el: elRef, key }
-      } catch {}
-    }
-  }
+  function clearHighlight3d() { return getHighlighter().clearHighlight3d() }
+  function updateActiveHighlight() { return getHighlighter().updateActiveHighlight() }
 
   /* ── 绘制 ─────────────────────────────────── */
 
