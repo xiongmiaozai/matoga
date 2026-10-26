@@ -47,10 +47,12 @@ func newEnv(t *testing.T) *testEnv {
 	cfg := store.NewConfig(paths, log)
 	thumb := media.NewThumb(paths)
 	r := httpx.NewRouter(auth, log)
+	hdri := media.NewHDRI(paths, cfg)
 	api.Mount(r, api.Services{
 		Deps:   &api.Deps{Auth: auth},
 		Config: cfg,
 		Thumbs: thumb,
+		HDRI:   hdri,
 	})
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
@@ -364,10 +366,12 @@ func TestLANModeRequiresToken(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	auth := httpx.NewAuth("secret-token")
 	r := httpx.NewRouter(auth, log)
+	cfg2 := store.NewConfig(paths, log)
 	api.Mount(r, api.Services{
 		Deps:   &api.Deps{Auth: auth},
-		Config: store.NewConfig(paths, log),
+		Config: cfg2,
 		Thumbs: media.NewThumb(paths),
+		HDRI:   media.NewHDRI(paths, cfg2),
 	})
 	srv := httptest.NewServer(r)
 	defer srv.Close()
@@ -442,3 +446,4 @@ func pctEncode(r rune) string {
 	}
 	return sb.String()
 }
+
