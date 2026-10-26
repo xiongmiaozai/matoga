@@ -43,6 +43,7 @@ import { buildStatusText } from './uvc/status.js'
 import { buildUvUi } from './uvc/ui-build.js'
 import { createPainter } from './uvc/painter.js'
 import { createSelection } from './uvc/selection.js'
+import { createHistory } from './uvc/history.js'
 
 
 export function createUvEditor(opts) {
@@ -255,87 +256,27 @@ export function createUvEditor(opts) {
 
   /* ── 撤销 / 重做 / 重制 / 重置 ─────────────────────────── */
 
-  /* 取 layout 面当前值（撤销/重做互推时保存“另一侧”状态用） */
-  function pushUndo(entry) {
-    state.undoStack.push(entry)
-    state.redoStack.length = 0   /* 新编辑 → 重做历史分叉失效 */
-    if (state.undoStack.length > UNDO_MAX) state.undoStack.shift()
-    syncUndoButtons()
-    notifyDirty()
-  }
-
-  function undoEdit() {
-    const entry = state.undoStack.pop()
-    if (!entry) return
-    const cur = faceEntryOf(entry.layEl, entry.key)
-    applyHistoryEntry(entry, hooks)
-    if (cur && cur.uv) state.redoStack.push(cur)
-    syncEditInputs()
-    updateStatus()
-    draw()
-    notifyDirty()
-  }
-
-  function redoEdit() {
-    const entry = state.redoStack.pop()
-    if (!entry) return
-    const cur = faceEntryOf(entry.layEl, entry.key)
-    applyHistoryEntry(entry, hooks)
-    if (cur && cur.uv) state.undoStack.push(cur)   /* 直接入栈（不经 pushUndo，避免清空 redo） */
-    syncEditInputs()
-    updateStatus()
-    draw()
-    notifyDirty()
-  }
-
-  /* 撤销/重做按钮禁用态同步 */
-  function syncUndoButtons() {
-    if (undoBtn) undoBtn.disabled = state.undoStack.length === 0
-    if (redoBtn) redoBtn.disabled = state.redoStack.length === 0
-  }
-
-  /* 重制：按元素尺寸（vanilla 规则）重算选中面默认 UV；无元素引用时回退全幅 */
-  function remakeSelected() {
-    const f = selectedFace()
-    if (!f || !state.selected) return
-    const layEl = state.selected.el
-    const scale = (state.layout && state.layout.uvScale) || 16
-    const el = layEl.el
-    let def = null
-    if (typeof defaultFaceUv === 'function' && el && Array.isArray(el.from) && Array.isArray(el.to)) {
-      def = defaultFaceUv(state.selected.key, el.from, el.to, scale)
+  let _history = null
+  function getHistory() {
+    if (!_history) {
+      _history = createHistory({
+        state, hooks, t, defaultFaceUv, notifyDirty,
+        getEls: () => ({ undoBtn, redoBtn }),
+        selectedFace: (...a) => selectedFace(...a),
+        syncEditInputs: (...a) => syncEditInputs(...a),
+        updateStatus: (...a) => updateStatus(...a),
+        draw: (...a) => draw(...a),
+      })
     }
-    if (!def) def = [0, 0, scale, scale]
-    pushUndo({ layEl, key: state.selected.key, uv: [...f.uv], rotation: f.rotation })
-    applyFaceUvValues(layEl, state.selected.key, def, hooks)
-    syncEditInputs()
-    updateStatus()
-    draw()
+    return _history
   }
 
-  function resetEdits() {
-    const layout = state.layout
-    if (!layout || !state.snapshot) return
-    try {
-      if (typeof confirm === 'function' && !confirm(t('uv.resetConfirm'))) return
-    } catch {}
-    layout.elements.forEach((el, i) => {
-      const snapEl = state.snapshot[i]
-      if (!snapEl) return
-      for (const key in snapEl.faces) {
-        const sf = snapEl.faces[key]
-        applyFaceUvValues(el, key, sf.uv, hooks)
-        applyFaceRotationValue(el, key, sf.rotation, hooks)
-      }
-    })
-    state.undoStack.length = 0
-    state.redoStack.length = 0
-    syncUndoButtons()
-    syncEditInputs()
-    updateStatus()
-    draw()
-    notifyDirty()
-  }
+  function pushUndo(entry) { return getHistory().pushUndo(entry) }
+  function undoEdit() { return getHistory().undoEdit() }
+  function redoEdit() { return getHistory().redoEdit() }
+  function syncUndoButtons() { return getHistory().syncUndoButtons() }
+  function remakeSelected() { return getHistory().remakeSelected() }
+  function resetEdits() { return getHistory().resetEdits() }
 
   /* ── 拖拽编辑（移动 / 手柄缩放）────────────────────── */
 
