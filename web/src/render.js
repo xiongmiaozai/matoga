@@ -30,6 +30,8 @@ import { renderChart } from './rnd/charts.js'
 import { appendModelCard, modelThumbSpec, renderModelThumbPair } from './rnd/model-cards.js'
 import { renderSidebar } from './rnd/sidebar.js'
 import { _filteredCache, _lastBaseSet, _renderedCount, _rowMap, setFilteredCache, setRenderedCount, setLastBaseSet } from './rnd/state.js'
+import { renderThumbPair } from './rnd/cells.js'
+import { renderModelTypeResult } from './rnd/model-result.js'
 function _showMoreHandler() {
   state.renderLimit += 200
   if (state.viewMode !== 'byFolder' && _filteredCache) {
@@ -67,40 +69,6 @@ onLocaleChange(() => {
   renderCategoryBar(_lastBaseSet)
 })
 
-export function setLoading(side, on) {
-  const path = side === 'left' ? leftPathEl : rightPathEl
-  const btn = side === 'left' ? leftBtn : rightBtn
-  if (on) path.textContent = t('render.loading')
-  else path.textContent = (side === 'left' ? state.leftPath : state.rightPath) || t('common.empty')
-  btn.disabled = on
-}
-
-export function applyEntries(side, folderPath, entries) {
-  if (side === 'left') {
-    state.leftPath = folderPath; state.leftEntries = entries
-    leftPathEl.textContent = folderPath
-  } else {
-    state.rightPath = folderPath; state.rightEntries = entries
-    rightPathEl.textContent = folderPath
-  }
-}
-
-export function statusBadge(kind) {
-  const icons = { have: 'i-check', diff: 'i-alert', partial: 'i-minus', miss: 'i-x', extra: 'i-plus' }
-  const labels = { have: t('status.haveShort'), diff: t('status.diffShort'), partial: t('status.partialShort'), miss: t('status.missShort'), extra: t('status.extraShort') }
-  return `<span class="status-badge status-${kind}"><svg class="ico"><use href="#${icons[kind]}"/></svg>${labels[kind]}</span>`
-}
-
-export function renderThumbPair(le, re) {
-  const isImgE = (e) => e && !e.isDirectory && isImageFile(e.name)
-  if (!isImgE(le) && !isImgE(re)) return '<span class="cell-empty">—</span>'
-  const lt = isImgE(le) ? `<img class="thumb thumb-left" data-thumb="${escAttr(le.fullPath)}" />` : '<span class="thumb-ph thumb-left-ph">L</span>'
-  const rt = isImgE(re) ? `<img class="thumb thumb-right" data-thumb="${escAttr(re.fullPath)}" />` : '<span class="thumb-ph thumb-right-ph">R</span>'
-  return `<div class="thumb-pair">${lt}${rt}</div>`
-}
-
-/* 模型行预览列：左右各一个 3D 缩略图占位（.ac-thumb + _modelThumbItem，observeModelThumbs 懒加载）。
-   noCache 跳过后端缓存（对比场景为任意文件夹，缓存 key 含绝对路径，仅前端离屏渲染 + 内存去重） */
 export function appendGroupRows(frag, g) {
   const tr = document.createElement('tr')
   tr.className = 'row-' + g.kind
@@ -164,126 +132,6 @@ export function appendSubRows(frag, g) {
     sub.addEventListener('click', () => { state.selected = g; renderSidebar() })
     frag.appendChild(sub)
   }
-}
-
-export function renderModelTypeResult() {
-  const body = $('modelGridBody')
-  if (!body) return
-  const result = state.result
-  let models = result.filter(g => g.isModel)
-  const onlyDiff = onlyMissingChk.checked
-  if (onlyDiff) models = models.filter(g => g.kind !== 'have')
-  models = models.filter(g => !state.hiddenKeys.has(g.key))
-  sortResult(models)
-  if (models.length === 0) {
-    const msg = !state.leftPath || !state.rightPath ? t('render.dragHint') : result.length === 0 ? t('render.bothEmpty') : t('render.noModel')
-    body.innerHTML = `<div class="model-grid-empty">${msg}</div>`
-    return
-  }
-  const typeMap = new Map()
-  for (const g of models) {
-    const tp = modelTypeOf(g) || t('render.rootFolder')
-    if (!typeMap.has(tp)) typeMap.set(tp, [])
-    typeMap.get(tp).push(g)
-  }
-  const types = [...typeMap.keys()].sort((a, b) => a.localeCompare(b, 'zh'))
-  const frag = document.createDocumentFragment()
-  const limit = state.renderLimit
-  let rendered = 0
-  let truncated = false
-  const buildSummary = (items) => {
-    const fc = { have: 0, diff: 0, partial: 0, miss: 0, extra: 0 }
-    for (const g of items) fc[g.kind]++
-    const sp = []
-    if (fc.have) sp.push(`<span class="fc fc-have">✓${fc.have}</span>`)
-    if (fc.diff) sp.push(`<span class="fc fc-diff">≈${fc.diff}</span>`)
-    if (fc.partial) sp.push(`<span class="fc fc-partial">◐${fc.partial}</span>`)
-    if (fc.miss) sp.push(`<span class="fc fc-miss">✗${fc.miss}</span>`)
-    if (fc.extra) sp.push(`<span class="fc fc-extra">＋${fc.extra}</span>`)
-    return sp.join(' ')
-  }
-  const renderCardsInto = (container, items) => {
-    for (const g of items) {
-      if (rendered >= limit) { truncated = true; break }
-      appendModelCard(container, g)
-      rendered++
-    }
-  }
-  const groupByPrefix = (items) => {
-    const buckets = new Map()
-    const ungrouped = []
-    for (const g of items) {
-      const pfx = modelPrefixOf(modelBaseNameOf(g))
-      if (pfx == null) ungrouped.push(g)
-      else {
-        let b = buckets.get(pfx)
-        if (!b) { b = []; buckets.set(pfx, b) }
-        b.push(g)
-      }
-    }
-    if (buckets.size + (ungrouped.length ? 1 : 0) <= 1) return null
-    const out = [...buckets.entries()]
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([pfx, its]) => ({ prefix: pfx, items: its }))
-    if (ungrouped.length) out.push({ prefix: null, items: ungrouped })
-    return out
-  }
-  for (const tp of types) {
-    if (rendered >= limit) { truncated = true; break }
-    const items = typeMap.get(tp)
-    const collapsed = state.collapsedFolders.has(tp)
-    const section = document.createElement('div')
-    section.className = 'model-type-section'
-    section.innerHTML = `<div class="model-type-header"><span class="model-type-arrow">${collapsed ? '▸' : '▾'}</span><svg class="ico ico-sm"><use href="#i-cube"/></svg><span class="model-type-name">${tp}</span><span class="model-type-count">${t('render.modelTypeCount', { n: items.length })}</span><span class="model-type-summary">${buildSummary(items)}</span></div>`
-    section.querySelector('.model-type-header').addEventListener('click', () => {
-      if (state.collapsedFolders.has(tp)) state.collapsedFolders.delete(tp)
-      else state.collapsedFolders.add(tp)
-      renderModelTypeResult()
-    })
-    if (!collapsed) {
-      const prefixGroups = groupByPrefix(items)
-      if (!prefixGroups) {
-        const cards = document.createElement('div')
-        cards.className = 'model-cards'
-        renderCardsInto(cards, items)
-        section.appendChild(cards)
-      } else {
-        for (const pg of prefixGroups) {
-          if (rendered >= limit) { truncated = true; break }
-          const subKey = tp + '#' + (pg.prefix || '')
-          const subCollapsed = state.collapsedFolders.has(subKey)
-          const label = pg.prefix || t('render.modelUngrouped')
-          const sub = document.createElement('div')
-          sub.className = 'model-prefix-section'
-          sub.innerHTML = `<div class="model-prefix-header"><span class="model-type-arrow">${subCollapsed ? '▸' : '▾'}</span><span class="model-prefix-name">${escHtml(label)}</span><span class="model-type-count">${t('render.modelTypeCount', { n: pg.items.length })}</span><span class="model-type-summary">${buildSummary(pg.items)}</span></div>`
-          sub.querySelector('.model-prefix-header').addEventListener('click', () => {
-            if (state.collapsedFolders.has(subKey)) state.collapsedFolders.delete(subKey)
-            else state.collapsedFolders.add(subKey)
-            renderModelTypeResult()
-          })
-          if (!subCollapsed) {
-            const cards = document.createElement('div')
-            cards.className = 'model-cards'
-            renderCardsInto(cards, pg.items)
-            sub.appendChild(cards)
-          }
-          section.appendChild(sub)
-        }
-      }
-    }
-    frag.appendChild(section)
-  }
-  if (truncated) {
-    const more = document.createElement('div')
-    more.className = 'model-show-more'
-    more.innerHTML = `<button class="btn btn-ghost btn-sm">${t('render.showMore', { rendered, total: models.length })}</button>`
-    more.querySelector('button').addEventListener('click', () => { state.renderLimit += 200; renderModelTypeResult() })
-    frag.appendChild(more)
-  }
-  body.innerHTML = ''
-  body.appendChild(frag)
-  observeThumbs(body)
-  observeModelThumbs(body)
 }
 
 function applyCategoryFilter(arr) {
@@ -597,54 +445,7 @@ export function selectGroup(g, toggle = true) {
   renderSidebar()
 }
 
-export function bindEmptyCellActions(panel, g) {
-  if (!state.rightPath) return
-  panel.querySelectorAll('.pv-row').forEach(row => {
-    const cells = row.querySelectorAll('.pv-cell')
-    if (cells.length < 2) return
-    const rightCell = cells[1]
-    if (rightCell.querySelector('img')) return
-    const role = row.dataset.role
-    let le = null
-    if (g.isMaterial) le = g.left && g.left[role]
-    else le = g.left && (g.left.file || g.left.dir)
-    const hasLeft = le && !le.isDirectory
-    const canBlank = g.isMaterial && (role === 'normal' || role === 'specular')
-    if (!hasLeft && !canBlank) return
-    const empty = rightCell.querySelector('.pv-empty')
-    if (empty) empty.remove()
-    const actions = document.createElement('div')
-    actions.className = 'pv-empty-actions'
-    if (hasLeft) {
-      const rel = relPath(state.leftPath, le.fullPath)
-      const dest = joinPath(state.rightPath, rel)
-      const copyBtn = document.createElement('button')
-      copyBtn.className = 'pv-empty-btn pv-empty-copy'
-      copyBtn.textContent = t('preview.copyFromLeft')
-      copyBtn.title = t('preview.copyFromLeftTitle')
-      copyBtn.addEventListener('click', (e) => { e.stopPropagation(); copySingleToRight(le.fullPath, dest) })
-      actions.appendChild(copyBtn)
-      const addBtn = document.createElement('button')
-      addBtn.className = 'pv-empty-btn pv-empty-add'
-      addBtn.textContent = t('preview.addTex')
-      addBtn.title = t('preview.addTexTitle')
-      addBtn.addEventListener('click', (e) => { e.stopPropagation(); addTextureToRight(dest) })
-      actions.appendChild(addBtn)
-    }
-    if (canBlank) {
-      const createBtn = document.createElement('button')
-      createBtn.className = 'pv-empty-btn pv-empty-create'
-      createBtn.textContent = t('preview.createBlank')
-      createBtn.title = role === 'normal' ? t('preview.createBlankNormalTitle') : t('preview.createBlankSpecularTitle')
-      createBtn.addEventListener('click', (e) => { e.stopPropagation(); createBlankTextureToRight(g, role) })
-      actions.appendChild(createBtn)
-    }
-    rightCell.appendChild(actions)
-  })
-}
-
+export { setLoading, applyEntries, statusBadge, renderThumbPair, bindEmptyCellActions } from './rnd/cells.js'
+export { renderModelTypeResult } from './rnd/model-result.js'
 export { renderSidebar } from './rnd/sidebar.js'
 export { loadModelTexEffectPreview } from './rnd/model-preview.js'
-
-
-
