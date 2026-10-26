@@ -57,12 +57,17 @@ export const resultBody = $('resultBody')
 export const folderCard = $('folderCard')
 
 export const IMG_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'ico', 'tif', 'tiff', 'avif'])
-export const TEX_SUFFIXES = [['_n', 'normal'], ['_s', 'specular']]
-export const ROLES = ['main', 'normal', 'specular']
+export const TEX_SUFFIXES = [
+  ['_n', 'normal'], ['-n', 'normal'],
+  ['_s', 'specular'], ['-s', 'specular'],
+  ['_h', 'height'], ['-h', 'height'],
+  ['_e', 'emissive'], ['-e', 'emissive']
+]
+export const ROLES = ['main', 'normal', 'specular', 'height', 'emissive']
 export const STATUS_ORDER = { miss: 0, partial: 1, diff: 2, extra: 3, have: 4 }
 
 export function roleLabel(role) {
-  const labels = { main: 'preview.roleMain', normal: 'preview.roleNormal', specular: 'preview.roleSpecular' }
+  const labels = { main: 'preview.roleMain', normal: 'preview.roleNormal', specular: 'preview.roleSpecular', height: 'preview.roleHeight', emissive: 'preview.roleEmissive' }
   return _t(labels[role] || role)
 }
 

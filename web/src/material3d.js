@@ -10,6 +10,7 @@ import { HDRLoader } from './hdr-loader.js'
 import { loadEnvTexture, extFromUrl } from './hdr-env-loader.js'
 import { Sky } from './sky.js'
 import { t as _t } from './i18n.js'
+import { attachTextureAnimOnly, unloadTextureAnim } from './mc-model-viewer.js'
 
 let scene, camera, renderer, animationId, pmrem, envTexture, pmremTexture
 let isWebGL2 = false
@@ -49,7 +50,7 @@ function setLoadingProgress(pct) {
 }
 let emissiveIntensity = 1.0
 let normalScale = 1.0
-let materialFormat = 'auto'
+let materialFormat = 'labpbr'
 let formatDetectCallback = null
 let heightDetectCallback = null
 let sourceSide = 'dual'
@@ -405,20 +406,26 @@ function applyHDREnvMode() {
   if (lightGroup) { while (lightGroup.children.length) lightGroup.remove(lightGroup.children[0]) }
   const ambient = new THREE.AmbientLight(0xffffff, 0.1)
   lightGroup.add(ambient)
-  if (scene) scene.environmentRotation.set(0, 0, 0)
   if (hdrTextureOriginal) {
-    const src = hdrTextureRotated || hdrTextureOriginal
-    hdrTexture = src
-    if (hdrUsage === 'env' || hdrUsage === 'both') scene.environment = src
-    else scene.environment = null
+    const rad = hdrRotation * Math.PI / 180
+    hdrTexture = hdrTextureOriginal
+    if (hdrUsage === 'env' || hdrUsage === 'both') {
+      scene.environment = hdrTextureOriginal
+      scene.environmentRotation.set(0, rad, 0)
+    } else {
+      scene.environment = null
+      scene.environmentRotation.set(0, 0, 0)
+    }
     if (hdrUsage === 'bg' || hdrUsage === 'both') {
-      scene.background = src
+      ensureRotatedTexture()
+      scene.background = hdrTextureRotated || hdrTextureOriginal
     } else {
       scene.background = new THREE.Color(0x1a1a2e)
     }
   } else {
     hdrTexture = null
     scene.environment = null
+    scene.environmentRotation.set(0, 0, 0)
     scene.background = new THREE.Color(0x1a1a2e)
   }
   if (scene) scene.environmentIntensity = envIntensity; for (const m of [meshLeft, meshRight]) { if (m) m.material.envMapIntensity = envIntensity }
@@ -1262,6 +1269,7 @@ export function toggleFullscreen() {
 }
 export async function loadHDREnv(filePath) {
   if (!initialized || !filePath) return
+  window.dispatchEvent(new CustomEvent('material3d:hdrLoading', { detail: { url: filePath } }))
   try {
     const tex = await loadEnvTexture(filePath, extFromUrl(filePath))
     tex.mapping = THREE.EquirectangularReflectionMapping
@@ -1277,7 +1285,7 @@ export async function loadHDREnv(filePath) {
       format: tex._srcFormat || 'HDR (RGBE)',
       size: tex.image.data ? tex.image.data.byteLength : 0
     }
-    ensureRotatedTexture()
+
     currentEnvMode = 'hdri'
     applyHDREnvMode()
     window.dispatchEvent(new CustomEvent('material3d:hdrLoaded', { detail: hdrInfo }))
@@ -1300,14 +1308,20 @@ export function getCurrentEnvMode() { return currentEnvMode }
 export function setEnvModeExport(mode) { setEnvMode(mode) }
 export function setHdrRotation(val) {
   hdrRotation = val
-  if (hdrRotateTimer) clearTimeout(hdrRotateTimer)
-  hdrRotateTimer = setTimeout(() => {
-    hdrRotateTimer = null
-    if (initialized && currentEnvMode === 'hdri') {
-      ensureRotatedTexture()
-      applyHDREnvMode()
-    }
-  }, 30)
+  if (!initialized || currentEnvMode !== 'hdri') return
+  if (hdrUsage === 'env' || hdrUsage === 'both') {
+    scene.environmentRotation.set(0, hdrRotation * Math.PI / 180, 0)
+  }
+  if (hdrUsage === 'bg' || hdrUsage === 'both') {
+    if (hdrRotateTimer) clearTimeout(hdrRotateTimer)
+    hdrRotateTimer = setTimeout(() => {
+      hdrRotateTimer = null
+      if (currentEnvMode === 'hdri' && (hdrUsage === 'bg' || hdrUsage === 'both')) {
+        ensureRotatedTexture()
+        scene.background = hdrTextureRotated || hdrTextureOriginal
+      }
+    }, 80)
+  }
 }
 
 export function setHdrUsage(mode) { if (!['both', 'env', 'bg'].includes(mode)) return; hdrUsage = mode; if (initialized && currentEnvMode === 'hdri') applyHDREnvMode() }
@@ -1321,34 +1335,63 @@ export function setSkySunAzimuth(val) { skySunAzimuth = val; if (initialized && 
 
 export function setSkyTint(hex) { const n = parseInt(hex.slice(1), 16); if (Number.isNaN(n)) return; skyTintHex = n; if (initialized && currentEnvMode === 'sky') { updateSkySunPosition(); scheduleSkyBake() } }
 
-function disposeTexture(tex) { if (tex && tex.dispose) tex.dispose() }
-function disposeAllMaterialTextures(m) { disposeTexture(m.map); disposeTexture(m.normalMap); disposeTexture(m.roughnessMap); disposeTexture(m.metalnessMap); disposeTexture(m.emissiveMap); if (m.userData.shaderRefs) { disposeTexture(m.userData.shaderRefs.heightMap.value); m.userData.shaderRefs.heightMap.value = null; m.userData.shaderRefs.hasHeightMap.value = 0.0 } disposeTexture(m.userData.pendingHeightMap); m.userData.pendingHeightMap = null; m.map = null; m.normalMap = null; m.roughnessMap = null; m.metalnessMap = null; m.emissiveMap = null }
+function disposeTexture(tex) { if (tex && tex.dispose) { unloadTextureAnim(tex); tex.dispose() } }
+function disposeAllMaterialTextures(m) { disposeTexture(m.map); disposeTexture(m.normalMap); disposeTexture(m.roughnessMap); disposeTexture(m.metalnessMap); disposeTexture(m.emissiveMap); if (m.userData.shaderRefs) { disposeTexture(m.userData.shaderRefs.heightMap.value); m.userData.shaderRefs.heightMap.value = null; m.userData.shaderRefs.hasHeightMap.value = 0.0 } disposeTexture(m.userData.pendingHeightMap); m.userData.pendingHeightMap = null; m.map = null; m.normalMap = null; m.roughnessMap = null; m.metalnessMap = null; m.emissiveMap = null; m.emissive.set(0x000000); m.emissiveIntensity = 1.0; m.color.set(0x888888) }
+
+/* ── 3D 普通贴图模式染色：贴图文件（非 MC 模型）3D 预览时，按贴图名推断 tint，
+    采样当前生物群系颜色设到 material.color（three.js 自动 color × map）。动态 import
+    mc-model-viewer 避免循环依赖。biome 切换时 refreshMaterial3DTint 重染当前贴图 */
+let currentTintPaths = { left: null, right: null }
+function applyTintToMaterial(material, texPath, myVer) {
+  import('./mc-model-viewer.js').then(m => m.sampleTintForTexture(texPath)).then(tint => {
+    if (material.userData.loadVer !== myVer) return
+    if (tint) material.color.setRGB(tint.r, tint.g, tint.b)
+    else material.color.set(0xffffff)
+    material.needsUpdate = true
+  }).catch(() => {})
+}
+export function refreshMaterial3DTint() {
+  if (!initialized) return
+  if (currentTintPaths.left) applyTintToMaterial(meshLeft.material, currentTintPaths.left, meshLeft.material.userData.loadVer || 0)
+  if (currentTintPaths.right) applyTintToMaterial(meshRight.material, currentTintPaths.right, meshRight.material.userData.loadVer || 0)
+}
 
 function applyTexturesToMesh(mesh, group, side) {
   const material = mesh.material
   disposeAllMaterialTextures(material)
-  if (!group) { material.color.set(0x888888); material.emissive.set(0x000000); material.needsUpdate = true; return }
+  const myVer = (material.userData.loadVer = (material.userData.loadVer || 0) + 1)
+  if (!group) { currentTintPaths[side] = null; material.color.set(0x888888); material.emissive.set(0x000000); material.needsUpdate = true; return }
 
   const loader = new THREE.TextureLoader()
   const getEntry = (role) => { const e = group[side] && group[side][role]; return (e && !e.isDirectory && isImageFile(e.name)) ? e : null }
   const mainEntry = getEntry('main'), normalEntry = getEntry('normal'), specEntry = getEntry('specular')
 
   if (mainEntry) {
-    loader.load(fileUrl(mainEntry.fullPath), (tex) => { tex.colorSpace = THREE.SRGBColorSpace; tex.wrapS = tex.wrapT = THREE.RepeatWrapping; disposeTexture(material.map); material.map = tex; applyTextureFilter(tex); material.color.set(0xffffff); const mi = new Image(); mi.onload = () => { const w = Math.min(mi.naturalWidth, 64), h = Math.min(mi.naturalHeight, 64); const tc = document.createElement('canvas'); tc.width = w; tc.height = h; const tctx = tc.getContext('2d', { willReadFrequently: true }); tctx.drawImage(mi, 0, 0, w, h); const td = tctx.getImageData(0, 0, w, h).data; let hasAlpha = false, semiCount = 0, total = 0; for (let i = 3; i < td.length; i += 4) { total++; const a = td[i]; if (a < 250) hasAlpha = true; if (a > 5 && a < 250) semiCount++ } material.userData.hasAlpha = hasAlpha; material.userData.hasSemiTrans = semiCount / total > 0.02; applyOpacityMode(material) }; mi.src = fileUrl(mainEntry.fullPath); material.needsUpdate = true })
-  } else { material.color.set(0x444466); material.userData.hasAlpha = false; material.userData.hasSemiTrans = false; applyOpacityMode(material) }
+    const mainUrl = fileUrl(mainEntry.fullPath)
+    const mcmetaUrl = fileUrl(mainEntry.fullPath + '.mcmeta')
+    loader.load(mainUrl, (tex) => {
+      if (material.userData.loadVer !== myVer) { tex.dispose(); return }
+      tex.colorSpace = THREE.SRGBColorSpace; tex.wrapS = tex.wrapT = THREE.RepeatWrapping; disposeTexture(material.map); material.map = tex; applyTextureFilter(tex); material.color.set(0xffffff); currentTintPaths[side] = mainEntry.fullPath; applyTintToMaterial(material, mainEntry.fullPath, myVer)
+      attachTextureAnimOnly(tex, fetch(mcmetaUrl).then(r => r.ok ? r.json() : null).catch(() => null)).then(anim => { if (anim) { tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.needsUpdate = true } })
+      const mi = new Image(); mi.onload = () => { if (material.userData.loadVer !== myVer) return; const w = Math.min(mi.naturalWidth, 64), h = Math.min(mi.naturalHeight, 64); const tc = document.createElement('canvas'); tc.width = w; tc.height = h; const tctx = tc.getContext('2d', { willReadFrequently: true }); tctx.drawImage(mi, 0, 0, w, h); const td = tctx.getImageData(0, 0, w, h).data; let hasAlpha = false, semiCount = 0, total = 0; for (let i = 3; i < td.length; i += 4) { total++; const a = td[i]; if (a < 250) hasAlpha = true; if (a > 5 && a < 250) semiCount++ } material.userData.hasAlpha = hasAlpha; material.userData.hasSemiTrans = semiCount / total > 0.02; applyOpacityMode(material) }; mi.src = mainUrl; material.needsUpdate = true
+    })
+  } else { currentTintPaths[side] = null; material.color.set(0x444466); material.userData.hasAlpha = false; material.userData.hasSemiTrans = false; applyOpacityMode(material) }
 
   if (normalEntry) {
     const nUrl = fileUrl(normalEntry.fullPath)
     const processNormal = (source) => {
+      if (material.userData.loadVer !== myVer) return
       const sc = document.createElement('canvas'); sc.width = imgW(source); sc.height = imgH(source)
       const sctx = sc.getContext('2d', { willReadFrequently: true }); sctx.drawImage(source, 0, 0)
       const src = sc
       if (side === 'left') showLoading(_t('m3d.loading'))
       if (side === 'left' && heightDetectCallback) heightDetectCallback('loading')
       requestAnimationFrame(() => {
+        if (material.userData.loadVer !== myVer) return
         setLoadingProgress(0.2)
         disposeTexture(material.normalMap); material.normalMap = reconstructNormal(src); applyTextureFilter(material.normalMap); material.normalScale.set(normalScale, normalScale)
         requestAnimationFrame(() => {
+          if (material.userData.loadVer !== myVer) return
           setLoadingProgress(0.4)
           let heightTex = extractHeight(src); let hStatus = heightTex ? 'alpha' : false
           if (!heightTex) { heightTex = extractHeightFromNormal(src); hStatus = heightTex ? 'normal' : false }
@@ -1368,6 +1411,7 @@ function applyTexturesToMesh(mesh, group, side) {
 
   if (specEntry) {
     const specImg = new Image(); specImg.onload = () => {
+      if (material.userData.loadVer !== myVer) return
       let fmt = materialFormat
       if (fmt === 'auto') { fmt = detectFormat(specImg); if (formatDetectCallback) formatDetectCallback(fmt) }
       disposeTexture(material.roughnessMap); disposeTexture(material.metalnessMap); disposeTexture(material.emissiveMap)
@@ -1378,6 +1422,7 @@ function applyTexturesToMesh(mesh, group, side) {
          material.roughnessMap = extractRoughness(specImg); material.metalnessMap = extractMetalness(specImg); applyTextureFilter(material.roughnessMap); applyTextureFilter(material.metalnessMap)
         if (mainEntry) {
           const mainImg = new Image(); mainImg.onload = () => {
+            if (material.userData.loadVer !== myVer) return
              disposeTexture(material.emissiveMap); material.emissiveMap = extractEmissive(specImg, mainImg); applyTextureFilter(material.emissiveMap)
             material.emissive.set(0xffffff); material.emissiveIntensity = emissiveIntensity; material.needsUpdate = true
           }; mainImg.src = fileUrl(mainEntry.fullPath)
@@ -1576,37 +1621,50 @@ export function clearSpecularTexture() {
   for (const m of [meshLeft, meshRight]) clearSpecTexture(m.material)
 }
 
-export function applyPbrMapsToModelMaterial(mat, normalUrl, specUrl) {
+/* 应用 PBR 贴图到模型面材质（法线/高光）。
+     normalUrl/specUrl：非空字符串 → 加载应用；空串 → 清除对应 map；null/undefined → 不动。
+     force=true 跳过 replaced 守卫（编辑器替换主图后强制覆盖旧 PBR；模型加载流程保持 replaced 守卫阻断竞态） */
+export function applyPbrMapsToModelMaterial(mat, normalUrl, specUrl, force) {
   if (!mat) return
-  if (normalUrl) {
-    const img = new Image()
-    img.crossOrigin = 'anonymous'
-    img.onload = () => {
-      if (mat.userData.replaced) return
-      disposeTexture(mat.normalMap)
-      const nTex = reconstructNormal(img)
-      nTex.magFilter = THREE.NearestFilter; nTex.minFilter = THREE.NearestFilter
-      mat.normalMap = nTex
-      if (mat.normalScale) mat.normalScale.set(1.0, 1.0)
-      mat.needsUpdate = true
+  const blocked = () => !force && mat.userData && mat.userData.replaced
+  if (normalUrl != null) {
+    if (normalUrl === '') {
+      disposeTexture(mat.normalMap); mat.normalMap = null; mat.needsUpdate = true
+    } else {
+      const img = new Image()
+      img.crossOrigin = 'anonymous'
+      img.onload = () => {
+        if (blocked()) return
+        disposeTexture(mat.normalMap)
+        const nTex = reconstructNormal(img)
+        nTex.magFilter = THREE.NearestFilter; nTex.minFilter = THREE.NearestFilter
+        mat.normalMap = nTex
+        if (mat.normalScale) mat.normalScale.set(1.0, 1.0)
+        mat.needsUpdate = true
+      }
+      img.src = normalUrl
     }
-    img.src = normalUrl
   }
-  if (specUrl) {
-    const img = new Image()
-    img.crossOrigin = 'anonymous'
-    img.onload = () => {
-      if (mat.userData.replaced) return
+  if (specUrl != null) {
+    if (specUrl === '') {
       disposeTexture(mat.roughnessMap); disposeTexture(mat.metalnessMap)
-      const rTex = extractRoughness(img)
-      const mTex = extractMetalness(img)
-      rTex.magFilter = THREE.NearestFilter; rTex.minFilter = THREE.NearestFilter
-      mTex.magFilter = THREE.NearestFilter; mTex.minFilter = THREE.NearestFilter
-      mat.roughnessMap = rTex
-      mat.metalnessMap = mTex
-      mat.needsUpdate = true
+      mat.roughnessMap = null; mat.metalnessMap = null; mat.needsUpdate = true
+    } else {
+      const img = new Image()
+      img.crossOrigin = 'anonymous'
+      img.onload = () => {
+        if (blocked()) return
+        disposeTexture(mat.roughnessMap); disposeTexture(mat.metalnessMap)
+        const rTex = extractRoughness(img)
+        const mTex = extractMetalness(img)
+        rTex.magFilter = THREE.NearestFilter; rTex.minFilter = THREE.NearestFilter
+        mTex.magFilter = THREE.NearestFilter; mTex.minFilter = THREE.NearestFilter
+        mat.roughnessMap = rTex
+        mat.metalnessMap = mTex
+        mat.needsUpdate = true
+      }
+      img.src = specUrl
     }
-    img.src = specUrl
   }
 }
 export function applyNodePBR(p) {

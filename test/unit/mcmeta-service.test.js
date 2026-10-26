@@ -5,7 +5,7 @@ const os = require('os')
 const path = require('path')
 const zlib = require('zlib')
 const svc = require('../../server/services/mcmeta-service')
-const { AppError } = require('../../shared/errors')
+const { AppError } = require('../../server/lib/errors')
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'matoga-mcmeta-'))
 

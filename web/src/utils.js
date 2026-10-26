@@ -37,13 +37,17 @@ export function apiUrl(p) {
   return (typeof window !== 'undefined' && window.matogaCore && window.matogaCore.url) ? window.matogaCore.url(p) : p
 }
 
-/* 资产库贴图跨面板拖拽：自定义 MIME（JSON { name, url, path }），供 UV 编辑器等接收方直接使用 */
+/* 资产库贴图跨面板拖拽：自定义 MIME（JSON { name, url, path, normal, specular }），
+     供 UV 编辑器等接收方直接使用；normal/specular 为材质球配套法线/高光 URL（可选） */
 export const TEX_DRAG_MIME = 'text/matoga-tex'
 
 export function setTexDragData(dt, tex) {
   if (!dt || !tex || typeof tex.url !== 'string' || !tex.url) return false
   try {
-    dt.setData(TEX_DRAG_MIME, JSON.stringify({ name: tex.name || '', url: tex.url, path: tex.path || null }))
+    dt.setData(TEX_DRAG_MIME, JSON.stringify({
+      name: tex.name || '', url: tex.url, path: tex.path || null,
+      normal: tex.normal || '', specular: tex.specular || '',
+    }))
     return true
   } catch { return false }
 }
@@ -110,7 +114,7 @@ export function buildGroups(entries) {
 }
 
 export function groupRoles(g) { return ROLES.filter(r => g && g[r]) }
-export function hasAny(g) { return !!(g && (g.main || g.normal || g.specular || g.file || g.dir)) }
+export function hasAny(g) { return !!(g && (g.main || g.normal || g.specular || g.height || g.emissive || g.file || g.dir)) }
 
 export function leftRoles(g) { return g._lr || (g._lr = groupRoles(g.left)) }
 export function rightRoles(g) { return g._rr || (g._rr = groupRoles(g.right)) }

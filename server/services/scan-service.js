@@ -6,7 +6,7 @@
 
 const fs = require('fs')
 const path = require('path')
-const { AppError } = require('../../shared/errors')
+const { AppError } = require('../lib/errors')
 
 const STAT_BATCH = 32
 

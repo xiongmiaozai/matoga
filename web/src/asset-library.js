@@ -2117,7 +2117,10 @@ function hideDetail() {
   detailCurrent = null
 }
 
+let _initialized = false
 export function initAssetLibrary() {
+  if (_initialized) return
+  _initialized = true
   const search = document.getElementById('assetLibSearch')
   if (search) search.addEventListener('input', () => { searchTerm = search.value; applyFilter() })
   buildToolbar()

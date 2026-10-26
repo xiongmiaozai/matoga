@@ -47,10 +47,11 @@ export function initUvView() {
     hooks: {
       onFaceUv: updateModelFaceUv,
       onFaceRotation: updateModelFaceRotation,
-      /* 空串 = 移除材质（面变纯色）；否则替换贴图 */
-      onTexture: (texIndex, texUrl, layout) => {
+      /* 空串 = 移除材质（面变纯色）；否则替换贴图。
+         extra（材质球配套 normal/specular URL）透传 → 3D 视口 PBR 预览 */
+      onTexture: (texIndex, texUrl, layout, extra) => {
         if (texUrl === '') return clearModelTexture(texIndex, layout)
-        return updateModelTexture(texIndex, texUrl, layout)
+        return updateModelTexture(texIndex, texUrl, layout, extra)
       },
       highlightFace: highlightModelFace,
       exportJson: exportActiveModelJson,

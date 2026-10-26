@@ -46,7 +46,7 @@ export async function compare() {
   const result = []
   for (const key of allKeys) {
     const lg = leftGroups.get(key), rg = rightGroups.get(key)
-    const isMaterial = (lg && (lg.main || lg.normal || lg.specular)) || (rg && (rg.main || rg.normal || rg.specular))
+    const isMaterial = (lg && (lg.main || lg.normal || lg.specular || lg.height || lg.emissive)) || (rg && (rg.main || rg.normal || rg.specular || rg.height || rg.emissive))
     const isDir = (lg && lg.dir) || (rg && rg.dir)
     const isModel = isModelEntry(lg && lg.file) || isModelEntry(rg && rg.file)
     let g

@@ -5,7 +5,7 @@
  */
 
 import {
-  state, $, ROLE_LABEL, KIND_TEXT, STATUS_ORDER,
+  state, $, ROLES, ROLE_LABEL, KIND_TEXT, STATUS_ORDER,
   leftBtn, rightBtn, onlyMissingChk, summaryEl, resultBody,
   leftPathEl, rightPathEl
 } from './core.js'
@@ -178,7 +178,7 @@ export function appendGroupRows(frag, g) {
 }
 
 export function appendSubRows(frag, g) {
-  for (const role of ['main', 'normal', 'specular']) {
+  for (const role of ROLES) {
     const le = g.left && g.left[role], re = g.right && g.right[role]
     if (!le && !re) continue
     const sub = document.createElement('tr')
@@ -879,12 +879,11 @@ async function loadModelPreview(g) {
   const mySeq = ++state.modelLoadSeq
   const le = g.left && g.left.file, re = g.right && g.right.file
   const left = le && isModelEntry(le) ? { fileRoot: state.leftPath, rel: le.name } : null
-  let right = re && isModelEntry(re) ? { fileRoot: state.rightPath, rel: re.name } : null
+  const right = re && isModelEntry(re) ? { fileRoot: state.rightPath, rel: re.name } : null
   if (!left && !right) return
-  if (!right && left) right = left
   if (!tryActivateCompareModelViewport()) return
   try {
-    await viewMcModelPairInViewport({ left, right, isStale: () => state.modelLoadSeq !== mySeq })
+    await viewMcModelPairInViewport({ left, right, rightRoot: state.rightPath, isStale: () => state.modelLoadSeq !== mySeq })
     if (state.selected !== g) clearCustomModel()
   } catch {}
 }
@@ -959,7 +958,7 @@ export function renderSidebar() {
   const diffPairs = []
   if (g.isMaterial) {
     const hasMain = (g.left && g.left.main) || (g.right && g.right.main)
-    for (const role of ['main', 'normal', 'specular']) {
+    for (const role of ROLES) {
       const le = g.left && g.left[role], re = g.right && g.right[role]
       if (!le && !re) {
         if ((role === 'normal' || role === 'specular') && hasMain && state.rightPath)

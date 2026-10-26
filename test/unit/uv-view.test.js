@@ -516,7 +516,7 @@ test('贴图拖拽工具：setTexDragData / getTexDragData 往返 + 容错', () 
   }
   const dt = mkDt()
   assert.equal(utils.setTexDragData(dt, { name: 'a.png', url: '/api/x.png', path: 'p' }), true, '写入成功')
-  assert.deepEqual(utils.getTexDragData(dt), { name: 'a.png', url: '/api/x.png', path: 'p' }, '读回一致')
+  assert.deepEqual(utils.getTexDragData(dt), { name: 'a.png', url: '/api/x.png', path: 'p', normal: '', specular: '' }, '读回一致')
   assert.equal(utils.setTexDragData(null, { url: '/x' }), false, '无 dataTransfer 安全返回')
   assert.equal(utils.setTexDragData(dt, { name: 'x' }), false, '无 url 不写入')
   assert.equal(utils.getTexDragData(dt).name, 'a.png', '无效写入不覆盖既有数据')

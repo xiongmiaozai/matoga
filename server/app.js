@@ -10,6 +10,7 @@ const { middleware: auth } = require('./middleware/auth')
 const { fail } = require('./middleware/errors')
 const configStore = require('./config/config-store')
 const { trust } = require('./middleware/validate')
+const { WEB_ROOT } = require('./paths')
 
 
 const ROOT = path.join(__dirname, '..')
@@ -53,7 +54,7 @@ function createApp() {
   app.use('/vendor/golden-layout-css', express.static(path.join(ROOT, 'node_modules', 'golden-layout', 'dist', 'css'), { setHeaders: (res) => res.set('Cache-Control', 'no-store') }))
 
 
-  app.use(express.static(path.join(ROOT, 'web'), {
+  app.use(express.static(WEB_ROOT, {
     index: 'index.html',
     setHeaders: (res) => res.set('Cache-Control', 'no-store')
   }))

@@ -104,7 +104,7 @@ async function buildGroupFor(spec) {
   for (const part of parts) {
     let sub = null
     if (part.elements.length) {
-      sub = buildModelGroup(part.elements, mcMatFor(part.textures, spec.api, spec.packName), 16)
+      sub = buildModelGroup(part.elements, mcMatFor(part.textures, spec.api, spec.packName, spec.fileRoot, undefined, undefined, part.tints), 16)
       sprite = false
     } else {
       sub = buildItemSpriteGroup(part.textures, spec.api, spec.packName)

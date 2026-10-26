@@ -925,6 +925,8 @@ input[type="color"].m3d-color-input:hover, #m3dSkyTint:hover { border-color: var
 .m3d-hud-bar .m3d-segment button { color: rgba(255,255,255,.7); }
 .m3d-hud-bar .m3d-segment button:hover { color: #fff; }
 .m3d-hud-bar .m3d-segment button.active { background: rgba(255,255,255,.18); color: #fff; box-shadow: none; }
+.m3d-hud-bar .m3d-hud-field { display: flex; align-items: center; gap: 4px; color: rgba(255,255,255,.7); font-size: 11px; }
+.m3d-hud-bar .m3d-hud-field select { background: rgba(0,0,0,.35); color: #fff; border: 1px solid rgba(255,255,255,.15); border-radius: 4px; }
 #m3dGeoSeg button { padding: 0; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; }
 .m3d-hud-btn { width: 30px; height: 30px; border-radius: var(--radius-md); border: none; background: rgba(255,255,255,.12); color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all .15s var(--ease); backdrop-filter: blur(8px); }
 .m3d-hud-btn:hover { background: rgba(255,255,255,.22); }
@@ -1194,10 +1196,16 @@ input[type="color"].m3d-color-input:hover, #m3dSkyTint:hover { border-color: var
 .uvp-status { flex-shrink: 0; font-size: 11px; color: rgba(255,255,255,.55); white-space: nowrap; }
 .uvp-grid-wrap { flex: 1; min-height: 0; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; align-items: center; background: #232329; }
 .uvp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; width: 100%; }
-.uvp-cell { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 4px; border-radius: 6px; border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.04); cursor: pointer; transition: all .15s var(--ease); }
+.uvp-cell { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 4px; border-radius: 6px; border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.04); cursor: pointer; transition: all .15s var(--ease); }
 .uvp-cell:hover { border-color: var(--primary); background: rgba(74,124,255,.12); }
 .uvp-cell img { width: 64px; height: 64px; object-fit: contain; image-rendering: pixelated; background: #1a1a20; border-radius: 4px; }
 .uvp-name { max-width: 100%; font-size: 10px; color: rgba(255,255,255,.75); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.uvp-badges { position: absolute; top: 4px; right: 4px; display: flex; gap: 2px; pointer-events: none; }
+.uvp-badge { font-size: 9px; font-weight: 700; line-height: 1; padding: 2px 3px; border-radius: 3px; color: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.5); }
+.uvp-badge.n { background: #3a7bd5; }
+.uvp-badge.s { background: #d58a3a; }
+.uvp-badge.h { background: #8e3ad5; }
+.uvp-badge.e { background: #c9b227; }
 .uvp-more { margin: 10px auto 4px; padding: 4px 16px; border-radius: 999px; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.08); color: #ddd; font-size: 12px; cursor: pointer; }
 .uvp-more:hover { background: rgba(255,255,255,.16); }
 .uvp-empty { padding: 40px 12px; color: rgba(255,255,255,.5); font-size: 12px; text-align: center; }
