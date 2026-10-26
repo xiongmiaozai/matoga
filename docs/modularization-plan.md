@@ -318,5 +318,11 @@ npm run dist:win                  # 打包契约不被破坏
 | --- | --- | --- | --- | --- |
 | — | node-canvas.js 首轮（9 模块，3950→2644） | DONE | 550 pass / 冒烟通过 | `dad0a8c` |
 | B0 | 基线复测 | DONE | 550 pass / 0 fail（47.4s）、smoke（1.3s） | — |
-| B1 | node-canvas.js 二次拆分 | TODO | — | — |
-| … | … | TODO | — | — |
+| B1 | node-canvas.js 二次拆分（2324→141，27 模块） | DONE | 552 pass / 冒烟 19+5+10 | 多 commit（349fc5d…f11c6a4） |
+| B1 | asset-library.js（→ `asset-lib/` 多模块） | DONE | 552 pass / 冒烟通过 | 多 commit |
+| B1 | material3d.js（1697→98，`m3d/` 16 模块） | DONE | 552 pass / 冒烟通过 | 多 commit |
+| B3 | mc-model-viewer.js（1452→32，`mcv/` 10 模块） | DONE | 552 pass / e2e 全绿 | 多 commit |
+| B2 | render.js（1299→44，`rnd/` 10 模块） | DONE | 552 pass / 冒烟通过 | 多 commit（268f666…730541a） |
+| B3 | uv-editor-core.js（1272→395，`uvc/` 16 模块） | DONE | 552 pass / 冒烟 19+5+10 | 多 commit（consts…highlight） |
+| B2 | workspace.js | TODO | — | — |
+
