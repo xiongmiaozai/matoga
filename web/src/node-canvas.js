@@ -568,59 +568,8 @@ if(_btnPreview) _btnPreview.addEventListener('click', ()=>{
 /* fitView / autoLayout 已移至 node-canvas/layout.js */
 
 
-/* ── 复制/粘贴 ───────────────────────────────── */
-let _clipboard = null;
-function copySelection(){
-  if(state.selected.size === 0){ toast('未选中节点'); return; }
-  const nodes = [], edges = [];
-  const idMap = new Map();
-  state.selected.forEach(id=>{
-    const n = state.nodes.get(id);
-    if(!n) return;
-    const newId = uid();
-    idMap.set(id, newId);
-    nodes.push({id:newId, type:n.type, x:n.x, y:n.y, props:JSON.parse(JSON.stringify(n.props)), title:n.title||null, collapsed:!!n.collapsed});
-  });
-  state.edges.forEach((e)=>{
-    if(idMap.has(e.from.node) && idMap.has(e.to.node)){
-      edges.push({from:idMap.get(e.from.node), fp:e.from.port, to:idMap.get(e.to.node), tp:e.to.port});
-    }
-  });
-  _clipboard = {nodes, edges};
-  toast(`已复制 ${nodes.length} 个节点`);
-}
-function pasteClipboard(wx, wy){
-  if(!_clipboard){ toast('剪贴板为空'); return; }
-  pushHistory();
-  let minX=Infinity, minY=Infinity;
-  _clipboard.nodes.forEach(nd=>{ minX=Math.min(minX,nd.x); minY=Math.min(minY,nd.y); });
-  const dx = (wx!=null && wy!=null) ? (wx - minX) : 30;
-  const dy = (wx!=null && wy!=null) ? (wy - minY) : 30;
-  const idMap = new Map();
-  const newNodes = [];
-  _clipboard.nodes.forEach(nd=>{
-    const id = uid();
-    idMap.set(nd.id, id);
-    const node = {id, type:nd.type, x:nd.x+dx, y:nd.y+dy, props:JSON.parse(JSON.stringify(nd.props)), title:nd.title||null, collapsed:!!nd.collapsed, el:null};
-    state.nodes.set(id, node);
-    renderNode(node);
-    newNodes.push(id);
-  });
-  _clipboard.edges.forEach(ed=>{
-    const fromId = idMap.get(ed.from), toId = idMap.get(ed.to);
-    if(fromId && toId){
-      const eid = 'e'+Math.random().toString(36).slice(2,9);
-      state.edges.set(eid, {id:eid, from:{node:fromId,port:ed.fp}, to:{node:toId,port:ed.tp}});
-    }
-  });
-  renderEdges();
-  updateStats();
-  evaluate();
-  state.selected.clear();
-  newNodes.forEach(id=>state.selected.add(id));
-  refreshSelection();
-  toast(`已粘贴 ${newNodes.length} 个节点`);
-}
+/* 复制/粘贴 已移至 node-canvas/clipboard.js */
+import { copySelection, pasteClipboard } from './node-canvas/clipboard.js'
 
 /* 图序列化（保存/加载 ComfyUI 格式）已移至 node-canvas/graph-io.js */
 import { _topoOrder, _graphToComfy, serializeGraph,
