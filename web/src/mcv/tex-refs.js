@@ -6,6 +6,8 @@
  * 从 material3d.js 原样搬出，逻辑未改。
  */
 
+import * as THREE from 'three'
+
 export const TEX_REF_EXT_RE = /\.(png|jpe?g|webp|gif|bmp|tiff?|avif)$/i
 
 /* matoga 扩展贴图引用（模型 textures 表值直接可加载，跳过命名空间解析）：
@@ -147,4 +149,5 @@ export function spriteTexKey(textures) {
   if (textures.particle != null) return '#particle'
   return null
 }
+
 

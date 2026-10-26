@@ -5,6 +5,8 @@
  *
  * 从 material3d.js 原样搬出，逻辑未改。
  */
+
+import * as THREE from 'three'
 import { isSpecialTexPath } from './tex-refs.js'
 
 export function fileUrl(p) { return '/api/file/raw?path=' + encodeURIComponent(p) }
@@ -54,4 +56,5 @@ export async function fetchOkData(path) {
   if (!j || !j.ok) throw new Error((j && j.msg) || 'bad response')
   return j.data
 }
+
 
