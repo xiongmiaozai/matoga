@@ -66,7 +66,6 @@ export const LIGHT_PRESETS = {
   }
 }
 
-
 export function createEnvTexture(presetKey) {
   const preset = LIGHT_PRESETS[presetKey] || LIGHT_PRESETS.studio
   const env = preset.env
