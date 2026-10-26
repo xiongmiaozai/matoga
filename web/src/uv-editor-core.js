@@ -39,6 +39,7 @@ import { imgCache, loadTexImage, loadTexAnimInfo } from './uvc/tex-cache.js'
 import { applyFaceUvValues, applyFaceRotationValue, faceEntryOf, applyHistoryEntry, snapshotLayout } from './uvc/face-ops.js'
 import { hitRect as hitRectIn, hitHandle as hitHandleIn, isUsableTexUrl } from './uvc/hit-test.js'
 import { exportModel as exportModelImpl, exportUvTemplate as exportUvTemplateImpl } from './uvc/exporters.js'
+import { buildStatusText } from './uvc/status.js'
 
 
 export function createUvEditor(opts) {
@@ -944,36 +945,17 @@ export function createUvEditor(opts) {
   function updateStatus() {
     if (!statusEl) return
     const layout = state.layout
-    if (!layout) { statusEl.textContent = state.notice || ''; return }
-    const tex = layout.textures[state.activeTex]
-    if (!tex) { statusEl.textContent = state.notice || ''; return }
-    if (state.notice) { statusEl.textContent = state.notice; return }
-    let faceCount = 0
-    layout.elements.forEach(el => {
-      for (const key in el.faces) if (el.faces[key].tex === state.activeTex) faceCount++
+    const tex = layout && layout.textures[state.activeTex]
+    const rec = tex ? imgCache.get(tex.url) : null
+    const animInfo = (rec && rec.ok && rec.img)
+      ? loadTexAnimInfo(tex, rec.img.naturalWidth, rec.img.naturalHeight, requestDraw)
+      : null
+    statusEl.textContent = buildStatusText({
+      t, layout, activeTex: state.activeTex, notice: state.notice,
+      isCustom: state.customTex.has(state.activeTex),
+      drag: state.drag, hover: state.hover, selected: state.selected, edit: state.edit,
+      rec, animInfo,
     })
-    const rec = imgCache.get(tex.url)
-    const failed = rec && rec.done && !rec.ok
-    const sizeStr = rec && rec.ok && rec.img ? `${rec.img.naturalWidth}×${rec.img.naturalHeight}` : ''
-    const animInfo = sizeStr ? loadTexAnimInfo(tex, rec.img.naturalWidth, rec.img.naturalHeight, requestDraw) : null
-    const animStr = animInfo ? ` · ${t('uv.animFrames', { n: animInfo.frames })}` : ''
-    const removedStr = !tex.url ? ` · ${t('uv.removed')}` : ''
-    const customStr = (!tex.url || !state.customTex.has(state.activeTex)) ? '' : ` · ${t('uv.custom')}`
-    let text = (tex.name || '') + (sizeStr ? ` · ${sizeStr}` : '') + animStr + customStr + removedStr + (failed ? ` · ${t('uv.missing')}` : '') + ` · ${t('uv.faces', { n: faceCount })}`
-    if (state.drag && state.drag.moved) {
-      const f = state.drag.rc.face
-      text += '  ·  ' + `${t('uv.el')} ${state.drag.rc.elIdx} ${state.drag.rc.key} · uv [${f.uv.map(fmtUvNum).join(', ')}]`
-    } else if (state.hover) {
-      const f = state.hover.face
-      const parts = [`${t('uv.el')} ${layout.elements.indexOf(state.hover.el)}`, state.hover.key]
-      if (f.rotation) parts.push(`${t('uv.rot')} ${f.rotation}°`, requestDraw)
-      if (f.mirror) parts.push(t('uv.mirror'))
-      text += '  ·  ' + parts.join(' · ')
-    } else if (state.edit && state.selected) {
-      const f = state.selected.face
-      text += '  ·  ' + `${t('uv.el')} ${state.selected.elIdx} ${state.selected.key} · uv [${f.uv.map(fmtUvNum).join(', ')}]`
-    }
-    statusEl.textContent = text
   }
 
   /* ── 脏状态 ─────────────────────────────────── */
