@@ -37,6 +37,7 @@ import { drawCheckerboard, drawMissing } from './uvc/draw-helpers.js'
 import { fmtUvNum, readAsDataURL } from './uvc/utils.js'
 import { imgCache, loadTexImage, loadTexAnimInfo } from './uvc/tex-cache.js'
 import { applyFaceUvValues, applyFaceRotationValue, faceEntryOf, applyHistoryEntry, snapshotLayout } from './uvc/face-ops.js'
+import { hitRect as hitRectIn, hitHandle as hitHandleIn, isUsableTexUrl } from './uvc/hit-test.js'
 
 
 export function createUvEditor(opts) {
@@ -677,16 +678,8 @@ export function createUvEditor(opts) {
     requestDraw()
   }
 
-  function hitRect(mx, my) {
-    return state.rects.findLast(rc => mx >= rc.x && mx <= rc.x + rc.w && my >= rc.y && my <= rc.y + rc.h)
-  }
-
-  function hitHandle(mx, my) {
-    for (const h of state.handles) {
-      if (Math.abs(mx - h.x) <= HANDLE_HIT && Math.abs(my - h.y) <= HANDLE_HIT) return h
-    }
-    return null
-  }
+  function hitRect(mx, my) { return hitRectIn(state.rects, mx, my) }
+  function hitHandle(mx, my) { return hitHandleIn(state.handles, mx, my) }
 
   /* ── 自定义贴图（上传 / 拖放 → dataURL 替换 + 换图钩子） ──────────
      多文件：从当前选中贴图槽位起按顺序替换（画师一次导出多张贴图逐槽位对应）；
@@ -730,10 +723,6 @@ export function createUvEditor(opts) {
   }
 
   /* 可用作贴图的 URL：dataURL / http(s) / 站内相对路径（/api/...） */
-  function isUsableTexUrl(url) {
-    return typeof url === 'string' && (url.startsWith('data:') || /^https?:\/\//i.test(url) || url.startsWith('/'))
-  }
-
   /* 移除材质：清空贴图槽位引用（face.tex 索引保持不变，不删除槽位本身）；
      UV 画布仅剩棋盘底 + 面矩形，3D 视口面变纯色（onTexture 空串 → 宿主清除材质）；
      重新上传 / 拖入 / 贴图库选择即可恢复 */
