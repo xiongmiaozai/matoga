@@ -66,13 +66,13 @@ func (c *Config) readRaw() map[string]any {
 	raw, err := os.ReadFile(c.file)
 	if err != nil {
 		if !errors.Is(err, fs.ErrNotExist) {
-			c.log.Warn("config", "read failed", "err", err)
+			c.log.Warn("config: read failed", "err", err.Error())
 		}
 		return map[string]any{}
 	}
 	var m map[string]any
 	if err := json.Unmarshal(raw, &m); err != nil {
-		c.log.Warn("config", "bad config.json", "err", err)
+		c.log.Warn("config: bad config.json", "err", err.Error())
 		return map[string]any{}
 	}
 	return m
@@ -192,3 +192,5 @@ func AtomicWriteJSON(file string, v any) error {
 	}
 	return os.Rename(name, file)
 }
+
+
