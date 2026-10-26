@@ -29,11 +29,7 @@ import { modelPrefixOf } from './model-prefix.js'
 import { renderChart } from './rnd/charts.js'
 import { appendModelCard, modelThumbSpec, renderModelThumbPair } from './rnd/model-cards.js'
 import { renderSidebar } from './rnd/sidebar.js'
-const _rowMap = new Map()
-let _filteredCache = null
-let _renderedCount = 0
-let _lastBaseSet = []
-
+import { _filteredCache, _lastBaseSet, _renderedCount, _rowMap, setFilteredCache, setRenderedCount, setLastBaseSet } from './rnd/state.js'
 function _showMoreHandler() {
   state.renderLimit += 200
   if (state.viewMode !== 'byFolder' && _filteredCache) {
@@ -47,7 +43,7 @@ function _showMoreHandler() {
       if (added >= 200) { truncated = true; break }
       appendGroupRows(frag, _filteredCache[i]); added++
     }
-    _renderedCount += added
+    setRenderedCount(_renderedCount + added)
     for (const r of frag.children) if (r._group) _rowMap.set(r._group.key, r)
     resultBody.appendChild(frag)
     if (truncated) {
@@ -323,7 +319,7 @@ function buildCatRow(dim, labelKey, items, currentVal, scrollable) {
 }
 
 function renderCategoryBar(baseSet) {
-  _lastBaseSet = baseSet || []
+  setLastBaseSet(baseSet || [])
   const bar = $('categoryBar')
   if (!bar) return
   const f = state.categoryFilter || { type: 'all', content: 'all', status: 'all', folder: 'all', tag: 'all' }
@@ -562,8 +558,8 @@ export function renderResult() {
   resultBody.appendChild(frag)
   _rowMap.clear()
   for (const r of resultBody.children) if (r._group) _rowMap.set(r._group.key, r)
-  _filteredCache = filtered
-  _renderedCount = rendered
+  setFilteredCache(filtered)
+  setRenderedCount(rendered)
   observeThumbs(resultBody)
   observeModelThumbs(resultBody)
 
@@ -649,5 +645,6 @@ export function bindEmptyCellActions(panel, g) {
 
 export { renderSidebar } from './rnd/sidebar.js'
 export { loadModelTexEffectPreview } from './rnd/model-preview.js'
+
 
 
