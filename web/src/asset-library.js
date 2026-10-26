@@ -42,71 +42,12 @@ import {
   parsePackTexPath, packTexThumbUrl, parsePackModelPath, isVirtualAssetPath,
   userModelFilePath, packRawUrl, officialRawUrl, mcRawUrl,
 } from './asset-lib/helpers.js'
+import { el, shade, loadList, saveList } from './asset-lib/dom.js'
+import { tryActivateModelViewport, viewMcModelAsset, viewImportedModelAsset } from './asset-lib/model-view.js'
 
-/* ── 模型查看：3D 视口 ── */
+/* ── 模型查看：3D 视口 已移至 asset-lib/model-view.js ── */
 
-/* 3D 视口未激活（用户尚未打开过「3D 视口」面板或预览 3D tab）时自动激活：
-   优先点击预览面板 3D tab（等价用户点击，含 tab 切换），回退独立视口面板宿主。
-   返回 true 表示视口已就绪，可重试模型展示 */
-function tryActivateModelViewport() {
-  if (isViewportVisible()) return true
-  const pvBtn = document.querySelector('.pv-tabs button[data-pv-tab="3d"]')
-  if (pvBtn) { pvBtn.click(); return true }
-  const host = document.getElementById('material3dStandaloneHost')
-  if (host) { activateMaterial3DHost(host); return true }
-  return false
-}
-
-/* 3D 视口查看 MC 包内 .json 模型（models/ 路径或 items/ 物品定义；parent 链 + elements + 包内贴图） */
-async function viewMcModelAsset(source, packName, rel, name) {
-  try {
-    let r = await viewMcModelInViewport({ api: packApiFor(source), packName, rel })
-    if (!r.shown && tryActivateModelViewport()) {
-      r = await viewMcModelInViewport({ api: packApiFor(source), packName, rel })
-    }
-    if (r.shown) showToast(t('asset.toastModelViewport', { name }))
-    else showToast(t('asset.toastModelViewportNoView'))
-  } catch (e) {
-    showToast(t('asset.toastModelOpenFail') + ': ' + (e.message || e))
-  }
-}
-
-/* 3D 视口查看导入模型（data/imported-models，.bbmodel / MC .json） */
-async function viewImportedModelAsset(id, name) {
-  try {
-    let r = await viewImportedModelInViewport({ id })
-    if (!r.shown && tryActivateModelViewport()) {
-      r = await viewImportedModelInViewport({ id })
-    }
-    if (r.shown) showToast(t('asset.toastModelViewport', { name }))
-    else showToast(t('asset.toastModelViewportNoView'))
-  } catch (e) {
-    showToast(t('asset.toastModelOpenFail') + ': ' + (e.message || e))
-  }
-}
-
-function el(tag, cls, html) {
-  const d = document.createElement(tag)
-  if (cls) d.className = cls
-  if (html != null) d.innerHTML = html
-  return d
-}
-
-function shade(hex, amt) {
-  const n = parseInt(hex.slice(1), 16)
-  let r = (n >> 16) + amt, g = ((n >> 8) & 0xff) + amt, b = (n & 0xff) + amt
-  r = Math.max(0, Math.min(255, r)); g = Math.max(0, Math.min(255, g)); b = Math.max(0, Math.min(255, b))
-  return '#' + ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')
-}
-
-function loadList(key) {
-  try { return JSON.parse(localStorage.getItem(key)) || [] } catch { return [] }
-}
-function saveList(key, arr) {
-  try { localStorage.setItem(key, JSON.stringify(arr)) } catch {}
-}
-
-
+/* el / shade / loadList / saveList 已移至 asset-lib/dom.js */
 
 async function assetApiCall(method, path, body) {
   const res = await fetch(apiUrl(path), {
