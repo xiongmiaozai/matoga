@@ -40,6 +40,7 @@ import { applyFaceUvValues, applyFaceRotationValue, faceEntryOf, applyHistoryEnt
 import { hitRect as hitRectIn, hitHandle as hitHandleIn, isUsableTexUrl } from './uvc/hit-test.js'
 import { exportModel as exportModelImpl, exportUvTemplate as exportUvTemplateImpl } from './uvc/exporters.js'
 import { buildStatusText } from './uvc/status.js'
+import { buildUvUi } from './uvc/ui-build.js'
 
 
 export function createUvEditor(opts) {
@@ -102,295 +103,64 @@ export function createUvEditor(opts) {
 
   /* ── DOM 构建（结构顺序与原浮窗一致：toolbar / canvasWrap / status / 隐藏 fileInput） ── */
 
-  const wrap = document.createElement('div')
-  wrap.className = 'uvv-wrap'
-
-  const toolbar = document.createElement('div')
-  toolbar.className = 'uvv-toolbar'
-
-  chipsEl = document.createElement('div')
-  chipsEl.className = 'uvv-tex-chips'
-  toolbar.appendChild(chipsEl)
-
-  zoomSeg = document.createElement('div')
-  zoomSeg.className = 'm3d-segment uvv-zoom-seg'
-  ZOOM_STEPS.forEach(z => {
-    const btn = document.createElement('button')
-    btn.dataset.zoom = String(z)
-    btn.textContent = z === 'fit' ? t('uv.fit') : z + 'x'
-    if (z === 'fit') btn.classList.add('active')
-    btn.addEventListener('click', () => {
-      state.zoom = z === 'fit' ? 'fit' : +z
-      zoomSeg.querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn))
-      draw()
-    })
-    zoomSeg.appendChild(btn)
-  })
-  toolbar.appendChild(zoomSeg)
-
-  gridBtn = document.createElement('button')
-  gridBtn.className = 'uvv-grid-btn active'
-  gridBtn.title = t('uv.grid')
-  gridBtn.textContent = t('uv.grid')
-  gridBtn.addEventListener('click', () => {
-    state.grid = !state.grid
-    gridBtn.classList.toggle('active', state.grid)
-    draw()
-  })
-  toolbar.appendChild(gridBtn)
-
-  editBtn = document.createElement('button')
-  editBtn.className = 'uvv-grid-btn uvv-edit-btn'
-  editBtn.title = t('uv.editTitle')
-  editBtn.textContent = t('uv.edit')
-  editBtn.addEventListener('click', () => setEdit(!state.edit))
-  toolbar.appendChild(editBtn)
-
-  uploadBtn = document.createElement('button')
-  uploadBtn.className = 'uvv-grid-btn'
-  uploadBtn.title = t('uv.uploadTitle')
-  uploadBtn.textContent = t('uv.upload')
-  uploadBtn.addEventListener('click', () => { if (fileInput) fileInput.click() })
-  toolbar.appendChild(uploadBtn)
-
-  libraryBtn = document.createElement('button')
-  libraryBtn.className = 'uvv-grid-btn uvv-library-btn'
-  libraryBtn.title = t('uv.libraryTitle')
-  libraryBtn.textContent = t('uv.library')
-  libraryBtn.addEventListener('click', pickLibraryTexture)
-  toolbar.appendChild(libraryBtn)
-
-  exportBtn = document.createElement('button')
-  exportBtn.className = 'uvv-grid-btn'
-  exportBtn.title = t('uv.exportTitle')
-  exportBtn.textContent = t('uv.export')
-  exportBtn.addEventListener('click', exportModel)
-  toolbar.appendChild(exportBtn)
-
-  templateBtn = document.createElement('button')
-  templateBtn.className = 'uvv-grid-btn'
-  templateBtn.title = t('uv.templateTitle')
-  templateBtn.textContent = t('uv.template')
-  templateBtn.addEventListener('click', exportUvTemplate)
-  toolbar.appendChild(templateBtn)
-
-  /* 编辑工具条（编辑模式显示；放 toolbar 内随 flex-wrap 换行，不动外层结构） */
-  editBar = document.createElement('div')
-  editBar.className = 'uvv-edit-bar'
-  const uvLabel = document.createElement('span')
-  uvLabel.className = 'uvv-edit-label'
-  uvLabel.textContent = t('uv.uvLabel')
-  editBar.appendChild(uvLabel)
-  uvInputs = [0, 1, 2, 3].map(() => {
-    const inp = document.createElement('input')
-    inp.type = 'number'
-    inp.className = 'uvv-uv-input'
-    inp.step = '1'
-    inp.disabled = true
-    inp.addEventListener('focus', () => {
-      const f = selectedFace()
-      state.inputOrig = f ? [...f.uv] : null
-    })
-    inp.addEventListener('change', () => { applyUvInput() })
-    editBar.appendChild(inp)
-    return inp
-  })
-  rotBtn = document.createElement('button')
-  rotBtn.className = 'uvv-grid-btn'
-  rotBtn.title = t('uv.rotateTitle')
-  rotBtn.textContent = t('uv.rotate')
-  rotBtn.addEventListener('click', rotateSelected)
-  editBar.appendChild(rotBtn)
-  mirrorBtn = document.createElement('button')
-  mirrorBtn.className = 'uvv-grid-btn'
-  mirrorBtn.title = t('uv.mirrorTitle')
-  mirrorBtn.textContent = t('uv.mirror')
-  mirrorBtn.addEventListener('click', mirrorSelected)
-  editBar.appendChild(mirrorBtn)
-  remakeBtn = document.createElement('button')
-  remakeBtn.className = 'uvv-grid-btn'
-  remakeBtn.title = t('uv.remakeTitle')
-  remakeBtn.textContent = t('uv.remake')
-  remakeBtn.addEventListener('click', remakeSelected)
-  editBar.appendChild(remakeBtn)
-  undoBtn = document.createElement('button')
-  undoBtn.className = 'uvv-grid-btn'
-  undoBtn.title = t('uv.undoTitle') + ' (Ctrl+Z)'
-  undoBtn.textContent = t('uv.undo')
-  undoBtn.addEventListener('click', undoEdit)
-  editBar.appendChild(undoBtn)
-  redoBtn = document.createElement('button')
-  redoBtn.className = 'uvv-grid-btn'
-  redoBtn.title = t('uv.redoTitle') + ' (Ctrl+Shift+Z / Ctrl+Y)'
-  redoBtn.textContent = t('uv.redo')
-  redoBtn.disabled = true
-  redoBtn.addEventListener('click', redoEdit)
-  editBar.appendChild(redoBtn)
-  resetBtn = document.createElement('button')
-  resetBtn.className = 'uvv-grid-btn'
-  resetBtn.title = t('uv.resetTitle')
-  resetBtn.textContent = t('uv.reset')
-  resetBtn.addEventListener('click', resetEdits)
-  editBar.appendChild(resetBtn)
-  const hint = document.createElement('span')
-  hint.className = 'uvv-edit-hint'
-  hint.textContent = t('uv.editHint')
-  editBar.appendChild(hint)
-  toolbar.appendChild(editBar)
-
-  wrap.appendChild(toolbar)
-
-  /* 画布区 */
-  canvasWrap = document.createElement('div')
-  canvasWrap.className = 'uvv-canvas-wrap'
-  canvas = document.createElement('canvas')
-  canvas.className = 'uvv-canvas'
-  canvasWrap.appendChild(canvas)
-
-  /* 自定义贴图上传（隐藏 input 挂 wrap 尾部，保持 canvasWrap 子结构不变；拖放目标为画布区） */
-  fileInput = document.createElement('input')
-  fileInput.type = 'file'
-  fileInput.multiple = true
-  fileInput.accept = 'image/png,image/jpeg,image/webp,image/gif'
-  fileInput.style.display = 'none'
-  fileInput.addEventListener('change', () => {
-    handleTextureFiles(fileInput.files)
-    try { fileInput.value = '' } catch {}
-  })
-
-  canvasWrap.addEventListener('dragover', (e) => {
-    if (!state.layout) return
-    e.preventDefault()
-    canvasWrap.classList.add('uvv-drop-active')
-  })
-  canvasWrap.addEventListener('dragleave', () => canvasWrap.classList.remove('uvv-drop-active'))
-  canvasWrap.addEventListener('drop', (e) => {
-    e.preventDefault()
-    canvasWrap.classList.remove('uvv-drop-active')
-    /* 资产库贴图卡片拖入：raw URL 直接替换当前贴图槽位 */
-    const tex = getTexDragData(e.dataTransfer)
-    if (tex) {
-      if (state.layout && isUsableTexUrl(tex.url)) applyCustomTexture(tex.url, tex.name || null)
-      return
-    }
-    const files = e.dataTransfer && e.dataTransfer.files
-    handleTextureFiles(files)
-  })
-
-  emptyEl = document.createElement('div')
-  emptyEl.className = 'uvv-empty'
-  canvasWrap.appendChild(emptyEl)
-  wrap.appendChild(canvasWrap)
-
-  /* 状态栏 */
-  statusEl = document.createElement('div')
-  statusEl.className = 'uvv-status'
-  wrap.appendChild(statusEl)
-  wrap.appendChild(fileInput)   /* 隐藏上传 input（尾部，不占结构索引） */
-
-  container.appendChild(wrap)
-  ctx = canvas.getContext('2d')
-
-  canvas.addEventListener('mousemove', (e) => {
-    if (state.drag) return
-    const r = canvas.getBoundingClientRect()
-    const mx = e.clientX - r.left, my = e.clientY - r.top
-    const hit = hitRect(mx, my)
-    const same = hit && state.hover
-      ? (hit.el === state.hover.el && hit.key === state.hover.key)
-      : (!hit && !state.hover)
-    if (!same) {
-      state.hover = hit ? { el: hit.el, face: hit.face, key: hit.key } : null
-      updateStatus()
-      updateActiveHighlight()
-      draw()
-    }
-    if (state.edit) {
-      const h = state.selected ? hitHandle(mx, my) : null
-      canvas.style.cursor = h ? HANDLE_CURSOR[h.mode] : (hit ? 'move' : 'crosshair')
-    }
-  })
-  canvas.addEventListener('mouseleave', () => {
-    if (state.hover) { state.hover = null; updateStatus(); updateActiveHighlight(); draw() }
-  })
-
-  /* 编辑拖拽（pointer events 支持触控笔/触摸） */
-  canvas.addEventListener('pointerdown', (e) => {
-    if (!state.edit || state.drag || !state.layout) return
-    const r = canvas.getBoundingClientRect()
-    const mx = e.clientX - r.left, my = e.clientY - r.top
-    const h = state.selected ? hitHandle(mx, my) : null
-    if (h) { startDrag(e, h.mode, mx, my); return }
-    const rc = hitRect(mx, my)
-    if (rc) {
-      selectFace(rc)
-      startDrag(e, 'move', mx, my)
-    } else if (state.selected) {
-      clearSelection()
-    }
-  })
-  canvas.addEventListener('pointermove', (e) => {
-    if (!state.drag) return
-    const r = canvas.getBoundingClientRect()
-    onDragMove(e.clientX - r.left, e.clientY - r.top, e.altKey)
-  })
-  const endDrag = (e) => {
-    const d = state.drag
-    if (!d) return
-    state.drag = null
-    try { canvas.releasePointerCapture && canvas.releasePointerCapture(e.pointerId) } catch {}
-    if (d.moved) pushUndo({ layEl: d.rc.el, key: d.rc.key, uv: [...d.orig], rotation: d.rc.face.rotation })
-    updateStatus()
-    draw()
-  }
-  canvas.addEventListener('pointerup', endDrag)
-  canvas.addEventListener('pointercancel', endDrag)
-
-  /* Ctrl+Z 撤销 / Ctrl+Shift+Z 或 Ctrl+Y 重做（输入框聚焦时放行浏览器原生行为） */
-  const onKeyDown = (e) => {
-    if (!visible() || !state.edit) return
-    if (!(e.ctrlKey || e.metaKey)) return
-    const k = e.key
-    const isUndo = (k === 'z' || k === 'Z') && !e.shiftKey
-    const isRedo = (k === 'y' || k === 'Y') || ((k === 'z' || k === 'Z') && e.shiftKey)
-    if (!isUndo && !isRedo) return
-    const tag = e.target && e.target.tagName
-    if (tag === 'INPUT' || tag === 'TEXTAREA') return
-    e.preventDefault()
-    if (isUndo) undoEdit()
-    else redoEdit()
-  }
-  window.addEventListener('keydown', onKeyDown)
-
   const onModelShown = () => { if (visible()) refresh() }
-  if (!opts || opts.autoRefreshOnModelShown !== false) {
-    window.addEventListener('mcmodel:shown', onModelShown)
-  }
 
-  const offLocaleChange = onLocaleChange(() => {
-    gridBtn.title = t('uv.grid')
-    gridBtn.textContent = t('uv.grid')
-    editBtn.title = t('uv.editTitle')
-    editBtn.textContent = t('uv.edit')
-    uploadBtn.title = t('uv.uploadTitle')
-    uploadBtn.textContent = t('uv.upload')
-    libraryBtn.title = t('uv.libraryTitle')
-    libraryBtn.textContent = t('uv.library')
-    exportBtn.title = t('uv.exportTitle')
-    exportBtn.textContent = t('uv.export')
-    templateBtn.title = t('uv.templateTitle')
-    templateBtn.textContent = t('uv.template')
-    rotBtn.textContent = t('uv.rotate')
-    mirrorBtn.textContent = t('uv.mirror')
-    remakeBtn.textContent = t('uv.remake')
-    undoBtn.textContent = t('uv.undo')
-    redoBtn.textContent = t('uv.redo')
-    resetBtn.textContent = t('uv.reset')
-    refresh()
+  const ui = buildUvUi({
+    t, state, container,
+    autoRefreshOnModelShown: opts ? opts.autoRefreshOnModelShown : undefined,
+    getTexDragData, isUsableTexUrl, onLocaleChange, refresh,
+    draw: (...args) => draw(...args),
+    setEdit: (...args) => setEdit(...args),
+    selectedFace: (...args) => selectedFace(...args),
+    applyUvInput: (...args) => applyUvInput(...args),
+    rotateSelected: (...args) => rotateSelected(...args),
+    mirrorSelected: (...args) => mirrorSelected(...args),
+    remakeSelected: (...args) => remakeSelected(...args),
+    undoEdit: (...args) => undoEdit(...args),
+    redoEdit: (...args) => redoEdit(...args),
+    resetEdits: (...args) => resetEdits(...args),
+    pickLibraryTexture: (...args) => pickLibraryTexture(...args),
+    exportModel: (...args) => exportModel(...args),
+    exportUvTemplate: (...args) => exportUvTemplate(...args),
+    handleTextureFiles: (...args) => handleTextureFiles(...args),
+    applyCustomTexture: (...args) => applyCustomTexture(...args),
+    hitRect: (...args) => hitRect(...args),
+    hitHandle: (...args) => hitHandle(...args),
+    startDrag: (...args) => startDrag(...args),
+    onDragMove: (...args) => onDragMove(...args),
+    selectFace: (...args) => selectFace(...args),
+    clearSelection: (...args) => clearSelection(...args),
+    pushUndo: (...args) => pushUndo(...args),
+    updateStatus: (...args) => updateStatus(...args),
+    updateActiveHighlight: (...args) => updateActiveHighlight(...args),
+    visible: (...args) => visible(...args),
+    onModelShown,
   })
 
-  resizeObserver = new ResizeObserver(() => draw())
-  resizeObserver.observe(canvasWrap)
+  canvas = ui.canvas
+  ctx = ui.getCtx()
+  canvasWrap = ui.canvasWrap
+  chipsEl = ui.chipsEl
+  zoomSeg = ui.zoomSeg
+  gridBtn = ui.gridBtn
+  editBtn = ui.editBtn
+  uploadBtn = ui.uploadBtn
+  exportBtn = ui.exportBtn
+  templateBtn = ui.templateBtn
+  fileInput = ui.fileInput
+  editBar = ui.editBar
+  uvInputs = ui.uvInputs
+  rotBtn = ui.rotBtn
+  mirrorBtn = ui.mirrorBtn
+  remakeBtn = ui.remakeBtn
+  undoBtn = ui.undoBtn
+  redoBtn = ui.redoBtn
+  resetBtn = ui.resetBtn
+  libraryBtn = ui.libraryBtn
+  statusEl = ui.statusEl
+  emptyEl = ui.emptyEl
+  resizeObserver = ui.resizeObserver
+
 
   /* 重绘节流：不可见时跳过，同一帧内多次请求合并为一次 */
   function requestDraw() {
