@@ -36,6 +36,7 @@ import { ZOOM_STEPS, IMG_CACHE_MAX, UNDO_MAX, HANDLE_HIT, HANDLE_DRAW, HANDLE_CU
 import { drawCheckerboard, drawMissing } from './uvc/draw-helpers.js'
 import { fmtUvNum, readAsDataURL } from './uvc/utils.js'
 import { imgCache, loadTexImage, loadTexAnimInfo } from './uvc/tex-cache.js'
+import { applyFaceUvValues, applyFaceRotationValue, faceEntryOf, applyHistoryEntry, snapshotLayout } from './uvc/face-ops.js'
 
 
 export function createUvEditor(opts) {
@@ -453,27 +454,6 @@ export function createUvEditor(opts) {
 
   /* ── 编辑：值应用（layout face + 原始 element 写回 → 联动钩子） ────────── */
 
-  function applyFaceUvValues(layEl, key, uv) {
-    const face = layEl && layEl.faces ? layEl.faces[key] : null
-    if (!face || !Array.isArray(uv) || uv.length !== 4 || !uv.every(n => Number.isFinite(+n))) return false
-    face.uv = [+uv[0], +uv[1], +uv[2], +uv[3]]
-    face.mirror = face.uv[2] < face.uv[0]
-    if (layEl.el && typeof hooks.onFaceUv === 'function') {
-      try { hooks.onFaceUv(layEl.el, key, face.uv) } catch {}
-    }
-    return true
-  }
-
-  function applyFaceRotationValue(layEl, key, rotation) {
-    const face = layEl && layEl.faces ? layEl.faces[key] : null
-    if (!face) return false
-    face.rotation = Number.isFinite(+rotation) ? (((Math.round(+rotation / 90) * 90) % 360) + 360) % 360 : 0
-    if (layEl.el && typeof hooks.onFaceRotation === 'function') {
-      try { hooks.onFaceRotation(layEl.el, key, face.rotation) } catch {}
-    }
-    return true
-  }
-
   function selectedFace() {
     return state.selected ? state.selected.face : null
   }
@@ -538,7 +518,7 @@ export function createUvEditor(opts) {
     const orig = (state.inputOrig && state.inputOrig.length === 4) ? [...state.inputOrig] : [...f.uv]
     pushUndo({ layEl: state.selected.el, key: state.selected.key, uv: orig, rotation: f.rotation })
     state.inputOrig = null
-    applyFaceUvValues(state.selected.el, state.selected.key, cuv)
+    applyFaceUvValues(state.selected.el, state.selected.key, cuv, hooks)
     syncEditInputs()
     draw()
   }
@@ -547,7 +527,7 @@ export function createUvEditor(opts) {
     const f = selectedFace()
     if (!f || !state.selected) return
     pushUndo({ layEl: state.selected.el, key: state.selected.key, uv: [...f.uv], rotation: f.rotation })
-    applyFaceRotationValue(state.selected.el, state.selected.key, ((f.rotation || 0) + 90) % 360)
+    applyFaceRotationValue(state.selected.el, state.selected.key, ((f.rotation || 0) + 90) % 360, hooks)
     updateStatus()
     draw()
   }
@@ -556,7 +536,7 @@ export function createUvEditor(opts) {
     const f = selectedFace()
     if (!f || !state.selected) return
     pushUndo({ layEl: state.selected.el, key: state.selected.key, uv: [...f.uv], rotation: f.rotation })
-    applyFaceUvValues(state.selected.el, state.selected.key, [f.uv[2], f.uv[1], f.uv[0], f.uv[3]])
+    applyFaceUvValues(state.selected.el, state.selected.key, [f.uv[2], f.uv[1], f.uv[0], f.uv[3]], hooks)
     updateStatus()
     draw()
   }
@@ -564,17 +544,6 @@ export function createUvEditor(opts) {
   /* ── 撤销 / 重做 / 重制 / 重置 ─────────────────────────── */
 
   /* 取 layout 面当前值（撤销/重做互推时保存“另一侧”状态用） */
-  function faceEntryOf(layEl, key) {
-    const f = (layEl && layEl.faces) ? layEl.faces[key] : null
-    if (!f) return null
-    return { layEl, key, uv: Array.isArray(f.uv) ? [...f.uv] : null, rotation: f.rotation || 0 }
-  }
-
-  function applyHistoryEntry(entry) {
-    if (Array.isArray(entry.uv)) applyFaceUvValues(entry.layEl, entry.key, entry.uv)
-    if (entry.rotation != null) applyFaceRotationValue(entry.layEl, entry.key, entry.rotation)
-  }
-
   function pushUndo(entry) {
     state.undoStack.push(entry)
     state.redoStack.length = 0   /* 新编辑 → 重做历史分叉失效 */
@@ -587,7 +556,7 @@ export function createUvEditor(opts) {
     const entry = state.undoStack.pop()
     if (!entry) return
     const cur = faceEntryOf(entry.layEl, entry.key)
-    applyHistoryEntry(entry)
+    applyHistoryEntry(entry, hooks)
     if (cur && cur.uv) state.redoStack.push(cur)
     syncEditInputs()
     updateStatus()
@@ -599,7 +568,7 @@ export function createUvEditor(opts) {
     const entry = state.redoStack.pop()
     if (!entry) return
     const cur = faceEntryOf(entry.layEl, entry.key)
-    applyHistoryEntry(entry)
+    applyHistoryEntry(entry, hooks)
     if (cur && cur.uv) state.undoStack.push(cur)   /* 直接入栈（不经 pushUndo，避免清空 redo） */
     syncEditInputs()
     updateStatus()
@@ -626,22 +595,10 @@ export function createUvEditor(opts) {
     }
     if (!def) def = [0, 0, scale, scale]
     pushUndo({ layEl, key: state.selected.key, uv: [...f.uv], rotation: f.rotation })
-    applyFaceUvValues(layEl, state.selected.key, def)
+    applyFaceUvValues(layEl, state.selected.key, def, hooks)
     syncEditInputs()
     updateStatus()
     draw()
-  }
-
-  function snapshotLayout(layout) {
-    if (!layout || !Array.isArray(layout.elements)) return null
-    return layout.elements.map(el => {
-      const faces = {}
-      for (const key in (el.faces || {})) {
-        const f = el.faces[key]
-        if (f && Array.isArray(f.uv)) faces[key] = { uv: [...f.uv], rotation: f.rotation || 0 }
-      }
-      return { faces }
-    })
   }
 
   function resetEdits() {
@@ -655,8 +612,8 @@ export function createUvEditor(opts) {
       if (!snapEl) return
       for (const key in snapEl.faces) {
         const sf = snapEl.faces[key]
-        applyFaceUvValues(el, key, sf.uv)
-        applyFaceRotationValue(el, key, sf.rotation)
+        applyFaceUvValues(el, key, sf.uv, hooks)
+        applyFaceRotationValue(el, key, sf.rotation, hooks)
       }
     })
     state.undoStack.length = 0
@@ -714,7 +671,7 @@ export function createUvEditor(opts) {
     const before = d.rc.face.uv
     if (uv.every((v, i) => v === before[i])) return
     d.moved = true
-    applyFaceUvValues(d.rc.el, d.rc.key, uv)
+    applyFaceUvValues(d.rc.el, d.rc.key, uv, hooks)
     syncEditInputs()
     updateStatus()
     requestDraw()
