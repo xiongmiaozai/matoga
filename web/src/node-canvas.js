@@ -44,217 +44,7 @@ let _initialized = false;
 
 /* 拖拽对齐辅助线 + 连线几何 已移至 node-canvas/edge-glue.js */
 
-/* ── 全局事件 ───────────────────────────────── */
-canvasWrap.addEventListener('pointerdown', (e)=>{
-  pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
-  startLongPress(e);
-  if(pointers.size>=2){
-    const pts=[...pointers.values()];
-    setPinch({dist0:Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y),
-      zoom0:state.viewport.zoom, vx0:state.viewport.x, vy0:state.viewport.y});
-    if(state.dragging){
-      if(state.dragging.kind==='node') state.dragging.moving.forEach(id=>{const n=state.nodes.get(id);if(n)n.el.classList.remove('dragging');});
-      if(state.dragging.kind==='edge') cleanupEdgeDrag();
-      state.dragging=null;
-    }
-    return;
-  }
-}, true);
-canvasWrap.addEventListener('pointerdown', (e)=>{
-  if(getPinch()) return;
-  if(e.target===canvasWrap || e.target===gridBg || e.target===world || e.target===nodesLayer){
-    if(e.button===2) return; // 右键菜单
-    if(e.button===1 || (e.button===0 && e.altKey) || e.pointerType==='touch'){
-      e.preventDefault();
-      state.dragging = {kind:'pan', sx:e.clientX, sy:e.clientY,
-        ox:state.viewport.x, oy:state.viewport.y};
-      canvasWrap.classList.add('panning');
-    } else if(e.button===0){
-      const wp = screenToWorld(e.clientX, e.clientY);
-      state.dragging = {kind:'box', sx:e.clientX, sy:e.clientY, startWorld:wp, moved:false};
-      if(!e.shiftKey){ state.selected.clear(); state.selectedEdge=null; refreshSelection(); }
-    }
-  }
-});
-window.addEventListener('pointermove', (e)=>{
-  if(pointers.has(e.pointerId)) pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
-  checkLongPressMove(e);
-  if(getPinch() && pointers.size>=2){
-    const pts=[...pointers.values()];
-    const dist=Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y);
-    const cx=(pts[0].x+pts[1].x)/2, cy=(pts[0].y+pts[1].y)/2;
-    const r=canvasWrap.getBoundingClientRect();
-    const zoom=clamp(getPinch().zoom0*dist/getPinch().dist0, 0.2, 3);
-    const acx=cx-r.left, acy=cy-r.top;
-    const wx=(acx-getPinch().vx0)/getPinch().zoom0, wy=(acy-getPinch().vy0)/getPinch().zoom0;
-    state.viewport.zoom=zoom;
-    state.viewport.x=acx-wx*zoom;
-    state.viewport.y=acy-wy*zoom;
-    applyViewport();
-    return;
-  }
-  const d = state.dragging;
-  if(!d) return;
-  if(d.kind==='pan'){
-    state.viewport.x = d.ox + (e.clientX-d.sx);
-    state.viewport.y = d.oy + (e.clientY-d.sy);
-    applyViewport();
-  } else if(d.kind==='node'){
-    const dx = (e.clientX-d.sx)/state.viewport.zoom;
-    const dy = (e.clientY-d.sy)/state.viewport.zoom;
-    d.baselines.forEach((base,id)=>{
-      const n = state.nodes.get(id);
-      if(!n) return;
-      n.x = base.x + dx; n.y = base.y + dy;
-      n.el.style.left = n.x+'px';
-      n.el.style.top = n.y+'px';
-    });
-    _alignGuides(d);
-    renderEdges();
-    updateMinimap();
-  } else if(d.kind==='edge'){
-    const cur = screenToWorld(e.clientX, e.clientY);
-    let a = d.startWorld, b = cur;
-    if(d.dir==='in'){ a = cur; b = d.startWorld; }
-    let t = edgesSvg.querySelector('.edge-temp');
-    if(!t){
-      t = document.createElementNS(NS,'path');
-      t.setAttribute('class','edge-temp');
-      edgesSvg.appendChild(t);
-    }
-    t.setAttribute('d', edgePath(a,b));
-    t.setAttribute('stroke', typeColor(d.dataType));
-  } else if(d.kind==='box'){
-    const dx = e.clientX - d.sx, dy = e.clientY - d.sy;
-    if(Math.abs(dx)<3 && Math.abs(dy)<3) return;
-    d.moved = true;
-    const cur = screenToWorld(e.clientX, e.clientY);
-    const x = Math.min(d.startWorld.x, cur.x);
-    const y = Math.min(d.startWorld.y, cur.y);
-    const w = Math.abs(cur.x - d.startWorld.x);
-    const h = Math.abs(cur.y - d.startWorld.y);
-    let box = canvasWrap.querySelector('.sel-box');
-    if(!box){
-      box = document.createElement('div');
-      box.className = 'sel-box';
-      box.style.cssText = 'position:absolute;border:1px solid var(--accent,#7cbd56);background:rgba(124,189,86,.12);pointer-events:none;z-index:9999';
-      canvasWrap.appendChild(box);
-    }
-    const {x:vx, y:vy, zoom} = state.viewport;
-    box.style.left = (x*zoom + vx) + 'px';
-    box.style.top = (y*zoom + vy) + 'px';
-    box.style.width = (w*zoom) + 'px';
-    box.style.height = (h*zoom) + 'px';
-  }
-});
-window.addEventListener('pointerup', (e)=>{
-  pointers.delete(e.pointerId);
-  clearLongPress();
-  if(getPinch()){
-    if(pointers.size<2) setPinch(null);
-    return;
-  }
-  const d = state.dragging;
-  if(d && d.kind==='edge'){
-    // 检查是否落在端口上
-    const target = document.elementFromPoint(e.clientX, e.clientY);
-    if(target && target.classList.contains('port')){
-      finishEdge(target);
-    } else {
-      cleanupEdgeDrag();
-    }
-  }
-  if(d && d.kind==='node'){
-    d.moving.forEach(id=>{
-      const n=state.nodes.get(id);
-      if(n) n.el.classList.remove('dragging');
-    });
-    _clearAlignGuides();
-    markDirty();
-  }
-  if(d && d.kind==='box' && d.moved){
-    const cur = screenToWorld(e.clientX, e.clientY);
-    const minX = Math.min(d.startWorld.x, cur.x), maxX = Math.max(d.startWorld.x, cur.x);
-    const minY = Math.min(d.startWorld.y, cur.y), maxY = Math.max(d.startWorld.y, cur.y);
-    state.nodes.forEach((n,id)=>{
-      const r = n.el.getBoundingClientRect();
-      const cx = (r.left + r.width/2), cy = (r.top + r.height/2);
-      const wp = screenToWorld(cx, cy);
-      if(wp.x>=minX && wp.x<=maxX && wp.y>=minY && wp.y<=maxY){
-        state.selected.add(id);
-      }
-    });
-    refreshSelection();
-  }
-  const box = canvasWrap.querySelector('.sel-box');
-  if(box) box.remove();
-  state.dragging = null;
-  canvasWrap.classList.remove('panning');
-});
-window.addEventListener('pointercancel', (e)=>{
-  pointers.delete(e.pointerId);
-  setPinch(null);
-  clearLongPress();
-  if(state.dragging){
-    if(state.dragging.kind==='node') state.dragging.moving.forEach(id=>{const n=state.nodes.get(id);if(n)n.el.classList.remove('dragging');});
-    if(state.dragging.kind==='edge') cleanupEdgeDrag();
-    _clearAlignGuides();
-    state.dragging=null;
-  }
-  canvasWrap.classList.remove('panning');
-});
-
-
-// 滚轮缩放
-canvasWrap.addEventListener('wheel', (e)=>{
-  e.preventDefault();
-  const factor = e.deltaY<0 ? 1.1 : 1/1.1;
-  setZoom(state.viewport.zoom*factor, e.clientX, e.clientY);
-}, {passive:false});
-
-// 右键菜单
-canvasWrap.addEventListener('contextmenu', (e)=>{
-  e.preventDefault();
-  const nodeEl = e.target.closest('.node');
-  if(nodeEl){
-    showNodeMenu(e, nodeEl.dataset.id);
-  } else {
-    showCanvasMenu(e);
-  }
-});
-
-// 键盘
-window.addEventListener('keydown', (e)=>{
-  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT') return;
-  // 导入对话框打开时，仅 Escape 关闭，屏蔽其他快捷键
-  if(importOverlay.classList.contains('open')){
-    if(e.key==='Escape') importOverlay.classList.remove('open');
-    return;
-  }
-  const ctrl = e.ctrlKey || e.metaKey;
-  if(ctrl && (e.key==='z'||e.key==='Z')){ e.preventDefault(); if(e.shiftKey) redo(); else undo(); return; }
-  if(ctrl && (e.key==='y'||e.key==='Y')){ e.preventDefault(); redo(); return; }
-  if(ctrl && (e.key==='d'||e.key==='D')){ e.preventDefault(); state.selected.forEach(id=>duplicateNode(id)); return; }
-  if(ctrl && (e.key==='c'||e.key==='C')){ e.preventDefault(); copySelection(); return; }
-  if(ctrl && (e.key==='x'||e.key==='X')){ e.preventDefault(); cutSelection(); return; }
-  if(ctrl && (e.key==='v'||e.key==='V')){ e.preventDefault(); pasteClipboard(); return; }
-  if(ctrl && (e.key==='a'||e.key==='A')){ e.preventDefault(); state.selected.clear(); state.nodes.forEach((n,id)=>state.selected.add(id)); refreshSelection(); return; }
-  if(ctrl && (e.key==='s'||e.key==='S')){ e.preventDefault(); saveGraph(); return; }
-  if(e.key==='Delete'||e.key==='Backspace'){
-    pushHistory();
-    if(state.selectedEdge){ state.edges.delete(state.selectedEdge); state.selectedEdge=null; renderEdges(); updateStats(); evaluate(); }
-    state.selected.forEach(id=>deleteNode(id));
-  } else if(e.key==='f'||e.key==='F'){ fitView(); }
-  else if(e.key==='l'||e.key==='L'){ autoLayout(); }
-  else if(e.key==='Escape'){
-    const hdrModal = document.getElementById('hdrPreviewModal');
-    const paramsOv = document.getElementById('m3dParamsOverlay');
-    if(hdrModal && hdrModal.classList.contains('show')){ hdrModal.classList.remove('show'); return; }
-    if(paramsOv && paramsOv.classList.contains('show')){ paramsOv.classList.remove('show'); return; }
-    cleanupEdgeDrag(); state.selected.clear(); state.selectedEdge=null; refreshSelection(); closeCtxMenu();
-  }
-});
-
+/* 全局事件 已移至 node-canvas/events.js */
 /* 右键菜单 + 节点操作 已移至 node-canvas/menus.js */
 import { closeCtxMenu, showCanvasMenu, showNodeMenu, duplicateNode, renameNode,
   disconnectNode, selectUpstream, selectDownstream, selectAll, cutSelection } from './node-canvas/menus.js'
@@ -262,6 +52,7 @@ import { closeCtxMenu, showCanvasMenu, showNodeMenu, duplicateNode, renameNode,
 
 /* 工具栏 / 面板交互 已移至 node-canvas/toolbar.js */
 import { wireToolbar } from './node-canvas/toolbar.js'
+import { wireEvents } from './node-canvas/events.js'
 /* fitView / autoLayout 已移至 node-canvas/layout.js */
 
 
@@ -311,45 +102,9 @@ export function addTextureAt(path, name, x, y){
   return node;
 }
 
-function _centerXY(ox, oy){
-  const r = canvasWrap.getBoundingClientRect();
-  const wp = screenToWorld(r.left + r.width/2, r.top + r.height/2);
-  return { x: wp.x + (ox||0), y: wp.y + (oy||0) };
-}
-
-function _buildMaterialPreset(baseColor, roughness, metallic){
-  const c = _centerXY(-220, -40);
-  const colorNode = createNode('color', c.x, c.y);
-  if(colorNode) colorNode.props.color = baseColor;
-  const roughNode = createNode('number', c.x, c.y + 80);
-  if(roughNode) roughNode.props.value = roughness;
-  const metalNode = createNode('number', c.x + 120, c.y + 80);
-  if(metalNode) metalNode.props.value = metallic;
-  [colorNode, roughNode, metalNode].forEach(n => { if(n){ n.el.remove(); renderNode(n); } });
-  renderEdges(); updateStats(); evaluate();
-}
-const _PRESET_RECIPES = {
-  metal:    () => _buildMaterialPreset('#c8c8d0', 0.25, 1.0),
-  plastic:  () => _buildMaterialPreset('#e0e0e0', 0.5, 0.0),
-  glass:    () => _buildMaterialPreset('#e0eef5', 0.05, 0.0),
-  fabric:   () => _buildMaterialPreset('#b39880', 0.9, 0.0),
-  emissive: () => _buildMaterialPreset('#fff3c0', 0.5, 0.0),
-};
-export function loadPreset(name){
-  const fn = _PRESET_RECIPES[name];
-  if(!fn){ toast('未知预设: '+name); return; }
-  fn();
-  toast('已加载预设: '+name);
-}
-
-/* 自定义画布预设：导出当前图（ComfyUI 格式对象）/ 整图恢复 */
-export function serializeGraphData(){ return _graphToComfy(); }
-export function loadCanvasPresetGraph(graph){
-  if(!graph || !Array.isArray(graph.nodes) || !graph.nodes.length){ toast('画布预设为空'); return; }
-  loadGraphJSON(typeof graph==='string' ? graph : JSON.stringify(graph));
-  setTimeout(fitView, 80);
-}
-
+/* 材质预设 / 画布预设 已移至 node-canvas/presets.js */
+import { loadPreset } from './node-canvas/presets.js'
+export { loadPreset, serializeGraphData, loadCanvasPresetGraph } from './node-canvas/presets.js'
 export function initNodeCanvas(){
   if(_initialized) return;
   // 小地图需要节点强调色：注入 NODE_DEFS 的读取方式（避免 viewport 反向依赖编辑器）
@@ -383,3 +138,4 @@ setHistoryHooks({ renderNode, renderEdges, updateStats, evaluate, toast });
 setGestureHooks({ showNodeMenu, showCanvasMenu });
 setProjectHooks({ graphToComfy: _graphToComfy, loadGraphJSON });
 wireToolbar();
+wireEvents();
