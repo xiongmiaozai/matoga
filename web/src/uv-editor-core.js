@@ -35,10 +35,8 @@ import { getTexDragData } from './utils.js'
 import { ZOOM_STEPS, IMG_CACHE_MAX, UNDO_MAX, HANDLE_HIT, HANDLE_DRAW, HANDLE_CURSOR } from './uvc/consts.js'
 import { drawCheckerboard, drawMissing } from './uvc/draw-helpers.js'
 import { fmtUvNum, readAsDataURL } from './uvc/utils.js'
+import { imgCache, loadTexImage, loadTexAnimInfo } from './uvc/tex-cache.js'
 
-/* 贴图 / 动画元数据缓存（跨实例共享，key 均为 URL） */
-const imgCache = new Map()   /* url → { img, ok, done } */
-const animCache = new Map()  /* mcmetaUrl → { meta, anim, parsedFor, failed } */
 
 export function createUvEditor(opts) {
   const container = opts && opts.container
@@ -390,6 +388,13 @@ export function createUvEditor(opts) {
   resizeObserver = new ResizeObserver(() => draw())
   resizeObserver.observe(canvasWrap)
 
+  /* 重绘节流：不可见时跳过，同一帧内多次请求合并为一次 */
+  function requestDraw() {
+    if (drawPending || !visible()) return
+    drawPending = true
+    requestAnimationFrame(() => { drawPending = false; draw() })
+  }
+
   /* ── 数据刷新 ─────────────────────────────────── */
 
   function refresh() {
@@ -409,7 +414,7 @@ export function createUvEditor(opts) {
     syncUndoButtons()
     notifyDirty()
     if (state.layout) {
-      for (const tex of state.layout.textures) { if (tex.url) loadTexImage(tex.url) }
+      for (const tex of state.layout.textures) { if (tex.url) loadTexImage(tex.url, requestDraw) }
     }
     if (!state.layout && state.edit) setEdit(false)
     rebuildChips()
@@ -445,70 +450,6 @@ export function createUvEditor(opts) {
     })
   }
 
-  /* ── 贴图加载（Image 缓存）────────────────────────── */
-
-  function loadTexImage(url) {
-    let rec = imgCache.get(url)
-    if (rec) return rec
-    if (imgCache.size > IMG_CACHE_MAX) imgCache.clear()
-    rec = { img: null, ok: false, done: false }
-    imgCache.set(url, rec)
-    const img = new Image()
-    img.onload = () => { rec.img = img; rec.ok = true; rec.done = true; requestDraw() }
-    img.onerror = () => { rec.img = null; rec.ok = false; rec.done = true; requestDraw() }
-    img.src = url
-    return rec
-  }
-
-  function requestDraw() {
-    if (drawPending || !visible()) return
-    drawPending = true
-    requestAnimationFrame(() => { drawPending = false; draw() })
-  }
-
-  /* ── 动画贴图元数据（.png.mcmeta）──────────────────────
-     UV 编辑器为静态分析工具：动画贴图固定显示首帧（帧 0 顶部区域），
-     面矩形 UV 坐标即帧内像素坐标；缓存 null = 非动画或仍在加载。
-     mcmeta 原始 JSON 只请求一次；解析在贴图真实尺寸就绪后重试
-     （首次调用时贴图可能未加载，临时尺寸会误判单帧 → 贴图 onload
-     后以 naturalWidth/Height 重新解析出帧区域）。 */
-
-  function tryParseAnim(entry, texW, texH) {
-    if (!entry || !entry.meta || entry.anim || entry.failed) return
-    const w = +texW || 0, h = +texH || 0
-    if (w <= 0 || h <= 0) return
-    const sizeKey = w + 'x' + h
-    if (entry.parsedFor === sizeKey) return   /* 同尺寸已解析（null 不重试） */
-    entry.parsedFor = sizeKey
-    const anim = parseAnimMeta(entry.meta, w, h)
-    if (anim) {
-      entry.anim = { frameW: anim.frameW, frameH: anim.frameH, frames: anim.frameCount }
-      requestDraw()
-    }
-  }
-
-  function loadTexAnimInfo(tex, texW, texH) {
-    const url = (tex && typeof tex.mcmetaUrl === 'string') ? tex.mcmetaUrl : null
-    if (!url) return null
-    if (!animCache.has(url)) {
-      animCache.set(url, { meta: null, anim: null, parsedFor: null, failed: false })
-      fetch(url)
-        .then(res => (res.ok ? res.json() : Promise.reject(new Error('HTTP ' + res.status))))
-        .then(meta => {
-          const entry = animCache.get(url)
-          if (!entry || typeof meta !== 'object' || !meta) return
-          entry.meta = meta
-          tryParseAnim(entry, texW, texH)
-        })
-        .catch(() => {
-          const entry = animCache.get(url)
-          if (entry) entry.failed = true
-        })
-    }
-    const entry = animCache.get(url)
-    tryParseAnim(entry, texW, texH)
-    return entry ? entry.anim : null
-  }
 
   /* ── 编辑：值应用（layout face + 原始 element 写回 → 联动钩子） ────────── */
 
@@ -822,7 +763,7 @@ export function createUvEditor(opts) {
     if (filename) tex.name = String(filename).replace(/\.[^.]+$/, '')
     state.customTex.add(i)
     rebuildChips()
-    loadTexImage(dataUrl)   /* 预载 → onload 后重绘 */
+    loadTexImage(dataUrl, requestDraw)   /* 预载 → onload 后重绘 */
     if (typeof hooks.onTexture === 'function') {
       try { Promise.resolve(hooks.onTexture(i, dataUrl, layout)).catch(() => {}) } catch {}
     }
@@ -1010,12 +951,12 @@ export function createUvEditor(opts) {
     const tex = layout.textures[state.activeTex]
     if (!tex) { showEmpty(); return }
     const removed = !tex.url
-    const rec = removed ? null : loadTexImage(tex.url)
+    const rec = removed ? null : loadTexImage(tex.url, requestDraw)
     const img = rec && rec.ok ? rec.img : null
     const texW = img ? img.naturalWidth : (layout.uvScale || 16)
     const texH = img ? img.naturalHeight : (layout.uvScale || 16)
     /* 动画贴图仅显示首帧（帧 0 顶部区域）：面 UV 坐标即帧内像素坐标 */
-    const animInfo = loadTexAnimInfo(tex, texW, texH)
+    const animInfo = loadTexAnimInfo(tex, texW, texH, requestDraw)
     const frameW = animInfo ? animInfo.frameW : texW
     const frameH = animInfo ? animInfo.frameH : texH
 
@@ -1157,7 +1098,7 @@ export function createUvEditor(opts) {
     const rec = imgCache.get(tex.url)
     const failed = rec && rec.done && !rec.ok
     const sizeStr = rec && rec.ok && rec.img ? `${rec.img.naturalWidth}×${rec.img.naturalHeight}` : ''
-    const animInfo = sizeStr ? loadTexAnimInfo(tex, rec.img.naturalWidth, rec.img.naturalHeight) : null
+    const animInfo = sizeStr ? loadTexAnimInfo(tex, rec.img.naturalWidth, rec.img.naturalHeight, requestDraw) : null
     const animStr = animInfo ? ` · ${t('uv.animFrames', { n: animInfo.frames })}` : ''
     const removedStr = !tex.url ? ` · ${t('uv.removed')}` : ''
     const customStr = (!tex.url || !state.customTex.has(state.activeTex)) ? '' : ` · ${t('uv.custom')}`
@@ -1168,7 +1109,7 @@ export function createUvEditor(opts) {
     } else if (state.hover) {
       const f = state.hover.face
       const parts = [`${t('uv.el')} ${layout.elements.indexOf(state.hover.el)}`, state.hover.key]
-      if (f.rotation) parts.push(`${t('uv.rot')} ${f.rotation}°`)
+      if (f.rotation) parts.push(`${t('uv.rot')} ${f.rotation}°`, requestDraw)
       if (f.mirror) parts.push(t('uv.mirror'))
       text += '  ·  ' + parts.join(' · ')
     } else if (state.edit && state.selected) {
