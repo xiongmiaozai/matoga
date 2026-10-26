@@ -34,7 +34,7 @@ import { getTexDragData } from './utils.js'
 
 import { ZOOM_STEPS, IMG_CACHE_MAX, UNDO_MAX, HANDLE_HIT, HANDLE_DRAW, HANDLE_CURSOR } from './uvc/consts.js'
 import { drawCheckerboard, drawMissing } from './uvc/draw-helpers.js'
-import { fmtUvNum, readAsDataURL } from './uvc/utils.js'
+import { fmtUvNum } from './uvc/utils.js'
 import { imgCache, loadTexImage, loadTexAnimInfo } from './uvc/tex-cache.js'
 import { applyFaceUvValues, applyFaceRotationValue, faceEntryOf, applyHistoryEntry, snapshotLayout } from './uvc/face-ops.js'
 import { hitRect as hitRectIn, hitHandle as hitHandleIn, isUsableTexUrl } from './uvc/hit-test.js'
@@ -44,6 +44,8 @@ import { buildUvUi } from './uvc/ui-build.js'
 import { createPainter } from './uvc/painter.js'
 import { createSelection } from './uvc/selection.js'
 import { createHistory } from './uvc/history.js'
+import { createDrag } from './uvc/drag.js'
+import { createTextureIO } from './uvc/texture-io.js'
 
 
 export function createUvEditor(opts) {
@@ -280,55 +282,24 @@ export function createUvEditor(opts) {
 
   /* ── 拖拽编辑（移动 / 手柄缩放）────────────────────── */
 
-  function startDrag(e, mode, mx, my) {
-    const rc = selectedRect() || hitRect(mx, my)
-    if (!rc) return
-    state.drag = { mode, rc, sx: mx, sy: my, orig: [...rc.face.uv], moved: false }
-    try { canvas.setPointerCapture && canvas.setPointerCapture(e.pointerId) } catch {}
+  let _drag = null
+  function getDrag() {
+    if (!_drag) {
+      _drag = createDrag({
+        state, hooks,
+        getCanvas: () => canvas,
+        selectedRect: (...a) => selectedRect(...a),
+        hitRect: (mx, my) => hitRect(mx, my),
+        syncEditInputs: (...a) => syncEditInputs(...a),
+        updateStatus: (...a) => updateStatus(...a),
+        requestDraw: (...a) => requestDraw(...a),
+      })
+    }
+    return _drag
   }
 
-  function onDragMove(mx, my, altKey) {
-    const d = state.drag
-    if (!d) return
-    const px = state.px || 1
-    const scale = (state.layout && state.layout.uvScale) || 16
-    const step = altKey ? 0.25 : 1
-    const snap = v => Math.round(v / step) * step
-    const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi)
-    let uv
-    if (d.mode === 'move') {
-      let dx = snap((mx - d.sx) / px)
-      let dy = snap((my - d.sy) / px)
-      const [u1, v1, u2, v2] = d.orig
-      dx = clamp(dx, -Math.min(u1, u2), scale - Math.max(u1, u2))
-      dy = clamp(dy, -Math.min(v1, v2), scale - Math.max(v1, v2))
-      uv = [u1 + dx, v1 + dy, u2 + dx, v2 + dy]
-    } else {
-      const [u1, v1, u2, v2] = d.orig
-      let minX = Math.min(u1, u2), maxX = Math.max(u1, u2)
-      let minY = Math.min(v1, v2), maxY = Math.max(v1, v2)
-      const U = clamp(snap(mx / px), 0, scale)
-      const V = clamp(snap(my / px), 0, scale)
-      const m = d.mode
-      if (m.includes('w')) minX = clamp(Math.min(maxX - 1, U), 0, scale)
-      if (m.includes('e')) maxX = clamp(Math.max(minX + 1, U), 0, scale)
-      if (m.includes('n')) minY = clamp(Math.min(maxY - 1, V), 0, scale)
-      if (m.includes('s')) maxY = clamp(Math.max(minY + 1, V), 0, scale)
-      uv = [
-        u1 <= u2 ? minX : maxX,
-        v1 <= v2 ? minY : maxY,
-        u1 <= u2 ? maxX : minX,
-        v1 <= v2 ? maxY : minY,
-      ]
-    }
-    const before = d.rc.face.uv
-    if (uv.every((v, i) => v === before[i])) return
-    d.moved = true
-    applyFaceUvValues(d.rc.el, d.rc.key, uv, hooks)
-    syncEditInputs()
-    updateStatus()
-    requestDraw()
-  }
+  function startDrag(e, mode, mx, my) { return getDrag().startDrag(e, mode, mx, my) }
+  function onDragMove(mx, my, altKey) { return getDrag().onDragMove(mx, my, altKey) }
 
   function hitRect(mx, my) { return hitRectIn(state.rects, mx, my) }
   function hitHandle(mx, my) { return hitHandleIn(state.handles, mx, my) }
@@ -337,82 +308,25 @@ export function createUvEditor(opts) {
      多文件：从当前选中贴图槽位起按顺序替换（画师一次导出多张贴图逐槽位对应）；
      超出贴图槽数的文件忽略——新增空槽位无意义（无 face 引用的贴图不会显示） */
 
-  async function handleTextureFiles(files) {
-    const list = Array.from(files || []).filter(f => f && /^image\//.test(String(f.type || '')))
-    if (!list.length || !state.layout) return
-    const start = state.activeTex
-    let replaced = 0
-    for (let i = 0; i < list.length; i++) {
-      const texIndex = start + i
-      if (texIndex >= state.layout.textures.length) break
-      try {
-        const dataUrl = await readAsDataURL(list[i])
-        applyCustomTexture(dataUrl, list[i].name, texIndex)
-        replaced++
-      } catch {}
+  /* ── 自定义贴图（上传 / 拖放 → dataURL 替换 + 换图钩子） ────────── */
+
+  let _texIO = null
+  function getTexIO() {
+    if (!_texIO) {
+      _texIO = createTextureIO({
+        state, hooks, t, isUsableTexUrl, rebuildChips, requestDraw, notifyDirty, flashNotice,
+        draw: (...a) => draw(...a),
+        updateStatus: (...a) => updateStatus(...a),
+      })
     }
-    if (replaced > 1) flashNotice(t('uv.replacedN', { n: replaced }))
+    return _texIO
   }
 
-  function applyCustomTexture(dataUrl, filename, texIndex) {
-    const layout = state.layout
-    if (!layout || !isUsableTexUrl(dataUrl)) return
-    const i = (texIndex != null && Number.isFinite(+texIndex)) ? +texIndex : state.activeTex
-    const tex = layout.textures[i]
-    if (!tex) return
-    tex.url = dataUrl
-    tex.mcmetaUrl = null   /* 自定义贴图无动画元数据 */
-    if (filename) tex.name = String(filename).replace(/\.[^.]+$/, '')
-    state.customTex.add(i)
-    rebuildChips()
-    loadTexImage(dataUrl, requestDraw)   /* 预载 → onload 后重绘 */
-    if (typeof hooks.onTexture === 'function') {
-      try { Promise.resolve(hooks.onTexture(i, dataUrl, layout)).catch(() => {}) } catch {}
-    }
-    updateStatus()
-    draw()
-    notifyDirty()
-  }
+  function handleTextureFiles(files) { return getTexIO().handleTextureFiles(files) }
+  function applyCustomTexture(dataUrl, filename, texIndex) { return getTexIO().applyCustomTexture(dataUrl, filename, texIndex) }
+  function removeTexture(texIndex) { return getTexIO().removeTexture(texIndex) }
+  function pickLibraryTexture() { return getTexIO().pickLibraryTexture() }
 
-  /* 可用作贴图的 URL：dataURL / http(s) / 站内相对路径（/api/...） */
-  /* 移除材质：清空贴图槽位引用（face.tex 索引保持不变，不删除槽位本身）；
-     UV 画布仅剩棋盘底 + 面矩形，3D 视口面变纯色（onTexture 空串 → 宿主清除材质）；
-     重新上传 / 拖入 / 贴图库选择即可恢复 */
-  function removeTexture(texIndex) {
-    const layout = state.layout
-    if (!layout) return
-    const i = (texIndex != null && Number.isFinite(+texIndex)) ? +texIndex : state.activeTex
-    const tex = layout.textures[i]
-    if (!tex || !tex.url) return
-    tex.url = ''
-    tex.mcmetaUrl = null
-    state.customTex.add(i)
-    rebuildChips()
-    updateStatus()
-    draw()
-    notifyDirty()
-    if (typeof hooks.onTexture === 'function') {
-      try { Promise.resolve(hooks.onTexture(i, '', layout)).catch(() => {}) } catch {}
-    }
-  }
-
-  /* 贴图库选择：hooks.pickTexture 可覆盖（返回 Promise<{name,url}|null>）；
-     默认动态加载 uv-tex-picker 浮窗（总资产库贴图 → raw URL） */
-  async function pickLibraryTexture() {
-    if (!state.layout) return
-    let picked = null
-    try {
-      if (typeof hooks.pickTexture === 'function') {
-        picked = await hooks.pickTexture()
-      } else {
-        const m = await import('./uv-tex-picker.js')
-        picked = await m.openTexPicker()
-      }
-    } catch (e) { console.error('[uv-editor] tex-picker', e) }
-    if (picked && isUsableTexUrl(picked.url)) {
-      applyCustomTexture(picked.url, picked.name || null)
-    }
-  }
 
   /* 状态栏短暂提示（3s 后自动让位给常规状态文本） */
   function flashNotice(msg) {
