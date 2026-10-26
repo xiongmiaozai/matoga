@@ -33,6 +33,8 @@ import { parseAnimMeta, defaultFaceUv } from './mc-model-viewer.js'
 import { getTexDragData } from './utils.js'
 
 import { ZOOM_STEPS, IMG_CACHE_MAX, UNDO_MAX, HANDLE_HIT, HANDLE_DRAW, HANDLE_CURSOR } from './uvc/consts.js'
+import { drawCheckerboard, drawMissing } from './uvc/draw-helpers.js'
+import { fmtUvNum, readAsDataURL } from './uvc/utils.js'
 
 /* 贴图 / 动画元数据缓存（跨实例共享，key 均为 URL） */
 const imgCache = new Map()   /* url → { img, ok, done } */
@@ -792,17 +794,6 @@ export function createUvEditor(opts) {
      多文件：从当前选中贴图槽位起按顺序替换（画师一次导出多张贴图逐槽位对应）；
      超出贴图槽数的文件忽略——新增空槽位无意义（无 face 引用的贴图不会显示） */
 
-  function readAsDataURL(file) {
-    return new Promise((resolve, reject) => {
-      try {
-        const reader = new FileReader()
-        reader.onload = () => resolve(String(reader.result))
-        reader.onerror = () => reject(new Error('read fail'))
-        reader.readAsDataURL(file)
-      } catch (e) { reject(e) }
-    })
-  }
-
   async function handleTextureFiles(files) {
     const list = Array.from(files || []).filter(f => f && /^image\//.test(String(f.type || '')))
     if (!list.length || !state.layout) return
@@ -1052,14 +1043,14 @@ export function createUvEditor(opts) {
     ctx.imageSmoothingEnabled = false
 
     /* 透明棋盘底 */
-    drawCheckerboard(W, H, Math.max(4, Math.round(px * 2)))
+    drawCheckerboard(ctx, W, H, Math.max(4, Math.round(px * 2)))
 
     /* 贴图底图（缺失时红斜纹警示；动画贴图取首帧源区域；已移除仅剩棋盘底） */
     if (img) {
       if (animInfo) ctx.drawImage(img, 0, 0, frameW, frameH, 0, 0, W, H)
       else ctx.drawImage(img, 0, 0, W, H)
     } else if (!removed) {
-      drawMissing(W, H)
+      drawMissing(ctx, W, H)
     }
 
     /* uvScale 网格（格子足够大才画，避免过密） */
@@ -1136,31 +1127,6 @@ export function createUvEditor(opts) {
     updateStatus()
   }
 
-  function drawCheckerboard(W, H, size) {
-    const s = Math.max(4, size)
-    ctx.fillStyle = '#3a3a44'
-    ctx.fillRect(0, 0, W, H)
-    ctx.fillStyle = '#2e2e36'
-    for (let y = 0; y < H; y += s) {
-      for (let x = ((y / s) % 2) * s; x < W; x += s * 2) {
-        ctx.fillRect(x, y, Math.min(s, W - x), Math.min(s, H - y))
-      }
-    }
-  }
-
-  function drawMissing(W, H) {
-    ctx.fillStyle = 'rgba(120,32,32,.25)'
-    ctx.fillRect(0, 0, W, H)
-    ctx.strokeStyle = 'rgba(230,74,74,.5)'
-    ctx.lineWidth = 2
-    ctx.beginPath()
-    const step = Math.max(12, W / 8)
-    for (let p = -H; p < W; p += step) {
-      ctx.moveTo(p, 0); ctx.lineTo(p + H, H)
-    }
-    ctx.stroke()
-  }
-
   function showEmpty() {
     if (!canvas || !emptyEl) return
     canvas.style.display = 'none'
@@ -1175,11 +1141,6 @@ export function createUvEditor(opts) {
     emptyEl.appendChild(title)
     emptyEl.appendChild(hint)
     if (statusEl) statusEl.textContent = ''
-  }
-
-  function fmtUvNum(v) {
-    const n = +v
-    return Number.isFinite(n) && !Number.isInteger(n) ? Math.round(n * 100) / 100 : n
   }
 
   function updateStatus() {
