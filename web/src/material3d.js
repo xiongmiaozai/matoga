@@ -5,29 +5,19 @@
  */
 
 import * as THREE from 'three'
+import { S, FLY_KEYS, FLY_SPEED, FLY_BOOST } from './m3d/state.js'
 import { fileUrl, isImageFile } from './utils.js'
 import { HDRLoader } from './hdr-loader.js'
 import { loadEnvTexture, extFromUrl } from './hdr-env-loader.js'
 import { Sky } from './sky.js'
 import { t as _t } from './i18n.js'
 
-let scene, camera, renderer, animationId, pmrem, envTexture, pmremTexture
-let isWebGL2 = false
 
 
-let meshLeft, meshRight, labelLeft, labelRight
-let groundMesh, gridHelper, lightGroup
-let customModelGroup = null   /* 自定义模型（MC .json / .bbmodel）托管容器，非空时内置预览 mesh 隐藏 */
-let container = null
-let initialized = false
-const hosts = new Set()
-let hostObserver = null
-let containerResizeObserver = null
-let currentGeo = 'cube'
 
 function _loadingEls() {
-  if (container) {
-    const el = container.querySelector('.m3d-loading')
+  if (S.container) {
+    const el = S.container.querySelector('.m3d-loading')
     return el ? [el] : []
   }
   return document.querySelectorAll('.m3d-loading')
@@ -47,71 +37,9 @@ function setLoadingProgress(pct) {
     if (f) f.style.width = Math.round(pct * 100) + '%'
   })
 }
-let emissiveIntensity = 1.0
-let normalScale = 1.0
-let materialFormat = 'auto'
-let formatDetectCallback = null
-let heightDetectCallback = null
-let sourceSide = 'dual'
-let parallaxScale = 0.05
-let parallaxSteps = 32.0
-let parallaxMode = 2.0
-let parallaxAdaptive = 1.0
-let parallaxEnabled = true
-let parallaxShadow = 0.0
-const _lightDirTmp = new THREE.Vector3()
-let currentLightPreset = 'studio'
-let currentEnvMode = 'custom'
-let groundVisible = false
-let envIntensity = 0.5
-let hdrTexture = null
-let hdrTextureOriginal = null
-let hdrTextureRotated = null
-let hdrRotation = 0
-let hdrUsage = 'both'
-let hdrInfo = null
-let hdrRotateTimer = null
-let skyMesh = null
-let skyEnvTexture = null
-let skySunLight = null
-let skyTurbidity = 3
-let skyRayleigh = 2.5
-let skyMieCoefficient = 0.005
-let skyMieDirectionalG = 0.8
-let skySunElevation = 15
-let skySunAzimuth = 180
 
-let skyTintHex = 0xa0c0ff
-let skyBakeTimer = null
-const _skyTint = new THREE.Color()
-let opacityMode = 'auto'
-let opacityValue = 1.0
-let transmissionValue = 0.0
-let iorValue = 1.5
-let clearcoatValue = 0.0
-let textureFilter = 'nearest'
-let mipmapsEnabled = true
-let anisotropyLevel = 4
-let alignOfficial = false
-let maxAnisotropy = 1
 
-let rotX = 0, rotY = 0, targetRotX = 0, targetRotY = 0
-let isDragging = false, lastX = 0, lastY = 0
-let camDist = 3, targetCamDist = 3
-let autoRotate = true
 
-let camPanX = 0, camPanY = 0, targetPanX = 0, targetPanY = 0
-let dragMode = null
-let freeCamMode = false
-const flyPos = new THREE.Vector3(0, 0.5, 3)
-let flyYaw = 0, flyPitch = 0
-const flyKeys = Object.create(null)
-const FLY_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight'])
-const FLY_SPEED = 3, FLY_BOOST = 2.5
-let lastFrameTime = 0
-const _flyForward = new THREE.Vector3()
-const _flyRight = new THREE.Vector3()
-const _flyMove = new THREE.Vector3()
 
 const LIGHT_PRESETS = {
   studio: {
@@ -275,10 +203,10 @@ function cloneLightConfig(config) {
 }
 
 function rebuildLights(config) {
-  if (!lightGroup) return
-  while (lightGroup.children.length) lightGroup.remove(lightGroup.children[0])
+  if (!S.lightGroup) return
+  while (S.lightGroup.children.length) S.lightGroup.remove(S.lightGroup.children[0])
   const ambient = new THREE.AmbientLight(config.ambient.color, config.ambient.intensity)
-  lightGroup.add(ambient)
+  S.lightGroup.add(ambient)
   for (const l of config.lights) {
     const dir = new THREE.DirectionalLight(l.color, l.intensity)
     dir.position.set(l.pos[0], l.pos[1], l.pos[2])
@@ -287,147 +215,146 @@ function rebuildLights(config) {
     dir.shadow.camera.left = -3; dir.shadow.camera.right = 3
     dir.shadow.camera.top = 3; dir.shadow.camera.bottom = -3
     dir.shadow.camera.near = 0.1; dir.shadow.camera.far = 15
-    lightGroup.add(dir)
+    S.lightGroup.add(dir)
   }
 }
 
-let customLightConfig = null
 
 function applyLightPreset(presetKey) {
-  if (!initialized || !LIGHT_PRESETS[presetKey]) return
-  currentLightPreset = presetKey
+  if (!S.initialized || !LIGHT_PRESETS[presetKey]) return
+  S.currentLightPreset = presetKey
   const preset = LIGHT_PRESETS[presetKey]
-  customLightConfig = cloneLightConfig(preset)
+  S.customLightConfig = cloneLightConfig(preset)
   rebuildLights(preset)
-  if (currentEnvMode === 'custom') {
-    if (envTexture) envTexture.dispose()
-    envTexture = createEnvTexture(presetKey)
-    if (pmremTexture) pmremTexture.dispose()
-    pmremTexture = pmrem.fromEquirectangular(envTexture)
-    scene.environment = pmremTexture.texture
-    scene.background = new THREE.Color(preset.bg)
+  if (S.currentEnvMode === 'custom') {
+    if (S.envTexture) S.envTexture.dispose()
+    S.envTexture = createEnvTexture(presetKey)
+    if (S.pmremTexture) S.pmremTexture.dispose()
+    S.pmremTexture = S.pmrem.fromEquirectangular(S.envTexture)
+    S.scene.environment = S.pmremTexture.texture
+    S.scene.background = new THREE.Color(preset.bg)
   }
-  if (scene) scene.environmentIntensity = envIntensity; for (const m of [meshLeft, meshRight]) { if (m) m.material.envMapIntensity = envIntensity }
+  if (S.scene) S.scene.environmentIntensity = S.envIntensity; for (const m of [S.meshLeft, S.meshRight]) { if (m) m.material.envMapIntensity = S.envIntensity }
 }
 
 function applyCustomLightConfig(config) {
-  if (!initialized || !config || !config.ambient || !Array.isArray(config.lights)) return
-  customLightConfig = cloneLightConfig(config)
-  rebuildLights(customLightConfig)
-  if (currentEnvMode === 'custom') {
-    scene.background = new THREE.Color(customLightConfig.bg)
+  if (!S.initialized || !config || !config.ambient || !Array.isArray(config.lights)) return
+  S.customLightConfig = cloneLightConfig(config)
+  rebuildLights(S.customLightConfig)
+  if (S.currentEnvMode === 'custom') {
+    S.scene.background = new THREE.Color(S.customLightConfig.bg)
   }
-  if (scene) scene.environmentIntensity = envIntensity; for (const m of [meshLeft, meshRight]) { if (m) m.material.envMapIntensity = envIntensity }
+  if (S.scene) S.scene.environmentIntensity = S.envIntensity; for (const m of [S.meshLeft, S.meshRight]) { if (m) m.material.envMapIntensity = S.envIntensity }
 }
 
 function updateSkySunPosition() {
-  if (!skyMesh) return
-  const u = skyMesh.material.uniforms
-  const elevation = skySunElevation * Math.PI / 180
-  const azimuth = skySunAzimuth * Math.PI / 180
+  if (!S.skyMesh) return
+  const u = S.skyMesh.material.uniforms
+  const elevation = S.skySunElevation * Math.PI / 180
+  const azimuth = S.skySunAzimuth * Math.PI / 180
   const phi = Math.PI / 2 - elevation
   const sun = new THREE.Vector3()
   sun.setFromSphericalCoords(1, phi, azimuth)
   u.sunPosition.value.copy(sun)
-  u.turbidity.value = skyTurbidity
-  u.rayleigh.value = skyRayleigh
-  u.mieCoefficient.value = skyMieCoefficient
-  u.mieDirectionalG.value = skyMieDirectionalG
+  u.turbidity.value = S.skyTurbidity
+  u.rayleigh.value = S.skyRayleigh
+  u.mieCoefficient.value = S.skyMieCoefficient
+  u.mieDirectionalG.value = S.skyMieDirectionalG
 
-  _skyTint.setHex(skyTintHex)
-  u.skyTint.value.set(_skyTint.r, _skyTint.g, _skyTint.b)
-  if (skySunLight) {
-    skySunLight.position.copy(sun).multiplyScalar(10)
+  S._skyTint.setHex(S.skyTintHex)
+  u.skyTint.value.set(S._skyTint.r, S._skyTint.g, S._skyTint.b)
+  if (S.skySunLight) {
+    S.skySunLight.position.copy(sun).multiplyScalar(10)
     const dayFactor = Math.max(0, Math.sin(elevation))
-    skySunLight.intensity = 2.5 * dayFactor
+    S.skySunLight.intensity = 2.5 * dayFactor
   }
 }
 
 function bakeSkyEnvironment() {
-  if (!skyMesh || !pmrem) return
-  const u = skyMesh.material.uniforms
+  if (!S.skyMesh || !S.pmrem) return
+  const u = S.skyMesh.material.uniforms
   const prevSunDisc = u.showSunDisc.value
   u.showSunDisc.value = 0
   const skyScene = new THREE.Scene()
-  scene.remove(skyMesh)
-  skyScene.add(skyMesh)
-  if (skyEnvTexture) skyEnvTexture.dispose()
-  skyEnvTexture = pmrem.fromScene(skyScene)
-  scene.environment = skyEnvTexture.texture
-  skyScene.remove(skyMesh)
-  scene.add(skyMesh)
+  S.scene.remove(S.skyMesh)
+  skyScene.add(S.skyMesh)
+  if (S.skyEnvTexture) S.skyEnvTexture.dispose()
+  S.skyEnvTexture = S.pmrem.fromScene(skyScene)
+  S.scene.environment = S.skyEnvTexture.texture
+  skyScene.remove(S.skyMesh)
+  S.scene.add(S.skyMesh)
   u.showSunDisc.value = prevSunDisc
-  if (scene) scene.environmentIntensity = envIntensity; for (const m of [meshLeft, meshRight]) { if (m) m.material.envMapIntensity = envIntensity }
+  if (S.scene) S.scene.environmentIntensity = S.envIntensity; for (const m of [S.meshLeft, S.meshRight]) { if (m) m.material.envMapIntensity = S.envIntensity }
 }
 
 function scheduleSkyBake() {
-  clearTimeout(skyBakeTimer)
-  skyBakeTimer = setTimeout(() => {
-    skyBakeTimer = null
-    if (initialized && currentEnvMode === 'sky') bakeSkyEnvironment()
+  clearTimeout(S.skyBakeTimer)
+  S.skyBakeTimer = setTimeout(() => {
+    S.skyBakeTimer = null
+    if (S.initialized && S.currentEnvMode === 'sky') bakeSkyEnvironment()
   }, 120)
 }
 
 function applyProceduralSky() {
-  if (!initialized) return
-  if (hdrTexture) { hdrTexture.dispose(); hdrTexture = null }
-  if (envTexture) { envTexture.dispose(); envTexture = null }
-  if (pmremTexture) { pmremTexture.dispose(); pmremTexture = null }
-  if (lightGroup) { while (lightGroup.children.length) lightGroup.remove(lightGroup.children[0]) }
+  if (!S.initialized) return
+  if (S.hdrTexture) { S.hdrTexture.dispose(); S.hdrTexture = null }
+  if (S.envTexture) { S.envTexture.dispose(); S.envTexture = null }
+  if (S.pmremTexture) { S.pmremTexture.dispose(); S.pmremTexture = null }
+  if (S.lightGroup) { while (S.lightGroup.children.length) S.lightGroup.remove(S.lightGroup.children[0]) }
   const ambient = new THREE.AmbientLight(0xffffff, 0.15)
-  lightGroup.add(ambient)
-  if (!skySunLight) {
-    skySunLight = new THREE.DirectionalLight(0xffffff, 2.5)
-    skySunLight.castShadow = true
-    skySunLight.shadow.mapSize.set(1024, 1024)
-    skySunLight.shadow.camera.left = -3; skySunLight.shadow.camera.right = 3
-    skySunLight.shadow.camera.top = 3; skySunLight.shadow.camera.bottom = -3
-    skySunLight.shadow.camera.near = 0.1; skySunLight.shadow.camera.far = 50
+  S.lightGroup.add(ambient)
+  if (!S.skySunLight) {
+    S.skySunLight = new THREE.DirectionalLight(0xffffff, 2.5)
+    S.skySunLight.castShadow = true
+    S.skySunLight.shadow.mapSize.set(1024, 1024)
+    S.skySunLight.shadow.camera.left = -3; S.skySunLight.shadow.camera.right = 3
+    S.skySunLight.shadow.camera.top = 3; S.skySunLight.shadow.camera.bottom = -3
+    S.skySunLight.shadow.camera.near = 0.1; S.skySunLight.shadow.camera.far = 50
   }
-  lightGroup.add(skySunLight)
-  if (!skyMesh) {
-    skyMesh = new Sky()
-    skyMesh.scale.setScalar(10000)
-    scene.add(skyMesh)
+  S.lightGroup.add(S.skySunLight)
+  if (!S.skyMesh) {
+    S.skyMesh = new Sky()
+    S.skyMesh.scale.setScalar(10000)
+    S.scene.add(S.skyMesh)
   }
   updateSkySunPosition()
-  scene.background = null
+  S.scene.background = null
   bakeSkyEnvironment()
 }
 
 function applyHDREnvMode() {
-  if (!initialized) return
-  if (skyMesh) { scene.remove(skyMesh); skyMesh = null }
-  if (skyEnvTexture) { skyEnvTexture.dispose(); skyEnvTexture = null }
-  if (skySunLight) { lightGroup.remove(skySunLight); skySunLight = null }
-  if (envTexture) { envTexture.dispose(); envTexture = null }
-  if (pmremTexture) { pmremTexture.dispose(); pmremTexture = null }
-  if (lightGroup) { while (lightGroup.children.length) lightGroup.remove(lightGroup.children[0]) }
+  if (!S.initialized) return
+  if (S.skyMesh) { S.scene.remove(S.skyMesh); S.skyMesh = null }
+  if (S.skyEnvTexture) { S.skyEnvTexture.dispose(); S.skyEnvTexture = null }
+  if (S.skySunLight) { S.lightGroup.remove(S.skySunLight); S.skySunLight = null }
+  if (S.envTexture) { S.envTexture.dispose(); S.envTexture = null }
+  if (S.pmremTexture) { S.pmremTexture.dispose(); S.pmremTexture = null }
+  if (S.lightGroup) { while (S.lightGroup.children.length) S.lightGroup.remove(S.lightGroup.children[0]) }
   const ambient = new THREE.AmbientLight(0xffffff, 0.1)
-  lightGroup.add(ambient)
-  if (scene) scene.environmentRotation.set(0, 0, 0)
-  if (hdrTextureOriginal) {
-    const src = hdrTextureRotated || hdrTextureOriginal
-    hdrTexture = src
-    if (hdrUsage === 'env' || hdrUsage === 'both') scene.environment = src
-    else scene.environment = null
-    if (hdrUsage === 'bg' || hdrUsage === 'both') {
-      scene.background = src
+  S.lightGroup.add(ambient)
+  if (S.scene) S.scene.environmentRotation.set(0, 0, 0)
+  if (S.hdrTextureOriginal) {
+    const src = S.hdrTextureRotated || S.hdrTextureOriginal
+    S.hdrTexture = src
+    if (S.hdrUsage === 'env' || S.hdrUsage === 'both') S.scene.environment = src
+    else S.scene.environment = null
+    if (S.hdrUsage === 'bg' || S.hdrUsage === 'both') {
+      S.scene.background = src
     } else {
-      scene.background = new THREE.Color(0x1a1a2e)
+      S.scene.background = new THREE.Color(0x1a1a2e)
     }
   } else {
-    hdrTexture = null
-    scene.environment = null
-    scene.background = new THREE.Color(0x1a1a2e)
+    S.hdrTexture = null
+    S.scene.environment = null
+    S.scene.background = new THREE.Color(0x1a1a2e)
   }
-  if (scene) scene.environmentIntensity = envIntensity; for (const m of [meshLeft, meshRight]) { if (m) m.material.envMapIntensity = envIntensity }
+  if (S.scene) S.scene.environmentIntensity = S.envIntensity; for (const m of [S.meshLeft, S.meshRight]) { if (m) m.material.envMapIntensity = S.envIntensity }
 }
 
 function ensureRotatedTexture() {
-  if (hdrTextureRotated) { hdrTextureRotated.dispose(); hdrTextureRotated = null }
-  if (hdrTextureOriginal && (hdrRotation % 360)) {
-    hdrTextureRotated = rotateTextureData(hdrTextureOriginal, hdrRotation)
+  if (S.hdrTextureRotated) { S.hdrTextureRotated.dispose(); S.hdrTextureRotated = null }
+  if (S.hdrTextureOriginal && (S.hdrRotation % 360)) {
+    S.hdrTextureRotated = rotateTextureData(S.hdrTextureOriginal, S.hdrRotation)
   }
 }
 
@@ -465,17 +392,17 @@ function rotateTextureData(tex, angleDeg) {
 
 
 function setEnvMode(mode) {
-  if (!initialized || !['custom', 'sky', 'hdri'].includes(mode)) return
-  currentEnvMode = mode
+  if (!S.initialized || !['custom', 'sky', 'hdri'].includes(mode)) return
+  S.currentEnvMode = mode
   if (mode === 'sky') {
     applyProceduralSky()
   } else if (mode === 'hdri') {
     applyHDREnvMode()
   } else {
-    if (skyMesh) { scene.remove(skyMesh); skyMesh = null }
-    if (skyEnvTexture) { skyEnvTexture.dispose(); skyEnvTexture = null }
-    if (skySunLight) { lightGroup.remove(skySunLight); skySunLight = null }
-    applyLightPreset(currentLightPreset)
+    if (S.skyMesh) { S.scene.remove(S.skyMesh); S.skyMesh = null }
+    if (S.skyEnvTexture) { S.skyEnvTexture.dispose(); S.skyEnvTexture = null }
+    if (S.skySunLight) { S.lightGroup.remove(S.skySunLight); S.skySunLight = null }
+    applyLightPreset(S.currentLightPreset)
   }
 }
 
@@ -663,7 +590,7 @@ function parseIncludes(src) {
 function applyOpacityMode(material) {
   const hasAlpha = material.userData.hasAlpha || false
   const hasSemiTrans = material.userData.hasSemiTrans || false
-  const mode = opacityMode
+  const mode = S.opacityMode
   if (mode === 'cutout') {
     material.transparent = false
     material.alphaTest = hasAlpha ? 0.5 : 0
@@ -675,8 +602,8 @@ function applyOpacityMode(material) {
   } else if (mode === 'glass') {
     material.transparent = true
     material.alphaTest = 0
-    material.transmission = transmissionValue
-    material.ior = iorValue
+    material.transmission = S.transmissionValue
+    material.ior = S.iorValue
     material.thickness = 0.5
   } else {
     if (hasSemiTrans) {
@@ -691,9 +618,9 @@ function applyOpacityMode(material) {
     }
     material.transmission = 0
   }
-  if (opacityValue < 1.0) {
+  if (S.opacityValue < 1.0) {
     material.transparent = true
-    material.opacity = opacityValue
+    material.opacity = S.opacityValue
   } else {
     material.opacity = 1.0
   }
@@ -711,25 +638,25 @@ function applyHeightFilter(tex) {
 
 function applyTextureFilter(tex) {
   if (!tex) return
-  if (alignOfficial) {
+  if (S.alignOfficial) {
     tex.generateMipmaps = true
     tex.magFilter = THREE.NearestFilter
     tex.minFilter = THREE.NearestMipmapLinearFilter
     tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping
-    tex.anisotropy = Math.min(anisotropyLevel, maxAnisotropy)
+    tex.anisotropy = Math.min(S.anisotropyLevel, S.maxAnisotropy)
     tex.needsUpdate = true
     return
   }
-  const useMipmap = mipmapsEnabled && (textureFilter === 'trilinear' || textureFilter === 'anisotropic')
+  const useMipmap = S.mipmapsEnabled && (S.textureFilter === 'trilinear' || S.textureFilter === 'anisotropic')
   tex.generateMipmaps = useMipmap
-  if (textureFilter === 'nearest') {
+  if (S.textureFilter === 'nearest') {
     tex.magFilter = THREE.NearestFilter
     tex.minFilter = useMipmap ? THREE.NearestMipmapNearestFilter : THREE.NearestFilter
   } else {
     tex.magFilter = THREE.LinearFilter
     tex.minFilter = useMipmap ? THREE.LinearMipmapLinearFilter : THREE.LinearFilter
   }
-  tex.anisotropy = (textureFilter === 'anisotropic' && useMipmap) ? Math.min(anisotropyLevel, maxAnisotropy) : 1
+  tex.anisotropy = (S.textureFilter === 'anisotropic' && useMipmap) ? Math.min(S.anisotropyLevel, S.maxAnisotropy) : 1
   tex.needsUpdate = true
 }
 
@@ -745,8 +672,8 @@ function collectMaterialTextures(m) {
 }
 
 function applyFilterToAllTextures() {
-  if (!initialized) return
-  for (const mesh of [meshLeft, meshRight]) {
+  if (!S.initialized) return
+  for (const mesh of [S.meshLeft, S.meshRight]) {
     if (!mesh || !mesh.material) continue
     for (const tex of collectMaterialTextures(mesh.material)) applyTextureFilter(tex)
     mesh.material.needsUpdate = true
@@ -760,12 +687,12 @@ function makeMaterial() {
   mat.onBeforeCompile = (shader) => {
     const prev = mat.userData.shaderRefs
     shader.uniforms.heightMap = { value: prev ? prev.heightMap.value : mat.userData.pendingHeightMap }
-    shader.uniforms.hasHeightMap = { value: prev ? prev.hasHeightMap.value : (mat.userData.pendingHeightMap && parallaxEnabled ? 1.0 : 0.0) }
-    shader.uniforms.parallaxScale = { value: parallaxScale }
-    shader.uniforms.parallaxSteps = { value: parallaxSteps }
-    shader.uniforms.parallaxMode = { value: parallaxMode }
-    shader.uniforms.parallaxAdaptive = { value: parallaxAdaptive }
-    shader.uniforms.parallaxShadow = { value: parallaxShadow }
+    shader.uniforms.hasHeightMap = { value: prev ? prev.hasHeightMap.value : (mat.userData.pendingHeightMap && S.parallaxEnabled ? 1.0 : 0.0) }
+    shader.uniforms.parallaxScale = { value: S.parallaxScale }
+    shader.uniforms.parallaxSteps = { value: S.parallaxSteps }
+    shader.uniforms.parallaxMode = { value: S.parallaxMode }
+    shader.uniforms.parallaxAdaptive = { value: S.parallaxAdaptive }
+    shader.uniforms.parallaxShadow = { value: S.parallaxShadow }
     shader.uniforms.uHeightLightDir = { value: prev ? prev.uHeightLightDir.value : new THREE.Vector3(0, 1, 0) }
     shader.uniforms.uHeightTexSize = { value: prev ? prev.uHeightTexSize.value : (mat.userData.pendingHeightMap ? new THREE.Vector2(mat.userData.pendingHeightMap.image.width, mat.userData.pendingHeightMap.image.height) : new THREE.Vector2(256, 256)) }
     mat.userData.shaderRefs = shader.uniforms
@@ -825,13 +752,13 @@ function makeMaterial() {
           float Plen = length(P);
           P *= 1.0 / (1.0 + max(Plen - 0.1, 0.0) * 4.0);
           float uvFade = 1.0;
-          ${isWebGL2 ? 'uvFade = 1.0 - smoothstep(0.15, 0.45, length(fwidth(parallaxUv)));' : ''}
+          ${S.isWebGL2 ? 'uvFade = 1.0 - smoothstep(0.15, 0.45, length(fwidth(parallaxUv)));' : ''}
           P *= uvFade;
           P *= smoothstep(0.0, 0.2, viewDotN);
           float hMip = 0.0;
-          ${isWebGL2 ? 'hMip = log2(max(max(fwidth(parallaxUv.x) * uHeightTexSize.x, fwidth(parallaxUv.y) * uHeightTexSize.y), 1.0));' : ''}
+          ${S.isWebGL2 ? 'hMip = log2(max(max(fwidth(parallaxUv.x) * uHeightTexSize.x, fwidth(parallaxUv.y) * uHeightTexSize.y), 1.0));' : ''}
           if (parallaxMode < 0.5) {
-            float height = ${isWebGL2 ? 'textureLod( heightMap, parallaxUv, hMip )' : 'texture2D( heightMap, parallaxUv )'}.r;
+            float height = ${S.isWebGL2 ? 'textureLod( heightMap, parallaxUv, hMip )' : 'texture2D( heightMap, parallaxUv )'}.r;
             parallaxUv = parallaxUv - P * height;
           } else {
             float numLayers = parallaxSteps;
@@ -843,18 +770,18 @@ function makeMaterial() {
             float currentLayerDepth = 0.0;
             vec2 deltaTexCoords = P / numLayers;
             vec2 currentTexCoords = parallaxUv;
-            float currentDepthValue = ${isWebGL2 ? 'textureLod( heightMap, currentTexCoords, hMip )' : 'texture2D( heightMap, currentTexCoords )'}.r;
+            float currentDepthValue = ${S.isWebGL2 ? 'textureLod( heightMap, currentTexCoords, hMip )' : 'texture2D( heightMap, currentTexCoords )'}.r;
             for (int i = 0; i < 64; i++) {
               if (currentLayerDepth >= currentDepthValue) break;
               currentTexCoords -= deltaTexCoords;
-              currentDepthValue = ${isWebGL2 ? 'textureLod( heightMap, currentTexCoords, hMip )' : 'texture2D( heightMap, currentTexCoords )'}.r;
+              currentDepthValue = ${S.isWebGL2 ? 'textureLod( heightMap, currentTexCoords, hMip )' : 'texture2D( heightMap, currentTexCoords )'}.r;
               currentLayerDepth += layerDepth;
             }
             if (parallaxMode < 1.5) {
               parallaxUv = currentTexCoords;
             } else if (parallaxMode < 2.5) {
               vec2 prevTexCoords = currentTexCoords + deltaTexCoords;
-              float beforeDepth = ${isWebGL2 ? 'textureLod( heightMap, prevTexCoords, hMip )' : 'texture2D( heightMap, prevTexCoords )'}.r - currentLayerDepth + layerDepth;
+              float beforeDepth = ${S.isWebGL2 ? 'textureLod( heightMap, prevTexCoords, hMip )' : 'texture2D( heightMap, prevTexCoords )'}.r - currentLayerDepth + layerDepth;
               float afterDepth = currentDepthValue - currentLayerDepth;
               float weight = afterDepth / (afterDepth - beforeDepth);
               parallaxUv = mix(currentTexCoords, prevTexCoords, weight);
@@ -866,7 +793,7 @@ function makeMaterial() {
                 layerDepth *= 0.5;
                 vec2 midTexCoords = prevTexCoords - deltaTexCoords;
                 float midLayerDepth = prevLayerDepth + layerDepth;
-                float midDepthValue = ${isWebGL2 ? 'textureLod( heightMap, midTexCoords, hMip )' : 'texture2D( heightMap, midTexCoords )'}.r;
+                float midDepthValue = ${S.isWebGL2 ? 'textureLod( heightMap, midTexCoords, hMip )' : 'texture2D( heightMap, midTexCoords )'}.r;
                 if (midLayerDepth < midDepthValue) {
                   prevTexCoords = midTexCoords;
                   prevLayerDepth = midLayerDepth;
@@ -881,12 +808,12 @@ function makeMaterial() {
           if (parallaxShadow > 0.0 && tLight.z > 0.01) {
             float numSS = 8.0;
             vec2 ssDelta = tLight.xy / max(abs(tLight.z), 0.05) * abs(parallaxScale) / numSS;
-            float hRay = ${isWebGL2 ? 'textureLod( heightMap, parallaxUv, hMip )' : 'texture2D( heightMap, parallaxUv )'}.r;
+            float hRay = ${S.isWebGL2 ? 'textureLod( heightMap, parallaxUv, hMip )' : 'texture2D( heightMap, parallaxUv )'}.r;
             vec2 ssUv = parallaxUv;
             for (int i = 0; i < 8; i++) {
               ssUv += ssDelta;
               hRay += 1.0 / numSS;
-              float hSurf = ${isWebGL2 ? 'textureLod( heightMap, ssUv, hMip )' : 'texture2D( heightMap, ssUv )'}.r;
+              float hSurf = ${S.isWebGL2 ? 'textureLod( heightMap, ssUv, hMip )' : 'texture2D( heightMap, ssUv )'}.r;
               parallaxShadowFactor = min(parallaxShadowFactor, smoothstep(0.0, 0.06, hRay - hSurf));
             }
             parallaxShadowFactor = mix(1.0, parallaxShadowFactor, parallaxShadow);
@@ -911,20 +838,20 @@ function isHostVisible(el) {
 }
 
 function findVisibleHost() {
-  for (const h of hosts) { if (isHostVisible(h)) return h }
+  for (const h of S.hosts) { if (isHostVisible(h)) return h }
   return null
 }
 
 function activeHost() {
-  return (renderer && renderer.domElement.parentElement) || null
+  return (S.renderer && S.renderer.domElement.parentElement) || null
 }
 
 function refreshHostHints() {
-  const active = initialized ? activeHost() : null
-  for (const h of hosts) {
+  const active = S.initialized ? activeHost() : null
+  for (const h of S.hosts) {
     h.classList.toggle('m3d-host-active', h === active)
     const hint = h.querySelector('.m3d-host-empty')
-    if (hint) hint.style.display = (initialized && h !== active) ? '' : 'none'
+    if (hint) hint.style.display = (S.initialized && h !== active) ? '' : 'none'
   }
 }
 
@@ -935,20 +862,20 @@ function moveViewportWidgets(target) {
 }
 
 function setContainer(el) {
-  if (!el || el === container) { refreshHostHints(); return }
-  container = el
-  if (renderer) { el.appendChild(renderer.domElement); moveViewportWidgets(el); handleResize() }
+  if (!el || el === S.container) { refreshHostHints(); return }
+  S.container = el
+  if (S.renderer) { el.appendChild(S.renderer.domElement); moveViewportWidgets(el); handleResize() }
   refreshHostHints()
 }
 
 export function activateMaterial3DHost(el) {
-  if (!el || !hosts.has(el)) return
-  if (!initialized) { initMaterial3D(el); return }
+  if (!el || !S.hosts.has(el)) return
+  if (!S.initialized) { initMaterial3D(el); return }
   setContainer(el)
 }
 
 function reevaluateActiveHost() {
-  if (!initialized) return
+  if (!S.initialized) return
   const active = activeHost()
   if (active && isHostVisible(active)) return
   const visible = findVisibleHost()
@@ -956,35 +883,34 @@ function reevaluateActiveHost() {
 }
 
 function ensureHostObserver() {
-  if (hostObserver) return hostObserver
-  hostObserver = new IntersectionObserver((entries) => {
-    if (!initialized) return
+  if (S.hostObserver) return S.hostObserver
+  S.hostObserver = new IntersectionObserver((entries) => {
+    if (!S.initialized) return
     for (const entry of entries) {
       if (entry.isIntersecting && isHostVisible(entry.target)) setContainer(entry.target)
     }
     reevaluateActiveHost()
   })
-  return hostObserver
+  return S.hostObserver
 }
 
-let _hostReevalRAF = 0
 if (typeof window !== 'undefined') {
   window.addEventListener('resize', () => {
-    if (_hostReevalRAF) return
-    _hostReevalRAF = requestAnimationFrame(() => {
-      _hostReevalRAF = 0
+    if (S._hostReevalRAF) return
+    S._hostReevalRAF = requestAnimationFrame(() => {
+      S._hostReevalRAF = 0
       reevaluateActiveHost()
     })
   })
 }
 
 export function registerMaterial3DHost(el) {
-  if (!el || hosts.has(el)) return
-  hosts.add(el)
+  if (!el || S.hosts.has(el)) return
+  S.hosts.add(el)
   ensureHostObserver().observe(el)
-  if (containerResizeObserver) containerResizeObserver.observe(el)
-  el.addEventListener('pointerdown', () => { if (initialized) setContainer(el) }, true)
-  if (initialized) {
+  if (S.containerResizeObserver) S.containerResizeObserver.observe(el)
+  el.addEventListener('pointerdown', () => { if (S.initialized) setContainer(el) }, true)
+  if (S.initialized) {
     const active = activeHost()
     if ((!active || !isHostVisible(active)) && isHostVisible(el)) setContainer(el)
     else refreshHostHints()
@@ -993,43 +919,43 @@ export function registerMaterial3DHost(el) {
 
 export function initMaterial3D(containerEl) {
   registerMaterial3DHost(containerEl)
-  if (initialized) {
-    if (containerEl !== container) {
+  if (S.initialized) {
+    if (containerEl !== S.container) {
       const target = isHostVisible(containerEl) ? containerEl : (findVisibleHost() || containerEl)
       setContainer(target)
     } else { refreshHostHints() }
     return
   }
-  container = isHostVisible(containerEl) ? containerEl : (findVisibleHost() || containerEl)
-  const width = container.clientWidth || 300, height = container.clientHeight || 200
-  scene = new THREE.Scene(); scene.background = new THREE.Color(LIGHT_PRESETS.studio.bg)
-  camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100); camera.position.set(0, 0.5, camDist)
-  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
-  isWebGL2 = renderer.capabilities.isWebGL2
-  maxAnisotropy = renderer.capabilities.getMaxAnisotropy() || 1
-  renderer.setSize(width, height); renderer.setPixelRatio(window.devicePixelRatio)
-  renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 2.2
-  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap
-  container.appendChild(renderer.domElement)
-  pmrem = new THREE.PMREMGenerator(renderer)
-  lightGroup = new THREE.Group(); scene.add(lightGroup)
-  const geo = geometries[currentGeo]()
-  meshLeft = new THREE.Mesh(geo, makeMaterial()); meshLeft.castShadow = true; meshLeft.receiveShadow = true; scene.add(meshLeft)
-  meshRight = new THREE.Mesh(geo.clone(), makeMaterial()); meshRight.castShadow = true; meshRight.receiveShadow = true; scene.add(meshRight)
-  labelLeft = createLabel(_t('common.left'), '#2b6cff'); labelRight = createLabel(_t('common.right'), '#d97706')
-  scene.add(labelLeft); scene.add(labelRight)
+  S.container = isHostVisible(containerEl) ? containerEl : (findVisibleHost() || containerEl)
+  const width = S.container.clientWidth || 300, height = S.container.clientHeight || 200
+  S.scene = new THREE.Scene(); S.scene.background = new THREE.Color(LIGHT_PRESETS.studio.bg)
+  S.camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100); S.camera.position.set(0, 0.5, S.camDist)
+  S.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
+  S.isWebGL2 = S.renderer.capabilities.isWebGL2
+  S.maxAnisotropy = S.renderer.capabilities.getMaxAnisotropy() || 1
+  S.renderer.setSize(width, height); S.renderer.setPixelRatio(window.devicePixelRatio)
+  S.renderer.toneMapping = THREE.ACESFilmicToneMapping; S.renderer.toneMappingExposure = 2.2
+  S.renderer.shadowMap.enabled = true; S.renderer.shadowMap.type = THREE.PCFShadowMap
+  S.container.appendChild(S.renderer.domElement)
+  S.pmrem = new THREE.PMREMGenerator(S.renderer)
+  S.lightGroup = new THREE.Group(); S.scene.add(S.lightGroup)
+  const geo = geometries[S.currentGeo]()
+  S.meshLeft = new THREE.Mesh(geo, makeMaterial()); S.meshLeft.castShadow = true; S.meshLeft.receiveShadow = true; S.scene.add(S.meshLeft)
+  S.meshRight = new THREE.Mesh(geo.clone(), makeMaterial()); S.meshRight.castShadow = true; S.meshRight.receiveShadow = true; S.scene.add(S.meshRight)
+  S.labelLeft = createLabel(_t('common.left'), '#2b6cff'); S.labelRight = createLabel(_t('common.right'), '#d97706')
+  S.scene.add(S.labelLeft); S.scene.add(S.labelRight)
   const groundGeo = new THREE.PlaneGeometry(8, 8)
   const groundMat = new THREE.MeshStandardMaterial({ color: 0x2a2a3e, roughness: 0.8, metalness: 0.0 })
-  groundMesh = new THREE.Mesh(groundGeo, groundMat); groundMesh.rotation.x = -Math.PI / 2; groundMesh.position.y = -1.3; groundMesh.receiveShadow = true; groundMesh.visible = groundVisible; scene.add(groundMesh)
-  gridHelper = new THREE.GridHelper(8, 32, 0x444466, 0x222244)
-  gridHelper.position.y = -1.29; gridHelper.material.transparent = true; gridHelper.material.opacity = 0.3; gridHelper.visible = groundVisible; scene.add(gridHelper)
+  S.groundMesh = new THREE.Mesh(groundGeo, groundMat); S.groundMesh.rotation.x = -Math.PI / 2; S.groundMesh.position.y = -1.3; S.groundMesh.receiveShadow = true; S.groundMesh.visible = S.groundVisible; S.scene.add(S.groundMesh)
+  S.gridHelper = new THREE.GridHelper(8, 32, 0x444466, 0x222244)
+  S.gridHelper.position.y = -1.29; S.gridHelper.material.transparent = true; S.gridHelper.material.opacity = 0.3; S.gridHelper.visible = S.groundVisible; S.scene.add(S.gridHelper)
   setupControls()
-  if (containerResizeObserver) containerResizeObserver.disconnect()
-  containerResizeObserver = new ResizeObserver(handleResize)
-  for (const h of hosts) containerResizeObserver.observe(h)
-  lastFrameTime = performance.now()
-  animate(); initialized = true
-  moveViewportWidgets(container)
+  if (S.containerResizeObserver) S.containerResizeObserver.disconnect()
+  S.containerResizeObserver = new ResizeObserver(handleResize)
+  for (const h of S.hosts) S.containerResizeObserver.observe(h)
+  S.lastFrameTime = performance.now()
+  animate(); S.initialized = true
+  moveViewportWidgets(S.container)
   refreshHostHints()
   applyLightPreset('studio')
   applySourceSide()
@@ -1037,289 +963,288 @@ export function initMaterial3D(containerEl) {
 }
 
 function applySourceSide() {
-  if (!initialized) return
-  if (customModelGroup) return
+  if (!S.initialized) return
+  if (S.customModelGroup) return
 
-  if (sourceSide === 'dual') {
-    meshLeft.visible = true; meshRight.visible = true; meshLeft.position.x = -1.1; meshRight.position.x = 1.1
-    meshLeft.scale.setScalar(0.75); meshRight.scale.setScalar(0.75)
-    labelLeft.visible = true; labelRight.visible = true
-    labelLeft.position.set(-1.1, -0.95, 0); labelRight.position.set(1.1, -0.95, 0)
-  } else if (sourceSide === 'left') {
-    meshLeft.visible = true; meshRight.visible = false; meshLeft.position.x = 0
-    meshLeft.scale.setScalar(1.0)
-    labelLeft.visible = false; labelRight.visible = false
+  if (S.sourceSide === 'dual') {
+    S.meshLeft.visible = true; S.meshRight.visible = true; S.meshLeft.position.x = -1.1; S.meshRight.position.x = 1.1
+    S.meshLeft.scale.setScalar(0.75); S.meshRight.scale.setScalar(0.75)
+    S.labelLeft.visible = true; S.labelRight.visible = true
+    S.labelLeft.position.set(-1.1, -0.95, 0); S.labelRight.position.set(1.1, -0.95, 0)
+  } else if (S.sourceSide === 'left') {
+    S.meshLeft.visible = true; S.meshRight.visible = false; S.meshLeft.position.x = 0
+    S.meshLeft.scale.setScalar(1.0)
+    S.labelLeft.visible = false; S.labelRight.visible = false
   } else {
-    meshLeft.visible = false; meshRight.visible = true; meshRight.position.x = 0
-    meshRight.scale.setScalar(1.0)
-    labelLeft.visible = false; labelRight.visible = false
+    S.meshLeft.visible = false; S.meshRight.visible = true; S.meshRight.position.x = 0
+    S.meshRight.scale.setScalar(1.0)
+    S.labelLeft.visible = false; S.labelRight.visible = false
   }
 }
 
 function setupControls() {
-  const canvas = renderer.domElement; canvas.style.cursor = 'grab'
+  const canvas = S.renderer.domElement; canvas.style.cursor = 'grab'
   canvas.addEventListener('contextmenu', (e) => e.preventDefault())
   canvas.addEventListener('mousedown', (e) => {
-    isDragging = true; autoRotate = false; lastX = e.clientX; lastY = e.clientY
-    if (freeCamMode) dragMode = 'look'
-    else if (e.button === 0 && !e.shiftKey) dragMode = 'rotate'
-    else dragMode = 'pan'
+    S.isDragging = true; S.autoRotate = false; S.lastX = e.clientX; S.lastY = e.clientY
+    if (S.freeCamMode) S.dragMode = 'look'
+    else if (e.button === 0 && !e.shiftKey) S.dragMode = 'rotate'
+    else S.dragMode = 'pan'
     canvas.style.cursor = 'grabbing'
     if (e.button === 1) e.preventDefault()
   })
   canvas.addEventListener('mousemove', (e) => {
-    if (!isDragging) return
-    const dx = e.clientX - lastX, dy = e.clientY - lastY
-    lastX = e.clientX; lastY = e.clientY
-    if (dragMode === 'look') {
-      flyYaw -= dx * 0.005
-      flyPitch = Math.max(-1.55, Math.min(1.55, flyPitch - dy * 0.005))
-    } else if (dragMode === 'rotate') {
-      targetRotY += dx * 0.01; targetRotX += dy * 0.01
-      targetRotX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, targetRotX))
+    if (!S.isDragging) return
+    const dx = e.clientX - S.lastX, dy = e.clientY - S.lastY
+    S.lastX = e.clientX; S.lastY = e.clientY
+    if (S.dragMode === 'look') {
+      S.flyYaw -= dx * 0.005
+      S.flyPitch = Math.max(-1.55, Math.min(1.55, S.flyPitch - dy * 0.005))
+    } else if (S.dragMode === 'rotate') {
+      S.targetRotY += dx * 0.01; S.targetRotX += dy * 0.01
+      S.targetRotX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, S.targetRotX))
     } else {
-      const k = camDist * 0.0015
-      targetPanX -= dx * k; targetPanY += dy * k
+      const k = S.camDist * 0.0015
+      S.targetPanX -= dx * k; S.targetPanY += dy * k
     }
   })
-  window.addEventListener('mouseup', () => { if (isDragging) { isDragging = false; dragMode = null; canvas.style.cursor = freeCamMode ? 'crosshair' : 'grab' } })
+  window.addEventListener('mouseup', () => { if (S.isDragging) { S.isDragging = false; S.dragMode = null; canvas.style.cursor = S.freeCamMode ? 'crosshair' : 'grab' } })
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault()
-    if (freeCamMode) {
-      _flyForward.set(0, 0, -1).applyEuler(camera.rotation)
-      flyPos.addScaledVector(_flyForward, -e.deltaY * 0.01)
+    if (S.freeCamMode) {
+      S._flyForward.set(0, 0, -1).applyEuler(S.camera.rotation)
+      S.flyPos.addScaledVector(S._flyForward, -e.deltaY * 0.01)
       clampFlyPos()
     } else {
-      targetCamDist = Math.max(1.5, Math.min(8, targetCamDist + e.deltaY * 0.003))
+      S.targetCamDist = Math.max(1.5, Math.min(8, S.targetCamDist + e.deltaY * 0.003))
     }
   }, { passive: false })
   canvas.addEventListener('dblclick', () => {
-    if (freeCamMode) { resetFreeView(); return }
-    autoRotate = !autoRotate; targetRotX = 0; targetRotY = 0; targetPanX = 0; targetPanY = 0
+    if (S.freeCamMode) { resetFreeView(); return }
+    S.autoRotate = !S.autoRotate; S.targetRotX = 0; S.targetRotY = 0; S.targetPanX = 0; S.targetPanY = 0
   })
   window.addEventListener('keydown', (e) => {
-    if (!freeCamMode) return
+    if (!S.freeCamMode) return
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT' || e.target.isContentEditable)) return
-    if (FLY_KEYS.has(e.code)) { flyKeys[e.code] = true; e.preventDefault() }
+    if (FLY_KEYS.has(e.code)) { S.flyKeys[e.code] = true; e.preventDefault() }
   })
-  window.addEventListener('keyup', (e) => { delete flyKeys[e.code] })
-  window.addEventListener('blur', () => { for (const k in flyKeys) delete flyKeys[k] })
+  window.addEventListener('keyup', (e) => { delete S.flyKeys[e.code] })
+  window.addEventListener('blur', () => { for (const k in S.flyKeys) delete S.flyKeys[k] })
 }
 
 function clampFlyPos() {
-  flyPos.x = Math.max(-40, Math.min(40, flyPos.x))
-  flyPos.y = Math.max(-20, Math.min(40, flyPos.y))
-  flyPos.z = Math.max(-40, Math.min(40, flyPos.z))
+  S.flyPos.x = Math.max(-40, Math.min(40, S.flyPos.x))
+  S.flyPos.y = Math.max(-20, Math.min(40, S.flyPos.y))
+  S.flyPos.z = Math.max(-40, Math.min(40, S.flyPos.z))
 }
 
 function lookAtOrigin() {
-  _flyForward.set(0, 0, 0).sub(flyPos)
-  if (_flyForward.lengthSq() < 1e-8) _flyForward.set(0, 0, -1)
-  _flyForward.normalize()
-  flyPitch = Math.asin(Math.max(-1, Math.min(1, _flyForward.y)))
-  flyYaw = Math.atan2(-_flyForward.x, -_flyForward.z)
+  S._flyForward.set(0, 0, 0).sub(S.flyPos)
+  if (S._flyForward.lengthSq() < 1e-8) S._flyForward.set(0, 0, -1)
+  S._flyForward.normalize()
+  S.flyPitch = Math.asin(Math.max(-1, Math.min(1, S._flyForward.y)))
+  S.flyYaw = Math.atan2(-S._flyForward.x, -S._flyForward.z)
 }
 
 function resetFreeView() {
-  flyPos.set(0, 0.5, 3)
+  S.flyPos.set(0, 0.5, 3)
   lookAtOrigin()
 }
 
 function updateFlyMovement(dt) {
-  _flyMove.set(0, 0, 0)
-  _flyForward.set(0, 0, -1).applyEuler(camera.rotation)
-  _flyRight.set(1, 0, 0).applyEuler(camera.rotation)
-  if (flyKeys.KeyW || flyKeys.ArrowUp) _flyMove.add(_flyForward)
-  if (flyKeys.KeyS || flyKeys.ArrowDown) _flyMove.sub(_flyForward)
-  if (flyKeys.KeyD || flyKeys.ArrowRight) _flyMove.add(_flyRight)
-  if (flyKeys.KeyA || flyKeys.ArrowLeft) _flyMove.sub(_flyRight)
-  if (flyKeys.KeyE) _flyMove.y += 1
-  if (flyKeys.KeyQ) _flyMove.y -= 1
-  if (_flyMove.lengthSq() > 0) {
-    const speed = FLY_SPEED * ((flyKeys.ShiftLeft || flyKeys.ShiftRight) ? FLY_BOOST : 1)
-    _flyMove.normalize().multiplyScalar(speed * dt)
-    flyPos.add(_flyMove)
+  S._flyMove.set(0, 0, 0)
+  S._flyForward.set(0, 0, -1).applyEuler(S.camera.rotation)
+  S._flyRight.set(1, 0, 0).applyEuler(S.camera.rotation)
+  if (S.flyKeys.KeyW || S.flyKeys.ArrowUp) S._flyMove.add(S._flyForward)
+  if (S.flyKeys.KeyS || S.flyKeys.ArrowDown) S._flyMove.sub(S._flyForward)
+  if (S.flyKeys.KeyD || S.flyKeys.ArrowRight) S._flyMove.add(S._flyRight)
+  if (S.flyKeys.KeyA || S.flyKeys.ArrowLeft) S._flyMove.sub(S._flyRight)
+  if (S.flyKeys.KeyE) S._flyMove.y += 1
+  if (S.flyKeys.KeyQ) S._flyMove.y -= 1
+  if (S._flyMove.lengthSq() > 0) {
+    const speed = FLY_SPEED * ((S.flyKeys.ShiftLeft || S.flyKeys.ShiftRight) ? FLY_BOOST : 1)
+    S._flyMove.normalize().multiplyScalar(speed * dt)
+    S.flyPos.add(S._flyMove)
     clampFlyPos()
   }
 }
 
-let _resizeRAF = 0
 function handleResize() {
-  if (_resizeRAF) return
-  _resizeRAF = requestAnimationFrame(() => {
-    _resizeRAF = 0
-    if (!container || !renderer || !camera) return
-    const w = container.clientWidth, h = container.clientHeight
-    if (w > 0 && h > 0) { camera.aspect = w / h; camera.updateProjectionMatrix(); renderer.setSize(w, h) }
+  if (S._resizeRAF) return
+  S._resizeRAF = requestAnimationFrame(() => {
+    S._resizeRAF = 0
+    if (!S.container || !S.renderer || !S.camera) return
+    const w = S.container.clientWidth, h = S.container.clientHeight
+    if (w > 0 && h > 0) { S.camera.aspect = w / h; S.camera.updateProjectionMatrix(); S.renderer.setSize(w, h) }
   })
 }
 
 function animate() {
-  animationId = requestAnimationFrame(animate)
-  if (!container || container.clientWidth < 2 || container.clientHeight < 2) { lastFrameTime = performance.now(); return }
+  S.animationId = requestAnimationFrame(animate)
+  if (!S.container || S.container.clientWidth < 2 || S.container.clientHeight < 2) { S.lastFrameTime = performance.now(); return }
   const now = performance.now()
-  const dt = Math.min(0.05, Math.max(0, (now - lastFrameTime) / 1000))
-  lastFrameTime = now
+  const dt = Math.min(0.05, Math.max(0, (now - S.lastFrameTime) / 1000))
+  S.lastFrameTime = now
 
-  if (freeCamMode) {
-    camera.rotation.set(flyPitch, flyYaw, 0)
+  if (S.freeCamMode) {
+    S.camera.rotation.set(S.flyPitch, S.flyYaw, 0)
     updateFlyMovement(dt)
-    camera.position.copy(flyPos)
+    S.camera.position.copy(S.flyPos)
   } else {
-    if (autoRotate) targetRotY += 0.005
-    rotX += (targetRotX - rotX) * 0.1; rotY += (targetRotY - rotY) * 0.1; camDist += (targetCamDist - camDist) * 0.1
-    camPanX += (targetPanX - camPanX) * 0.18; camPanY += (targetPanY - camPanY) * 0.18
-    meshLeft.rotation.x = rotX; meshLeft.rotation.y = rotY
-    meshRight.rotation.x = rotX; meshRight.rotation.y = rotY
-    if (customModelGroup) { customModelGroup.rotation.x = rotX; customModelGroup.rotation.y = rotY }
-    camera.position.set(camPanX, 0.5 + camPanY, camDist)
-    camera.rotation.set(0, 0, 0)
+    if (S.autoRotate) S.targetRotY += 0.005
+    S.rotX += (S.targetRotX - S.rotX) * 0.1; S.rotY += (S.targetRotY - S.rotY) * 0.1; S.camDist += (S.targetCamDist - S.camDist) * 0.1
+    S.camPanX += (S.targetPanX - S.camPanX) * 0.18; S.camPanY += (S.targetPanY - S.camPanY) * 0.18
+    S.meshLeft.rotation.x = S.rotX; S.meshLeft.rotation.y = S.rotY
+    S.meshRight.rotation.x = S.rotX; S.meshRight.rotation.y = S.rotY
+    if (S.customModelGroup) { S.customModelGroup.rotation.x = S.rotX; S.customModelGroup.rotation.y = S.rotY }
+    S.camera.position.set(S.camPanX, 0.5 + S.camPanY, S.camDist)
+    S.camera.rotation.set(0, 0, 0)
   }
 
-  camera.updateMatrixWorld()
-  if (parallaxShadow > 0.0) {
+  S.camera.updateMatrixWorld()
+  if (S.parallaxShadow > 0.0) {
     let lDir = null
-    if (skySunLight && currentEnvMode === 'sky') lDir = skySunLight.position
-    else { for (const c of lightGroup.children) { if (c.isDirectionalLight) { lDir = c.position; break } } }
+    if (S.skySunLight && S.currentEnvMode === 'sky') lDir = S.skySunLight.position
+    else { for (const c of S.lightGroup.children) { if (c.isDirectionalLight) { lDir = c.position; break } } }
     if (lDir) {
-      _lightDirTmp.copy(lDir).normalize().transformDirection(camera.matrixWorldInverse)
-      for (const m of [meshLeft, meshRight]) { if (m && m.material && m.material.userData.shaderRefs) m.material.userData.shaderRefs.uHeightLightDir.value.copy(_lightDirTmp) }
+      S._lightDirTmp.copy(lDir).normalize().transformDirection(S.camera.matrixWorldInverse)
+      for (const m of [S.meshLeft, S.meshRight]) { if (m && m.material && m.material.userData.shaderRefs) m.material.userData.shaderRefs.uHeightLightDir.value.copy(S._lightDirTmp) }
     }
   }
-  renderer.render(scene, camera)
+  S.renderer.render(S.scene, S.camera)
 }
 
 export function setGeometry(geoType) {
-  if (!initialized || !geometries[geoType]) return
+  if (!S.initialized || !geometries[geoType]) return
   clearCustomModel()
-  currentGeo = geoType; meshLeft.geometry.dispose(); meshRight.geometry.dispose()
-  meshLeft.geometry = geometries[geoType](); meshRight.geometry = geometries[geoType]()
+  S.currentGeo = geoType; S.meshLeft.geometry.dispose(); S.meshRight.geometry.dispose()
+  S.meshLeft.geometry = geometries[geoType](); S.meshRight.geometry = geometries[geoType]()
 }
-export function setMetalness(val) { if (initialized) { meshLeft.material.metalness = val; meshRight.material.metalness = val } }
-export function setRoughness(val) { if (initialized) { meshLeft.material.roughness = val; meshRight.material.roughness = val } }
-export function setNormalScale(val) { normalScale = val; if (initialized) { meshLeft.material.normalScale.set(val, val); meshRight.material.normalScale.set(val, val) } }
-export function setEmissiveIntensity(val) { emissiveIntensity = val; if (initialized) { meshLeft.material.emissiveIntensity = val; meshRight.material.emissiveIntensity = val } }
-export function setMaterialFormat(fmt) { materialFormat = fmt }
-export function setFormatDetectCallback(cb) { formatDetectCallback = cb }
-export function setHeightDetectCallback(cb) { heightDetectCallback = cb }
-export function setSourceSide(side) { sourceSide = side; applySourceSide() }
-export function setParallaxScale(val) { parallaxScale = val; if (initialized) { for (const m of [meshLeft, meshRight]) { if (m && m.material && m.material.userData.shaderRefs) m.material.userData.shaderRefs.parallaxScale.value = val } } }
-export function setParallaxSteps(val) { parallaxSteps = val; if (initialized) { for (const m of [meshLeft, meshRight]) { if (m && m.material && m.material.userData.shaderRefs) m.material.userData.shaderRefs.parallaxSteps.value = val } } }
-export function setParallaxMode(val) { parallaxMode = val; if (initialized) { for (const m of [meshLeft, meshRight]) { if (m && m.material && m.material.userData.shaderRefs) m.material.userData.shaderRefs.parallaxMode.value = val } } }
-export function setParallaxAdaptive(val) { parallaxAdaptive = val; if (initialized) { for (const m of [meshLeft, meshRight]) { if (m && m.material && m.material.userData.shaderRefs) m.material.userData.shaderRefs.parallaxAdaptive.value = val } } }
-export function setParallaxEnabled(on) { parallaxEnabled = on; if (initialized) { for (const m of [meshLeft, meshRight]) { if (m && m.material && m.material.userData.shaderRefs) { const ht = m.material.userData.shaderRefs.heightMap.value; m.material.userData.shaderRefs.hasHeightMap.value = (ht && on) ? 1.0 : 0.0; if (ht) { ht.needsUpdate = true; m.material.needsUpdate = true } } } } }
-export function setParallaxShadow(val) { parallaxShadow = val; if (initialized) { for (const m of [meshLeft, meshRight]) { if (m && m.material && m.material.userData.shaderRefs) m.material.userData.shaderRefs.parallaxShadow.value = val } } }
-export function setLightPreset(presetKey) { applyLightPreset(presetKey); if (currentEnvMode !== 'custom') setEnvMode('custom') }
-export function getCustomLightConfig() { return customLightConfig ? cloneLightConfig(customLightConfig) : null }
-export function applyCustomLightConfigExport(config) { if (currentEnvMode !== 'custom') setEnvMode('custom'); applyCustomLightConfig(config) }
-export function setEnvIntensity(val) { envIntensity = val; if (initialized) { if (scene) scene.environmentIntensity = val; for (const m of [meshLeft, meshRight]) { if (m) m.material.envMapIntensity = val } } }
-export function setExposure(val) { if (initialized && renderer) renderer.toneMappingExposure = val }
-export function toggleGround(visible) { groundVisible = visible; if (initialized) { if (groundMesh) groundMesh.visible = visible; if (gridHelper) gridHelper.visible = visible } }
-export function setAutoRotate(on) { autoRotate = on }
-export function isFreeCameraMode() { return freeCamMode }
+export function setMetalness(val) { if (S.initialized) { S.meshLeft.material.metalness = val; S.meshRight.material.metalness = val } }
+export function setRoughness(val) { if (S.initialized) { S.meshLeft.material.roughness = val; S.meshRight.material.roughness = val } }
+export function setNormalScale(val) { S.normalScale = val; if (S.initialized) { S.meshLeft.material.normalScale.set(val, val); S.meshRight.material.normalScale.set(val, val) } }
+export function setEmissiveIntensity(val) { S.emissiveIntensity = val; if (S.initialized) { S.meshLeft.material.emissiveIntensity = val; S.meshRight.material.emissiveIntensity = val } }
+export function setMaterialFormat(fmt) { S.materialFormat = fmt }
+export function setFormatDetectCallback(cb) { S.formatDetectCallback = cb }
+export function setHeightDetectCallback(cb) { S.heightDetectCallback = cb }
+export function setSourceSide(side) { S.sourceSide = side; applySourceSide() }
+export function setParallaxScale(val) { S.parallaxScale = val; if (S.initialized) { for (const m of [S.meshLeft, S.meshRight]) { if (m && m.material && m.material.userData.shaderRefs) m.material.userData.shaderRefs.parallaxScale.value = val } } }
+export function setParallaxSteps(val) { S.parallaxSteps = val; if (S.initialized) { for (const m of [S.meshLeft, S.meshRight]) { if (m && m.material && m.material.userData.shaderRefs) m.material.userData.shaderRefs.parallaxSteps.value = val } } }
+export function setParallaxMode(val) { S.parallaxMode = val; if (S.initialized) { for (const m of [S.meshLeft, S.meshRight]) { if (m && m.material && m.material.userData.shaderRefs) m.material.userData.shaderRefs.parallaxMode.value = val } } }
+export function setParallaxAdaptive(val) { S.parallaxAdaptive = val; if (S.initialized) { for (const m of [S.meshLeft, S.meshRight]) { if (m && m.material && m.material.userData.shaderRefs) m.material.userData.shaderRefs.parallaxAdaptive.value = val } } }
+export function setParallaxEnabled(on) { S.parallaxEnabled = on; if (S.initialized) { for (const m of [S.meshLeft, S.meshRight]) { if (m && m.material && m.material.userData.shaderRefs) { const ht = m.material.userData.shaderRefs.heightMap.value; m.material.userData.shaderRefs.hasHeightMap.value = (ht && on) ? 1.0 : 0.0; if (ht) { ht.needsUpdate = true; m.material.needsUpdate = true } } } } }
+export function setParallaxShadow(val) { S.parallaxShadow = val; if (S.initialized) { for (const m of [S.meshLeft, S.meshRight]) { if (m && m.material && m.material.userData.shaderRefs) m.material.userData.shaderRefs.parallaxShadow.value = val } } }
+export function setLightPreset(presetKey) { applyLightPreset(presetKey); if (S.currentEnvMode !== 'custom') setEnvMode('custom') }
+export function getCustomLightConfig() { return S.customLightConfig ? cloneLightConfig(S.customLightConfig) : null }
+export function applyCustomLightConfigExport(config) { if (S.currentEnvMode !== 'custom') setEnvMode('custom'); applyCustomLightConfig(config) }
+export function setEnvIntensity(val) { S.envIntensity = val; if (S.initialized) { if (S.scene) S.scene.environmentIntensity = val; for (const m of [S.meshLeft, S.meshRight]) { if (m) m.material.envMapIntensity = val } } }
+export function setExposure(val) { if (S.initialized && S.renderer) S.renderer.toneMappingExposure = val }
+export function toggleGround(visible) { S.groundVisible = visible; if (S.initialized) { if (S.groundMesh) S.groundMesh.visible = visible; if (S.gridHelper) S.gridHelper.visible = visible } }
+export function setAutoRotate(on) { S.autoRotate = on }
+export function isFreeCameraMode() { return S.freeCamMode }
 export function setFreeCameraMode(on) {
-  if (!initialized) return
+  if (!S.initialized) return
   on = !!on
-  if (freeCamMode === on) return
-  freeCamMode = on
-  if (freeCamMode) {
-    flyPos.copy(camera.position)
+  if (S.freeCamMode === on) return
+  S.freeCamMode = on
+  if (S.freeCamMode) {
+    S.flyPos.copy(S.camera.position)
     lookAtOrigin()
-    camera.rotation.order = 'YXZ'
-    autoRotate = false
-    for (const k in flyKeys) delete flyKeys[k]
-    renderer.domElement.style.cursor = 'crosshair'
+    S.camera.rotation.order = 'YXZ'
+    S.autoRotate = false
+    for (const k in S.flyKeys) delete S.flyKeys[k]
+    S.renderer.domElement.style.cursor = 'crosshair'
   } else {
-    camPanX = 0; camPanY = 0; targetPanX = 0; targetPanY = 0
-    camera.rotation.set(0, 0, 0)
-    renderer.domElement.style.cursor = 'grab'
+    S.camPanX = 0; S.camPanY = 0; S.targetPanX = 0; S.targetPanY = 0
+    S.camera.rotation.set(0, 0, 0)
+    S.renderer.domElement.style.cursor = 'grab'
   }
-  document.dispatchEvent(new CustomEvent('material3d:freecam', { detail: { enabled: freeCamMode } }))
+  document.dispatchEvent(new CustomEvent('material3d:freecam', { detail: { enabled: S.freeCamMode } }))
 }
-export function setWireframe(on) { if (initialized) { meshLeft.material.wireframe = on; meshRight.material.wireframe = on } }
-export function setOpacityMode(mode) { opacityMode = mode; if (initialized) { for (const m of [meshLeft, meshRight]) { if (m) applyOpacityMode(m.material) } } }
-export function setOpacity(val) { opacityValue = val; if (initialized) { for (const m of [meshLeft, meshRight]) { if (m) applyOpacityMode(m.material) } } }
-export function setTransmission(val) { transmissionValue = val; if (initialized) { for (const m of [meshLeft, meshRight]) { if (m) { m.material.transmission = val; if (val > 0) { m.material.transparent = true; m.material.alphaTest = 0 } m.material.needsUpdate = true } } } }
-export function setIOR(val) { iorValue = val; if (initialized) { for (const m of [meshLeft, meshRight]) { if (m) m.material.ior = val } } }
-export function setClearcoat(val) { clearcoatValue = val; if (initialized) { for (const m of [meshLeft, meshRight]) { if (m) m.material.clearcoat = val } } }
-export function setTextureFilter(mode) { textureFilter = mode; applyFilterToAllTextures() }
-export function setMipmapsEnabled(on) { mipmapsEnabled = on; applyFilterToAllTextures() }
-export function setAnisotropyLevel(val) { anisotropyLevel = Math.max(1, Math.round(val)); applyFilterToAllTextures() }
-export function setAlignOfficial(val) { alignOfficial = !!val; applyFilterToAllTextures() }
-export function getMaxAnisotropy() { return maxAnisotropy }
+export function setWireframe(on) { if (S.initialized) { S.meshLeft.material.wireframe = on; S.meshRight.material.wireframe = on } }
+export function setOpacityMode(mode) { S.opacityMode = mode; if (S.initialized) { for (const m of [S.meshLeft, S.meshRight]) { if (m) applyOpacityMode(m.material) } } }
+export function setOpacity(val) { S.opacityValue = val; if (S.initialized) { for (const m of [S.meshLeft, S.meshRight]) { if (m) applyOpacityMode(m.material) } } }
+export function setTransmission(val) { S.transmissionValue = val; if (S.initialized) { for (const m of [S.meshLeft, S.meshRight]) { if (m) { m.material.transmission = val; if (val > 0) { m.material.transparent = true; m.material.alphaTest = 0 } m.material.needsUpdate = true } } } }
+export function setIOR(val) { S.iorValue = val; if (S.initialized) { for (const m of [S.meshLeft, S.meshRight]) { if (m) m.material.ior = val } } }
+export function setClearcoat(val) { S.clearcoatValue = val; if (S.initialized) { for (const m of [S.meshLeft, S.meshRight]) { if (m) m.material.clearcoat = val } } }
+export function setTextureFilter(mode) { S.textureFilter = mode; applyFilterToAllTextures() }
+export function setMipmapsEnabled(on) { S.mipmapsEnabled = on; applyFilterToAllTextures() }
+export function setAnisotropyLevel(val) { S.anisotropyLevel = Math.max(1, Math.round(val)); applyFilterToAllTextures() }
+export function setAlignOfficial(val) { S.alignOfficial = !!val; applyFilterToAllTextures() }
+export function getMaxAnisotropy() { return S.maxAnisotropy }
 export function screenshot() {
-  if (!initialized || !renderer) return
-  renderer.render(scene, camera)
-  const url = renderer.domElement.toDataURL('image/png')
+  if (!S.initialized || !S.renderer) return
+  S.renderer.render(S.scene, S.camera)
+  const url = S.renderer.domElement.toDataURL('image/png')
   const a = document.createElement('a')
   a.href = url; a.download = `material3d_${Date.now()}.png`
   document.body.appendChild(a); a.click(); document.body.removeChild(a)
 }
 export function toggleFullscreen() {
-  if (!container) return
-  container.classList.toggle('fullscreen')
+  if (!S.container) return
+  S.container.classList.toggle('fullscreen')
   setTimeout(handleResize, 50)
 }
 export async function loadHDREnv(filePath) {
-  if (!initialized || !filePath) return
+  if (!S.initialized || !filePath) return
   try {
     const tex = await loadEnvTexture(filePath, extFromUrl(filePath))
     tex.mapping = THREE.EquirectangularReflectionMapping
-    if (hdrTextureOriginal) { hdrTextureOriginal.dispose(); hdrTextureOriginal = null }
-    if (hdrTextureRotated) { hdrTextureRotated.dispose(); hdrTextureRotated = null }
+    if (S.hdrTextureOriginal) { S.hdrTextureOriginal.dispose(); S.hdrTextureOriginal = null }
+    if (S.hdrTextureRotated) { S.hdrTextureRotated.dispose(); S.hdrTextureRotated = null }
 
-    if (envTexture) { envTexture.dispose(); envTexture = null }
-    hdrTextureOriginal = tex
-    hdrTexture = tex
-    hdrInfo = {
+    if (S.envTexture) { S.envTexture.dispose(); S.envTexture = null }
+    S.hdrTextureOriginal = tex
+    S.hdrTexture = tex
+    S.hdrInfo = {
       width: tex.image.width || 0,
       height: tex.image.height || 0,
       format: tex._srcFormat || 'HDR (RGBE)',
       size: tex.image.data ? tex.image.data.byteLength : 0
     }
     ensureRotatedTexture()
-    currentEnvMode = 'hdri'
+    S.currentEnvMode = 'hdri'
     applyHDREnvMode()
-    window.dispatchEvent(new CustomEvent('material3d:hdrLoaded', { detail: hdrInfo }))
+    window.dispatchEvent(new CustomEvent('material3d:hdrLoaded', { detail: S.hdrInfo }))
   } catch (e) {
     window.dispatchEvent(new CustomEvent('material3d:hdrLoadFailed', { detail: { message: e.message } }))
   }
 }
 export function clearHDREnv() {
-  if (hdrTextureOriginal) { hdrTextureOriginal.dispose(); hdrTextureOriginal = null }
-  if (hdrTextureRotated) { hdrTextureRotated.dispose(); hdrTextureRotated = null }
+  if (S.hdrTextureOriginal) { S.hdrTextureOriginal.dispose(); S.hdrTextureOriginal = null }
+  if (S.hdrTextureRotated) { S.hdrTextureRotated.dispose(); S.hdrTextureRotated = null }
 
-  hdrTexture = null
-  hdrInfo = null
-  if (scene) scene.environmentRotation.set(0, 0, 0)
-  if (currentEnvMode === 'hdri') setEnvMode('custom')
+  S.hdrTexture = null
+  S.hdrInfo = null
+  if (S.scene) S.scene.environmentRotation.set(0, 0, 0)
+  if (S.currentEnvMode === 'hdri') setEnvMode('custom')
   else applyHDREnvMode()
 }
-export function getCurrentLightPreset() { return currentLightPreset }
-export function getCurrentEnvMode() { return currentEnvMode }
+export function getCurrentLightPreset() { return S.currentLightPreset }
+export function getCurrentEnvMode() { return S.currentEnvMode }
 export function setEnvModeExport(mode) { setEnvMode(mode) }
 export function setHdrRotation(val) {
-  hdrRotation = val
-  if (hdrRotateTimer) clearTimeout(hdrRotateTimer)
-  hdrRotateTimer = setTimeout(() => {
-    hdrRotateTimer = null
-    if (initialized && currentEnvMode === 'hdri') {
+  S.hdrRotation = val
+  if (S.hdrRotateTimer) clearTimeout(S.hdrRotateTimer)
+  S.hdrRotateTimer = setTimeout(() => {
+    S.hdrRotateTimer = null
+    if (S.initialized && S.currentEnvMode === 'hdri') {
       ensureRotatedTexture()
       applyHDREnvMode()
     }
   }, 30)
 }
 
-export function setHdrUsage(mode) { if (!['both', 'env', 'bg'].includes(mode)) return; hdrUsage = mode; if (initialized && currentEnvMode === 'hdri') applyHDREnvMode() }
-export function getHdrInfo() { return hdrInfo }
-export function setSkyTurbidity(val) { skyTurbidity = val; if (initialized && currentEnvMode === 'sky') { updateSkySunPosition(); scheduleSkyBake() } }
-export function setSkyRayleigh(val) { skyRayleigh = val; if (initialized && currentEnvMode === 'sky') { updateSkySunPosition(); scheduleSkyBake() } }
-export function setSkyMieCoefficient(val) { skyMieCoefficient = val; if (initialized && currentEnvMode === 'sky') { updateSkySunPosition(); scheduleSkyBake() } }
-export function setSkyMieDirectionalG(val) { skyMieDirectionalG = val; if (initialized && currentEnvMode === 'sky') { updateSkySunPosition(); scheduleSkyBake() } }
-export function setSkySunElevation(val) { skySunElevation = val; if (initialized && currentEnvMode === 'sky') { updateSkySunPosition(); scheduleSkyBake() } }
-export function setSkySunAzimuth(val) { skySunAzimuth = val; if (initialized && currentEnvMode === 'sky') { updateSkySunPosition(); scheduleSkyBake() } }
+export function setHdrUsage(mode) { if (!['both', 'env', 'bg'].includes(mode)) return; S.hdrUsage = mode; if (S.initialized && S.currentEnvMode === 'hdri') applyHDREnvMode() }
+export function getHdrInfo() { return S.hdrInfo }
+export function setSkyTurbidity(val) { S.skyTurbidity = val; if (S.initialized && S.currentEnvMode === 'sky') { updateSkySunPosition(); scheduleSkyBake() } }
+export function setSkyRayleigh(val) { S.skyRayleigh = val; if (S.initialized && S.currentEnvMode === 'sky') { updateSkySunPosition(); scheduleSkyBake() } }
+export function setSkyMieCoefficient(val) { S.skyMieCoefficient = val; if (S.initialized && S.currentEnvMode === 'sky') { updateSkySunPosition(); scheduleSkyBake() } }
+export function setSkyMieDirectionalG(val) { S.skyMieDirectionalG = val; if (S.initialized && S.currentEnvMode === 'sky') { updateSkySunPosition(); scheduleSkyBake() } }
+export function setSkySunElevation(val) { S.skySunElevation = val; if (S.initialized && S.currentEnvMode === 'sky') { updateSkySunPosition(); scheduleSkyBake() } }
+export function setSkySunAzimuth(val) { S.skySunAzimuth = val; if (S.initialized && S.currentEnvMode === 'sky') { updateSkySunPosition(); scheduleSkyBake() } }
 
-export function setSkyTint(hex) { const n = parseInt(hex.slice(1), 16); if (Number.isNaN(n)) return; skyTintHex = n; if (initialized && currentEnvMode === 'sky') { updateSkySunPosition(); scheduleSkyBake() } }
+export function setSkyTint(hex) { const n = parseInt(hex.slice(1), 16); if (Number.isNaN(n)) return; S.skyTintHex = n; if (S.initialized && S.currentEnvMode === 'sky') { updateSkySunPosition(); scheduleSkyBake() } }
 
 function disposeTexture(tex) { if (tex && tex.dispose) tex.dispose() }
 function disposeAllMaterialTextures(m) { disposeTexture(m.map); disposeTexture(m.normalMap); disposeTexture(m.roughnessMap); disposeTexture(m.metalnessMap); disposeTexture(m.emissiveMap); if (m.userData.shaderRefs) { disposeTexture(m.userData.shaderRefs.heightMap.value); m.userData.shaderRefs.heightMap.value = null; m.userData.shaderRefs.hasHeightMap.value = 0.0 } disposeTexture(m.userData.pendingHeightMap); m.userData.pendingHeightMap = null; m.map = null; m.normalMap = null; m.roughnessMap = null; m.metalnessMap = null; m.emissiveMap = null }
@@ -1344,18 +1269,18 @@ function applyTexturesToMesh(mesh, group, side) {
       const sctx = sc.getContext('2d', { willReadFrequently: true }); sctx.drawImage(source, 0, 0)
       const src = sc
       if (side === 'left') showLoading(_t('m3d.loading'))
-      if (side === 'left' && heightDetectCallback) heightDetectCallback('loading')
+      if (side === 'left' && S.heightDetectCallback) S.heightDetectCallback('loading')
       requestAnimationFrame(() => {
         setLoadingProgress(0.2)
-        disposeTexture(material.normalMap); material.normalMap = reconstructNormal(src); applyTextureFilter(material.normalMap); material.normalScale.set(normalScale, normalScale)
+        disposeTexture(material.normalMap); material.normalMap = reconstructNormal(src); applyTextureFilter(material.normalMap); material.normalScale.set(S.normalScale, S.normalScale)
         requestAnimationFrame(() => {
           setLoadingProgress(0.4)
           let heightTex = extractHeight(src); let hStatus = heightTex ? 'alpha' : false
           if (!heightTex) { heightTex = extractHeightFromNormal(src); hStatus = heightTex ? 'normal' : false }
           setLoadingProgress(0.9)
-          if (material.userData.shaderRefs) { disposeTexture(material.userData.shaderRefs.heightMap.value); material.userData.shaderRefs.heightMap.value = heightTex; material.userData.shaderRefs.hasHeightMap.value = (heightTex && parallaxEnabled) ? 1.0 : 0.0; if (heightTex) { applyHeightFilter(heightTex); material.userData.shaderRefs.uHeightTexSize.value.set(heightTex.image.width, heightTex.image.height) } }
+          if (material.userData.shaderRefs) { disposeTexture(material.userData.shaderRefs.heightMap.value); material.userData.shaderRefs.heightMap.value = heightTex; material.userData.shaderRefs.hasHeightMap.value = (heightTex && S.parallaxEnabled) ? 1.0 : 0.0; if (heightTex) { applyHeightFilter(heightTex); material.userData.shaderRefs.uHeightTexSize.value.set(heightTex.image.width, heightTex.image.height) } }
           else { disposeTexture(material.userData.pendingHeightMap); material.userData.pendingHeightMap = heightTex }
-          if (side === 'left' && heightDetectCallback) heightDetectCallback(hStatus)
+          if (side === 'left' && S.heightDetectCallback) S.heightDetectCallback(hStatus)
           material.needsUpdate = true
           if (side === 'left') { setLoadingProgress(1.0); setTimeout(hideLoading, 200) }
         })
@@ -1364,22 +1289,22 @@ function applyTexturesToMesh(mesh, group, side) {
     if (typeof createImageBitmap !== 'undefined') {
       fetch(nUrl).then(r => r.blob()).then(blob => createImageBitmap(blob, { premultiplyAlpha: 'none' })).then(bitmap => { processNormal(bitmap); if (bitmap.close) bitmap.close() }).catch(() => { const img = new Image(); img.onload = () => processNormal(img); img.src = nUrl })
     } else { const img = new Image(); img.onload = () => processNormal(img); img.src = nUrl }
-  } else { if (side === 'left' && heightDetectCallback) heightDetectCallback(false) }
+  } else { if (side === 'left' && S.heightDetectCallback) S.heightDetectCallback(false) }
 
   if (specEntry) {
     const specImg = new Image(); specImg.onload = () => {
-      let fmt = materialFormat
-      if (fmt === 'auto') { fmt = detectFormat(specImg); if (formatDetectCallback) formatDetectCallback(fmt) }
+      let fmt = S.materialFormat
+      if (fmt === 'auto') { fmt = detectFormat(specImg); if (S.formatDetectCallback) S.formatDetectCallback(fmt) }
       disposeTexture(material.roughnessMap); disposeTexture(material.metalnessMap); disposeTexture(material.emissiveMap)
       if (fmt === 'old') {
         material.roughnessMap = extractChannel(specImg, 0, true); material.metalnessMap = extractChannel(specImg, 1, false); material.emissiveMap = extractChannel(specImg, 2, false); applyTextureFilter(material.roughnessMap); applyTextureFilter(material.metalnessMap); applyTextureFilter(material.emissiveMap)
-        material.emissive.set(0xffffff); material.emissiveIntensity = emissiveIntensity; material.needsUpdate = true
+        material.emissive.set(0xffffff); material.emissiveIntensity = S.emissiveIntensity; material.needsUpdate = true
       } else {
          material.roughnessMap = extractRoughness(specImg); material.metalnessMap = extractMetalness(specImg); applyTextureFilter(material.roughnessMap); applyTextureFilter(material.metalnessMap)
         if (mainEntry) {
           const mainImg = new Image(); mainImg.onload = () => {
              disposeTexture(material.emissiveMap); material.emissiveMap = extractEmissive(specImg, mainImg); applyTextureFilter(material.emissiveMap)
-            material.emissive.set(0xffffff); material.emissiveIntensity = emissiveIntensity; material.needsUpdate = true
+            material.emissive.set(0xffffff); material.emissiveIntensity = S.emissiveIntensity; material.needsUpdate = true
           }; mainImg.src = fileUrl(mainEntry.fullPath)
         } else { material.emissive.set(0x000000) }
         material.needsUpdate = true
@@ -1390,11 +1315,11 @@ function applyTexturesToMesh(mesh, group, side) {
 }
 
 export function updateMaterial3D(group) {
-  if (!initialized) return
+  if (!S.initialized) return
   if (group) clearCustomModel()
-  if (!group && heightDetectCallback) heightDetectCallback(false)
-  applyTexturesToMesh(meshLeft, group, 'left')
-  applyTexturesToMesh(meshRight, group, 'right')
+  if (!group && S.heightDetectCallback) S.heightDetectCallback(false)
+  applyTexturesToMesh(S.meshLeft, group, 'left')
+  applyTexturesToMesh(S.meshRight, group, 'right')
 }
 
 export function clearMaterial3D() { updateMaterial3D(null) }
@@ -1403,7 +1328,7 @@ export function clearMaterial3D() { updateMaterial3D(null) }
    group 的内容需以自身原点为几何中心（缩放适配与贴地由本函数完成），
    wrapper 原点保持在模型中心，旋转（拖拽/自动旋转）围绕中心进行。 */
 export function showCustomModel(group) {
-  if (!initialized || !group) return false
+  if (!S.initialized || !group) return false
   clearCustomModel()
   try {
     const box = new THREE.Box3().setFromObject(group)
@@ -1419,17 +1344,17 @@ export function showCustomModel(group) {
     /* 底面贴地（地面 y=-1.3）：wrapper 原点在缩放后模型中心 */
     const halfY = (size.y * scale) / 2
     wrapper.position.y = -1.28 + halfY
-    meshLeft.visible = false; meshRight.visible = false
-    labelLeft.visible = false; labelRight.visible = false
-    customModelGroup = wrapper
-    scene.add(wrapper)
+    S.meshLeft.visible = false; S.meshRight.visible = false
+    S.labelLeft.visible = false; S.labelRight.visible = false
+    S.customModelGroup = wrapper
+    S.scene.add(wrapper)
 
     return true
   } catch { return false }
 }
 
 export function showCustomModelPair(leftGroup, rightGroup) {
-  if (!initialized) return false
+  if (!S.initialized) return false
   if (!leftGroup && !rightGroup) return false
   clearCustomModel()
   try {
@@ -1455,28 +1380,28 @@ export function showCustomModelPair(leftGroup, rightGroup) {
     place(leftGroup, -1.1)
     place(rightGroup, 1.1)
     if (added === 0) return false
-    meshLeft.visible = false; meshRight.visible = false
-    labelLeft.visible = true; labelRight.visible = true
-    labelLeft.position.set(-1.1, -0.95, 0); labelRight.position.set(1.1, -0.95, 0)
-    customModelGroup = wrapper
-    scene.add(wrapper)
+    S.meshLeft.visible = false; S.meshRight.visible = false
+    S.labelLeft.visible = true; S.labelRight.visible = true
+    S.labelLeft.position.set(-1.1, -0.95, 0); S.labelRight.position.set(1.1, -0.95, 0)
+    S.customModelGroup = wrapper
+    S.scene.add(wrapper)
 
     return true
   } catch { return false }
 }
 
 export function clearCustomModel() {
-  if (!customModelGroup) return
-  scene.remove(customModelGroup)
-  disposeGroupDeep(customModelGroup)
-  customModelGroup = null
-  if (initialized) applySourceSide()
+  if (!S.customModelGroup) return
+  S.scene.remove(S.customModelGroup)
+  disposeGroupDeep(S.customModelGroup)
+  S.customModelGroup = null
+  if (S.initialized) applySourceSide()
 }
 
-export function isCustomModelActive() { return !!customModelGroup }
+export function isCustomModelActive() { return !!S.customModelGroup }
 
 export function hasVisibleViewport() {
-  if (!initialized) return false
+  if (!S.initialized) return false
   return !!findVisibleHost()
 }
 
@@ -1492,26 +1417,26 @@ function disposeGroupDeep(root) {
 /* ════════════════════════════════════════════════════════════
    节点编辑器联动 API
    ════════════════════════════════════════════════════════════ */
-export function isMaterial3DReady() { return initialized }
+export function isMaterial3DReady() { return S.initialized }
 export function setBaseColor(rgb) {
-  if (!initialized || !Array.isArray(rgb)) return
+  if (!S.initialized || !Array.isArray(rgb)) return
   const r = clamp01(rgb[0]), g = clamp01(rgb[1]), b = clamp01(rgb[2])
-  meshLeft.material.color.setRGB(r, g, b)
-  meshRight.material.color.setRGB(r, g, b)
-  meshLeft.material.needsUpdate = meshRight.material.needsUpdate = true
+  S.meshLeft.material.color.setRGB(r, g, b)
+  S.meshRight.material.color.setRGB(r, g, b)
+  S.meshLeft.material.needsUpdate = S.meshRight.material.needsUpdate = true
 }
 export function setEmissiveColor(rgb) {
-  if (!initialized || !Array.isArray(rgb)) return
+  if (!S.initialized || !Array.isArray(rgb)) return
   const r = clamp01(rgb[0]), g = clamp01(rgb[1]), b = clamp01(rgb[2])
-  meshLeft.material.emissive.setRGB(r, g, b)
-  meshRight.material.emissive.setRGB(r, g, b)
-  meshLeft.material.needsUpdate = meshRight.material.needsUpdate = true
+  S.meshLeft.material.emissive.setRGB(r, g, b)
+  S.meshRight.material.emissive.setRGB(r, g, b)
+  S.meshLeft.material.needsUpdate = S.meshRight.material.needsUpdate = true
 }
 function clamp01(v) { return Math.max(0, Math.min(1, v)) }
 export function setMainTextureFromUrl(url) {
-  if (!initialized || !url) return
+  if (!S.initialized || !url) return
   const loader = new THREE.TextureLoader()
-  for (const m of [meshLeft, meshRight]) {
+  for (const m of [S.meshLeft, S.meshRight]) {
     loader.load(url, (tex) => {
       tex.colorSpace = THREE.SRGBColorSpace
       tex.wrapS = tex.wrapT = THREE.RepeatWrapping
@@ -1523,28 +1448,28 @@ export function setMainTextureFromUrl(url) {
   }
 }
 export function setNormalMapFromUrl(url) {
-  if (!initialized || !url) return
+  if (!S.initialized || !url) return
   const loader = new THREE.TextureLoader()
-  for (const m of [meshLeft, meshRight]) {
+  for (const m of [S.meshLeft, S.meshRight]) {
     loader.load(url, (tex) => {
       tex.wrapS = tex.wrapT = THREE.RepeatWrapping
       disposeTexture(m.material.normalMap)
       m.material.normalMap = tex
-      m.material.normalScale.set(normalScale, normalScale)
+      m.material.normalScale.set(S.normalScale, S.normalScale)
       applyTextureFilter(tex)
       m.material.needsUpdate = true
     })
   }
 }
 export function clearMainTexture() {
-  if (!initialized) return
-  for (const m of [meshLeft, meshRight]) {
+  if (!S.initialized) return
+  for (const m of [S.meshLeft, S.meshRight]) {
     disposeTexture(m.material.map); m.material.map = null; m.material.needsUpdate = true
   }
 }
 export function clearNormalMap() {
-  if (!initialized) return
-  for (const m of [meshLeft, meshRight]) {
+  if (!S.initialized) return
+  for (const m of [S.meshLeft, S.meshRight]) {
     disposeTexture(m.material.normalMap); m.material.normalMap = null; m.material.needsUpdate = true
   }
 }
@@ -1568,12 +1493,12 @@ function clearSpecTexture(mat) {
   mat.roughnessMap = null; mat.metalnessMap = null; mat.needsUpdate = true
 }
 export function setSpecularFromUrl(url) {
-  if (!initialized || !url) return
-  for (const m of [meshLeft, meshRight]) applySpecTextureToMaterial(m.material, url)
+  if (!S.initialized || !url) return
+  for (const m of [S.meshLeft, S.meshRight]) applySpecTextureToMaterial(m.material, url)
 }
 export function clearSpecularTexture() {
-  if (!initialized) return
-  for (const m of [meshLeft, meshRight]) clearSpecTexture(m.material)
+  if (!S.initialized) return
+  for (const m of [S.meshLeft, S.meshRight]) clearSpecTexture(m.material)
 }
 
 export function applyPbrMapsToModelMaterial(mat, normalUrl, specUrl) {
@@ -1610,7 +1535,7 @@ export function applyPbrMapsToModelMaterial(mat, normalUrl, specUrl) {
   }
 }
 export function applyNodePBR(p) {
-  if (!initialized || !p) return
+  if (!S.initialized || !p) return
   if (p.mainTextureUrl) clearCustomModel()
   if (p.baseColor) setBaseColor(p.baseColor)
   if (typeof p.roughness === 'number') setRoughness(clamp01(p.roughness))
@@ -1630,9 +1555,9 @@ export function applyNodePBR(p) {
   if (p.geometry) setGeometry(p.geometry)
 }
 export function applyNodePBRSide(p, side) {
-  if (!initialized || !p) return
+  if (!S.initialized || !p) return
   if (p.mainTextureUrl) clearCustomModel()
-  const mesh = side === 'left' ? meshLeft : meshRight
+  const mesh = side === 'left' ? S.meshLeft : S.meshRight
   if (!mesh) return
   const mat = mesh.material
   if (p.baseColor && Array.isArray(p.baseColor)) {
@@ -1641,7 +1566,7 @@ export function applyNodePBRSide(p, side) {
   if (typeof p.roughness === 'number') mat.roughness = clamp01(p.roughness)
   if (typeof p.metallic === 'number') mat.metalness = clamp01(p.metallic)
   if (typeof p.normalScale === 'number') mat.normalScale.set(p.normalScale, p.normalScale)
-  if (typeof p.opacity === 'number') { opacityValue = p.opacity; applyOpacityMode(mat) }
+  if (typeof p.opacity === 'number') { S.opacityValue = p.opacity; applyOpacityMode(mat) }
   if (p.emissive && Array.isArray(p.emissive)) {
     mat.emissive.setRGB(clamp01(p.emissive[0]), clamp01(p.emissive[1]), clamp01(p.emissive[2])); mat.needsUpdate = true
   }
@@ -1656,7 +1581,7 @@ export function applyNodePBRSide(p, side) {
     const loader = new THREE.TextureLoader()
     loader.load(p.normalMapUrl, (tex) => {
       tex.wrapS = tex.wrapT = THREE.RepeatWrapping
-      disposeTexture(mat.normalMap); mat.normalMap = tex; mat.normalScale.set(normalScale, normalScale); applyTextureFilter(tex); mat.needsUpdate = true
+      disposeTexture(mat.normalMap); mat.normalMap = tex; mat.normalScale.set(S.normalScale, S.normalScale); applyTextureFilter(tex); mat.needsUpdate = true
     })
   } else if (p.normalMapUrl === null) { disposeTexture(mat.normalMap); mat.normalMap = null; mat.needsUpdate = true }
   if (p.specTextureUrl) {
@@ -1668,30 +1593,30 @@ export function applyNodePBRSide(p, side) {
   if (p.geometry) setGeometry(p.geometry)
 }
 export function getMaterial3DInfo() {
-  if (!initialized) return null
-  const m = meshLeft.material
+  if (!S.initialized) return null
+  const m = S.meshLeft.material
   return {
     color: [m.color.r, m.color.g, m.color.b],
     roughness: m.roughness, metalness: m.metalness,
-    normalScale, emissiveIntensity, envIntensity,
+    normalScale: S.normalScale, emissiveIntensity: S.emissiveIntensity, envIntensity: S.envIntensity,
     hasMap: !!m.map, hasNormalMap: !!m.normalMap
   }
 }
 
 export function disposeMaterial3D() {
-  if (animationId) cancelAnimationFrame(animationId)
-  if (skyBakeTimer) { clearTimeout(skyBakeTimer); skyBakeTimer = null }
-  if (hdrRotateTimer) { clearTimeout(hdrRotateTimer); hdrRotateTimer = null }
-  if (customModelGroup) { scene.remove(customModelGroup); disposeGroupDeep(customModelGroup); customModelGroup = null }
-  for (const m of [meshLeft, meshRight]) { if (m) { if (m.material) { disposeAllMaterialTextures(m.material); m.material.dispose() }; if (m.geometry) m.geometry.dispose() } }
-  if (groundMesh) { groundMesh.geometry.dispose(); groundMesh.material.dispose() }
-  if (gridHelper) { gridHelper.geometry.dispose(); gridHelper.material.dispose() }
-  if (envTexture) envTexture.dispose()
-  if (pmremTexture) pmremTexture.dispose()
-  if (hdrTextureOriginal) hdrTextureOriginal.dispose()
-  if (hdrTextureRotated) hdrTextureRotated.dispose()
-  if (skyEnvTexture) skyEnvTexture.dispose()
-  if (skyMesh) { skyMesh.geometry.dispose(); skyMesh.material.dispose(); skyMesh = null }
-  if (pmrem) pmrem.dispose(); if (renderer) renderer.dispose()
-  initialized = false
+  if (S.animationId) cancelAnimationFrame(S.animationId)
+  if (S.skyBakeTimer) { clearTimeout(S.skyBakeTimer); S.skyBakeTimer = null }
+  if (S.hdrRotateTimer) { clearTimeout(S.hdrRotateTimer); S.hdrRotateTimer = null }
+  if (S.customModelGroup) { S.scene.remove(S.customModelGroup); disposeGroupDeep(S.customModelGroup); S.customModelGroup = null }
+  for (const m of [S.meshLeft, S.meshRight]) { if (m) { if (m.material) { disposeAllMaterialTextures(m.material); m.material.dispose() }; if (m.geometry) m.geometry.dispose() } }
+  if (S.groundMesh) { S.groundMesh.geometry.dispose(); S.groundMesh.material.dispose() }
+  if (S.gridHelper) { S.gridHelper.geometry.dispose(); S.gridHelper.material.dispose() }
+  if (S.envTexture) S.envTexture.dispose()
+  if (S.pmremTexture) S.pmremTexture.dispose()
+  if (S.hdrTextureOriginal) S.hdrTextureOriginal.dispose()
+  if (S.hdrTextureRotated) S.hdrTextureRotated.dispose()
+  if (S.skyEnvTexture) S.skyEnvTexture.dispose()
+  if (S.skyMesh) { S.skyMesh.geometry.dispose(); S.skyMesh.material.dispose(); S.skyMesh = null }
+  if (S.pmrem) S.pmrem.dispose(); if (S.renderer) S.renderer.dispose()
+  S.initialized = false
 }
