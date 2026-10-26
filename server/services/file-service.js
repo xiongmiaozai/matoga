@@ -78,9 +78,11 @@ function deleteFile(p) {
 }
 
 function createFolder(p) {
-  return fs.promises.mkdir(p, { recursive: true })
-    .then(() => ({ success: true }))
-    .catch(err => ({ success: false, error: err.message }))
+  return fs.promises.access(p, fs.constants.F_OK)
+    .then(() => ({ success: true, created: false }))
+    .catch(() => fs.promises.mkdir(p, { recursive: true })
+      .then(() => ({ success: true, created: true }))
+      .catch(err => ({ success: false, error: err.message })))
 }
 
 function _downsampleToGray(rgba, width, height, dstW, dstH) {

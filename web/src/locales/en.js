@@ -6,7 +6,7 @@
 
 export default {
   'app.title': 'matoga',
-  'app.version': 'v3.0',
+  'app.version': 'v3.1',
 
   'common.select': 'Select',
   'common.close': 'Close',
@@ -177,11 +177,9 @@ export default {
   'settings.paths': 'Paths',
   'settings.hdriPreset': 'HDRI Presets',
   'settings.mcPacks': 'MC Texture Packs',
-  'settings.craftPacks': 'Craft Packs',
   'settings.officialPacks': 'Official MC Packs',
-  'settings.userPacks': 'Player Packs',
   'settings.pick': 'Pick',
-  'settings.create': 'New',
+
   'settings.open': 'Open',
   'settings.about': 'About',
   'settings.version': 'Version',
@@ -502,11 +500,9 @@ export default {
   'toast.unhidden': 'Unhidden {n} item(s)',
   'toast.allUnhidden': 'All items unhidden',
   'toast.undoError': 'Undo error: {msg}',
-  'toast.inputPathFirst': 'Please enter a folder path to create',
-  'toast.createdFolder': 'Folder created and path saved',
-  'toast.createFail': 'Create failed: {msg}',
   'toast.savedPath': 'Path saved',
   'toast.selectPathFirst': 'Please select a path first',
+  'toast.openFail': 'Open failed: {msg}',
   'toast.loadedHdr': 'Loaded: {name}',
   'toast.loadHdrFailed': 'Failed to load HDR',
   'toast.cannotReadPreset': 'Cannot read preset folder',

@@ -6,7 +6,7 @@
 
 export default {
   'app.title': 'matoga',
-  'app.version': 'v3.0',
+  'app.version': 'v3.1',
 
   'common.select': '选择',
   'common.close': '关闭',
@@ -177,11 +177,9 @@ export default {
   'settings.paths': '路径',
   'settings.hdriPreset': 'HDRI 预设',
   'settings.mcPacks': 'MC 材质包',
-  'settings.craftPacks': '制作包',
   'settings.officialPacks': 'MC 官方材质包',
-  'settings.userPacks': '玩家材质包',
   'settings.pick': '选',
-  'settings.create': '建',
+
   'settings.open': '开',
   'settings.about': '关于',
   'settings.version': '版本',
@@ -502,11 +500,9 @@ export default {
   'toast.unhidden': '已取消隐藏 {n} 项',
   'toast.allUnhidden': '已取消全部隐藏',
   'toast.undoError': '撤回出错：{msg}',
-  'toast.inputPathFirst': '请先输入要创建的文件夹路径',
-  'toast.createdFolder': '已创建文件夹并保存地址',
-  'toast.createFail': '创建失败：{msg}',
   'toast.savedPath': '已保存地址',
   'toast.selectPathFirst': '请先选择地址',
+  'toast.openFail': '打开失败：{msg}',
   'toast.loadedHdr': '已加载：{name}',
   'toast.loadHdrFailed': '加载 HDR 失败',
   'toast.cannotReadPreset': '无法读取预设文件夹',
