@@ -1,0 +1,55 @@
+name: build-win-exe
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'server/**'
+      - 'web/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/build-win-exe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Windows exe (pkg single-file)
+        run: npm run build:win
+
+      - name: Verify artifact
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "dist\matoga-win-x64.exe")) {
+            throw "dist\matoga-win-x64.exe not found"
+          }
+          $size = (Get-Item "dist\matoga-win-x64.exe").Length
+          Write-Host "exe size: $size bytes ($([math]::Round($size/1MB,2)) MB)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: matoga-win-x64-exe
+          path: dist/matoga-win-x64.exe
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Attach to release (on tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/matoga-win-x64.exe
