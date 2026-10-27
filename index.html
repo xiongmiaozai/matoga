@@ -1039,15 +1039,37 @@
                 linear-gradient(to bottom, rgba(7,7,9,0.88), rgba(13,13,18,0.88));
             position: relative;
         }
+        .ending::before {
+            content: '✦';
+            position: absolute;
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 14px;
+            color: rgba(201,162,39,0.3);
+            text-shadow: 0 0 12px rgba(201,162,39,0.2);
+        }
         .closing {
             font-family: "Cinzel", "Noto Serif SC", serif;
             font-size: 28px;
             font-weight: 300;
             letter-spacing: 6px;
             color: rgba(220,200,170,0.75);
-            margin-bottom: 60px;
+            margin-bottom: 12px;
             text-shadow: 0 0 40px rgba(201,162,39,0.1), 0 0 80px rgba(139,0,0,0.05);
         }
+        .closing-sub {
+            font-family: "Cinzel", serif;
+            font-size: 11px;
+            letter-spacing: 6px;
+            color: rgba(201,162,39,0.35);
+            margin-bottom: 48px;
+            text-transform: uppercase;
+        }
+        .ending .hero-btns { gap: 14px; }
+        .ending .btn { min-width: 180px; text-align: center; }
+        .ending .btn-outline { border-color: rgba(180,140,80,0.15); }
+        .ending .btn-outline:hover { border-color: rgba(201,162,39,0.5); }
 
         footer {
             padding: 40px 24px;
@@ -1916,6 +1938,7 @@
     <!-- 收尾 -->
     <section class="ending reveal" id="download">
         <p class="closing">让材质创作，只专注创作本身。</p>
+        <p class="closing-sub">Focus on Creation Itself</p>
         <div class="hero-btns" id="downloadBtns" style="flex-wrap:wrap;gap:12px;">
             <a href="https://github.com/xiongmiaozai/matoga/releases/download/v3.2.0/matoga.Setup.3.2.0.exe" class="btn btn-primary" target="_blank" rel="noopener" data-os="win">Windows 安装版</a>
             <a href="https://github.com/xiongmiaozai/matoga/releases/download/v3.2.0/matoga-3.2.0-arm64.dmg" class="btn btn-outline" target="_blank" rel="noopener" data-os="mac">macOS Apple 芯片</a>
