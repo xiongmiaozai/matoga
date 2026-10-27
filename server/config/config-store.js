@@ -20,6 +20,7 @@ try { fs.mkdirSync(DATA_DIR, { recursive: true }) } catch (e) { logger.warn('con
 const SCHEMA = {
   locale: 'zh',
   theme: 'light',
+  themeMode: 'auto',
   recursive: false,
   hash: false,
   onlyMissing: false,

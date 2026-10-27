@@ -45,20 +45,23 @@
   const matogaUpload = {
     async pickFile(acceptExts) {
       return new Promise((resolve) => {
+        let settled = false
+        const done = (v) => { if (!settled) { settled = true; resolve(v) } }
         const input = document.createElement('input')
         input.type = 'file'
         if (acceptExts && acceptExts.length) input.accept = '.' + acceptExts.join(',.')
         input.onchange = async () => {
           const f = input.files && input.files[0]
-          if (!f) return resolve(null)
+          if (!f) return done(null)
           try {
             const begin = await call('POST', '/api/upload/begin')
             await putRaw(begin.uploadId, f.name, f)
             const end = await call('POST', '/api/upload/end?uploadId=' + begin.uploadId)
             const sep = end.rootPath.includes('\\') && !end.rootPath.includes('/') ? '\\' : '/'
-            resolve(end.rootPath + sep + f.name)
-          } catch { resolve(null) }
+            done(end.rootPath + sep + f.name)
+          } catch { done(null) }
         }
+        input.addEventListener('cancel', () => done(null))
         input.click()
       })
     },
@@ -154,6 +157,12 @@
     getConfig: () => call('GET', '/api/config'),
     setConfig: (patch) => call('PUT', '/api/config', patch).then(() => {}).catch(() => {}),
     clearConfig: () => call('DELETE', '/api/config').then(() => {}).catch(() => {}),
+
+    listThemes: () => call('GET', '/api/themes'),
+    getTheme: (id) => call('GET', '/api/themes/' + encodeURIComponent(id)),
+    saveTheme: (id, def) => call('PUT', '/api/themes/' + encodeURIComponent(id), def),
+    deleteTheme: (id) => call('DELETE', '/api/themes/' + encodeURIComponent(id)).then(() => {}).catch(() => {}),
+    importTheme: (def) => call('POST', '/api/themes/import', def),
 
     copyFile: (src, dest) => wrapFs(() => call('POST', '/api/file/copy', { src, dest })).then(r => { if (r.success) { hashCache.delete(dest); hashCache.delete(src) } return r }),
     backupFile: async (p) => {

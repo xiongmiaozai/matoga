@@ -281,7 +281,7 @@ body.node-mode #nodeView{ display:flex; }
   background-repeat:no-repeat; image-rendering:pixelated;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
 }
-.lib-item .pv-img{ background-color:#000 }
+.lib-item .pv-img{ background-color:var(--mc-darker) }
 .lib-item .pv-num{ background:linear-gradient(90deg,#000,#fff); }
 .lib-item .pv-num .mark{
   position:absolute; top:-1px; bottom:-1px; width:2px; margin-left:-1px;

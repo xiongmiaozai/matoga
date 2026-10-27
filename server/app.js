@@ -46,6 +46,7 @@ function createApp() {
   api.use('/imported-models', require('./routes/imported-models'))
   api.use('/custom-models', require('./routes/custom-models'))
   api.use('/panels', require('./routes/panels'))
+  api.use('/themes', require('./routes/themes'))
   app.use('/api', api)
 
 

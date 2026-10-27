@@ -17,6 +17,7 @@ const path = require('path')
 const crypto = require('crypto')
 const { logger } = require('../middleware/logger')
 const { DATA_ROOT } = require('../paths')
+const { AppError } = require('../lib/errors')
 
 const DIR = path.join(DATA_ROOT, 'data', 'node-projects')
 const FORMAT = 'matoga-node-project'
@@ -291,6 +292,7 @@ function rename(id, name) {
 }
 
 function thumbPath(id) {
+  if (!ID_RE.test(id)) throw new AppError('ERR_INVALID_PARAM', 'bad id')
   return path.join(projectDir(id), 'thumbnail.png')
 }
 

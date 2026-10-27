@@ -14,21 +14,21 @@
   </script>
   <title>matoga</title>
   <link rel="stylesheet" href="styles.css" />
-  <link rel="stylesheet" href="mc-theme.css" />
+  <link rel="stylesheet" id="mcThemeLink" href="mc-theme.css" />
   <link rel="stylesheet" href="/vendor/golden-layout-css/goldenlayout-base.css" />
-  <link rel="stylesheet" href="/vendor/golden-layout-css/themes/goldenlayout-light-theme.css" />
+  <link rel="stylesheet" data-gl-theme href="/vendor/golden-layout-css/themes/goldenlayout-light-theme.css" />
   <link rel="stylesheet" href="workspace.css" />
   <link rel="stylesheet" href="node-canvas.css" />
   <link rel="stylesheet" href="node-rel.css" />
   <link rel="stylesheet" href="node-preview.css" />
   <link rel="stylesheet" href="floating-window.css" />
   <style>
-    .bb-launch { display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; height:100%; padding:24px; gap:10px; color:#9a9a9a; }
-    .bb-launch-ico { width:56px; height:56px; opacity:.85; color:#3a7bd5; }
-    .bb-launch-title { font-size:16px; font-weight:600; color:#e6e6e6; }
+    .bb-launch { display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; height:100%; padding:24px; gap:10px; color:var(--text-muted); }
+    .bb-launch-ico { width:56px; height:56px; opacity:.85; color:var(--primary); }
+    .bb-launch-title { font-size:16px; font-weight:600; color:var(--text); }
     .bb-launch-desc { font-size:12.5px; line-height:1.6; max-width:320px; }
-    .bb-launch-btn { display:inline-flex; align-items:center; gap:6px; margin-top:6px; padding:9px 20px; border:0; border-radius:6px; background:#3a7bd5; color:#fff; font-size:13.5px; cursor:pointer; transition:background .15s; }
-    .bb-launch-btn:hover { background:#2f6cc0; }
+    .bb-launch-btn { display:inline-flex; align-items:center; gap:6px; margin-top:6px; padding:9px 20px; border:0; border-radius:6px; background:var(--primary); color:var(--text); font-size:13.5px; cursor:pointer; transition:background .15s; }
+    .bb-launch-btn:hover { background:var(--primary-hover); }
   </style>
 </head>
 <body>
@@ -61,6 +61,7 @@
     <symbol id="i-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></symbol>
     <symbol id="i-box" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v8a2 2 0 0 1-1 1.73l-7 4a2 2 0 0 1-2 0l-7-4A2 2 0 0 1 3 16V8a2 2 0 0 1 1-1.73l7-4a2 2 0 0 1 2 0l7 4A2 2 0 0 1 21 8z"/><path d="M3.3 7L12 12l8.7-5"/><path d="M12 22V12"/></symbol>
     <symbol id="i-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></symbol>
+    <symbol id="i-palette" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="7.5" cy="10.5" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none"/><circle cx="16.5" cy="10.5" r="1" fill="currentColor" stroke="none"/><path d="M12 21a9 9 0 0 0 0-18"/></symbol>
     <symbol id="i-compare" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M6 8v8a4 4 0 0 0 4 4h4M18 16V8a4 4 0 0 0-4-4h-4"/></symbol>
     <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></symbol>
     <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></symbol>
@@ -159,6 +160,10 @@
     <div class="settings-body">
       <div class="settings-section">
         <div class="settings-section-title" data-i18n="settings.appearance">外观</div>
+        <div class="theme-select-row">
+          <span class="path-setting-label" data-i18n="theme.manager">主题</span>
+          <select id="themeSelect" class="input-select"></select>
+        </div>
         <label class="opt"><input type="checkbox" id="settingThemeChk" /><span data-i18n="settings.darkMode">深色模式</span></label>
       </div>
       <div class="settings-section">

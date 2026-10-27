@@ -179,12 +179,12 @@
 .lm_splitter.lm_vertical {
   width: 10px !important;
   cursor: ns-resize !important;
-  background: #d0d0d0 !important;
+  background: var(--panel-3) !important;
 }
 .lm_splitter.lm_horizontal {
   height: 10px !important;
   cursor: ew-resize !important;
-  background: #d0d0d0 !important;
+  background: var(--panel-3) !important;
 }
 .lm_splitter .lm_drag_handle {
   background: transparent !important;
@@ -199,8 +199,8 @@
 .lm_splitter.lm_vertical::before { width: 18px; height: 2px; }
 .lm_splitter.lm_horizontal::before { width: 2px; height: 18px; }
 .lm_splitter:hover::before, .lm_splitter.lm_dragging::before { background: #fff; }
-.lm_splitter:hover { background: #0A59F7 !important; }
-.lm_splitter.lm_dragging { background: #0A59F7 !important; }
+.lm_splitter:hover { background: var(--primary) !important; }
+.lm_splitter.lm_dragging { background: var(--primary) !important; }
 
 /* 停靠指示器 — Adobe 风格蓝色高亮 */
 .lm_drop_target_indicator {

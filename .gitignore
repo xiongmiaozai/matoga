@@ -53,5 +53,5 @@ craft-packs/
 # 大型素材包（大二进制文件，不入库；运行时由本地 / 分发渠道提供）
 mc-packs/
 official-packs/
-hdri-presets/.codeartsdoer/
+hdri-presets/
 .codeartsdoer/

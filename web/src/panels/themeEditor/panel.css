@@ -1,0 +1,125 @@
+/* 主题编辑器面板 */
+.theme-editor {
+  padding: 8px 0;
+}
+.theme-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.theme-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel-2);
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+  position: relative;
+  text-align: left;
+}
+.theme-card:hover {
+  border-color: var(--primary);
+}
+.theme-card.active {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+.theme-card-name {
+  font-size: var(--fs-base);
+  color: var(--text);
+}
+.theme-card-sw {
+  display: flex;
+  gap: 3px;
+}
+.theme-sw {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  border: 1px solid var(--border);
+}
+.theme-card-tag {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: 9px;
+  color: var(--text-muted);
+}
+.theme-editor-actions {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.theme-edit-form {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  margin-top: 4px;
+}
+.theme-edit-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.theme-name-input {
+  flex: 1;
+}
+.theme-mode-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--fs-base);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.theme-edit-group {
+  margin-bottom: 10px;
+}
+.theme-edit-group-title {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.theme-token-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.theme-token-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.theme-token-label {
+  width: 110px;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  flex-shrink: 0;
+  font-family: ui-monospace, monospace;
+}
+.theme-token-color {
+  width: 30px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: none;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.theme-token-text {
+  flex: 1;
+  min-width: 0;
+}
+.theme-edit-footer {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}

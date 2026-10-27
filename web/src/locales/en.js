@@ -6,7 +6,7 @@
 
 export default {
   'app.title': 'matoga',
-  'app.version': 'v3.1',
+  'app.version': 'v3.1.1',
 
   'common.select': 'Select',
   'common.close': 'Close',
@@ -184,6 +184,23 @@ export default {
   'settings.about': 'About',
   'settings.version': 'Version',
   'settings.language': 'Language',
+
+  'theme.manager': 'Theme',
+  'theme.new': 'New theme',
+  'theme.import': 'Import',
+  'theme.namePlaceholder': 'Theme name',
+  'theme.darkVariant': 'Dark variant',
+  'theme.colors': 'Colors',
+  'theme.sizes': 'Size / Radius / Font',
+  'theme.other': 'Other',
+  'theme.export': 'Export',
+  'theme.delete': 'Delete',
+  'theme.saved': 'Theme saved',
+  'theme.saveFail': 'Save failed: {msg}',
+  'theme.deleted': 'Theme deleted',
+  'theme.deleteFail': 'Delete failed: {msg}',
+  'theme.imported': 'Theme imported',
+  'theme.importFail': 'Import failed: {msg}',
 
   'm3d.loading': 'Processing normal map...',
   'm3d.geoSphere': 'Sphere',

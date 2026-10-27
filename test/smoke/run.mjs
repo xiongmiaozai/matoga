@@ -1,125 +1,84 @@
 /**
  * matoga - 冒烟测试统一 runner
- * 自启隔离服务器实例（独立端口 + 独立数据目录），依次执行 api-smoke 与 ws-sync，结束后回收。
+ * 同进程启动隔离服务器，并行调度 API 组与 WS 组，结束后回收。
  * Copyright (c) 2026 芝世 (xiongmiaozai). All rights reserved.
  * SPDX-License-Identifier: MIT
  */
 
-import { spawn } from 'node:child_process'
-import net from 'node:net'
-import fs from 'node:fs'
-import os from 'node:os'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
+import { startServer, stopServer, cleanDataRoot } from './lib/server.mjs'
+import { tmpRoot, cleanDir, ensureDir, writeFile } from './lib/data.mjs'
 
-const HERE = fileURLToPath(new URL('.', import.meta.url))
-const ROOT = path.join(HERE, '..', '..')
-const TMP_DATA = path.join(os.tmpdir(), 'matoga-smoke-data-' + process.pid)
+import * as apiScan from './api/scan.test.mjs'
+import * as apiFileOps from './api/file-ops.test.mjs'
+import * as apiConfig from './api/config.test.mjs'
+import * as apiUpload from './api/upload.test.mjs'
+import * as apiMisc from './api/misc.test.mjs'
 
-function freePort() {
-  return new Promise((resolve, reject) => {
-    const srv = net.createServer()
-    srv.on('error', reject)
-    srv.listen(0, '127.0.0.1', () => {
-      const { port } = srv.address()
-      srv.close(() => resolve(port))
-    })
-  })
+import * as wsBatchProgress from './ws/batch-progress.test.mjs'
+import * as wsCancel from './ws/cancel.test.mjs'
+import * as wsBackup from './ws/backup.test.mjs'
+
+const API_MODULES = [apiScan, apiFileOps, apiConfig, apiUpload, apiMisc]
+const WS_MODULES = [wsBatchProgress, wsCancel, wsBackup]
+
+async function runGroup(label, modules, ctx) {
+  console.log(`${label}\n`)
+  let pass = 0
+  let fail = 0
+  for (const mod of modules) {
+    try {
+      const r = await mod.run(ctx)
+      pass += r.pass
+      fail += r.fail
+    } catch (e) {
+      fail++
+      console.error(`  ERROR  ${label.slice(0, -1)} 模块异常: ${e.message}`)
+    }
+  }
+  console.log(`\n${label}结果: ${pass} 通过, ${fail} 失败\n`)
+  return { pass, fail }
 }
 
-function waitServer(child, port) {
-  const deadline = Date.now() + 20000
-  return new Promise((resolve, reject) => {
-    let actualPort = port
-    const timer = setInterval(async () => {
-      if (Date.now() > deadline) {
-        cleanup()
-        reject(new Error('服务器启动超时'))
-        return
-      }
-      try {
-        const r = await fetch(`http://127.0.0.1:${actualPort}/api/health`)
-        const j = await r.json()
-        if (j.ok && j.data.status === 'ok') {
-          if (j.data.pid !== child.pid) {
-            cleanup()
-            reject(new Error(`health pid 不匹配: 期望 ${child.pid}，实际 ${j.data.pid}`))
-            return
-          }
-          cleanup()
-          resolve(`http://127.0.0.1:${actualPort}`)
-        }
-      } catch { /* 尚未就绪，继续轮询 */ }
-    }, 250)
-
-    let buf = ''
-    const onData = (d) => {
-      buf += d.toString()
-      const m = buf.match(/http:\/\/localhost:(\d+)\//)
-      if (m) actualPort = parseInt(m[1], 10)
-    }
-    const onStderr = (d) => process.stderr.write('[server] ' + d)
-    const onExit = () => {
-      cleanup()
-      reject(new Error('服务器进程提前退出'))
-    }
-
-    function cleanup() {
-      clearInterval(timer)
-      child.stdout.removeListener('data', onData)
-      child.stderr.removeListener('data', onStderr)
-      child.removeListener('exit', onExit)
-    }
-
-    child.stdout.on('data', onData)
-    child.stderr.on('data', onStderr)
-    child.once('exit', onExit)
-  })
-}
-
-function runTest(file, env) {
-  return new Promise((resolve) => {
-    const p = spawn(process.execPath, [path.join(HERE, file)], {
-      env: { ...process.env, ...env },
-      stdio: 'inherit'
-    })
-    p.on('exit', (code) => resolve(code ?? 1))
-  })
+async function ensureApiSmokeData(smoke) {
+  await cleanDir(smoke)
+  await ensureDir(join(smoke, 'sub'))
+  await writeFile(join(smoke, 'a.png'), 'hello-matoga-png-fake')
+  await writeFile(join(smoke, 'b.txt'), 'hello-b')
+  await writeFile(join(smoke, 'c.png'), 'fake-c')
+  await writeFile(join(smoke, 'd.png'), 'fake-d')
 }
 
 let server = null
-let failed = false
+let dataRoot = null
+let failed = true
 try {
-  fs.rmSync(TMP_DATA, { recursive: true, force: true })
-  fs.mkdirSync(TMP_DATA, { recursive: true })
-  const port = await freePort()
-  const env = {
-    MATOGA_DATA_ROOT: TMP_DATA,
-    MATOGA_PRESET_ROOT: ROOT
-  }
-  server = spawn(process.execPath, [path.join(ROOT, 'server', 'index.js'), '--port', String(port)], {
-    env: { ...process.env, ...env },
-    stdio: ['ignore', 'pipe', 'pipe']
-  })
-  const base = await waitServer(server, port)
-  env.SMOKE_BASE = base
+  dataRoot = tmpRoot('data')
+  await cleanDataRoot(dataRoot)
+  const { child, base } = await startServer({ dataRoot })
+  server = child
   console.log(`冒烟服务器已就绪: ${base} (pid ${server.pid})\n`)
 
-  const c1 = await runTest('api-smoke.mjs', env)
-  console.log()
-  const c2 = await runTest('ws-sync.test.mjs', env)
-  failed = !!(c1 || c2)
+  const smoke = tmpRoot('api')
+  await ensureApiSmokeData(smoke)
+  const ctx = { base, smoke }
+
+  const [apiResult, wsResult] = await Promise.all([
+    runGroup('API 冒烟', API_MODULES, ctx),
+    runGroup('WS 集成', WS_MODULES, { base })
+  ])
+
+  const totalPass = apiResult.pass + wsResult.pass
+  const totalFail = apiResult.fail + wsResult.fail
+  console.log(`冒烟总结果: ${totalPass} 通过, ${totalFail} 失败`)
+  failed = totalFail > 0
+
+  await cleanDir(smoke)
 } catch (e) {
   console.error('冒烟运行失败:', e.message)
   failed = true
 } finally {
-  if (server && server.exitCode === null) {
-    server.kill('SIGTERM')
-    await new Promise((r) => {
-      server.once('exit', r)
-      setTimeout(() => { try { server.kill('SIGKILL') } catch {} ; r() }, 5000)
-    })
-  }
-  fs.rmSync(TMP_DATA, { recursive: true, force: true })
+  await stopServer(server)
+  await cleanDataRoot(dataRoot)
 }
 process.exit(failed ? 1 : 0)

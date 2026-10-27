@@ -104,11 +104,12 @@ function getSelection() {
 
 function setSelection(items) {
   const clean = sanitizeList(items, MAX_ITEMS)
-  writeQueue = writeQueue.then(() => {
-    try { atomicWrite(SELECTION_FILE, { items: clean }) }
-    catch (e) { logger.error('craft', 'setSelection failed: ' + e.message) }
+  const result = writeQueue.then(() => {
+    atomicWrite(SELECTION_FILE, { items: clean })
+    return clean
   })
-  return writeQueue.then(() => clean)
+  writeQueue = result.catch((e) => { logger.error('craft', 'setSelection failed: ' + e.message) })
+  return result
 }
 
 function addItem(item) {

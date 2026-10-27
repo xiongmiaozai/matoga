@@ -72,3 +72,12 @@ test('deleteModel 幂等：删除不存在的合法 id 不报错', async () => {
   const r = await svc.deleteModel('never-saved-id')
   assert.equal(r.id, 'never-saved-id')
 })
+test('saveModel 非法 id（路径穿越）→ 抛 ERR_INVALID_PARAM', async () => {
+  await assert.rejects(() => svc.saveModel({ id: '../..', name: 'x', data: '{}' }), (e) => e.code === 'ERR_INVALID_PARAM')
+  await assert.rejects(() => svc.saveModel({ id: 'a/b', name: 'x', data: '{}' }), (e) => e.code === 'ERR_INVALID_PARAM')
+})
+
+test('saveModel data 为 null/undefined → 抛 ERR_INVALID_PARAM', async () => {
+  await assert.rejects(() => svc.saveModel({ name: 'x', data: null }), (e) => e.code === 'ERR_INVALID_PARAM')
+  await assert.rejects(() => svc.saveModel({ name: 'x', data: undefined }), (e) => e.code === 'ERR_INVALID_PARAM')
+})

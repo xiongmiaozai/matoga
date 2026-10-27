@@ -11,6 +11,7 @@
 const fs = require('fs')
 const path = require('path')
 const { DATA_ROOT } = require('../paths')
+const { AppError } = require('../lib/errors')
 
 const IMPORTED_MODELS_DIR = path.join(DATA_ROOT, 'data', 'imported-models')
 
@@ -97,8 +98,10 @@ async function listModels() {
 
 async function saveModel({ id, name, data, ext }) {
   await ensureDir(IMPORTED_MODELS_DIR)
-  const safeName = String(name || 'model').replace(/[^\w.\-]+/g, '_')
+  const safeName = String(name || 'model').replace(/[^\w.-]+/g, '_')
   const fid = id || (safeName + '-' + Date.now().toString(36))
+  if (id) assertValidId(id)
+  if (data == null) throw new AppError('ERR_INVALID_PARAM', 'data required')
   const e = normalizeExt(ext, name, data)
   const dir = path.join(IMPORTED_MODELS_DIR, fid)
   await fs.promises.mkdir(dir, { recursive: true })

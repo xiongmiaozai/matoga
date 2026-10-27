@@ -6,7 +6,7 @@
 
 export default {
   'app.title': 'matoga',
-  'app.version': 'v3.1',
+  'app.version': 'v3.1.1',
 
   'common.select': '选择',
   'common.close': '关闭',
@@ -184,6 +184,23 @@ export default {
   'settings.about': '关于',
   'settings.version': '版本',
   'settings.language': '语言',
+
+  'theme.manager': '主题',
+  'theme.new': '新建主题',
+  'theme.import': '导入',
+  'theme.namePlaceholder': '主题名称',
+  'theme.darkVariant': '深色变体',
+  'theme.colors': '颜色',
+  'theme.sizes': '尺寸 / 圆角 / 字号',
+  'theme.other': '其他',
+  'theme.export': '导出',
+  'theme.delete': '删除',
+  'theme.saved': '主题已保存',
+  'theme.saveFail': '保存失败：{msg}',
+  'theme.deleted': '主题已删除',
+  'theme.deleteFail': '删除失败：{msg}',
+  'theme.imported': '主题已导入',
+  'theme.importFail': '导入失败：{msg}',
 
   'm3d.loading': '处理法线贴图...',
   'm3d.geoSphere': '球',

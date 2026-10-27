@@ -553,8 +553,8 @@ export function showPixelDiff(pairs, panel) {
 
     toolbar.querySelectorAll('button').forEach(mb => {
       mb.addEventListener('click', () => {
-        toolbar.querySelectorAll('button').forEach(b => { b.classList.remove('active'); b.style.background = '#2a3a5c'; b.style.color = '#a0b0d0' })
-        mb.classList.add('active'); mb.style.background = '#4a6a9c'; mb.style.color = '#fff'
+        toolbar.querySelectorAll('button').forEach(b => { b.classList.remove('active') })
+        mb.classList.add('active')
         currentMode = mb.dataset.mode; render()
       })
     })

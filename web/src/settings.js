@@ -7,20 +7,14 @@
 import { $, showToast } from './core.js'
 import { refreshHdrPreset } from './hdri-preset.js'
 import { t, setLocale, getLocale, onLocaleChange, applyI18n } from './i18n.js'
+import * as themeRegistry from './theme/registry.js'
 
 export function applyTheme(theme) {
-  document.documentElement.setAttribute('data-theme', theme)
-  document.body.setAttribute('data-theme', theme)
-  const toggle = $('themeToggle')
-  if (toggle) toggle.innerHTML = theme === 'dark' ? '<svg class="ico"><use href="#i-sun"/></svg>' : '<svg class="ico"><use href="#i-moon"/></svg>'
-  const chk = $('settingThemeChk')
-  if (chk) chk.checked = theme === 'dark'
-  window.api.setConfig({ theme })
+  themeRegistry.applyTheme(theme)
 }
 
 export function toggleTheme() {
-  const current = document.documentElement.getAttribute('data-theme')
-  applyTheme(current === 'dark' ? 'light' : 'dark')
+  themeRegistry.toggleTheme()
 }
 
 export function initSettings() {
@@ -36,9 +30,34 @@ export function initSettings() {
   const toggle = $('themeToggle')
   if (toggle) toggle.addEventListener('click', toggleTheme)
 
+  initThemeSelect()
 
   initLanguageSettings()
   initPathSettings()
+}
+
+function initThemeSelect() {
+  const sel = $('themeSelect')
+  if (!sel) return
+  const reg = themeRegistry.getRegistry()
+  const active = themeRegistry.getActiveId()
+  sel.innerHTML = ''
+  const groups = { 内置: [], 自定义: [] }
+  for (const def of reg.values()) (def.builtin ? groups['内置'] : groups['自定义']).push(def)
+  for (const [label, defs] of Object.entries(groups)) {
+    if (!defs.length) continue
+    const og = document.createElement('optgroup')
+    og.label = label
+    for (const def of defs) {
+      const opt = document.createElement('option')
+      opt.value = def.id
+      opt.textContent = def.name
+      if (def.id === active) opt.selected = true
+      og.appendChild(opt)
+    }
+    sel.appendChild(og)
+  }
+  sel.addEventListener('change', () => themeRegistry.applyTheme(sel.value))
 }
 
 function initLanguageSettings() {

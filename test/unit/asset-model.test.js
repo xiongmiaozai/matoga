@@ -199,9 +199,9 @@ test('路由: raw any=1 可读取包内模型 JSON（内容一致）', async () 
     assert.equal(r3.status, 200)
     assert.deepEqual(await r3.json(), JSON.parse(MODEL_ITEM))
 
-    /* 无 any=1 时非图片扩展名被拒绝（业务错误统一 HTTP 200 + ok:false） */
+    /* 无 any=1 时非图片扩展名被拒绝（业务错误返回 400 + ok:false） */
     const r4 = await fetch(base + '/api/mc-packs/MyPack/raw?path=' + encodeURIComponent('assets/minecraft/models/block/stone.json'))
-    assert.equal(r4.status, 200)
+    assert.equal(r4.status, 400)
     const j4 = await r4.json()
     assert.equal(j4.ok, false)
     assert.equal(j4.code, 'ERR_INVALID_PARAM')

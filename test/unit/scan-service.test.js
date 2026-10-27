@@ -43,6 +43,12 @@ test('shouldIgnore: 含 * 的 glob', () => {
   assert.equal(shouldIgnore('restore.txt', ['backup_*']), false)
 })
 
+test('shouldIgnore: 含正则特殊字符的 pattern 不崩溃', () => {
+  assert.equal(shouldIgnore('a(xb', ['a(*b']), true)
+  assert.equal(shouldIgnore('a[xb', ['a[*b']), true)
+  assert.equal(shouldIgnore('normal.txt', ['a(*b']), false)
+})
+
 test('scan: 非递归读取目录', async () => {
   setupTmp({ 'a.txt': '', 'b.png': '', 'sub': {} })
   const entries = await scan(TMP, [], false)
