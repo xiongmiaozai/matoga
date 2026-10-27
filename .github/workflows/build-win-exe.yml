@@ -7,6 +7,10 @@ on:
       - 'server/**'
       - 'web/**'
       - 'scripts/**'
+      - 'electron/**'
+      - 'hdri-presets/**'
+      - 'mc-packs/**'
+      - 'official-packs/**'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/build-win-exe.yml'
@@ -29,22 +33,25 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Windows exe (pkg single-file)
-        run: npm run build:win
+      - name: Build Windows NSIS installer (electron-builder)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run dist:win
 
       - name: Verify artifact
         shell: pwsh
         run: |
-          if (-not (Test-Path "dist\matoga-win-x64.exe")) {
-            throw "dist\matoga-win-x64.exe not found"
-          }
-          $size = (Get-Item "dist\matoga-win-x64.exe").Length
-          Write-Host "exe size: $size bytes ($([math]::Round($size/1MB,2)) MB)"
+          $exe = Get-ChildItem dist-electron\*.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $exe) { throw "No exe installer found in dist-electron" }
+          $size = $exe.Length
+          Write-Host "Installer: $($exe.Name), size: $size bytes ($([math]::Round($size/1MB,2)) MB)"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: matoga-win-x64-exe
-          path: dist/matoga-win-x64.exe
+          name: matoga-win-installer
+          path: |
+            dist-electron/*.exe
+            dist-electron/latest*.yml
           if-no-files-found: error
           retention-days: 30
 
@@ -52,4 +59,6 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/matoga-win-x64.exe
+          files: |
+            dist-electron/*.exe
+            dist-electron/latest*.yml
