@@ -3,6 +3,11 @@
   "version": "3.1.0",
   "description": "材质贴图对比工具 - 本地 Web 服务版（B/S 架构）",
   "main": "electron/main.js",
+  "workspaces": [
+    "server",
+    "web",
+    "electron"
+  ],
   "scripts": {
     "start": "node server/index.js",
     "web": "node server/index.js",
@@ -37,12 +42,7 @@
     "email": "2720596091@qq.com"
   },
   "license": "MIT",
-  "dependencies": {
-    "express": "^5.3.0",
-    "golden-layout": "^2.6.0",
-    "three": "^0.186.1",
-    "ws": "^8.22.0"
-  },
+
   "engines": {
     "node": ">=18"
   },
