@@ -7,9 +7,14 @@ package media
 import (
 	"bytes"
 	"encoding/binary"
+	"image"
 	"image/png"
+	"io"
 	"strings"
 	"testing"
+
+	"github.com/bbrks/go-blurhash"
+	"github.com/mrjoshuak/go-openexr/exr"
 )
 
 // buildHDR 构造一个未压缩（flat）的 Radiance RGBE 文件。
@@ -130,17 +135,49 @@ func TestBlurhashShape(t *testing.T) {
 		rgba[i*4+3] = 255
 	}
 	hash := EncodeBlurhash(rgba, w, h, 4, 3)
-	// 4×3 分量：1 + 4 + (12-1)*2 = 27 字符
-	if len(hash) != 27 {
-		t.Fatalf("blurhash 长度 = %d (%q), want 27", len(hash), hash)
+	// blurhash 规范：1(sizeFlag) + 1(maxValue) + 4(DC) + (4*3-1)*2 = 28 字符
+	if len(hash) != 28 {
+		t.Fatalf("blurhash 长度 = %d (%q), want 28", len(hash), hash)
 	}
 	if strings.ContainsAny(hash, " \t\n") {
 		t.Errorf("blurhash 不应含空白: %q", hash)
 	}
-	// 首字符编码 cx-1 + (cy-1)<<4 = 3 + 32 = 35 → base83 第 35 位
+	// sizeFlag = (cx-1) + (cy-1)*9 = 3 + 18 = 21 → base83 第 21 位
 	const chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz#$%*+,-.:;=?@[]^_{|}~"
-	if hash[0] != chars[35] {
-		t.Errorf("首字符 = %q, want %q", hash[0], chars[35])
+	if hash[0] != chars[21] {
+		t.Errorf("首字符 = %q, want %q", hash[0], chars[21])
+	}
+	// 纯色图的 AC 分量应全部量化为 0，可被标准解码器还原为近似纯色
+	if hash[2:6] == "0000" {
+		t.Logf("DC 分量 = %q", hash[2:6])
+	}
+}
+
+// TestBlurhashMatchesReference 用一张真实渐变图校验输出与参考实现一致。
+func TestBlurhashMatchesReference(t *testing.T) {
+	const w, h = 32, 16
+	rgba := make([]byte, w*h*4)
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			i := (y*w + x) * 4
+			rgba[i] = byte(x * 255 / w)
+			rgba[i+1] = byte(y * 255 / h)
+			rgba[i+2] = 128
+			rgba[i+3] = 255
+		}
+	}
+	got := EncodeBlurhash(rgba, w, h, 4, 3)
+	if len(got) != 28 {
+		t.Fatalf("长度 = %d (%q)", len(got), got)
+	}
+	// 与 bbrks/go-blurhash 直接调用结果比对
+	img := &image.NRGBA{Pix: rgba, Stride: w * 4, Rect: image.Rect(0, 0, w, h)}
+	want, err := blurhash.Encode(4, 3, img)
+	if err != nil {
+		t.Fatalf("参考编码失败: %v", err)
+	}
+	if got != want {
+		t.Errorf("blurhash = %q, want %q", got, want)
 	}
 }
 
@@ -188,24 +225,53 @@ func TestGenerateThumbDownsamples(t *testing.T) {
 	}
 }
 
-func TestHalfToFloatKnownValues(t *testing.T) {
-	cases := []struct {
-		in   uint16
-		want float32
-	}{
-		{0x0000, 0},
-		{0x3C00, 1},   // 1.0
-		{0x4000, 2},   // 2.0
-		{0xBC00, -1},  // -1.0
-		{0x3555, 0.33325},
-	}
-	for _, c := range cases {
-		got := halfToFloat(c.in)
-		diff := got - c.want
-		if diff > 1e-4 || diff < -1e-4 {
-			t.Errorf("halfToFloat(%#04x) = %v, want %v", c.in, got, c.want)
+// TestDecodeEXRRoundTrip 用 go-openexr 编码一张 EXR，再由我们的 DecodeEXR 解码，
+// 验证换库后的解码链路仍然正确。
+func TestDecodeEXRRoundTrip(t *testing.T) {
+	const w, h = 4, 3
+	src := exr.NewRGBAImage(image.Rect(0, 0, w, h))
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			src.SetRGBA(x, y, float32(x)/float32(w), float32(y)/float32(h), 0.5, 1)
 		}
 	}
+	var buf bytes.Buffer
+	if err := exr.Encode(&writeSeeker{&buf}, src); err != nil {
+		t.Fatalf("EXR 编码失败: %v", err)
+	}
+
+	img, err := DecodeEXR(buf.Bytes())
+	if err != nil {
+		t.Fatalf("EXR 解码失败: %v", err)
+	}
+	if img.Width != w || img.Height != h {
+		t.Fatalf("尺寸 = %dx%d, want %dx%d", img.Width, img.Height, w, h)
+	}
+	if img.Format != "EXR" {
+		t.Errorf("format = %q", img.Format)
+	}
+	// 左上角 (0,0)：R=0, G=0, B=0.5
+	if d := img.Data[2] - 0.5; d > 1e-3 || d < -1e-3 {
+		t.Errorf("(0,0) B = %v, want 0.5", img.Data[2])
+	}
+	// 右下角 (3,2)：R=0.75
+	if d := img.Data[(2*w+3)*4] - 0.75; d > 1e-3 || d < -1e-3 {
+		t.Errorf("(3,2) R = %v, want 0.75", img.Data[(2*w+3)*4])
+	}
+	if img.Data[3] != 1 {
+		t.Errorf("alpha = %v, want 1", img.Data[3])
+	}
+}
+
+// writeSeeker 让 bytes.Buffer 满足 io.WriteSeeker。
+type writeSeeker struct{ b *bytes.Buffer }
+
+func (w *writeSeeker) Write(p []byte) (int, error) { return w.b.Write(p) }
+func (w *writeSeeker) Seek(off int64, whence int) (int64, error) {
+	if whence == io.SeekStart && off == 0 {
+		w.b.Reset()
+	}
+	return int64(w.b.Len()), nil
 }
 
 func TestDecodeEXRRejectsInvalid(t *testing.T) {

@@ -9,6 +9,8 @@ import (
 	"image"
 	"image/png"
 	"math"
+
+	"github.com/bbrks/go-blurhash"
 )
 
 // aces 是 ACES 色调映射曲线。
@@ -127,47 +129,6 @@ func EncodePNG(width, height int, rgba []byte) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// blurChars 是 blurhash 的 base83 字符表。
-const blurChars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz#$%*+,-.:;=?@[]^_{|}~"
-
-func encode83(n, length int) string {
-	s := make([]byte, length)
-	for i := length; i >= 1; i-- {
-		s[i-1] = blurChars[n%83]
-		n /= 83
-	}
-	return string(s)
-}
-
-func sRGBToLinear(v float64) float64 {
-	v = math.Max(0, math.Min(1, v))
-	if v <= 0.04045 {
-		return v / 12.92
-	}
-	return math.Pow((v+0.055)/1.055, 2.4)
-}
-
-func linearTosRGB(v float64) float64 {
-	v = math.Max(0, math.Min(1, v))
-	if v <= 0.0031308 {
-		return v * 12.92
-	}
-	return 1.055*math.Pow(v, 1/2.4) - 0.055
-}
-
-func encodeDC(v float64) int { return int(math.Round(linearTosRGB(v) * 255)) }
-
-func encodeAC(v float64) int {
-	sign := 1.0
-	abs := v
-	if v < 0 {
-		sign = -1
-		abs = -v
-	}
-	raw := 9 + 9*sign*math.Pow(abs, 0.5)
-	return int(math.Max(0, math.Min(18, math.Round(raw))))
-}
-
 func rgbaDownsample(srcW, srcH int, rgba []byte, dstW, dstH int) []byte {
 	out := make([]byte, dstW*dstH*4)
 	for dy := 0; dy < dstH; dy++ {
@@ -202,6 +163,7 @@ func rgbaDownsample(srcW, srcH int, rgba []byte, dstW, dstH int) []byte {
 }
 
 // EncodeBlurhash 生成 blurhash 字符串（cx×cy 个分量）。
+// 底层由 bbrks/go-blurhash 实现，与参考算法逐位一致。
 func EncodeBlurhash(rgba []byte, width, height, cx, cy int) string {
 	if cx <= 0 {
 		cx = 4
@@ -209,43 +171,17 @@ func EncodeBlurhash(rgba []byte, width, height, cx, cy int) string {
 	if cy <= 0 {
 		cy = 3
 	}
-	factor := func(x, y int) [3]float64 {
-		var r, g, b float64
-		nx, ny := 2.0, 2.0
-		if x == 0 {
-			nx = 1
-		}
-		if y == 0 {
-			ny = 1
-		}
-		for j := 0; j < height; j++ {
-			for i := 0; i < width; i++ {
-				c := math.Cos(math.Pi*float64(x)*float64(i)/float64(width)) *
-					math.Cos(math.Pi*float64(y)*float64(j)/float64(height))
-				idx := (j*width + i) * 4
-				if idx+2 >= len(rgba) {
-					continue
-				}
-				r += c * sRGBToLinear(float64(rgba[idx])/255)
-				g += c * sRGBToLinear(float64(rgba[idx+1])/255)
-				b += c * sRGBToLinear(float64(rgba[idx+2])/255)
-			}
-		}
-		s := nx * ny / float64(width*height)
-		return [3]float64{r * s, g * s, b * s}
+	if width <= 0 || height <= 0 || len(rgba) < width*height*4 {
+		return ""
 	}
-
-	hash := encode83((cx-1)+((cy-1)<<4), 1)
-	dc := factor(0, 0)
-	hash += encode83((encodeDC(dc[0])<<16)|(encodeDC(dc[1])<<8)|encodeDC(dc[2]), 4)
-	for y := 0; y < cy; y++ {
-		for x := 0; x < cx; x++ {
-			if x == 0 && y == 0 {
-				continue
-			}
-			f := factor(x, y)
-			hash += encode83(encodeAC(f[0])*361+encodeAC(f[1])*19+encodeAC(f[2]), 2)
-		}
+	img := &image.NRGBA{
+		Pix:    rgba,
+		Stride: width * 4,
+		Rect:   image.Rect(0, 0, width, height),
+	}
+	hash, err := blurhash.Encode(cx, cy, img)
+	if err != nil {
+		return ""
 	}
 	return hash
 }
