@@ -27,10 +27,10 @@ func (h *AssetHandler) Get(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-// ByType 按分类返回。
+// ByType 按分类返回。非法分类与 Node 版一致地返回 ERR_INVALID_PARAM。
 func (h *AssetHandler) ByType(w http.ResponseWriter, r *http.Request) error {
 	t := chi.URLParam(r, "type")
-	if t == "" {
+	if !store.ValidType(t) {
 		return httpx.Errorf(httpx.CodeInvalidParam, "invalid asset type")
 	}
 	httpx.OK(w, h.Store.GetByType(t))

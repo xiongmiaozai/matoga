@@ -77,11 +77,13 @@ func TestAssetByType(t *testing.T) {
 		t.Errorf("tex 最近 = %d 条, want 0", len(rec))
 	}
 
-	// 非法类型返回空列表而不是报错
-	d = data(t, e.get(t, "/api/asset/type/bogus"))
-	fav, _ = d["favorites"].([]any)
-	if len(fav) != 0 {
-		t.Errorf("非法类型应返回空, got %d", len(fav))
+	// 非法类型与 Node 版一致：返回 ERR_INVALID_PARAM，而不是空列表
+	raw := e.get(t, "/api/asset/type/bogus")
+	if okv, _ := raw["ok"].(bool); okv {
+		t.Errorf("非法类型应报错, got ok=true: %v", raw)
+	}
+	if raw["code"] != "ERR_INVALID_PARAM" {
+		t.Errorf("code = %v, want ERR_INVALID_PARAM", raw["code"])
 	}
 }
 
@@ -102,8 +104,7 @@ func TestAssetRejectsBadKeys(t *testing.T) {
 	}
 }
 
-func TestAssetFavoritesLimit(t *testing.T) {
-	e := newEnv(t)
+func TestAssetFavoritesLimit(t *testing.T) {	e := newEnv(t)
 	items := make([]any, 0, 600)
 	for i := 0; i < 600; i++ {
 		items = append(items, map[string]any{
