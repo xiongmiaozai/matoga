@@ -11,7 +11,7 @@ import { $, showToast } from './core.js'
 import { sanitizeLayoutConfig } from './layout-config.js'
 import { getPanelDefs } from './panel-loader.js'
 import { showPrompt, showConfirm } from './ws/dialogs.js'
-import { PANEL_DEFS, comp, stack, col, row } from './ws/panel-defs.js'
+import { DEFAULT_PANEL_DEFS, comp, stack, col, row } from './ws/panel-defs.js'
 import {
   collectComponentTypes,
   countComponentTypes,
@@ -46,6 +46,8 @@ let saveTimer = null
 let glReady = false
 let suppressAutoSave = false
 
+/* 面板清单：默认值来自 ws/panel-defs.js，运行时由 getPanelDefs() 覆盖为清单实况 */
+let PANEL_DEFS = DEFAULT_PANEL_DEFS
 let ALL_PANEL_IDS = new Set(PANEL_DEFS.map(d => d.id))
 
 let panelHomes = []

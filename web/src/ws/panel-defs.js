@@ -6,7 +6,8 @@
  * 从 workspace.js 原样搬出，逻辑未改。
  */
 
-export const PANEL_DEFS = [
+/* 默认面板清单；调用方持有可变副本（运行时由 getPanelDefs() 覆盖为清单实况） */
+export const DEFAULT_PANEL_DEFS = [
   { id: 'folderCard',     title: '文件夹选择', icon: 'i-folder' },
   { id: 'compareSettings',title: '对比设置',    icon: 'i-compare' },
   { id: 'actions',        title: '操作',        icon: 'i-swap' },
