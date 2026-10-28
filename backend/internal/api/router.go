@@ -64,10 +64,12 @@ func Mount(r *httpx.Router, s Services) {
 	hdriGroup.Post("/cleanup", httpx.Wrap(hdriHandler.Cleanup))
 
 	// /api/asset
-	assetHandler := &AssetHandler{Store: s.Assets}
+	assetHandler := &AssetHandler{Store: s.Assets, Config: s.Config}
 	assetGroup := r.APIGroup("/asset")
 	assetGroup.Get("/", httpx.Wrap(assetHandler.Get))
 	assetGroup.Get("/type/{type}", httpx.Wrap(assetHandler.ByType))
+	assetGroup.Get("/tex", httpx.Wrap(assetHandler.Tex))
+	assetGroup.Get("/model", httpx.Wrap(assetHandler.Model))
 	assetGroup.Get("/info", httpx.Wrap(assetHandler.Info))
 	assetGroup.Put("/favorites", httpx.Wrap(assetHandler.SetFavorites))
 	assetGroup.Put("/recent", httpx.Wrap(assetHandler.SetRecent))

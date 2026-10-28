@@ -90,13 +90,13 @@ func TestAssetByType(t *testing.T) {
 func TestAssetRejectsBadKeys(t *testing.T) {
 	e := newEnv(t)
 	body := map[string]any{"items": []any{
-		map[string]any{"key": "noprefix", "name": "无前缀"},          // 无冒号 → 拒绝
-		map[string]any{"key": "bogus:x", "name": "非法前缀"},         // 前缀不在白名单 → 拒绝
-		map[string]any{"key": "tex:ok", "name": "合法"},             // 保留
-		map[string]any{"key": "tex:ok", "name": "重复"},              // 去重
+		map[string]any{"key": "noprefix", "name": "无前缀"},                 // 无冒号 → 拒绝
+		map[string]any{"key": "bogus:x", "name": "非法前缀"},                 // 前缀不在白名单 → 拒绝
+		map[string]any{"key": "tex:ok", "name": "合法"},                    // 保留
+		map[string]any{"key": "tex:ok", "name": "重复"},                    // 去重
 		map[string]any{"key": "tex:bad", "type": "hdri", "name": "类型冲突"}, // 拒绝
-		map[string]any{"name": "无 key"},                            // 拒绝
-		"not an object",                                            // 拒绝
+		map[string]any{"name": "无 key"},                                  // 拒绝
+		"not an object",                                                  // 拒绝
 	}}
 	d := data(t, e.do(t, "PUT", "/api/asset/favorites", body))
 	if d["count"].(float64) != 1 {
@@ -104,7 +104,8 @@ func TestAssetRejectsBadKeys(t *testing.T) {
 	}
 }
 
-func TestAssetFavoritesLimit(t *testing.T) {	e := newEnv(t)
+func TestAssetFavoritesLimit(t *testing.T) {
+	e := newEnv(t)
 	items := make([]any, 0, 600)
 	for i := 0; i < 600; i++ {
 		items = append(items, map[string]any{
@@ -175,6 +176,50 @@ func TestAssetInfo(t *testing.T) {
 	}
 	if d["size"].(float64) != 0 {
 		t.Errorf("size = %v, want 0", d["size"])
+	}
+}
+
+func TestAssetTexAggregate(t *testing.T) {
+	e := newEnv(t)
+	// 在临时目录里造一个真实的目录包
+	packRoot := filepath.Join(e.dir, "mc-packs")
+	p := filepath.Join(packRoot, "testpack", "assets", "minecraft", "textures", "block", "stone.png")
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte("png"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(packRoot, "testpack", "pack.mcmeta"), []byte(`{"pack":{"pack_format":15}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// 让配置指向该目录
+	data(t, e.do(t, "PUT", "/api/config", map[string]any{"mcPacksPath": packRoot}))
+
+	d := data(t, e.get(t, "/api/asset/tex"))
+	packs, _ := d["packs"].([]any)
+	if len(packs) != 1 {
+		t.Fatalf("packs = %d, want 1 (%v)", len(packs), packs)
+	}
+	first, _ := packs[0].(map[string]any)
+	if first["name"] != "testpack" {
+		t.Errorf("name = %v, want testpack", first["name"])
+	}
+	if first["source"] != "mc" {
+		t.Errorf("source = %v, want mc", first["source"])
+	}
+	if first["total"].(float64) != 1 {
+		t.Errorf("total = %v, want 1", first["total"])
+	}
+}
+
+func TestAssetModelAggregateEmpty(t *testing.T) {
+	e := newEnv(t)
+	// 默认配置下目录不存在 → 返回空列表而不是报错
+	d := data(t, e.get(t, "/api/asset/model"))
+	packs, _ := d["packs"].([]any)
+	if len(packs) != 0 {
+		t.Errorf("packs = %d, want 0", len(packs))
 	}
 }
 

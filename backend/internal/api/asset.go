@@ -13,18 +13,63 @@ import (
 
 	"github.com/xiongmiaozai/matoga/backend/internal/fsx"
 	"github.com/xiongmiaozai/matoga/backend/internal/httpx"
+	"github.com/xiongmiaozai/matoga/backend/internal/mcmeta"
 	"github.com/xiongmiaozai/matoga/backend/internal/store"
 )
 
 // AssetHandler 提供 /api/asset 的资产库读写。
 type AssetHandler struct {
-	Store *store.AssetStore
+	Store  *store.AssetStore
+	Config *store.Config
 }
 
 // Get 返回收藏夹与最近使用。
 func (h *AssetHandler) Get(w http.ResponseWriter, r *http.Request) error {
 	httpx.OK(w, h.Store.Get())
 	return nil
+}
+
+// Tex 聚合 MC 材质包与官方材质包的全部贴图（每包按 textures/ 第一级类别分组）。
+func (h *AssetHandler) Tex(w http.ResponseWriter, r *http.Request) error {
+	httpx.OK(w, map[string]any{"packs": h.collect(r, mcmeta.ListPackTexGroups)})
+	return nil
+}
+
+// Model 聚合 MC 材质包与官方材质包的全部模型（每包按 models/ 第一级类别分组）。
+func (h *AssetHandler) Model(w http.ResponseWriter, r *http.Request) error {
+	httpx.OK(w, map[string]any{"packs": h.collect(r, mcmeta.ListPackModelGroups)})
+	return nil
+}
+
+// sourcedPack 在 PackGroups 上补 source 字段（mc / official）。
+type sourcedPack struct {
+	*mcmeta.PackGroups
+	Source string `json:"source"`
+}
+
+// collect 依次收集 MC 包与官方包，并标注来源。
+func (h *AssetHandler) collect(r *http.Request, lister func(root, name string) (*mcmeta.PackGroups, error)) []sourcedPack {
+	if h.Config == nil {
+		return []sourcedPack{}
+	}
+	cfg := h.Config.Get()
+	rootOf := func(m map[string]any, key string) string {
+		if v, ok := m[key].(string); ok {
+			return v
+		}
+		return ""
+	}
+	mcRoot := rootOf(cfg, "mcPacksPath")
+	offRoot := rootOf(cfg, "officialPacksPath")
+
+	out := make([]sourcedPack, 0, 8)
+	for _, p := range mcmeta.ListPacks(mcRoot, lister) {
+		out = append(out, sourcedPack{PackGroups: &p, Source: "mc"})
+	}
+	for _, p := range mcmeta.ListPacks(offRoot, lister) {
+		out = append(out, sourcedPack{PackGroups: &p, Source: "official"})
+	}
+	return out
 }
 
 // ByType 按分类返回。非法分类与 Node 版一致地返回 ERR_INVALID_PARAM。
