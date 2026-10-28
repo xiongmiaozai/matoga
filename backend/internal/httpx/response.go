@@ -13,18 +13,18 @@ import (
 
 // 错误码，与 Node 版 core/errors.js 保持逐字一致，前端按 code 分支。
 const (
-	CodeInvalidParam   = "ERR_INVALID_PARAM"
-	CodePathDenied     = "ERR_PATH_DENIED"
-	CodeFSNotFound     = "ERR_FS_NOT_FOUND"
-	CodeNotFound       = "ERR_NOT_FOUND"
-	CodeFS             = "ERR_FS"
-	CodeAlreadyExists  = "ERR_ALREADY_EXISTS"
-	CodeMcNotZip       = "ERR_MC_NOT_ZIP"
-	CodeMcBadMcmeta    = "ERR_MC_BAD_MCMETA"
-	CodeCancelled      = "ERR_CANCELLED"
-	CodeLanForbidden   = "ERR_LAN_FORBIDDEN"
-	CodeUnauthorized   = "ERR_UNAUTHORIZED"
-	CodeUnknown        = "ERR_UNKNOWN"
+	CodeInvalidParam  = "ERR_INVALID_PARAM"
+	CodePathDenied    = "ERR_PATH_DENIED"
+	CodeFSNotFound    = "ERR_FS_NOT_FOUND"
+	CodeNotFound      = "ERR_NOT_FOUND"
+	CodeFS            = "ERR_FS"
+	CodeAlreadyExists = "ERR_ALREADY_EXISTS"
+	CodeMcNotZip      = "ERR_MC_NOT_ZIP"
+	CodeMcBadMcmeta   = "ERR_MC_BAD_MCMETA"
+	CodeCancelled     = "ERR_CANCELLED"
+	CodeLanForbidden  = "ERR_LAN_FORBIDDEN"
+	CodeUnauthorized  = "ERR_UNAUTHORIZED"
+	CodeUnknown       = "ERR_UNKNOWN"
 )
 
 // AppError 是带业务错误码的错误。

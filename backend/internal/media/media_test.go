@@ -309,4 +309,3 @@ func TestDetectAndDecodePrefersMagic(t *testing.T) {
 		t.Errorf("尺寸 = %dx%d", img.Width, img.Height)
 	}
 }
-

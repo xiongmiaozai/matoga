@@ -139,4 +139,3 @@ func TestScanNonRecursiveAndRecursive(t *testing.T) {
 		t.Error("忽略规则未生效")
 	}
 }
-
