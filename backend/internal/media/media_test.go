@@ -57,13 +57,25 @@ func TestDecodeHDRFlat(t *testing.T) {
 	if img.Format != "HDR (RGBE)" {
 		t.Errorf("format = %q", img.Format)
 	}
-	// scale = 2^(129-128)/255 = 2/255
-	want := float32(128) * 2.0 / 255.0
+	// Radiance 规范：scale = 2^(129-128)/256 = 2/256
+	// （旧 Node 实现用 /255，得到 1.0039216，属 0.4% 的系统性偏差）
+	want := float32(128) * 2.0 / 256.0
 	if diff := img.Data[0] - want; diff > 1e-5 || diff < -1e-5 {
 		t.Errorf("R = %v, want %v", img.Data[0], want)
 	}
 	if img.Data[3] != 1 {
 		t.Errorf("alpha = %v, want 1", img.Data[3])
+	}
+}
+
+// TestDecodeHDRTruncated 截断的 HDR 必须报错，不能静默补零当成有效数据。
+func TestDecodeHDRTruncated(t *testing.T) {
+	full := buildHDR(4, 4, make([]byte, 4*4*4))
+	if len(full) < 10 {
+		t.Fatal("fixture 太短")
+	}
+	if _, err := DecodeHDR(full[:len(full)-20]); err == nil {
+		t.Error("截断文件应报错")
 	}
 }
 

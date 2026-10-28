@@ -7,10 +7,10 @@ package media
 import (
 	"bytes"
 	"fmt"
-	"math"
-	"strconv"
 	"strings"
 
+	"github.com/mdouchement/hdr"
+	"github.com/mdouchement/hdr/codec/rgbe"
 	"github.com/mrjoshuak/go-openexr/exr"
 	"github.com/xiongmiaozai/matoga/backend/internal/httpx"
 )
@@ -23,137 +23,38 @@ type Image struct {
 	Format string
 }
 
-// DecodeHDR 解析 Radiance RGBE（.hdr）。
+// DecodeHDR 解析 Radiance RGBE（.hdr）。底层由 mdouchement/hdr 处理，
+// 支持 RLE / 简单扫描线 / EXPOSURE 标签。
+//
+// 注意：本库按 Radiance 规范用 2^(e-128)/256 换算，而旧 Node 实现用 /255，
+// 两者相差 0.4% 的全局常数因子；tonemap 会按平均亮度自动曝光，该因子被抵消。
 func DecodeHDR(buf []byte) (*Image, error) {
-	pos := 0
-	readLine := func() string {
-		start := pos
-		for pos < len(buf) && buf[pos] != '\n' {
-			pos++
-		}
-		s := string(buf[start:pos])
-		pos++ // 跳过 \n
-		return s
-	}
-
-	first := readLine()
-	if !strings.HasPrefix(first, "#?") {
-		return nil, httpx.Errorf(httpx.CodeFS, "HDR decode: bad magic")
-	}
-
-	width, height := 0, 0
-	for pos < len(buf) {
-		line := readLine()
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
-			continue
-		}
-		if strings.HasPrefix(trimmed, "FORMAT=") {
-			continue
-		}
-		// 只支持 -Y H +X W 的常见布局
-		if strings.HasPrefix(trimmed, "-Y") {
-			fields := strings.Fields(trimmed)
-			if len(fields) >= 4 {
-				h, err1 := strconv.Atoi(fields[1])
-				w, err2 := strconv.Atoi(fields[3])
-				if err1 == nil && err2 == nil {
-					height, width = h, w
-					break
-				}
-			}
-		}
-	}
-	if width <= 0 || height <= 0 {
-		return nil, httpx.Errorf(httpx.CodeFS, "HDR decode: missing dimensions")
-	}
-	rgba, err := hdrRLE(buf[pos:], width, height)
+	decoded, err := rgbe.Decode(bytes.NewReader(buf))
 	if err != nil {
-		return nil, err
+		return nil, httpx.Errorf(httpx.CodeFS, fmt.Sprintf("HDR decode: %v", err))
+	}
+	src, ok := decoded.(*hdr.RGB)
+	if !ok {
+		return nil, httpx.Errorf(httpx.CodeFS, "HDR decode: unsupported image mode (only RGBE)")
+	}
+	rect := src.Rect
+	width, height := rect.Dx(), rect.Dy()
+	if width <= 0 || height <= 0 {
+		return nil, httpx.Errorf(httpx.CodeFS, "HDR decode: bad dimensions")
 	}
 	data := make([]float32, width*height*4)
-	n := width * height
-	for j := 0; j < n && j*4+3 < len(rgba); j++ {
-		e := rgba[j*4+3]
-		scale := float32(math.Pow(2, float64(int(e)-128)) / 255)
-		data[j*4] = float32(rgba[j*4]) * scale
-		data[j*4+1] = float32(rgba[j*4+1]) * scale
-		data[j*4+2] = float32(rgba[j*4+2]) * scale
-		data[j*4+3] = 1
+	for y := 0; y < height; y++ {
+		row := (y-rect.Min.Y)*src.Stride + (0-rect.Min.X)*3
+		for x := 0; x < width; x++ {
+			si := row + x*3
+			di := (y*width + x) * 4
+			data[di] = float32(src.Pix[si])
+			data[di+1] = float32(src.Pix[si+1])
+			data[di+2] = float32(src.Pix[si+2])
+			data[di+3] = 1
+		}
 	}
 	return &Image{Width: width, Height: height, Data: data, Format: "HDR (RGBE)"}, nil
-}
-
-func hdrRLE(src []byte, w, h int) ([]byte, error) {
-	// 未压缩：直接返回（同时补足长度以便后续按 4*w*h 读取）
-	uncompressed := w < 8 || w > 0x7fff || len(src) < 3 || src[0] != 2 || src[1] != 2 || src[2]&0x80 != 0
-	if uncompressed {
-		need := 4 * w * h
-		if len(src) < need {
-			fixed := make([]byte, need)
-			copy(fixed, src)
-			return fixed, nil
-		}
-		return src[:need], nil
-	}
-
-	out := make([]byte, 4*w*h)
-	srcPos := 0
-	outPos := 0
-	ptrEnd := 4 * w
-	sl := make([]byte, ptrEnd)
-	start := make([]byte, 4)
-	num := h
-	for num > 0 && srcPos < len(src) {
-		if srcPos+4 > len(src) {
-			break
-		}
-		copy(start, src[srcPos:srcPos+4])
-		srcPos += 4
-		ptr := 0
-		for ptr < ptrEnd && srcPos < len(src) {
-			count := int(src[srcPos])
-			srcPos++
-			enc := count > 128
-			if enc {
-				count -= 128
-			}
-			if count == 0 || ptr+count > ptrEnd {
-				return nil, httpx.Errorf(httpx.CodeFS, "HDR decode: bad scanline")
-			}
-			if enc {
-				if srcPos >= len(src) {
-					return nil, httpx.Errorf(httpx.CodeFS, "HDR decode: truncated")
-				}
-				v := src[srcPos]
-				srcPos++
-				for i := 0; i < count; i++ {
-					sl[ptr] = v
-					ptr++
-				}
-			} else {
-				if srcPos+count > len(src) {
-					return nil, httpx.Errorf(httpx.CodeFS, "HDR decode: truncated")
-				}
-				copy(sl[ptr:], src[srcPos:srcPos+count])
-				ptr += count
-				srcPos += count
-			}
-		}
-		for i := 0; i < w; i++ {
-			o := 0
-			out[outPos] = sl[i+o]
-			o += w
-			out[outPos+1] = sl[i+o]
-			o += w
-			out[outPos+2] = sl[i+o]
-			o += w
-			out[outPos+3] = sl[i+o]
-			outPos += 4
-		}
-		num--
-	}
-	return out, nil
 }
 
 // DecodeEXR 解析 OpenEXR。底层由 mrjoshuak/go-openexr 处理，
