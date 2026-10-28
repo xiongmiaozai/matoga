@@ -46,6 +46,23 @@ test('saveThumb: 按模型类型落入专属缓存目录', async () => {
   const info = await svc.thumbInfo(key, 1)
   assert.equal(info.exists, true)
   svc.invalidate(key)
-  await new Promise(r => setTimeout(r, 30))
-  assert.ok(!fs.existsSync(svc.pngPathFor(key)))
+  // invalidate 内部是 fire-and-forget 的 fs.promises.unlink，不保证同步完成，
+  // 固定 sleep 会偶发失败（实测单跑约 1/3 概率）。改为轮询等待文件真正消失。
+  const gone = await waitUntil(() => !fs.existsSync(svc.pngPathFor(key)), 1000)
+  assert.ok(gone, 'invalidate 后缩略图文件应被删除')
 })
+
+/**
+ * 轮询等待条件成立。
+ * @param {() => boolean} fn
+ * @param {number} timeoutMs
+ * @returns {Promise<boolean>}
+ */
+async function waitUntil(fn, timeoutMs) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (fn()) return true
+    await new Promise((r) => setTimeout(r, 10))
+  }
+  return fn()
+}
