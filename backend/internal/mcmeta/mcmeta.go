@@ -133,6 +133,10 @@ func normalizeZipModelName(name string) string {
 
 // readZipEntries 用标准库读取 zip 中央目录，返回 (归一化名, 原始名, 未压缩大小)。
 // 替代 Node 版手写的 parseZipCentralDirectory。
+//
+// 注意：只读元数据（Name / UncompressedSize64 等）。返回的 *zip.File 已随 reader
+// 关闭而失效，调用 Open() 会得到 "file already closed"。需要读条目内容时用
+// openZipReader 并自行 Close。
 func readZipEntries(full string) ([]*zip.File, error) {
 	zr, err := zip.OpenReader(full)
 	if err != nil {
@@ -140,6 +144,11 @@ func readZipEntries(full string) ([]*zip.File, error) {
 	}
 	defer zr.Close()
 	return zr.File, nil
+}
+
+// openZipReader 打开 zip 并返回 reader 供调用方读取条目内容，调用方负责 Close。
+func openZipReader(full string) (*zip.ReadCloser, error) {
+	return zip.OpenReader(full)
 }
 
 // zipTextureEntries 从 zip 条目中筛出贴图。

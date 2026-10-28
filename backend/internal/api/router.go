@@ -27,6 +27,11 @@ type Services struct {
 	ImportedModels *store.ImportedModelStore
 	CustomModels   *store.CustomModelStore
 	CraftPack      *craftpack.Service
+	// CraftPacksRoot / McPacksRoot / McOfficialRoot 是三个包路由的根目录解析器。
+	// 走函数而不是字符串，是为了每次请求都读最新配置（用户可在运行时改路径）。
+	CraftPacksRoot func() string
+	McPacksRoot    func() string
+	McOfficialRoot func() string
 }
 
 // Mount 把所有 API 挂到根路由。
@@ -164,4 +169,27 @@ func Mount(r *httpx.Router, s Services) {
 	cpGroup.Post("/export", httpx.Wrap(cpHandler.Export))
 	cpGroup.Get("/packs", httpx.Wrap(cpHandler.Packs))
 	cpGroup.Get("/current", httpx.Wrap(cpHandler.Current))
+
+	// /api/craft-packs、/api/mc-packs、/api/mc-official
+	// 三者共用同一套包路由，差别只在根目录与是否暴露 version-map。
+	mountPackGroup(r, "/craft-packs", s.CraftPacksRoot, false)
+	mountPackGroup(r, "/mc-packs", s.McPacksRoot, false)
+	mountPackGroup(r, "/mc-official", s.McOfficialRoot, true)
+}
+
+// mountPackGroup 挂载一个包路由分组（5 个基础端点 + 可选 version-map）。
+func mountPackGroup(r *httpx.Router, prefix string, root func() string, versionMap bool) {
+	if root == nil {
+		return
+	}
+	h := NewPackHandler(root, versionMap)
+	g := r.APIGroup(prefix)
+	g.Get("/list", httpx.Wrap(h.List))
+	if versionMap {
+		g.Get("/version-map", httpx.Wrap(h.VersionMap))
+	}
+	g.Put("/rename", httpx.Wrap(h.Rename))
+	g.Get("/{name}/textures", httpx.Wrap(h.Textures))
+	g.Get("/{name}/entries", httpx.Wrap(h.Entries))
+	g.Get("/{name}/raw", httpx.Wrap(h.Raw))
 }

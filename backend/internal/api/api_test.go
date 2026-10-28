@@ -76,6 +76,9 @@ func newEnv(t *testing.T) *testEnv {
 		ImportedModels: store.NewImportedModelStore(filepath.Join(dir, "data")),
 		CustomModels:   store.NewCustomModelStore(dir),
 		CraftPack:      craftpack.New(dir, assets, cfg),
+		CraftPacksRoot: func() string { return testCfgPath(cfg, "craftPacksPath") },
+		McPacksRoot:    func() string { return testCfgPath(cfg, "mcPacksPath") },
+		McOfficialRoot: func() string { return testCfgPath(cfg, "officialPacksPath") },
 	})
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
@@ -472,4 +475,34 @@ func pctEncode(r rune) string {
 		sb.WriteByte(hexDigits[c&0x0F])
 	}
 	return sb.String()
+}
+
+// testCfgPath 从测试配置取路径，缺失回落空串。
+func testCfgPath(cfg *store.Config, key string) string {
+	if v, ok := cfg.Get()[key].(string); ok {
+		return v
+	}
+	return ""
+}
+
+// rawResult 是原始 HTTP 响应（用于取非 JSON 响应体，如图片字节）。
+type rawResult struct {
+	status      int
+	body        []byte
+	contentType string
+}
+
+// rawGet 发起 GET 并原样返回响应体，不按 JSON 解析。
+func (e *testEnv) rawGet(t *testing.T, path string) rawResult {
+	t.Helper()
+	res, err := http.Get(e.srv.URL + path)
+	if err != nil {
+		t.Fatalf("rawGet %s: %v", path, err)
+	}
+	defer res.Body.Close()
+	b, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("rawGet 读体 %s: %v", path, err)
+	}
+	return rawResult{status: res.StatusCode, body: b, contentType: res.Header.Get("Content-Type")}
 }

@@ -249,12 +249,13 @@ func ReadPackFile(root, name, relPath string, anyExt bool) (*PackFile, error) {
 		return nil, httpx.Errorf(httpx.CodeFSNotFound, "texture not found: "+rel)
 	}
 
-	// zip 包
-	files, err := readZipEntries(full)
+	// zip 包：必须持有 reader 直到读完条目内容，否则 f.Open() 报 "file already closed"
+	zr, err := openZipReader(full)
 	if err != nil {
 		return nil, httpx.Errorf(httpx.CodeFS, "open zip failed: "+err.Error())
 	}
-	entry := FindZipEntry(files, rel)
+	defer zr.Close()
+	entry := FindZipEntry(zr.File, rel)
 	if entry == nil {
 		return nil, httpx.Errorf(httpx.CodeFSNotFound, "texture not found: "+rel)
 	}

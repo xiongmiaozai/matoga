@@ -86,6 +86,10 @@ func main() {
 		ImportedModels: store.NewImportedModelStore(filepath.Join(paths.DataRoot, "data")),
 		CustomModels:   store.NewCustomModelStore(paths.DataRoot),
 		CraftPack:      craftpack.New(paths.DataRoot, assetStore, cfg),
+		// 三个包路由的根目录：每次请求都读最新配置，支持运行时改路径。
+		CraftPacksRoot: func() string { return cfgPath(cfg, "craftPacksPath") },
+		McPacksRoot:    func() string { return cfgPath(cfg, "mcPacksPath") },
+		McOfficialRoot: func() string { return cfgPath(cfg, "officialPacksPath") },
 	})
 
 	// 静态前端
@@ -129,4 +133,12 @@ func main() {
 		log.Error("关闭超时", "err", err.Error())
 	}
 	log.Info("已退出")
+}
+
+// cfgPath 从配置快照取字符串路径，缺失回落空串。
+func cfgPath(cfg *store.Config, key string) string {
+	if v, ok := cfg.Get()[key].(string); ok {
+		return v
+	}
+	return ""
 }
