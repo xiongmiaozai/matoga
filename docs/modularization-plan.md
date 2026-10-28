@@ -326,6 +326,8 @@ npm run dist:win                  # 打包契约不被破坏
 | B3 | uv-editor-core.js（1272→395，`uvc/` 16 模块） | DONE | 552 pass / 冒烟 19+5+10 | 多 commit（consts…highlight） |
 | B2 | workspace.js | DONE | 585 pass / 冒烟 19+10 | 只抽纯逻辑（见下） |
 | B7 | mc-theme.css / node-canvas.css / styles.css（3927 行 → 17 分片） | DONE | 585 pass / 冒烟 19+10 / 展开逐字符一致 | `cc3a8283` |
+| B8 | node-editor.html 内联样式抽外链（883→446 行） | DONE | 585 pass / 冒烟 19+10 | `53ad9436` |
+| B9 | locales/zh.js、en.js（各 790→20 行，词条按域切 5 分片） | DONE | 589 pass / 冒烟 19+10 / 731 键值逐条一致 | 本次 |
 
 ### 9.1 workspace.js：为什么只抽纯逻辑
 
@@ -380,5 +382,51 @@ npm run test:smoke 19 pass + WS 集成 10 pass / 0 fail
 
 `web/index.html` 与 `web/node-editor.html` 的 `<link>` 路径未变（仍指向同名入口文件），
 `node-editor.html` 内部对 `styles.css` 的覆盖规则仍在外链之后，级联关系不变。
+
+### 9.3 语言包拆分：词条按域分片，键与值逐条等价
+
+`web/src/locales/zh.js` 与 `en.js` 原本各 790 行、各含 731 条词条（单层扁平对象）。
+按**词条前缀**切成 5 个域分片：
+
+| 分片 | 覆盖前缀 | 词条数 | 行数 |
+| --- | --- | --- | --- |
+| `common.js` | app, lang, common, confirm, header, type | 35 | 46 |
+| `assets.js` | asset, category, panel, cm, detail, export, diff, light | 248 | 259 |
+| `compare.js` | compare, sidebar, center, settings, ctx | 82 | 93 |
+| `nodecanvas.js` | m3d, uv, render | 238 | 249 |
+| `preview.js` | preview, np, noderel, status, toast | 128 | 139 |
+
+入口 `zh.js` / `en.js` 收缩为 20 行，只做 import 合并：
+
+```js
+import common from './zh/common.js'
+// …其余 4 个分片
+export default { ...common, ...assets, ...compare, ...nodecanvas, ...preview }
+```
+
+**导出形状对外不变** —— `web/src/i18n.js:7-8` 的 `import zh from './locales/zh.js'` 无需改动，
+全仓仅此一处引用语言包，也没有 service worker / 预缓存清单需要同步登记（已用 grep 确认）。
+
+分片规则的约束：
+
+- 键与值**逐条搬运**，不做任何改写；分片按分片表顺序展开，合并后键集合与原文件完全一致
+  （跨分片的键顺序与原文件不同，但 `i18n` 按 key 取值，顺序不影响行为）；
+- 校验脚本以**键集合 + 逐条求值比对**为准：把原文件里每条词条的字面量 `eval` 出来，
+  与当前合并结果逐条 `===` 比较。实测量化口径：zh/en 各 731 条、差异 0，无空串词条。
+
+验证证据：
+
+```
+键集合: zh 原 731 / 现 731 一致 ✓    en 原 731 / 现 731 一致 ✓
+值比对: zh 731 条差异 0 ✓           en 731 条差异 0 ✓（原文件字面量求值后逐条 == 当前值）
+服务实测: /src/locales/zh.js、zh/common.js、en/nodecanvas.js 全部 HTTP 200
+npm test 589 pass / 0 fail（含新增 test/unit/locales-parity.test.js 4 例）
+npm run test:smoke 19 pass + WS 集成 10 pass / 0 fail
+```
+
+新增 `test/unit/locales-parity.test.js`（4 例）作为拆分风险的兜底：中英键集合必须相同、
+键总数不得低于拆分前基线 731、所有值为字符串、`lang.*` 切换词条存在。
+拆分前语言包**没有任何测试覆盖**，这条一致性断言是新增的。
+
 
 

@@ -1,0 +1,45 @@
+/**
+ * matoga - 材质贴图对比工具
+ * Copyright (c) 2026 芝世 (xiongmiaozai). All rights reserved.
+ * SPDX-License-Identifier: MIT
+ *
+ * 语言包分片：common（前缀 app, lang, common, confirm, header, type）
+ */
+
+export default {
+  'app.title': 'matoga',
+  'app.version': 'v3.0',
+  'common.select': '选择',
+  'common.close': '关闭',
+  'common.cancel': '取消',
+  'common.confirm': '确定',
+  'common.batchCopy': '批量复制',
+  'common.all': '全部',
+  'common.left': '左',
+  'common.right': '右',
+  'common.type': '类型',
+  'common.size': '大小',
+  'common.status': '状态',
+  'common.name': '名称',
+  'common.empty': '未选择',
+  'common.path': '路径',
+  'header.swap': '交换左右',
+  'header.theme': '切换深色/浅色模式',
+  'header.settings': '设置',
+  'header.language': '语言',
+  'header.nodePanel': '节点面板',
+  'type.material': '材质',
+  'type.folder': '文件夹',
+  'type.file': '文件',
+  'type.model': '模型',
+  'confirm.replaceSingle': '确认将 {n} 个贴图从{src}侧替换到{dest}侧？\n{backup}',
+  'confirm.hasBackup': '其中 {n} 个已有文件将自动备份',
+  'confirm.noBackup': '目标侧无同名文件',
+  'confirm.deleteTex': '确认删除此贴图？\n删除后可通过撤回恢复',
+  'confirm.copySingleRight': '确认将左侧贴图复制到右侧？',
+  'confirm.batchReplace': '批量替换：共 {n} 个贴图将从{src}侧复制到{dest}侧\n{backup}\n确定继续？',
+  'lang.zh': '中文',
+  'lang.en': 'English',
+  'header.nodeRelWin': '节点关系窗口',
+  'header.nodePreviewWin': '节点预览窗口',
+}
