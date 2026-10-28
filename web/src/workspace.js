@@ -17,7 +17,7 @@ import {
   countComponentTypes,
   isConfigComplete,
   getDefaultConfig,
-} from './ws/layout-tree.js'
+} from './ws/S.layout-tree.js'
 import {
   presetNames,
   getPresetConfig,
@@ -30,313 +30,32 @@ import {
   ALL_PRESETS_FILE_NAME,
   parsePresetImport,
 } from './ws/preset-model.js'
+import { S } from './ws/state.js'
 
-
+import { activatePreset, createNewPreset, deletePreset, duplicatePreset, exportAllPresets, exportPreset, importPreset, loadPresets, renamePresetDialog, resetCurrent, saveCurrent, saveCurrentAs } from './ws/presets.js'
+import { createLayoutRoot, extractPanels, focusPanel, restorePanelsToClassic } from './ws/panels.js'
+import { initGoldenLayout, notifyResize } from './ws/layout.js'
 const call = (m, p, b) => window.matogaCore.call(m, p, b)
 
-
-let layout = null
-let layoutRoot = null
-let barEl = null
-let panelEls = {}
-let cloneObservers = []
-let activePreset = '默认'
-let userPresets = {}
-let saveTimer = null
-let glReady = false
-let suppressAutoSave = false
-
 /* 面板清单：默认值来自 ws/panel-defs.js，运行时由 getPanelDefs() 覆盖为清单实况 */
-let PANEL_DEFS = DEFAULT_PANEL_DEFS
-let ALL_PANEL_IDS = new Set(PANEL_DEFS.map(d => d.id))
-
-let panelHomes = []
-
-function extractPanels() {
-  const sidebarInner = document.querySelector('.sidebar-left .sidebar-inner')
-  const cards = sidebarInner ? sidebarInner.querySelectorAll('.panel-card') : []
-  panelEls = {
-    folderCard: $('folderCard'),
-    compareSettings: cards[0],
-    actions: cards[1],
-    compare: document.querySelector('.center'),
-    modelCategory: $('modelCategoryPanelWrap'),
-    chart: $('chartPanelWrap'),
-    preview: $('previewPanelWrap'),
-    material3d: $('material3dPanelWrap'),
-    detail: $('detailPanelWrap'),
-    nodeCanvas: $('nodeCanvasPanelWrap'),
-    nodeLibrary: $('nodeLibraryPanelWrap'),
-    assetLibrary: $('assetLibraryPanelWrap'),
-
-    uvEditor: $('uvEditorPanelWrap'),
-
-  }
-  panelHomes = Object.values(panelEls)
-    .filter(Boolean)
-    .map((el) => ({ el, parent: el.parentElement, next: el.nextElementSibling }))
-}
-
-function restorePanelsToClassic() {
-  for (const { el, parent, next } of panelHomes) {
-    try {
-      if (!parent || !el.isConnected) continue
-      if (!el.parentElement || !el.parentElement.closest('#layoutRoot')) continue
-      el.classList.remove('gl-panel-content')
-      el.style.display = ''
-      const anchor = next && next.parentElement === parent ? next : null
-      parent.insertBefore(el, anchor)
-    } catch {}
-  }
-}
-
-function reconcileOrphanPanels() {
-  for (const { el, parent, next } of panelHomes) {
-    try {
-      if (el.isConnected || !parent) continue
-      el.classList.remove('gl-panel-content')
-      el.style.display = ''
-      const anchor = next && next.parentElement === parent ? next : null
-      parent.insertBefore(el, anchor)
-    } catch {}
-  }
-}
-
-function createLayoutRoot() {
-  const ws = $('workspace')
-  if (!ws) throw new Error('workspace not found')
-  layoutRoot = document.createElement('div')
-  layoutRoot.id = 'layoutRoot'
-  layoutRoot.className = 'layout-root'
-  ws.parentNode.insertBefore(layoutRoot, ws)
-
-  barEl = document.createElement('div')
-  barEl.className = 'workspace-bar'
-  layoutRoot.parentNode.insertBefore(barEl, layoutRoot)
-}
-
-function registerComponents() {
-  for (const def of PANEL_DEFS) {
-    layout.registerComponentFactoryFunction(def.id, (container) => {
-      const original = panelEls[def.id]
-      if (!original) return
-      const inUse = original.isConnected && original.parentElement && original.parentElement.closest('.lm_content')
-      if (!inUse) {
-        container.element.appendChild(original)
-        original.style.display = ''
-        original.classList.add('gl-panel-content')
-      } else {
-        const clone = createPanelClone(original)
-        container.element.appendChild(clone)
-        clone.style.display = ''
-      }
-    })
-  }
-}
-
-function createPanelClone(original) {
-  const clone = original.cloneNode(true)
-  clone.classList.add('gl-panel-content', 'gl-panel-clone')
-  clone.removeAttribute('id')
-  clone.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'))
-  stripCloneViewport(clone)
-  bindCloneDelegation(clone, original)
-  syncCloneFromOriginal(original, clone)
-  return clone
-}
-
-function stripCloneViewport(clone) {
-  clone.querySelectorAll('.material3d-container').forEach(c => {
-    c.querySelectorAll('canvas').forEach(cv => cv.remove())
-    c.classList.remove('m3d-host-active')
-    const hint = c.querySelector('.m3d-host-empty')
-    if (hint) hint.style.display = 'none'
-  })
-}
-
-function bindCloneDelegation(clone, original) {
-  function getOrigEl(target) {
-    const path = []
-    let node = target
-    while (node && node !== clone) {
-      const parent = node.parentElement
-      if (!parent) return null
-      path.unshift(Array.from(parent.children).indexOf(node))
-      node = parent
-    }
-    if (node !== clone) return null
-    let result = original
-    for (const i of path) {
-      result = result.children[i]
-      if (!result) return null
-    }
-    return result
-  }
-  const interactive = 'button, input, select, label, [data-act], th[data-key], .filter-btn, .view-tab, .sortable, .panel-card-title'
-  clone.addEventListener('click', (e) => {
-    const t = e.target.closest(interactive)
-    if (!t) return
-    const orig = getOrigEl(t)
-    if (orig && orig !== original) orig.click()
-  }, true)
-  clone.addEventListener('input', (e) => {
-    const orig = getOrigEl(e.target)
-    if (orig && orig !== original) {
-      orig.value = e.target.value
-      orig.dispatchEvent(new Event('input', { bubbles: true }))
-    }
-  }, true)
-  clone.addEventListener('change', (e) => {
-    const orig = getOrigEl(e.target)
-    if (orig && orig !== original) {
-      if (orig.type === 'checkbox' || orig.type === 'radio') orig.checked = e.target.checked
-      else orig.value = e.target.value
-      orig.dispatchEvent(new Event('change', { bubbles: true }))
-    }
-  }, true)
-  clone.addEventListener('dblclick', (e) => {
-    const orig = getOrigEl(e.target)
-    if (orig && orig !== original) orig.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
-  }, true)
-}
-
-function syncCloneFromOriginal(original, clone) {
-  const observer = new MutationObserver(() => {
-    if (!clone.isConnected) { observer.disconnect(); return }
-    const html = original.innerHTML
-    if (clone._lastHtml !== html) {
-      clone._lastHtml = html
-      clone.innerHTML = html
-      clone.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'))
-      stripCloneViewport(clone)
-    }
-  })
-  observer.observe(original, { childList: true, subtree: true, characterData: true, attributes: true })
-  cloneObservers.push(observer)
-}
-
-const GL_SETTINGS = {
-  constrainDragToContainer: false,
-  reorderEnabled: true,
-  popoutWholeStack: false,
-  closePopoutsOnUnload: true,
-  responsiveMode: 'none',
-  reorderOnTabMenuClick: true,
-  popInOnClose: true,
-}
-const GL_DIMENSIONS = {
-  borderWidth: 10,
-  borderGrabWidth: 30,
-  headerHeight: 28,
-  dragProxyWidth: 300,
-  dragProxyHeight: 200,
-}
-
-function sanitizeConfig(config) {
-  let cfg = config
-  if (!cfg || typeof cfg !== 'object') return getDefaultConfig()
-  if (LayoutConfig.isResolved(cfg)) {
-    try { cfg = LayoutConfig.fromResolved(cfg) } catch { return getDefaultConfig() }
-  }
-  const root = cfg.root || cfg
-  if (!root || typeof root !== 'object') return getDefaultConfig()
-  const cleaned = sanitizeLayoutConfig(root, ALL_PANEL_IDS)
-  if (!cleaned) return getDefaultConfig()
-  return cfg.root ? { ...cfg, root: cleaned } : { root: cleaned }
-}
-
-function applyConfig(config) {
-  cloneObservers.forEach(o => o.disconnect())
-  cloneObservers = []
-  const cfg = sanitizeConfig(config)
-  cfg.settings = GL_SETTINGS
-  cfg.dimensions = GL_DIMENSIONS
-  layout.loadLayout(cfg)
-  reconcileOrphanPanels()
-  const comps = new Set()
-  collectComponentTypes(cfg.root, comps)
-  document.dispatchEvent(new CustomEvent('workspace:activated', { detail: { components: [...comps] } }))
-}
-
-function initGoldenLayout(savedConfig) {
-  layout = new GoldenLayout(layoutRoot)
-  layout.resizeWithContainerAutomatically = true
-  registerComponents()
-  try {
-    applyConfig(savedConfig)
-  } catch (e) {
-    console.error('[workspace] load saved config failed, fallback to default layout', e)
-    applyConfig(getDefaultConfig())
-  }
-  layout.on('stateChanged', onStateChanged)
-  layout.on('initialised', () => { notifyResize() })
-}
-
-function onStateChanged() {
-  if (!glReady) return
-  if (saveTimer) clearTimeout(saveTimer)
-  saveTimer = setTimeout(() => {
-    try {
-      let cfg = layout.toConfig()
-      if (LayoutConfig.isResolved(cfg)) cfg = LayoutConfig.fromResolved(cfg)
-      if (isConfigComplete(cfg)) {
-        window.api.setConfig({ currentLayout: cfg })
-        if (!suppressAutoSave) autoSavePreset(cfg)
-      }
-    } catch {}
-    notifyResize()
-  }, 300)
-}
-
-function autoSavePreset(cfg) {
-  const name = activePreset
-  if (!name) return
-  setPreset(userPresets, name, cfg)
-  call('PUT', '/api/workspace/preset', { name, config: cfg }).catch(() => {})
-}
-
-function suppressAutoSaveBriefly() {
-  if (saveTimer) { clearTimeout(saveTimer); saveTimer = null }
-  suppressAutoSave = true
-  setTimeout(() => { suppressAutoSave = false }, 400)
-}
-
-function flushAutoSave() {
-  if (!saveTimer) return
-  clearTimeout(saveTimer)
-  saveTimer = null
-  try {
-    let cfg = layout.toConfig()
-    if (LayoutConfig.isResolved(cfg)) cfg = LayoutConfig.fromResolved(cfg)
-    if (isConfigComplete(cfg)) {
-      window.api.setConfig({ currentLayout: cfg })
-      autoSavePreset(cfg)
-    }
-  } catch {}
-}
-
-function notifyResize() {
-  window.dispatchEvent(new Event('resize'))
-  setTimeout(() => window.dispatchEvent(new Event('resize')), 50)
-}
 
 function renderWorkspaceBar() {
-  if (!barEl) return
-  const allNames = presetNames(activePreset, userPresets)
-  barEl.innerHTML = ''
+  if (!S.barEl) return
+  const allNames = presetNames(S.activePreset, S.userPresets)
+  S.barEl.innerHTML = ''
   const label = document.createElement('span')
   label.className = 'workspace-bar-label'
   label.textContent = '工作区'
-  barEl.appendChild(label)
+  S.barEl.appendChild(label)
 
   for (const name of allNames) {
     const tab = document.createElement('div')
-    tab.className = 'workspace-tab' + (name === activePreset ? ' active' : '')
+    tab.className = 'workspace-tab' + (name === S.activePreset ? ' active' : '')
     const nameSpan = document.createElement('span')
     nameSpan.className = 'ws-name'
     nameSpan.textContent = name
     tab.appendChild(nameSpan)
-    if (userPresets[name]) {
+    if (S.userPresets[name]) {
       const close = document.createElement('span')
       close.className = 'ws-close'
       close.title = '删除'
@@ -351,7 +70,7 @@ function renderWorkspaceBar() {
       }
       activatePreset(name)
     })
-    barEl.appendChild(tab)
+    S.barEl.appendChild(tab)
   }
 
   const actions = document.createElement('div')
@@ -382,260 +101,7 @@ function renderWorkspaceBar() {
   actions.appendChild(saveBtn)
   actions.appendChild(saveAsBtn)
   actions.appendChild(resetBtn)
-  barEl.appendChild(actions)
-}
-
-function sanitizeSavedConfig(config, presetName) {
-  const fixed = sanitizeConfig(config)
-  if (JSON.stringify(fixed) === JSON.stringify(config)) return config
-  if (presetName) {
-    userPresets[presetName] = userPresets[presetName] || {}
-    userPresets[presetName].config = fixed
-    userPresets[presetName].updatedAt = Date.now()
-    call('PUT', '/api/workspace/preset', { name: presetName, config: fixed }).catch(() => {})
-  }
-  try { window.api.setConfig({ currentLayout: fixed }) } catch {}
-  return fixed
-}
-
-async function loadPresets() {
-  let data = null
-  let fetchFailed = false
-  try {
-    data = await call('GET', '/api/workspace')
-  } catch {
-    fetchFailed = true
-  }
-  if (fetchFailed) {
-    console.error('[workspace] load presets failed, skip seeding to avoid overwriting server data')
-    return null
-  }
-  userPresets = (data && data.presets) || {}
-  activePreset = (data && data.active) || '默认'
-  if (!userPresets[activePreset]) activePreset = '默认'
-  if (!Object.keys(userPresets).length) {
-    const seed = getDefaultConfig()
-    userPresets['默认'] = { config: seed }
-    call('PUT', '/api/workspace/preset', { name: '默认', config: seed }).catch(() => {})
-    call('PUT', '/api/workspace/active', { name: '默认' }).catch(() => {})
-    return seed
-  }
-  const cfg = await window.api.getConfig()
-  if (userPresets[activePreset] && userPresets[activePreset].config) {
-    if (!isConfigComplete(userPresets[activePreset].config)) return null
-    return sanitizeSavedConfig(userPresets[activePreset].config, activePreset)
-  }
-  if (cfg && cfg.currentLayout && activePreset === '默认') {
-    if (!isConfigComplete(cfg.currentLayout)) return null
-    return sanitizeSavedConfig(cfg.currentLayout, null)
-  }
-  return null
-}
-
-async function saveCurrentAs() {
-  const name = await showPrompt('工作区名称', '我的工作区')
-  if (!name) return
-  try {
-    let cfg = layout.toConfig()
-    if (LayoutConfig.isResolved(cfg)) cfg = LayoutConfig.fromResolved(cfg)
-    if (!isConfigComplete(cfg)) { showToast('当前布局不完整，无法保存'); return }
-    await call('PUT', '/api/workspace/preset', { name, config: cfg })
-    setPreset(userPresets, name, cfg)
-    activePreset = name
-    await call('PUT', '/api/workspace/active', { name })
-    renderWorkspaceBar()
-    showToast('已保存工作区「' + name + '」')
-  } catch (e) { showToast('保存失败: ' + e.message) }
-}
-
-async function saveCurrent() {
-  try {
-    let cfg = layout.toConfig()
-    if (LayoutConfig.isResolved(cfg)) cfg = LayoutConfig.fromResolved(cfg)
-    if (!isConfigComplete(cfg)) { showToast('当前布局不完整，无法保存'); return }
-    await call('PUT', '/api/workspace/preset', { name: activePreset, config: cfg })
-    setPreset(userPresets, activePreset, cfg)
-    renderWorkspaceBar()
-    showToast('已保存当前工作区「' + activePreset + '」')
-  } catch (e) { showToast('保存失败: ' + e.message) }
-}
-
-async function deletePreset(name) {
-  if (!await showConfirm('删除工作区「' + name + '」？')) return
-  try {
-    await call('DELETE', '/api/workspace/preset?name=' + encodeURIComponent(name))
-    const wasActive = activePreset === name
-    deletePresetEntry(userPresets, name)
-    if (wasActive) { await activatePreset('默认') }
-    else { renderWorkspaceBar() }
-    showToast('已删除')
-  } catch (e) { showToast('删除失败: ' + e.message) }
-}
-
-async function activatePreset(name, force) {
-  if (name === activePreset && !force) return
-  flushAutoSave()
-  activePreset = name
-  let cfg = null
-  if (userPresets[name] && userPresets[name].config) cfg = userPresets[name].config
-
-  if (!cfg) { activePreset = '默认'; cfg = getDefaultConfig() }
-  suppressAutoSaveBriefly()
-  try {
-    applyConfig(cfg)
-    await call('PUT', '/api/workspace/active', { name: activePreset })
-    notifyResize()
-  } catch (e) {
-    console.error('[workspace] activate failed', e)
-    try { applyConfig(getDefaultConfig()) } catch (e2) { console.error('[workspace] activate fallback failed', e2) }
-  }
-  renderWorkspaceBar()
-}
-
-async function resetCurrent() {
-  if (userPresets[activePreset]) {
-    if (!await showConfirm('将工作区「' + activePreset + '」重置为默认布局？此操作不可撤销。')) return
-  }
-  const cfg = getDefaultConfig()
-  try {
-    applyConfig(cfg)
-    notifyResize()
-  } catch (e) { console.error('[workspace] reset failed', e) }
-  renderWorkspaceBar()
-}
-
-function getPresetConfigOf(name) {
-  return getPresetConfig(userPresets, name)
-}
-
-async function renamePresetDialog(name, onDone) {
-  const newName = await showPrompt('重命名工作区「' + name + '」', name)
-  if (!newName || newName === name) return
-  try {
-    await call('PUT', '/api/workspace/rename', { oldName: name, newName })
-    renamePresetEntry(userPresets, name, newName)
-    if (activePreset === name) activePreset = newName
-    renderWorkspaceBar()
-    if (onDone) onDone()
-    showToast('已重命名为「' + newName + '」')
-  } catch (e) { showToast('重命名失败: ' + e.message) }
-}
-
-async function duplicatePreset(name) {
-  const cfg = getPresetConfigOf(name)
-  if (!cfg) return
-  const newName = await showPrompt('复制工作区「' + name + '」为新预设', name + ' 副本')
-  if (!newName) return
-  try {
-    await call('PUT', '/api/workspace/preset', { name: newName, config: cfg })
-    setPreset(userPresets, newName, cfg)
-    renderWorkspaceBar()
-    showToast('已复制为「' + newName + '」')
-  } catch (e) { showToast('复制失败: ' + e.message) }
-}
-
-function exportPreset(name) {
-  const cfg = getPresetConfigOf(name)
-  if (!cfg) return
-  const blob = new Blob([buildPresetExport(name, cfg)], { type: 'application/json' })
-  const a = document.createElement('a')
-  a.href = URL.createObjectURL(blob)
-  a.download = presetExportFileName(name)
-  a.click()
-  URL.revokeObjectURL(a.href)
-  showToast('已导出「' + name + '」')
-}
-
-function exportAllPresets() {
-  const blob = new Blob([buildAllPresetsExport(userPresets)], { type: 'application/json' })
-  const a = document.createElement('a')
-  a.href = URL.createObjectURL(blob)
-  a.download = ALL_PRESETS_FILE_NAME
-  a.click()
-  URL.revokeObjectURL(a.href)
-  showToast('已导出全部预设')
-}
-
-async function importPreset(onDone) {
-  const input = document.createElement('input')
-  input.type = 'file'
-  input.accept = '.json'
-  input.addEventListener('change', async () => {
-    const file = input.files[0]
-    if (!file) return
-    try {
-      const text = await file.text()
-      const parsed = parsePresetImport(text)
-      if (parsed.kind === 'invalid') { showToast(parsed.reason); return }
-      if (parsed.kind === 'batch') {
-        for (const [n, p] of parsed.entries) {
-          await call('PUT', '/api/workspace/preset', { name: n, config: p.config })
-          userPresets[n] = { config: p.config }
-        }
-        renderWorkspaceBar()
-        if (onDone) onDone()
-        showToast('已批量导入预设')
-      } else {
-        await call('PUT', '/api/workspace/preset', { name: parsed.name, config: parsed.config })
-        userPresets[parsed.name] = { config: parsed.config }
-        renderWorkspaceBar()
-        if (onDone) onDone()
-        showToast('已导入「' + parsed.name + '」')
-      }
-    } catch (e) { showToast('导入失败: ' + e.message) }
-  })
-  input.click()
-}
-
-async function createNewPreset(onDone) {
-  const templates = Object.keys(userPresets)
-  let cfg = { root: row([stack([comp('compare', '贴图对比')])]) }
-  let nameHint = '我的工作区'
-  if (templates.length) {
-    const choice = await showPrompt('选择模板创建新工作区:\n' + templates.map((t, i) => (i + 1) + '. ' + t).join('\n') + '\n\n输入模板名或留空创建空白工作区', templates[0])
-    if (choice === null) return
-    if (choice && userPresets[choice] && userPresets[choice].config) {
-      cfg = userPresets[choice].config
-      nameHint = choice + ' 副本'
-    }
-  }
-  const newName = await showPrompt('新工作区名称', nameHint)
-  if (!newName) return
-  try {
-    await call('PUT', '/api/workspace/preset', { name: newName, config: cfg })
-    setPreset(userPresets, newName, cfg)
-    activePreset = newName
-    await call('PUT', '/api/workspace/active', { name: newName })
-    applyConfig(cfg)
-    renderWorkspaceBar()
-    if (onDone) onDone()
-    showToast('已创建工作区「' + newName + '」')
-  } catch (e) { showToast('创建失败: ' + e.message) }
-}
-
-function findComponentItem(item, id) {
-  if (!item) return null
-  const ct = item.componentType
-  if (ct !== undefined && ct !== null && (ct === id || ct.id === id)) return item
-  for (const c of item.contentItems || []) {
-    const r = findComponentItem(c, id)
-    if (r) return r
-  }
-  return null
-}
-
-function focusPanel(id) {
-  if (!layout || !layout.rootItem) return false
-  const target = findComponentItem(layout.rootItem, id)
-  if (!target) return false
-  let child = target
-  let p = target.parent
-  while (p) {
-    if (p.type === 'stack') { try { p.setActiveContentItem(child) } catch {} }
-    child = p
-    p = p.parent
-  }
-  return true
+  S.barEl.appendChild(actions)
 }
 
 function addWindowMenu() {
@@ -644,7 +110,7 @@ function addWindowMenu() {
 
   const counts = {}
   try {
-    const cfg = layout.toConfig()
+    const cfg = S.layout.toConfig()
     const root = cfg.root || cfg
     ;(function walk(n) {
       if (!n || typeof n !== 'object') return
@@ -654,7 +120,7 @@ function addWindowMenu() {
   } catch {}
 
   let stacks = []
-  try { stacks = layout.getAllStacks() } catch {}
+  try { stacks = S.layout.getAllStacks() } catch {}
   let activeStack = null
   for (const s of stacks) {
     try { if (s.getActiveContentItem()) { activeStack = s; break } } catch {}
@@ -669,7 +135,7 @@ function addWindowMenu() {
   header.textContent = '选择要添加的面板'
   menu.appendChild(header)
 
-  for (const def of PANEL_DEFS) {
+  for (const def of S.panelDefs) {
     const item = document.createElement('div')
     item.className = 'add-win-item'
     const cnt = counts[def.id] || 0
@@ -688,12 +154,12 @@ function addWindowMenu() {
       const altNew = e.altKey
       try {
         if (altNew) {
-          try { layout.addComponentAtLocation(def.id, {}, def.title, [{ typeId: 3, index: undefined }]) }
-          catch { layout.addComponent(def.id, {}, def.title) }
+          try { S.layout.addComponentAtLocation(def.id, {}, def.title, [{ typeId: 3, index: undefined }]) }
+          catch { S.layout.addComponent(def.id, {}, def.title) }
         } else if (activeStack) {
           activeStack.addComponent(def.id, {}, def.title)
         } else {
-          layout.addComponent(def.id, {}, def.title)
+          S.layout.addComponent(def.id, {}, def.title)
         }
         showToast('已添加「' + def.title + '」' + (altNew ? ' · 新标签组' : ''))
       } catch (err) { showToast('添加失败: ' + err.message) }
@@ -753,11 +219,11 @@ function openPresetManager() {
 
   function renderList() {
     list.innerHTML = ''
-    const allNames = presetNames(activePreset, userPresets)
+    const allNames = presetNames(S.activePreset, S.userPresets)
     for (const name of allNames) {
-      const isSaved = !!userPresets[name]
+      const isSaved = !!S.userPresets[name]
       const item = document.createElement('div')
-      item.className = 'preset-mgr-item' + (name === activePreset ? ' active' : '')
+      item.className = 'preset-mgr-item' + (name === S.activePreset ? ' active' : '')
       const nameSpan = document.createElement('span')
       nameSpan.className = 'pm-name'
       nameSpan.textContent = name
@@ -825,8 +291,8 @@ export async function initWorkspace() {
   try {
     const defs = getPanelDefs()
     if (defs && defs.length) {
-      PANEL_DEFS = defs
-      ALL_PANEL_IDS = new Set(PANEL_DEFS.map(d => d.id))
+      S.panelDefs = defs
+      S.allPanelIds = new Set(S.panelDefs.map(d => d.id))
     }
     extractPanels()
     createLayoutRoot()
@@ -835,18 +301,18 @@ export async function initWorkspace() {
     const savedConfig = await loadPresets()
     initGoldenLayout(savedConfig)
     renderWorkspaceBar()
-    glReady = true
+    S.glReady = true
     document.addEventListener('workspace:focus-panel', (e) => {
       const id = e.detail && e.detail.id
       if (id) focusPanel(id)
     })
-    if (layout) layout.updateSizeFromContainer()
+    if (S.layout) S.layout.updateSizeFromContainer()
     setTimeout(notifyResize, 100)
   } catch (e) {
-    console.error('[workspace] init failed, fallback to classic layout', e)
+    console.error('[workspace] init failed, fallback to classic S.layout', e)
     try { restorePanelsToClassic() } catch {}
     document.body.classList.remove('gl-active')
-    if (layoutRoot) layoutRoot.style.display = 'none'
-    if (barEl) barEl.style.display = 'none'
+    if (S.layoutRoot) S.layoutRoot.style.display = 'none'
+    if (S.barEl) S.barEl.style.display = 'none'
   }
 }
