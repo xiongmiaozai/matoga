@@ -327,7 +327,9 @@ npm run dist:win                  # 打包契约不被破坏
 | B2 | workspace.js | DONE | 585 pass / 冒烟 19+10 | 只抽纯逻辑（见下） |
 | B7 | mc-theme.css / node-canvas.css / styles.css（3927 行 → 17 分片） | DONE | 585 pass / 冒烟 19+10 / 展开逐字符一致 | `cc3a8283` |
 | B8 | node-editor.html 内联样式抽外链（883→446 行） | DONE | 585 pass / 冒烟 19+10 | `53ad9436` |
-| B9 | locales/zh.js、en.js（各 790→20 行，词条按域切 5 分片） | DONE | 589 pass / 冒烟 19+10 / 731 键值逐条一致 | 本次 |
+| B9 | locales/zh.js、en.js（各 790→20 行，词条按域切 5 分片） | DONE | 589 pass / 冒烟 19+10 / 731 键值逐条一致 | `0d9c6194` |
+| B4 | actions.js（576→14 行，`actions/` 8 模块） | DONE | 589 pass / 冒烟 19+10 / 九段逐行一致 | `bb9ca1d7` |
+| B2 | node-preview.js（520→126 行，`node-preview/` 5 模块） | DONE | 589 pass / 冒烟 19+10 | `712f5580` |
 
 ### 9.1 workspace.js：为什么只抽纯逻辑
 
