@@ -5,6 +5,9 @@
  *
  * 从 pack-browser.js 按职责搬出，逻辑未改。
  */
+
+import { packRawUrl, MODEL_DIR_PATH_RE, MODEL_JSON_RE } from '../helpers.js'
+
 import { S, BROWSE_CLICK_DELAY } from '../store.js'
 
 export function packEntryRawUrl(packName, relPath) {

@@ -5,6 +5,8 @@
  *
  * 从 hdri-preset.js 按职责搬出，逻辑未改。
  */
+
+
 import { $, showToast } from '../core.js'
 import { fileUrl } from '../utils.js'
 import { parseEnvPixels, detectExt, extFromUrl } from '../hdr-env-loader.js'

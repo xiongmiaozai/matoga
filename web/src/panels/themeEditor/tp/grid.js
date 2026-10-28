@@ -5,6 +5,9 @@
  *
  * 从 panel.js 按职责搬出，逻辑未改。
  */
+
+import { escapeHtml } from './helpers.js'
+
 import { initThemes, applyTheme, getRegistry, getActiveId, resolveTokens } from '../../../theme/registry.js'
 import { S } from './state.js'
 import { applyDraft, currentResolved, startEdit, stopEdit } from './draft.js'

@@ -5,6 +5,9 @@
  *
  * 从 node-rel.js 按职责搬出，逻辑未改。
  */
+
+import { cssEsc } from './consts.js'
+
 import { getGraphInfo, focusNodeInCanvas } from '../node-canvas.js'
 import { M, viewEl } from './consts.js'
 import { S } from '././state.js'
