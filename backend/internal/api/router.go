@@ -8,6 +8,7 @@ import (
 	"github.com/xiongmiaozai/matoga/backend/internal/httpx"
 	"github.com/xiongmiaozai/matoga/backend/internal/media"
 	"github.com/xiongmiaozai/matoga/backend/internal/store"
+	"github.com/xiongmiaozai/matoga/backend/internal/upload"
 )
 
 // Services 汇总挂载路由所需的全部依赖。
@@ -18,6 +19,8 @@ type Services struct {
 	HDRI        *media.HDRI
 	Assets      *store.AssetStore
 	ModelThumbs *media.ModelThumb
+	Upload      *upload.Service
+	PanelsDir   string
 }
 
 // Mount 把所有 API 挂到根路由。
@@ -77,4 +80,28 @@ func Mount(r *httpx.Router, s Services) {
 	assetGroup.Get("/info", httpx.Wrap(assetHandler.Info))
 	assetGroup.Put("/favorites", httpx.Wrap(assetHandler.SetFavorites))
 	assetGroup.Put("/recent", httpx.Wrap(assetHandler.SetRecent))
+
+	// /api/shell（仅本地模式）
+	shellHandler := &ShellHandler{}
+	shellGroup := r.APIGroup("/shell")
+	shellGroup.Use(s.Deps.Auth.RequireLocal)
+	shellGroup.Post("/open", httpx.Wrap(shellHandler.Open))
+	shellGroup.Post("/reveal", httpx.Wrap(shellHandler.Reveal))
+
+	// /api/upload
+	uploadHandler := &UploadHandler{Service: s.Upload}
+	uploadGroup := r.APIGroup("/upload")
+	uploadGroup.Post("/begin", httpx.Wrap(uploadHandler.Begin))
+	uploadGroup.Put("/file", httpx.Wrap(uploadHandler.PutFile))
+	uploadGroup.Post("/end", httpx.Wrap(uploadHandler.End))
+
+	// /api/compare
+	compareHandler := &CompareHandler{}
+	compareGroup := r.APIGroup("/compare")
+	compareGroup.Post("/scan", httpx.Wrap(compareHandler.Scan))
+
+	// /api/panels
+	panelsHandler := &PanelsHandler{Dir: s.PanelsDir}
+	panelsGroup := r.APIGroup("/panels")
+	panelsGroup.Get("/", httpx.Wrap(panelsHandler.List))
 }

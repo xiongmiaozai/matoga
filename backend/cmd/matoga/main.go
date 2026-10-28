@@ -25,6 +25,7 @@ import (
 	"github.com/xiongmiaozai/matoga/backend/internal/media"
 	"github.com/xiongmiaozai/matoga/backend/internal/platform"
 	"github.com/xiongmiaozai/matoga/backend/internal/store"
+	"github.com/xiongmiaozai/matoga/backend/internal/upload"
 )
 
 var version = "dev"
@@ -76,6 +77,8 @@ func main() {
 		HDRI:        media.NewHDRI(paths, cfg),
 		Assets:      store.NewAssetStore(paths.DataRoot, log),
 		ModelThumbs: media.NewModelThumb(paths.DataRoot),
+		Upload:      upload.New(paths.DataRoot),
+		PanelsDir:   filepath.Join(paths.ResRoot, "web", "src", "panels"),
 	})
 
 	// 静态前端

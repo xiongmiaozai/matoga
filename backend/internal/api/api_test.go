@@ -23,6 +23,7 @@ import (
 	"github.com/xiongmiaozai/matoga/backend/internal/media"
 	"github.com/xiongmiaozai/matoga/backend/internal/platform"
 	"github.com/xiongmiaozai/matoga/backend/internal/store"
+	"github.com/xiongmiaozai/matoga/backend/internal/upload"
 )
 
 type testEnv struct {
@@ -34,6 +35,8 @@ type testEnv struct {
 	thumb       *media.Thumb
 	assets      *store.AssetStore
 	modelThumbs *media.ModelThumb
+	upload      *upload.Service
+	panelsDir   string
 }
 
 func newEnv(t *testing.T) *testEnv {
@@ -52,6 +55,8 @@ func newEnv(t *testing.T) *testEnv {
 	hdri := media.NewHDRI(paths, cfg)
 	assets := store.NewAssetStore(dir, log)
 	modelThumbs := media.NewModelThumb(dir)
+	up := upload.New(dir)
+	panelsDir := filepath.Join(dir, "web", "src", "panels")
 	api.Mount(r, api.Services{
 		Deps:        &api.Deps{Auth: auth},
 		Config:      cfg,
@@ -59,12 +64,15 @@ func newEnv(t *testing.T) *testEnv {
 		HDRI:        hdri,
 		Assets:      assets,
 		ModelThumbs: modelThumbs,
+		Upload:      up,
+		PanelsDir:   panelsDir,
 	})
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
 	return &testEnv{
 		srv: srv, dir: dir, paths: paths, auth: auth, config: cfg,
 		thumb: thumb, assets: assets, modelThumbs: modelThumbs,
+		upload: up, panelsDir: panelsDir,
 	}
 }
 
