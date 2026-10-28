@@ -30,6 +30,7 @@ import {
 } from './hdri-preset.js'
 import { getMcBiomes, getCurrentBiome, setCurrentBiome, rerenderLastMcModel } from './mc-model-viewer.js'
 import { enhancePreview } from './preview2d.js'
+import { bindInput, hexToNum, numToHex, MAT_PRESET_INPUTS, SKY_PRESETS } from './preview-presets.js'
 
 let _initialized = false
 export async function initPreviewPanel() {
@@ -83,20 +84,18 @@ export async function initPreviewPanel() {
     })
   }
   bindSegment('m3dLightSeg', 'light', (key) => { setLightPreset(key); renderLightEditor(getCustomLightConfig()) })
-  const _hexToNum = (hex) => parseInt(hex.slice(1), 16)
-  const _numToHex = (n) => '#' + (n & 0xffffff).toString(16).padStart(6, '0')
   function renderLightEditor(config) {
     if (!config) return
     const ac = $('m3dAmbientColor'), ai = $('m3dAmbientIntensity'), aiv = $('m3dAmbientIntensityVal'), bg = $('m3dBgColor'), list = $('m3dLightList')
-    if (ac) ac.value = _numToHex(config.ambient.color)
+    if (ac) ac.value = numToHex(config.ambient.color)
     if (ai) { ai.value = config.ambient.intensity; if (aiv) aiv.textContent = config.ambient.intensity.toFixed(2) }
-    if (bg) bg.value = _numToHex(config.bg)
+    if (bg) bg.value = numToHex(config.bg)
     if (!list) return
     list.innerHTML = ''
     config.lights.forEach((light, i) => {
       const item = document.createElement('div'); item.className = 'm3d-light-item'
       const head = document.createElement('div'); head.className = 'm3d-light-item-head'
-      const dot = document.createElement('span'); dot.className = 'm3d-light-dot'; dot.style.background = _numToHex(light.color)
+      const dot = document.createElement('span'); dot.className = 'm3d-light-dot'; dot.style.background = numToHex(light.color)
       const title = document.createElement('span'); title.className = 'm3d-light-title'; title.textContent = t('m3d.lightLabel') + ' ' + (i + 1)
       const del = document.createElement('button'); del.className = 'm3d-light-del'; del.innerHTML = '&times;'
       del.addEventListener('click', () => {
@@ -105,8 +104,8 @@ export async function initPreviewPanel() {
       })
       head.appendChild(dot); head.appendChild(title); head.appendChild(del); item.appendChild(head)
       const r1 = document.createElement('div'); r1.className = 'm3d-ctrl-group'
-      const ci = document.createElement('input'); ci.type = 'color'; ci.className = 'm3d-color-input'; ci.value = _numToHex(light.color)
-      ci.addEventListener('input', () => { const c = getCustomLightConfig(); if (!c) return; c.lights[i].color = _hexToNum(ci.value); dot.style.background = ci.value; applyCustomLightConfigExport(c) })
+      const ci = document.createElement('input'); ci.type = 'color'; ci.className = 'm3d-color-input'; ci.value = numToHex(light.color)
+      ci.addEventListener('input', () => { const c = getCustomLightConfig(); if (!c) return; c.lights[i].color = hexToNum(ci.value); dot.style.background = ci.value; applyCustomLightConfigExport(c) })
       const il = document.createElement('label'); il.className = 'm3d-slider'
       const isp = document.createElement('span'); isp.textContent = t('m3d.lightIntensity')
       const iin = document.createElement('input'); iin.type = 'range'; iin.min = '0'; iin.max = '5'; iin.step = '0.01'; iin.value = light.intensity
@@ -125,9 +124,9 @@ export async function initPreviewPanel() {
       item.appendChild(r2); list.appendChild(item)
     })
   }
-  const acEl = $('m3dAmbientColor'); if (acEl) acEl.addEventListener('input', (e) => { const c = getCustomLightConfig(); if (!c) return; c.ambient.color = _hexToNum(e.target.value); applyCustomLightConfigExport(c) })
+  const acEl = $('m3dAmbientColor'); if (acEl) acEl.addEventListener('input', (e) => { const c = getCustomLightConfig(); if (!c) return; c.ambient.color = hexToNum(e.target.value); applyCustomLightConfigExport(c) })
   const aiEl = $('m3dAmbientIntensity'); if (aiEl) aiEl.addEventListener('input', (e) => { const v = parseFloat(e.target.value); const aiv2 = $('m3dAmbientIntensityVal'); if (aiv2) aiv2.textContent = v.toFixed(2); const c = getCustomLightConfig(); if (!c) return; c.ambient.intensity = v; applyCustomLightConfigExport(c) })
-  const bgEl = $('m3dBgColor'); if (bgEl) bgEl.addEventListener('input', (e) => { const c = getCustomLightConfig(); if (!c) return; c.bg = _hexToNum(e.target.value); applyCustomLightConfigExport(c) })
+  const bgEl = $('m3dBgColor'); if (bgEl) bgEl.addEventListener('input', (e) => { const c = getCustomLightConfig(); if (!c) return; c.bg = hexToNum(e.target.value); applyCustomLightConfigExport(c) })
   const addLight = $('m3dAddLight'); if (addLight) addLight.addEventListener('click', () => { const c = getCustomLightConfig(); if (!c) return; c.lights.push({ color: 0xffffff, intensity: 1.0, pos: [3, 3, 4] }); applyCustomLightConfigExport(c); renderLightEditor(c) })
   function renderLightCustomList(customPresets) {
     const list = $('m3dLightCustomList'); if (!list) return; list.innerHTML = ''
@@ -178,7 +177,6 @@ export async function initPreviewPanel() {
   }
   updateFilterControls()
 
-  const bindInput = (id, fn) => { const el = $(id); if (el) el.addEventListener('input', (e) => fn(e.target.value, el)) }
   bindInput('m3dMetalness', (v) => { const n = parseFloat(v); setMetalness(n); $('m3dMetalnessVal').textContent = n.toFixed(2) })
   bindInput('m3dRoughness', (v) => { const n = parseFloat(v); setRoughness(n); $('m3dRoughnessVal').textContent = n.toFixed(2) })
   bindInput('m3dNormal', (v) => { const n = parseFloat(v); setNormalScale(n); $('m3dNormalVal').textContent = n.toFixed(2) })
@@ -204,16 +202,6 @@ export async function initPreviewPanel() {
   bindInput('m3dSkyMieG', (v) => { const n = parseFloat(v); setSkyMieDirectionalG(n); $('m3dSkyMieGVal').textContent = n.toFixed(3) })
 
   const skyTint = $('m3dSkyTint'); if (skyTint) skyTint.addEventListener('input', (e) => setSkyTint(e.target.value))
-  const skyPresets = {
-    clear:    { elevation:60, azimuth:180, turbidity:2,  rayleigh:2.5, mie:0.004,  mieG:0.8,  tint:'#a0c8ff' },
-    partly:   { elevation:35, azimuth:200, turbidity:5,  rayleigh:2,   mie:0.008,  mieG:0.82, tint:'#b0c8e8' },
-    overcast: { elevation:20, azimuth:180, turbidity:18, rayleigh:1.5, mie:0.01,   mieG:0.85, tint:'#c0c4cc' },
-    dawn:     { elevation:6,  azimuth:90,  turbidity:6,  rayleigh:2,   mie:0.01,   mieG:0.85, tint:'#ffc8a0' },
-    dusk:     { elevation:5,  azimuth:270, turbidity:7,  rayleigh:2,   mie:0.01,   mieG:0.85, tint:'#ffb090' },
-    night:    { elevation:-5, azimuth:180, turbidity:3,  rayleigh:0.3, mie:0.003,  mieG:0.7,  tint:'#2a3a5a' },
-    noon:     { elevation:75, azimuth:180, turbidity:2,  rayleigh:1.2, mie:0.003,  mieG:0.75, tint:'#c0d8ff' },
-    sunset:   { elevation:4,  azimuth:270, turbidity:8,  rayleigh:2,   mie:0.01,   mieG:0.85, tint:'#ffd0a0' }
-  }
   function applySkyPreset(p) {
     const apply = (id, val, valId, text, fn) => { $(id).value = val; $(valId).textContent = text; fn(val) }
     apply('m3dSkyElevation', p.elevation, 'm3dSkyElevationVal', p.elevation + '°', setSkySunElevation)
@@ -268,7 +256,7 @@ export async function initPreviewPanel() {
     btn.addEventListener('click', () => {
       document.querySelectorAll('#m3dSkyPresetSeg button').forEach(b => b.classList.remove('active'))
       btn.classList.add('active')
-      applySkyPreset(skyPresets[btn.dataset.preset])
+      applySkyPreset(SKY_PRESETS[btn.dataset.preset])
     })
   })
   const skySave = $('m3dSkySaveBtn'); if (skySave) skySave.addEventListener('click', async () => {
@@ -415,7 +403,6 @@ export async function initPreviewPanel() {
   }))
 
   /* ── 自定义材质预设：收集滑条值 → 存 config.materialCustomPresets ── */
-  const MAT_PRESET_INPUTS = ['m3dMetalness', 'm3dRoughness', 'm3dNormal', 'm3dEmissive', 'm3dOpacity', 'm3dTransmission', 'm3dIOR', 'm3dClearcoat']
   function getMaterialPresetFromUI() {
     const p = {}
     MAT_PRESET_INPUTS.forEach(id => { const el = $(id); if (el) p[id] = parseFloat(el.value) })
