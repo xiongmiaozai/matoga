@@ -27,16 +27,18 @@ import (
 )
 
 type testEnv struct {
-	srv         *httptest.Server
-	dir         string
-	paths       platform.Paths
-	auth        *httpx.Auth
-	config      *store.Config
-	thumb       *media.Thumb
-	assets      *store.AssetStore
-	modelThumbs *media.ModelThumb
-	upload      *upload.Service
-	panelsDir   string
+	srv          *httptest.Server
+	dir          string
+	paths        platform.Paths
+	auth         *httpx.Auth
+	config       *store.Config
+	thumb        *media.Thumb
+	assets       *store.AssetStore
+	modelThumbs  *media.ModelThumb
+	upload       *upload.Service
+	panelsDir    string
+	workspaces   *store.WorkspaceStore
+	nodeProjects *store.NodeProjectStore
 }
 
 func newEnv(t *testing.T) *testEnv {
@@ -58,14 +60,16 @@ func newEnv(t *testing.T) *testEnv {
 	up := upload.New(dir)
 	panelsDir := filepath.Join(dir, "web", "src", "panels")
 	api.Mount(r, api.Services{
-		Deps:        &api.Deps{Auth: auth},
-		Config:      cfg,
-		Thumbs:      thumb,
-		HDRI:        hdri,
-		Assets:      assets,
-		ModelThumbs: modelThumbs,
-		Upload:      up,
-		PanelsDir:   panelsDir,
+		Deps:         &api.Deps{Auth: auth},
+		Config:       cfg,
+		Thumbs:       thumb,
+		HDRI:         hdri,
+		Assets:       assets,
+		ModelThumbs:  modelThumbs,
+		Upload:       up,
+		PanelsDir:    panelsDir,
+		Workspaces:   store.NewWorkspaceStore(filepath.Join(dir, "data"), log),
+		NodeProjects: store.NewNodeProjectStore(filepath.Join(dir, "data"), log),
 	})
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)

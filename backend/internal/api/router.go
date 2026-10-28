@@ -13,14 +13,16 @@ import (
 
 // Services 汇总挂载路由所需的全部依赖。
 type Services struct {
-	Deps        *Deps
-	Config      *store.Config
-	Thumbs      *media.Thumb
-	HDRI        *media.HDRI
-	Assets      *store.AssetStore
-	ModelThumbs *media.ModelThumb
-	Upload      *upload.Service
-	PanelsDir   string
+	Deps         *Deps
+	Config       *store.Config
+	Thumbs       *media.Thumb
+	HDRI         *media.HDRI
+	Assets       *store.AssetStore
+	ModelThumbs  *media.ModelThumb
+	Upload       *upload.Service
+	PanelsDir    string
+	Workspaces   *store.WorkspaceStore
+	NodeProjects *store.NodeProjectStore
 }
 
 // Mount 把所有 API 挂到根路由。
@@ -104,4 +106,23 @@ func Mount(r *httpx.Router, s Services) {
 	panelsHandler := &PanelsHandler{Dir: s.PanelsDir}
 	panelsGroup := r.APIGroup("/panels")
 	panelsGroup.Get("/", httpx.Wrap(panelsHandler.List))
+
+	// /api/workspace
+	wsHandler := &WorkspaceHandler{Store: s.Workspaces}
+	wsGroup := r.APIGroup("/workspace")
+	wsGroup.Get("/", httpx.Wrap(wsHandler.Get))
+	wsGroup.Put("/preset", httpx.Wrap(wsHandler.SavePreset))
+	wsGroup.Delete("/preset", httpx.Wrap(wsHandler.DeletePreset))
+	wsGroup.Put("/rename", httpx.Wrap(wsHandler.RenamePreset))
+	wsGroup.Put("/active", httpx.Wrap(wsHandler.SetActive))
+
+	// /api/node-projects
+	npHandler := &NodeProjectHandler{Store: s.NodeProjects}
+	npGroup := r.APIGroup("/node-projects")
+	npGroup.Get("/", httpx.Wrap(npHandler.List))
+	npGroup.Post("/", httpx.Wrap(npHandler.Save))
+	npGroup.Get("/{id}", httpx.Wrap(npHandler.Load))
+	npGroup.Delete("/{id}", httpx.Wrap(npHandler.Remove))
+	npGroup.Put("/{id}/rename", httpx.Wrap(npHandler.Rename))
+	npGroup.Get("/{id}/thumb", httpx.Wrap(npHandler.Thumb))
 }

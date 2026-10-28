@@ -71,14 +71,16 @@ func main() {
 	r := httpx.NewRouter(auth, log)
 
 	api.Mount(r, api.Services{
-		Deps:        &api.Deps{StartedAt: time.Now(), Auth: auth, Version: version},
-		Config:      cfg,
-		Thumbs:      media.NewThumb(paths),
-		HDRI:        media.NewHDRI(paths, cfg),
-		Assets:      store.NewAssetStore(paths.DataRoot, log),
-		ModelThumbs: media.NewModelThumb(paths.DataRoot),
-		Upload:      upload.New(paths.DataRoot),
-		PanelsDir:   filepath.Join(paths.ResRoot, "web", "src", "panels"),
+		Deps:         &api.Deps{StartedAt: time.Now(), Auth: auth, Version: version},
+		Config:       cfg,
+		Thumbs:       media.NewThumb(paths),
+		HDRI:         media.NewHDRI(paths, cfg),
+		Assets:       store.NewAssetStore(paths.DataRoot, log),
+		ModelThumbs:  media.NewModelThumb(paths.DataRoot),
+		Upload:       upload.New(paths.DataRoot),
+		PanelsDir:    filepath.Join(paths.ResRoot, "web", "src", "panels"),
+		Workspaces:   store.NewWorkspaceStore(filepath.Join(paths.DataRoot, "data"), log),
+		NodeProjects: store.NewNodeProjectStore(filepath.Join(paths.DataRoot, "data"), log),
 	})
 
 	// 静态前端
