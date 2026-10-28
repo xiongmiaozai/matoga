@@ -13,16 +13,17 @@ import (
 
 // Services 汇总挂载路由所需的全部依赖。
 type Services struct {
-	Deps         *Deps
-	Config       *store.Config
-	Thumbs       *media.Thumb
-	HDRI         *media.HDRI
-	Assets       *store.AssetStore
-	ModelThumbs  *media.ModelThumb
-	Upload       *upload.Service
-	PanelsDir    string
-	Workspaces   *store.WorkspaceStore
-	NodeProjects *store.NodeProjectStore
+	Deps           *Deps
+	Config         *store.Config
+	Thumbs         *media.Thumb
+	HDRI           *media.HDRI
+	Assets         *store.AssetStore
+	ModelThumbs    *media.ModelThumb
+	Upload         *upload.Service
+	PanelsDir      string
+	Workspaces     *store.WorkspaceStore
+	NodeProjects   *store.NodeProjectStore
+	ImportedModels *store.ImportedModelStore
 }
 
 // Mount 把所有 API 挂到根路由。
@@ -125,4 +126,14 @@ func Mount(r *httpx.Router, s Services) {
 	npGroup.Delete("/{id}", httpx.Wrap(npHandler.Remove))
 	npGroup.Put("/{id}/rename", httpx.Wrap(npHandler.Rename))
 	npGroup.Get("/{id}/thumb", httpx.Wrap(npHandler.Thumb))
+
+	// /api/imported-models
+	imHandler := &ImportedModelHandler{Store: s.ImportedModels, Thumbs: s.ModelThumbs}
+	imGroup := r.APIGroup("/imported-models")
+	imGroup.Get("/location", httpx.Wrap(imHandler.Location))
+	imGroup.Get("/", httpx.Wrap(imHandler.List))
+	imGroup.Post("/", httpx.Wrap(imHandler.Save))
+	imGroup.Get("/{id}", httpx.Wrap(imHandler.Load))
+	imGroup.Put("/{id}", httpx.Wrap(imHandler.Update))
+	imGroup.Delete("/{id}", httpx.Wrap(imHandler.Delete))
 }
