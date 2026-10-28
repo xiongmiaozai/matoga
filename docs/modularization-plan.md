@@ -325,6 +325,7 @@ npm run dist:win                  # 打包契约不被破坏
 | B2 | render.js（1299→44，`rnd/` 10 模块） | DONE | 552 pass / 冒烟通过 | 多 commit（268f666…730541a） |
 | B3 | uv-editor-core.js（1272→395，`uvc/` 16 模块） | DONE | 552 pass / 冒烟 19+5+10 | 多 commit（consts…highlight） |
 | B2 | workspace.js | DONE | 585 pass / 冒烟 19+10 | 只抽纯逻辑（见下） |
+| B7 | mc-theme.css / node-canvas.css / styles.css（3927 行 → 17 分片） | DONE | 585 pass / 冒烟 19+10 / 展开逐字符一致 | `cc3a8283` |
 
 ### 9.1 workspace.js：为什么只抽纯逻辑
 
@@ -345,16 +346,39 @@ npm run dist:win                  # 打包契约不被破坏
 
 顺带删除死代码 `web/src/ws/state.js`（37 行）——`94c26030` 创建后从未被任何文件 import。
 
+### 9.2 CSS 拆分：按分节自动分片，展开后逐字符等价
 
-### 9.1 workspace.js：为什么只抽纯逻辑（862 → 782 行）
+B7 批次中的三个大 CSS 用新增的 `tools/split-css-auto.mjs` 自动切分：
 
-`docs/migration-go-vue.md` §9 已判定该文件「不再继续拆 —— 会被 dockview 方案整体替换」，与本计划的 B2 TODO 冲突。经确认采取折中：
+| 文件 | 原行数 | 分片数 | 入口行数 | 分片目录 |
+| --- | --- | --- | --- | --- |
+| `web/mc-theme.css` | 1391 | 6 | 12 | `web/css/mc-theme/` |
+| `web/node-canvas.css` | 1288 | 6 | 12 | `web/css/node-canvas/` |
+| `web/styles.css` | 1248 | 5 | 11 | `web/css/styles/` |
 
-- **抽出可复用的纯逻辑**（不依赖 Golden-Layout 实例、不碰 DOM，Vue 化时可直接搬走）：
-  - `web/src/ws/layout-tree.js`（73 行）：`walkConfig`、`collectComponentTypes`、`countComponentTypes`、`isConfigComplete`、`getDefaultConfig`
-  - `web/src/ws/preset-model.js`（137 行）：`presetNames`、`isSavedPreset`、`getPresetConfig`、`setPreset`、`deletePresetEntry`、`renamePresetEntry`、`buildPresetExport`、`presetExportFileName`、`buildAllPresetsExport`、`ALL_PRESETS_FILE_NAME`、`parsePresetImport`
-- **不拆布局壳部分**（`initGoldenLayout` / `applyConfig` / 面板克隆 / 工作区栏渲染 / 右键菜单），因为它们与 Golden-Layout API 深度绑定，dockview 替换时整体作废。
-- **顺带删除死代码**：`web/src/ws/state.js`（37 行）自 `94c26030` 创建后从未被任何文件 import，已 `git rm`。
-- 新增 33 个单测（`test/unit/ws-layout-tree.test.js` 13 个、`test/unit/ws-preset-model.test.js` 20 个），此前这两个模块零覆盖。
+切分规则：
+
+- 只在**顶层分节标记**（`/* ═══` 或 `/* ──`）之间切，分片按原行号升序 `@import`，
+  层叠顺序与原文件完全一致；
+- 文件级头注释（`/**` 文档头，或未在本行闭合的 `/* ═══ 标题 ═══ */`）抽到入口保留；
+  单行完整注释（如 `/* ── 顶栏按钮 ── */`）是分节标记，留在分片内；
+- 分片内容原样落盘、不追加行尾换行，使入口展开后与原文件逐字符对齐；
+- 行数核对：分片总行数 ≠ 正文行数时直接抛错，不产物。
+
+验证证据：
+
+```
+展开入口 @import 后与原文件逐字符一致:
+  mc-theme.css    47654 == 47654 ✓
+  node-canvas.css 61819 == 61819 ✓
+  styles.css      86868 == 86868 ✓
+大括号配平: mc-theme 375/375 · node-canvas 514/514 · styles 805/805
+服务实测: 3 个入口 + 抽查分片（含中文文件名）全部 HTTP 200
+npm test 585 pass / 0 fail
+npm run test:smoke 19 pass + WS 集成 10 pass / 0 fail
+```
+
+`web/index.html` 与 `web/node-editor.html` 的 `<link>` 路径未变（仍指向同名入口文件），
+`node-editor.html` 内部对 `styles.css` 的覆盖规则仍在外链之后，级联关系不变。
 
 
