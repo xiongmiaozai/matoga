@@ -16,6 +16,7 @@ type Services struct {
 	Config *store.Config
 	Thumbs *media.Thumb
 	HDRI   *media.HDRI
+	Assets *store.AssetStore
 }
 
 // Mount 把所有 API 挂到根路由。
@@ -61,4 +62,13 @@ func Mount(r *httpx.Router, s Services) {
 	hdriGroup.Get("/thumb", httpx.Wrap(hdriHandler.Thumb))
 	hdriGroup.Post("/thumb", httpx.Wrap(hdriHandler.SaveThumb))
 	hdriGroup.Post("/cleanup", httpx.Wrap(hdriHandler.Cleanup))
+
+	// /api/asset
+	assetHandler := &AssetHandler{Store: s.Assets}
+	assetGroup := r.APIGroup("/asset")
+	assetGroup.Get("/", httpx.Wrap(assetHandler.Get))
+	assetGroup.Get("/type/{type}", httpx.Wrap(assetHandler.ByType))
+	assetGroup.Get("/info", httpx.Wrap(assetHandler.Info))
+	assetGroup.Put("/favorites", httpx.Wrap(assetHandler.SetFavorites))
+	assetGroup.Put("/recent", httpx.Wrap(assetHandler.SetRecent))
 }

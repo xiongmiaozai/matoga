@@ -32,6 +32,7 @@ type testEnv struct {
 	auth   *httpx.Auth
 	config *store.Config
 	thumb  *media.Thumb
+	assets *store.AssetStore
 }
 
 func newEnv(t *testing.T) *testEnv {
@@ -48,15 +49,17 @@ func newEnv(t *testing.T) *testEnv {
 	thumb := media.NewThumb(paths)
 	r := httpx.NewRouter(auth, log)
 	hdri := media.NewHDRI(paths, cfg)
+	assets := store.NewAssetStore(dir, log)
 	api.Mount(r, api.Services{
 		Deps:   &api.Deps{Auth: auth},
 		Config: cfg,
 		Thumbs: thumb,
 		HDRI:   hdri,
+		Assets: assets,
 	})
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
-	return &testEnv{srv: srv, dir: dir, paths: paths, auth: auth, config: cfg, thumb: thumb}
+	return &testEnv{srv: srv, dir: dir, paths: paths, auth: auth, config: cfg, thumb: thumb, assets: assets}
 }
 
 func (e *testEnv) get(t *testing.T, path string) map[string]any {
