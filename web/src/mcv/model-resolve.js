@@ -104,7 +104,7 @@ export function resolveItemDefRefs(node, out = [], depth = 0) {
   switch (type) {
     case 'model':
       if (typeof node.model === 'string' && node.model) {
-        out.push({ model: node.model, transformation: node.transformation || null })
+        out.push({ model: node.model, transformation: node.transformation || null, tints: Array.isArray(node.tints) ? node.tints : null })
       }
       break
     case 'condition':
@@ -187,7 +187,7 @@ export async function resolveMcModelAsset(api, packName, rel, fileRoot) {
         const borrowed = await borrowTemplateTextures(api, packName, rel, fileRoot)
         if (borrowed) textures = expandTextureAliases(borrowed)
       }
-      return { parts: [{ elements, textures, transform: null }] }
+      return { parts: [{ elements, textures, transform: null, tints: null }] }
     } catch {
       return { parts: [] }
     }
@@ -202,7 +202,7 @@ export async function resolveMcModelAsset(api, packName, rel, fileRoot) {
     if (!mp) continue
     try {
       const { elements, textures } = await resolveMcModel(api, packName, mp, 0, fileRoot)
-      parts.push({ elements, textures, transform: r.transformation || null })
+      parts.push({ elements, textures, transform: r.transformation || null, tints: r.tints || null })
     } catch {}
   }
   return { parts }

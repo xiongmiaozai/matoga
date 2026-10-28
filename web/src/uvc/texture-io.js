@@ -46,7 +46,7 @@ export function createTextureIO(o) {
     if (replaced > 1) flashNotice(t('uv.replacedN', { n: replaced }))
   }
 
-  function applyCustomTexture(dataUrl, filename, texIndex) {
+  function applyCustomTexture(dataUrl, filename, texIndex, extra) {
     const layout = state.layout
     if (!layout || !isUsableTexUrl(dataUrl)) return
     const i = (texIndex != null && Number.isFinite(+texIndex)) ? +texIndex : state.activeTex
@@ -59,7 +59,7 @@ export function createTextureIO(o) {
     rebuildChips()
     loadTexImage(dataUrl, requestDraw)   /* 预载 → onload 后重绘 */
     if (typeof hooks.onTexture === 'function') {
-      try { Promise.resolve(hooks.onTexture(i, dataUrl, layout)).catch(() => {}) } catch {}
+      try { Promise.resolve(hooks.onTexture(i, dataUrl, layout, extra)).catch(() => {}) } catch {}
     }
     updateStatus()
     draw()
@@ -87,8 +87,9 @@ export function createTextureIO(o) {
     }
   }
 
-  /* 贴图库选择：hooks.pickTexture 可覆盖（返回 Promise<{name,url}|null>）；
-     默认动态加载 uv-tex-picker 浮窗（总资产库贴图 → raw URL） */
+  /* 贴图库选择：hooks.pickTexture 可覆盖（返回 Promise<{name,url,normal,specular}|null>）；
+     默认动态加载 uv-tex-picker 浮窗（总资产库材质球 → raw URL）。
+     返回材质组：主图写入 UV 槽位，normal/specular 透传宿主做 3D 视口 PBR 预览 */
   async function pickLibraryTexture() {
     if (!state.layout) return
     let picked = null
@@ -101,7 +102,8 @@ export function createTextureIO(o) {
       }
     } catch (e) { console.error('[uv-editor] tex-picker', e) }
     if (picked && isUsableTexUrl(picked.url)) {
-      applyCustomTexture(picked.url, picked.name || null)
+      const extra = { normal: picked.normal || '', specular: picked.specular || '' }
+      applyCustomTexture(picked.url, picked.name || null, null, extra)
     }
   }
 

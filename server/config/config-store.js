@@ -15,9 +15,12 @@ const DATA_DIR = path.join(ROOT, 'data')
 const FILE = path.join(DATA_DIR, 'config.json')
 const PRESET = PRESET_ROOT
 
+try { fs.mkdirSync(DATA_DIR, { recursive: true }) } catch (e) { logger.warn('config', 'cannot create data dir: ' + e.message) }
+
 const SCHEMA = {
   locale: 'zh',
   theme: 'light',
+  themeMode: 'auto',
   recursive: false,
   hash: false,
   onlyMissing: false,
@@ -56,7 +59,7 @@ function get() {
   if (!cfg.mcPacksPath) cfg.mcPacksPath = path.join(PRESET, 'mc-packs')
   if (!cfg.officialPacksPath) cfg.officialPacksPath = path.join(PRESET, 'official-packs')
   if (!cfg.craftPacksPath) cfg.craftPacksPath = path.join(PRESET, 'craft-packs')
-  if (!cfg.userPacksPath) cfg.userPacksPath = path.join(DATA_DIR, 'user-packs')
+
   return cfg
 }
 

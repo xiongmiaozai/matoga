@@ -140,6 +140,28 @@ export function attachPackTexture(tex, metaPromise) {
   }).catch(() => { applyTexParams(tex); return null })
 }
 
+/* 仅配置动画采样（不修改 filter/wrap，由调用方预先设置）；用于非包通道（如左右对比预览）
+    复用本模块 animatedTexs 注册表与 rAF 循环；metaPromise 解析为 mcmeta JSON 或 null。
+    返回 anim | null（终态 resolve）。贴图需已设好 RepeatWrapping（applyTexAnimFrame 用 repeat/offset） */
+export function attachTextureAnimOnly(tex, metaPromise) {
+  if (!tex) return Promise.resolve(null)
+  const size = texImageSize(tex)
+  if (!size) return Promise.resolve(null)
+  return Promise.resolve(metaPromise).then(meta => {
+    const anim = parseAnimMeta(meta, size.w, size.h)
+    if (!anim) return null
+    applyTexAnimFrame(tex, anim, 0)
+    animatedTexs.set(tex, anim)
+    scheduleAnimTick()
+    return anim
+  }).catch(() => null)
+}
+
+/* 从动画注册表移除贴图（贴图 dispose / 替换前调用，避免 rAF 操作已释放贴图） */
+export function unloadTextureAnim(tex) {
+  if (tex && animatedTexs.has(tex)) animatedTexs.delete(tex)
+}
+
 /* MC 贴图像素风参数（同步/异步两条赋值路径共用） */
 export function applyTexParams(tex) {
   tex.colorSpace = THREE.SRGBColorSpace

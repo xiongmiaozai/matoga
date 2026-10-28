@@ -14,6 +14,7 @@ import { animatedTexs, attachPackTexture, loadAnimMetaCached } from './anim.js'
 import { applyTexParams } from './anim.js'
 import { getLastModelLayout } from './layout.js'
 import { makeModelMaterial } from './textures.js'
+import { applyPbrMapsToModelMaterial } from '../material3d.js'
 
 export const activeElementMeshes = new Map()   /* 原始 element → mesh（当前展示模型） */
 export let activeExportModel = null            /* 导出信息：{ type:'mc', parts, filename } | { type:'bb', json, filename } */
@@ -96,9 +97,11 @@ export function clearFaceTexture(mat) {
 }
 
 /* 贴图替换：dataURL 或可加载 URL（贴图库 raw URL）→ 更新 layout 中引用 texIndex 的所有面材质（含 sprite 单材质面）。
-    替换成功后把新贴图引用写回模型 textures 表（智能引用：同包 → 标准 MC 引用，
-    其他 → 扩展引用），导出/保存即持久化，重新打开模型自动加载 */
-export async function updateModelTexture(texIndex, texUrl, layout) {
+     替换成功后把新贴图引用写回模型 textures 表（智能引用：同包 → 标准 MC 引用，
+     其他 → 扩展引用），导出/保存即持久化，重新打开模型自动加载。
+     extra（材质球配套）：{ normal, specular } URL 字符串 → 同步应用到面材质做 3D 视口 PBR 预览
+     （空串清除对应 map；extra 省略则不动 PBR，保持模型加载时自动配的 PBR） */
+export async function updateModelTexture(texIndex, texUrl, layout, extra) {
   const lay = layout || getLastModelLayout()
   if (!lay || !Array.isArray(lay.elements)) return false
   if (typeof texUrl !== 'string' || !(texUrl.startsWith('data:') || /^https?:\/\//i.test(texUrl) || texUrl.startsWith('/'))) return false
@@ -122,9 +125,9 @@ export async function updateModelTexture(texIndex, texUrl, layout) {
           mat = makeModelMaterial(null)
           mesh.material[mi] = mat
         }
-        if (swapFaceTexture(mat, tex)) touched++
+        if (swapFaceTexture(mat, tex)) { touched++; if (extra) applyPbrMapsToModelMaterial(mat, extra.normal, extra.specular, true) }
       } else if (mi == null && mesh.material && !Array.isArray(mesh.material)) {
-        if (swapFaceTexture(mesh.material, tex)) touched++
+        if (swapFaceTexture(mesh.material, tex)) { touched++; if (extra) applyPbrMapsToModelMaterial(mesh.material, extra.normal, extra.specular, true) }
       }
     }
   }

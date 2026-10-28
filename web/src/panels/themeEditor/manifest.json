@@ -1,0 +1,11 @@
+{
+  "id": "themeEditor",
+  "title": "主题",
+  "icon": "i-palette",
+  "html": "panel.html",
+  "js": "panel.js",
+  "css": "panel.css",
+  "mount": "#settingsDrawer .settings-body",
+  "order": 50,
+  "dynamic": true
+}

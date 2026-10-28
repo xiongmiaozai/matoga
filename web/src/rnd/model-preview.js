@@ -35,12 +35,11 @@ export async function loadModelPreview(g) {
   const mySeq = ++state.modelLoadSeq
   const le = g.left && g.left.file, re = g.right && g.right.file
   const left = le && isModelEntry(le) ? { fileRoot: state.leftPath, rel: le.name } : null
-  let right = re && isModelEntry(re) ? { fileRoot: state.rightPath, rel: re.name } : null
+  const right = re && isModelEntry(re) ? { fileRoot: state.rightPath, rel: re.name } : null
   if (!left && !right) return
-  if (!right && left) right = left
   if (!tryActivateCompareModelViewport()) return
   try {
-    await viewMcModelPairInViewport({ left, right, isStale: () => state.modelLoadSeq !== mySeq })
+    await viewMcModelPairInViewport({ left, right, rightRoot: state.rightPath, isStale: () => state.modelLoadSeq !== mySeq })
     if (state.selected !== g) clearCustomModel()
   } catch {}
 }

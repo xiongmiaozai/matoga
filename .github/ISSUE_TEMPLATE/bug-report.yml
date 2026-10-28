@@ -1,0 +1,83 @@
+name: Bug 报告 / Bug Report
+description: 报告 matoga 的缺陷
+labels: ['bug', 'needs-triage']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈！请尽量填写完整，便于快速定位问题。
+
+  - type: input
+    id: version
+    attributes:
+      label: matoga 版本
+      placeholder: '如 3.1.0（见 package.json 或关于页）'
+    validations:
+      required: true
+
+  - type: input
+    id: env
+    attributes:
+      label: 运行环境
+      placeholder: '如 Node 20 / Windows 11 / 浏览器 Chrome 130'
+    validations:
+      required: true
+
+  - type: dropdown
+    id: mode
+    attributes:
+      label: 运行模式
+      options:
+        - npm start（本地 Web）
+        - npm run web:lan（局域网）
+        - npm run electron（桌面版）
+        - 打包可执行文件
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 问题描述
+      description: 简明扼要说明是什么问题
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 启动服务
+        2. 选择左侧文件夹 ...
+        3. 点击对比
+        4. 出现 ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志 / 控制台输出
+      description: 服务端日志或浏览器 Console 报错（贴文本，非截图）
+      render: shell
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 截图
+      description: 如有界面问题，请附截图

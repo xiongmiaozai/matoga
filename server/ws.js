@@ -29,6 +29,7 @@ function setup(server) {
     ws.on('message', (data) => {
       let msg
       try { msg = JSON.parse(data) } catch { return }
+      if (!msg || typeof msg !== 'object') return
       if (msg.type === 'sync') {
         const jobId = msg.jobId || crypto.randomUUID()
         if (!Array.isArray(msg.pairs) || !msg.pairs.length) {

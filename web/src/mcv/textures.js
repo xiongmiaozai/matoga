@@ -13,6 +13,7 @@ import { TEX_REF_EXT_RE, expandTextureAliases, isSpecialTexPath, resolveTextureR
 import { FACE_KEYS, MAT_INDEX, MAX_ELEMENTS, PLACEHOLDER_MAT, applyFaceUvs, buildModelGroup, defaultFaceUv, expandElementFaces, normFaceRotation, parseUv, parseVec3 } from './geometry.js'
 import { animatedTexs, attachPackTexture, loadAnimMetaCached } from './anim.js'
 import { applyTexParams } from './anim.js'
+import { getCurrentBiome, resolveTintColor } from './biome.js'
 
 export const texCache = new Map()   /* key → Promise<Texture|null> */
 
@@ -54,7 +55,8 @@ export function packMcmetaUrl(api, packName, texPath, fileRoot) {
     失败置 mat.userData.texFailed。
     userData.texReady：贴图加载流程 promise（终态必 resolve：成功设 map / 失败置 texFailed），
     离屏缩略图据此事件驱动等待（替代轮询 mat.map） */
-export function mcMatFor(textures, api, packName, fileRoot, fallbackRoot, overrideUrl) {
+export function mcMatFor(textures, api, packName, fileRoot, fallbackRoot, overrideUrl, tints, biome) {
+  const effBiome = biome || getCurrentBiome()
   return (key, face) => {
     if (!face || typeof face !== 'object' || typeof face.texture !== 'string') return null
     const texPath = resolveTextureRef(textures, face.texture)
@@ -63,6 +65,13 @@ export function mcMatFor(textures, api, packName, fileRoot, fallbackRoot, overri
     const url = overrideUrl || rawUrl(api, packName, texPath, fileRoot, false)
     const metaPromise = loadAnimMetaCached(ck + ':mcmeta', packMcmetaUrl(api, packName, texPath, fileRoot))
     const mat = makeModelMaterial(null)
+    const tintIndex = Number.isInteger(face.tintindex) ? face.tintindex : -1
+    if (tintIndex >= 0) {
+      resolveTintColor(tintIndex, tints, effBiome, texPath, api, packName, fileRoot, fallbackRoot).then(color => {
+        if (mat.userData.replaced || !color) return
+        mat.color = color; mat.needsUpdate = true
+      }).catch(() => {})
+    }
     if (!overrideUrl && !isSpecialTexPath(texPath)) {
       const dot = texPath.lastIndexOf('.')
       if (dot >= 0) {

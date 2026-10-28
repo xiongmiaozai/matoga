@@ -107,22 +107,24 @@ class HDRLoader extends DataTextureLoader {
 		const image_rgba_data = RGBE_ReadPixels_RLE( byteArray.subarray( byteArray.pos ), w, h )
 		let data, type, numElements
 		switch ( this.type ) {
-			case FloatType:
-				numElements = image_rgba_data.length / 4
-				const floatArray = new Float32Array( numElements * 4 )
-				for ( let j = 0; j < numElements; j ++ ) {
-					const e = image_rgba_data[ j * 4 + 3 ]; const scale = Math.pow( 2.0, e - 128.0 ) / 255.0
-					floatArray[ j * 4 + 0 ] = image_rgba_data[ j * 4 + 0 ] * scale
-					floatArray[ j * 4 + 1 ] = image_rgba_data[ j * 4 + 1 ] * scale
-					floatArray[ j * 4 + 2 ] = image_rgba_data[ j * 4 + 2 ] * scale
-					floatArray[ j * 4 + 3 ] = 1
-				}
-				data = floatArray; type = FloatType; break
-			case HalfFloatType:
-				numElements = image_rgba_data.length / 4
-				const halfArray = new Uint16Array( numElements * 4 )
-				for ( let j = 0; j < numElements; j ++ ) RGBEByteToRGBHalf( image_rgba_data, j * 4, halfArray, j * 4 )
-				data = halfArray; type = HalfFloatType; break
+		case FloatType: {
+			numElements = image_rgba_data.length / 4
+			const floatArray = new Float32Array( numElements * 4 )
+			for ( let j = 0; j < numElements; j ++ ) {
+				const e = image_rgba_data[ j * 4 + 3 ]; const scale = Math.pow( 2.0, e - 128.0 ) / 255.0
+				floatArray[ j * 4 + 0 ] = image_rgba_data[ j * 4 + 0 ] * scale
+				floatArray[ j * 4 + 1 ] = image_rgba_data[ j * 4 + 1 ] * scale
+				floatArray[ j * 4 + 2 ] = image_rgba_data[ j * 4 + 2 ] * scale
+				floatArray[ j * 4 + 3 ] = 1
+			}
+			data = floatArray; type = FloatType; break
+		}
+		case HalfFloatType: {
+			numElements = image_rgba_data.length / 4
+			const halfArray = new Uint16Array( numElements * 4 )
+			for ( let j = 0; j < numElements; j ++ ) RGBEByteToRGBHalf( image_rgba_data, j * 4, halfArray, j * 4 )
+			data = halfArray; type = HalfFloatType; break
+		}
 			default: throw new Error( 'HDRLoader: Unsupported type: ' + this.type )
 		}
 		return { width: w, height: h, data: data, header: rgbe_header_info.string, gamma: rgbe_header_info.gamma, exposure: rgbe_header_info.exposure, type: type, colorSpace: LinearSRGBColorSpace, minFilter: LinearFilter, magFilter: LinearFilter, generateMipmaps: false, flipY: true }

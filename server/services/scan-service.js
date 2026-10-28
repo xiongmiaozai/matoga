@@ -6,7 +6,7 @@
 
 const fs = require('fs')
 const path = require('path')
-const { AppError } = require('../../core/errors')
+const { AppError } = require('../lib/errors')
 
 const STAT_BATCH = 32
 
@@ -15,7 +15,7 @@ function shouldIgnore(name, patterns) {
   const lower = name.toLowerCase()
   for (const p of patterns) {
     if (p.startsWith('*.')) { if (lower.endsWith(p.slice(1).toLowerCase())) return true }
-    else if (p.includes('*')) { if (new RegExp('^' + p.replace(/\./g, '\\.').replace(/\*/g, '.*') + '$', 'i').test(name)) return true }
+    else if (p.includes('*')) { if (new RegExp('^' + p.replace(/[.+?^${}()|[\]\\*]/g, '\\$&').replace(/\\\*/g, '.*') + '$', 'i').test(name)) return true }
     else if (lower === p.toLowerCase()) return true
   }
   return false

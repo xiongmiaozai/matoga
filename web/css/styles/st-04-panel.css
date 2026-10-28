@@ -121,9 +121,9 @@
 .pv-diff-btn { position: absolute; top: 3px; left: 3px; background: rgba(0,0,0,.6); color: #fff; border: none; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer; z-index: 2; }
 .pv-diff-btn:hover { background: rgba(0,0,0,.8); }
 .pv-diff-btn-bar { text-align: center; margin-top: 6px; }
-.pv-diff-result { grid-column: 1 / -1; background: #1a1a1a; border-radius: var(--radius-md); padding: 10px; text-align: center; }
+.pv-diff-result { grid-column: 1 / -1; background: var(--panel-2); border-radius: var(--radius-md); padding: 10px; text-align: center; }
 .pv-diff-result canvas { max-width: 100%; border-radius: var(--radius-sm); }
-.pv-diff-info { color: #ccc; font-size: 11px; margin-top: 6px; }
+.pv-diff-info { color: var(--text-muted); font-size: 11px; margin-top: 6px; }
 .pv-cell.pv-loading { position: relative; }
 .pv-cell.pv-loading::after {
   content: ""; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
@@ -142,15 +142,15 @@
 .pv-cell.pv-error img { opacity: .15; }
 
 /* ── 3D 面板 ── */
-.material3d-container { flex: 1; min-height: 220px; position: relative; background: #1a1a2e; overflow: hidden; border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow-1), inset 0 0 0 1px rgba(255,255,255,.04); }
+.material3d-container { flex: 1; min-height: 220px; position: relative; background: var(--mc-darker); overflow: hidden; border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow-1), inset 0 0 0 1px rgba(255,255,255,.04); }
 .material3d-container canvas { display: block; width: 100% !important; height: 100% !important; }
 .material3d-container.fullscreen { position: fixed; inset: 0; z-index: 500; height: 100vh; }
 
 .m3d-loading { position: absolute; inset: 0; z-index: 20; display: none; align-items: center; justify-content: center; flex-direction: column; gap: 10px; background: rgba(26,26,46,.85); backdrop-filter: blur(2px); }
 .m3d-loading.show { display: flex; }
-.m3d-loading-text { color: #aab; font-size: 13px; }
+.m3d-loading-text { color: var(--text-muted); font-size: 13px; }
 .m3d-loading-bar { width: 160px; height: 4px; border-radius: 2px; background: rgba(255,255,255,.12); overflow: hidden; }
-.m3d-loading-fill { height: 100%; width: 0%; border-radius: 2px; background: linear-gradient(90deg, #4a7cff, #7a4aff); transition: width .15s ease; }
+.m3d-loading-fill { height: 100%; width: 0%; border-radius: 2px; background: linear-gradient(90deg, var(--primary), var(--extra)); transition: width .15s ease; }
 .material3d-controls { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
 .m3d-ctrl-group { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; }
 .m3d-segment { display: inline-flex; background: var(--panel-2); border-radius: var(--radius-md); padding: 2px; gap: 2px; }
@@ -226,7 +226,7 @@ input[type="color"].m3d-color-input:hover, #m3dSkyTint:hover { border-color: var
 .m3d-parallax-status-fill { height: 100%; width: 0%; border-radius: 2px; background: var(--text-dim); transition: width .35s ease, background .35s ease; }
 .m3d-parallax-status-fill.success { width: 100%; background: var(--accent); }
 .m3d-parallax-status-fill.fail { width: 30%; background: var(--danger); opacity: .5; }
-.m3d-parallax-status-fill.loading { width: 100%; background: linear-gradient(90deg, #4a7cff, #7a4aff); animation: m3dParallaxPulse 1s ease-in-out infinite; }
+.m3d-parallax-status-fill.loading { width: 100%; background: linear-gradient(90deg, var(--primary), var(--extra)); animation: m3dParallaxPulse 1s ease-in-out infinite; }
 @keyframes m3dParallaxPulse { 0%,100% { opacity: .35; } 50% { opacity: 1; } }
 .m3d-format-detected { color: var(--text-muted); font-size: 11px; }
 .m3d-hud-bar { position: absolute; top: 0; left: 0; right: 0; z-index: 15; display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: linear-gradient(to bottom, rgba(0,0,0,.62), rgba(0,0,0,.28) 55%, transparent); }
@@ -235,6 +235,8 @@ input[type="color"].m3d-color-input:hover, #m3dSkyTint:hover { border-color: var
 .m3d-hud-bar .m3d-segment button { color: rgba(255,255,255,.7); }
 .m3d-hud-bar .m3d-segment button:hover { color: #fff; }
 .m3d-hud-bar .m3d-segment button.active { background: rgba(255,255,255,.18); color: #fff; box-shadow: none; }
+.m3d-hud-bar .m3d-hud-field { display: flex; align-items: center; gap: 4px; color: rgba(255,255,255,.7); font-size: 11px; }
+.m3d-hud-bar .m3d-hud-field select { background: rgba(0,0,0,.35); color: #fff; border: 1px solid rgba(255,255,255,.15); border-radius: 4px; }
 #m3dGeoSeg button { padding: 0; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; }
 .m3d-hud-btn { width: 30px; height: 30px; border-radius: var(--radius-md); border: none; background: rgba(255,255,255,.12); color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all .15s var(--ease); backdrop-filter: blur(8px); }
 .m3d-hud-btn:hover { background: rgba(255,255,255,.22); }

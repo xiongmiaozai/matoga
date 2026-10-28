@@ -94,20 +94,26 @@ export function applyHDREnvMode() {
   if (S.lightGroup) { while (S.lightGroup.children.length) S.lightGroup.remove(S.lightGroup.children[0]) }
   const ambient = new THREE.AmbientLight(0xffffff, 0.1)
   S.lightGroup.add(ambient)
-  if (S.scene) S.scene.environmentRotation.set(0, 0, 0)
   if (S.hdrTextureOriginal) {
-    const src = S.hdrTextureRotated || S.hdrTextureOriginal
-    S.hdrTexture = src
-    if (S.hdrUsage === 'env' || S.hdrUsage === 'both') S.scene.environment = src
-    else S.scene.environment = null
+    const rad = S.hdrRotation * Math.PI / 180
+    S.hdrTexture = S.hdrTextureOriginal
+    if (S.hdrUsage === 'env' || S.hdrUsage === 'both') {
+      S.scene.environment = S.hdrTextureOriginal
+      S.scene.environmentRotation.set(0, rad, 0)
+    } else {
+      S.scene.environment = null
+      S.scene.environmentRotation.set(0, 0, 0)
+    }
     if (S.hdrUsage === 'bg' || S.hdrUsage === 'both') {
-      S.scene.background = src
+      ensureRotatedTexture()
+      S.scene.background = S.hdrTextureRotated || S.hdrTextureOriginal
     } else {
       S.scene.background = new THREE.Color(0x1a1a2e)
     }
   } else {
     S.hdrTexture = null
     S.scene.environment = null
+    S.scene.environmentRotation.set(0, 0, 0)
     S.scene.background = new THREE.Color(0x1a1a2e)
   }
   if (S.scene) S.scene.environmentIntensity = S.envIntensity; for (const m of [S.meshLeft, S.meshRight]) { if (m) m.material.envMapIntensity = S.envIntensity }

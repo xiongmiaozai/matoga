@@ -6,8 +6,10 @@
  * 从 material3d.js 原样搬出，逻辑未改。
  */
 
-export function disposeTexture(tex) { if (tex && tex.dispose) tex.dispose() }
-export function disposeAllMaterialTextures(m) { disposeTexture(m.map); disposeTexture(m.normalMap); disposeTexture(m.roughnessMap); disposeTexture(m.metalnessMap); disposeTexture(m.emissiveMap); if (m.userData.shaderRefs) { disposeTexture(m.userData.shaderRefs.heightMap.value); m.userData.shaderRefs.heightMap.value = null; m.userData.shaderRefs.hasHeightMap.value = 0.0 } disposeTexture(m.userData.pendingHeightMap); m.userData.pendingHeightMap = null; m.map = null; m.normalMap = null; m.roughnessMap = null; m.metalnessMap = null; m.emissiveMap = null }
+import { unloadTextureAnim } from '../mcv/anim.js'
+
+export function disposeTexture(tex) { if (tex && tex.dispose) { unloadTextureAnim(tex); tex.dispose() } }
+export function disposeAllMaterialTextures(m) { disposeTexture(m.map); disposeTexture(m.normalMap); disposeTexture(m.roughnessMap); disposeTexture(m.metalnessMap); disposeTexture(m.emissiveMap); if (m.userData.shaderRefs) { disposeTexture(m.userData.shaderRefs.heightMap.value); m.userData.shaderRefs.heightMap.value = null; m.userData.shaderRefs.hasHeightMap.value = 0.0 } disposeTexture(m.userData.pendingHeightMap); m.userData.pendingHeightMap = null; m.map = null; m.normalMap = null; m.roughnessMap = null; m.metalnessMap = null; m.emissiveMap = null; m.emissive.set(0x000000); m.emissiveIntensity = 1.0; m.color.set(0x888888) }
 
 
 export function disposeGroupDeep(root) {

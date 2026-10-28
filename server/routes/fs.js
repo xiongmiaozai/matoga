@@ -9,7 +9,7 @@ const os = require('os')
 const path = require('path')
 const express = require('express')
 const { ok, wrap } = require('../middleware/errors')
-const { guardRead } = require('../middleware/validate')
+const { guardRead, guardWrite } = require('../middleware/validate')
 const { shouldIgnore } = require('../services/scan-service')
 
 const router = express.Router()
@@ -79,7 +79,7 @@ router.get('/search', wrap(async (req, res) => {
 
 router.post('/create', wrap(async (req, res) => {
   const { fileService } = require('../services/file-service')
-  const p = guardRead(req.body && req.body.path)
+  const p = guardWrite(req.body && req.body.path)
   ok(res, await fileService.createFolder(p))
 }))
 

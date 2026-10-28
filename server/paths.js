@@ -15,4 +15,6 @@ const DATA_ROOT = process.env.MATOGA_DATA_ROOT
 
 const PRESET_ROOT = process.env.MATOGA_PRESET_ROOT || DATA_ROOT
 
-module.exports = { PKG, RES_ROOT, DATA_ROOT, PRESET_ROOT }
+const WEB_ROOT = process.env.MATOGA_WEB_ROOT || path.join(RES_ROOT, 'web')
+
+module.exports = { PKG, RES_ROOT, DATA_ROOT, PRESET_ROOT, WEB_ROOT }

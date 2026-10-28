@@ -186,6 +186,48 @@ let previewState = null
 let previewRenderer = null, previewScene = null, previewCamera = null, previewMesh = null
 let previewYaw = 0, previewPitch = 0, previewDragging = false, previewLastX = 0, previewLastY = 0
 let previewAutoExposure = 1
+let previewKeyBound = false
+
+function previewOnDown(x, y) { previewDragging = true; previewLastX = x; previewLastY = y }
+function previewOnMove(x, y) {
+  if (!previewDragging) return
+  previewYaw -= (x - previewLastX) * 0.005
+  previewPitch = Math.max(-1.4, Math.min(1.4, previewPitch - (y - previewLastY) * 0.005))
+  previewLastX = x; previewLastY = y
+  updatePreviewCamera()
+}
+
+export function resetHdrPreviewView() {
+  previewYaw = 0; previewPitch = 0
+  if (previewCamera) { previewCamera.fov = 75; previewCamera.updateProjectionMatrix() }
+  updatePreviewCamera()
+}
+
+export function toggleHdrPreviewFullscreen() {
+  const modal = $('hdrPreviewModal')
+  if (!modal) return
+  if (!document.fullscreenElement) { if (modal.requestFullscreen) modal.requestFullscreen() }
+  else { if (document.exitFullscreen) document.exitFullscreen() }
+}
+
+export function applyPreviewHdrToScene() {
+  if (!previewState || !previewState.entry || !previewState.entry.fullPath) return
+  const name = previewState.entry.name
+  const fullPath = previewState.entry.fullPath
+  loadHDREnv(fileUrl(fullPath))
+  currentSelectedPath = fullPath
+  const grid = $('m3dHdrPresetGrid')
+  if (grid) grid.querySelectorAll('.hdri-preset-item').forEach(el => el.classList.toggle('active', el.dataset.path === fullPath))
+  const modal = $('hdrPreviewModal')
+  if (modal) modal.classList.remove('show')
+  disposeHdrPreview()
+  const seg = $('m3dEnvModeSeg')
+  if (seg) {
+    seg.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.envmode === 'hdri'))
+    document.querySelectorAll('.m3d-env-subpane').forEach(p => p.classList.toggle('active', p.dataset.envpane === 'hdri'))
+  }
+  showToast(t('toast.loadedHdr', { name }))
+}
 
 function ensureSpherePreview(canvas) {
   if (previewRenderer && previewRenderer.domElement === canvas) return
@@ -201,19 +243,9 @@ function ensureSpherePreview(canvas) {
   previewMesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ side: THREE.BackSide }))
   previewScene.add(previewMesh)
   previewYaw = 0; previewPitch = 0
-  const onDown = (x, y) => { previewDragging = true; previewLastX = x; previewLastY = y }
-  const onMove = (x, y) => {
-    if (!previewDragging) return
-    previewYaw -= (x - previewLastX) * 0.005
-    previewPitch = Math.max(-1.4, Math.min(1.4, previewPitch - (y - previewLastY) * 0.005))
-    previewLastX = x; previewLastY = y
-    updatePreviewCamera()
-  }
-  canvas.addEventListener('mousedown', (e) => onDown(e.clientX, e.clientY))
-  window.addEventListener('mousemove', (e) => onMove(e.clientX, e.clientY))
-  window.addEventListener('mouseup', () => { previewDragging = false })
-  canvas.addEventListener('touchstart', (e) => { if (e.touches[0]) onDown(e.touches[0].clientX, e.touches[0].clientY) }, { passive: true })
-  canvas.addEventListener('touchmove', (e) => { if (e.touches[0]) { onMove(e.touches[0].clientX, e.touches[0].clientY); e.preventDefault() } }, { passive: false })
+  canvas.addEventListener('mousedown', (e) => previewOnDown(e.clientX, e.clientY))
+  canvas.addEventListener('touchstart', (e) => { if (e.touches[0]) previewOnDown(e.touches[0].clientX, e.touches[0].clientY) }, { passive: true })
+  canvas.addEventListener('touchmove', (e) => { if (e.touches[0]) { previewOnMove(e.touches[0].clientX, e.touches[0].clientY); e.preventDefault() } }, { passive: false })
   canvas.addEventListener('touchend', () => { previewDragging = false })
   canvas.addEventListener('wheel', (e) => {
     if (!previewCamera) return
@@ -223,6 +255,24 @@ function ensureSpherePreview(canvas) {
   }, { passive: true })
   if (typeof ResizeObserver !== 'undefined') {
     new ResizeObserver(() => resizePreview(canvas)).observe(canvas)
+  }
+  if (!previewKeyBound) {
+    previewKeyBound = true
+    window.addEventListener('mousemove', (e) => previewOnMove(e.clientX, e.clientY))
+    window.addEventListener('mouseup', () => { previewDragging = false })
+    window.addEventListener('keydown', (e) => {
+      const modal = $('hdrPreviewModal')
+      if (!modal || !modal.classList.contains('show')) return
+      if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return
+      switch (e.key) {
+        case 'ArrowLeft': previewYaw -= 0.1; updatePreviewCamera(); break
+        case 'ArrowRight': previewYaw += 0.1; updatePreviewCamera(); break
+        case 'ArrowUp': previewPitch = Math.max(-1.4, previewPitch - 0.1); updatePreviewCamera(); break
+        case 'ArrowDown': previewPitch = Math.min(1.4, previewPitch + 0.1); updatePreviewCamera(); break
+        case 'r': case 'R': resetHdrPreviewView(); break
+        case 'f': case 'F': toggleHdrPreviewFullscreen(); break
+      }
+    })
   }
   updatePreviewCamera()
 }
@@ -270,6 +320,11 @@ function renderSpherePreview() {
 }
 
 
+function setApplyBtnVisible(visible) {
+  const btn = $('hdrPreviewApplyBtn')
+  if (btn) btn.style.display = visible ? '' : 'none'
+}
+
 function requestHdrPreview(entry) {
   const modal = $('hdrPreviewModal')
   const canvas = $('hdrPreviewCanvas')
@@ -280,7 +335,8 @@ function requestHdrPreview(entry) {
   modal.classList.add('show')
   expSlider.value = 0
   expVal.textContent = '0.0'
-  infoEl.textContent = entry.name
+  infoEl.textContent = t('m3d.hdrPreviewLoading')
+  setApplyBtnVisible(true)
   canvas.width = 960; canvas.height = 480
 
   fetch(fileUrl(entry.fullPath)).then(r => r.arrayBuffer()).then(async buf => {
@@ -304,7 +360,8 @@ export function openHdrPreview(opts, exposure) {
     const { url, name, canvas, modal, expSlider, expVal, infoEl } = opts
     modal.classList.add('show')
     expSlider.value = 0; expVal.textContent = '0.0'
-    infoEl.textContent = name || ''
+    infoEl.textContent = t('m3d.hdrPreviewLoading')
+    setApplyBtnVisible(!!opts.fullPath)
     canvas.width = 960; canvas.height = 480
 
     fetch(url).then(r => r.arrayBuffer()).then(async buf => {
@@ -312,7 +369,7 @@ export function openHdrPreview(opts, exposure) {
       const res = await workerParse(buf, ext)
       if (!res.ok) throw new Error(res.error)
       const data = new Float32Array(res.data)
-      previewState = { data, width: res.width, height: res.height, entry: { name } }
+      previewState = { data, width: res.width, height: res.height, entry: { name, fullPath: opts.fullPath } }
       infoEl.textContent = `${name || ''} · ${res.width}×${res.height}`
       ensureSpherePreview(canvas)
       resizePreview(canvas)

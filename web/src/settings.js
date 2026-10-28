@@ -7,20 +7,14 @@
 import { $, showToast } from './core.js'
 import { refreshHdrPreset } from './hdri-preset.js'
 import { t, setLocale, getLocale, onLocaleChange, applyI18n } from './i18n.js'
+import * as themeRegistry from './theme/registry.js'
 
 export function applyTheme(theme) {
-  document.documentElement.setAttribute('data-theme', theme)
-  document.body.setAttribute('data-theme', theme)
-  const toggle = $('themeToggle')
-  if (toggle) toggle.innerHTML = theme === 'dark' ? '<svg class="ico"><use href="#i-sun"/></svg>' : '<svg class="ico"><use href="#i-moon"/></svg>'
-  const chk = $('settingThemeChk')
-  if (chk) chk.checked = theme === 'dark'
-  window.api.setConfig({ theme })
+  themeRegistry.applyTheme(theme)
 }
 
 export function toggleTheme() {
-  const current = document.documentElement.getAttribute('data-theme')
-  applyTheme(current === 'dark' ? 'light' : 'dark')
+  themeRegistry.toggleTheme()
 }
 
 export function initSettings() {
@@ -36,9 +30,34 @@ export function initSettings() {
   const toggle = $('themeToggle')
   if (toggle) toggle.addEventListener('click', toggleTheme)
 
+  initThemeSelect()
 
   initLanguageSettings()
   initPathSettings()
+}
+
+function initThemeSelect() {
+  const sel = $('themeSelect')
+  if (!sel) return
+  const reg = themeRegistry.getRegistry()
+  const active = themeRegistry.getActiveId()
+  sel.innerHTML = ''
+  const groups = { 内置: [], 自定义: [] }
+  for (const def of reg.values()) (def.builtin ? groups['内置'] : groups['自定义']).push(def)
+  for (const [label, defs] of Object.entries(groups)) {
+    if (!defs.length) continue
+    const og = document.createElement('optgroup')
+    og.label = label
+    for (const def of defs) {
+      const opt = document.createElement('option')
+      opt.value = def.id
+      opt.textContent = def.name
+      if (def.id === active) opt.selected = true
+      og.appendChild(opt)
+    }
+    sel.appendChild(og)
+  }
+  sel.addEventListener('change', () => themeRegistry.applyTheme(sel.value))
 }
 
 function initLanguageSettings() {
@@ -66,12 +85,15 @@ function initLanguageSettings() {
 
 function initPathSettings() {
   const items = [
-    { inputId: 'hdriPresetPathInput', pickId: 'hdriPresetPickBtn', createId: 'hdriPresetCreateBtn', openId: 'hdriPresetOpenBtn', cfgKey: 'hdriPresetPath' },
-    { inputId: 'mcPacksPathInput', pickId: 'mcPacksPickBtn', createId: 'mcPacksCreateBtn', openId: 'mcPacksOpenBtn', cfgKey: 'mcPacksPath' },
-    { inputId: 'craftPacksPathInput', pickId: 'craftPacksPickBtn', createId: 'craftPacksCreateBtn', openId: 'craftPacksOpenBtn', cfgKey: 'craftPacksPath' },
-    { inputId: 'userPacksPathInput', pickId: 'userPacksPickBtn', createId: 'userPacksCreateBtn', openId: 'userPacksOpenBtn', cfgKey: 'userPacksPath' },
-    { inputId: 'officialPacksPathInput', pickId: 'officialPacksPickBtn', createId: 'officialPacksCreateBtn', openId: 'officialPacksOpenBtn', cfgKey: 'officialPacksPath' }
+    { inputId: 'hdriPresetPathInput', pickId: 'hdriPresetPickBtn', openId: 'hdriPresetOpenBtn', cfgKey: 'hdriPresetPath' },
+    { inputId: 'mcPacksPathInput', pickId: 'mcPacksPickBtn', openId: 'mcPacksOpenBtn', cfgKey: 'mcPacksPath' },
+    { inputId: 'officialPacksPathInput', pickId: 'officialPacksPickBtn', openId: 'officialPacksOpenBtn', cfgKey: 'officialPacksPath' }
   ]
+  const savePath = (it, v) => {
+    window.api.setConfig({ [it.cfgKey]: v })
+    window.api.createFolder(v).catch(() => {})
+    if (it.cfgKey === 'hdriPresetPath') refreshHdrPreset()
+  }
   window.api.getConfig().then(cfg => {
     items.forEach(it => {
       const input = $(it.inputId)
@@ -81,37 +103,24 @@ function initPathSettings() {
   items.forEach(it => {
     const input = $(it.inputId)
     const pickBtn = $(it.pickId)
-    const createBtn = $(it.createId)
     const openBtn = $(it.openId)
-    const notifyChange = () => { if (it.cfgKey === 'hdriPresetPath') refreshHdrPreset() }
-    if (createBtn) createBtn.addEventListener('click', async () => {
-      const v = input && input.value.trim()
-      if (!v) { showToast(t('toast.inputPathFirst')); return }
-      const res = await window.api.createFolder(v)
-      if (res && res.success) {
-        window.api.setConfig({ [it.cfgKey]: v })
-        showToast(t('toast.createdFolder'))
-        notifyChange()
-      } else {
-        showToast(t('toast.createFail', { msg: (res && res.error) ? res.error : t('toast.unknownError') }))
-      }
-    })
     if (pickBtn) pickBtn.addEventListener('click', async () => {
       const p = await window.api.pickFolder()
       if (!p) return
       if (input) input.value = p
-      window.api.setConfig({ [it.cfgKey]: p })
+      savePath(it, p)
       showToast(t('toast.savedPath'))
-      notifyChange()
     })
     if (input) input.addEventListener('change', () => {
-      window.api.setConfig({ [it.cfgKey]: input.value.trim() })
-      notifyChange()
+      const v = input.value.trim()
+      if (!v) return
+      savePath(it, v)
     })
-    if (openBtn) openBtn.addEventListener('click', () => {
+    if (openBtn) openBtn.addEventListener('click', async () => {
       const v = input && input.value.trim()
       if (!v) { showToast(t('toast.selectPathFirst')); return }
-      window.api.openPath(v)
+      const err = await window.api.openPath(v)
+      if (err) showToast(t('toast.openFail', { msg: err }))
     })
   })
 }

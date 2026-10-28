@@ -54,7 +54,7 @@
   background: var(--danger);
   border-color: #000;
 }
-.btn-danger:hover:not(:disabled) { background: #a02e2e; filter: none; }
+.btn-danger:hover:not(:disabled) { background: var(--danger); filter: none; }
 
 .btn-ghost {
   background: transparent;
@@ -99,7 +99,7 @@
   padding: 5px 14px;
   border: 2px solid #000;
   background: var(--mc-stone-dark);
-  color: #ccc;
+  color: var(--text-muted);
   font-size: 12px;
   box-shadow: inset 2px 2px 0 0 var(--mc-border-light), inset -2px -2px 0 0 var(--mc-border-dark);
   transition: all .08s steps(2);
@@ -121,7 +121,7 @@
 .view-tab {
   border: 2px solid #000;
   background: var(--mc-stone-dark);
-  color: #aaa;
+  color: var(--text-dim);
   box-shadow: inset 2px 2px 0 0 var(--mc-border-light), inset -2px -2px 0 0 var(--mc-border-dark);
 }
 .view-tab:hover { color: #fff; border-color: #000; }

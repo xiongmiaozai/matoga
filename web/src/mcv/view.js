@@ -16,6 +16,9 @@ import { bbMatFor, buildItemSpriteGroup, mcMatFor } from './textures.js'
 import { buildBbLayout, buildMcLayout, buildSpriteLayout, getLastModelLayout, setLastLayout, notifyModelShown } from './layout.js'
 import { bindActiveModel } from './face-edit.js'
 
+/* 最近一次成功渲染的调用闭包（生物群系切换后重渲染用：单模型/对比各自设置） */
+let lastRenderFn = null
+
 /* 获取导入模型 JSON（data/imported-models，可能是 .bbmodel 或 MC .json；供缩略图/视口复用） */
 export async function fetchImportedModelJson(id) {
   const data = await fetchOkData('/api/imported-models/' + encodeURIComponent(id))
@@ -34,7 +37,7 @@ export async function viewMcModelInViewport({ api, packName, rel, fileRoot }) {
     let sub = null
     let partLayout = null
     if (part.elements.length) {
-      sub = buildModelGroup(part.elements, mcMatFor(part.textures, api, packName, fileRoot), 16)
+      sub = buildModelGroup(part.elements, mcMatFor(part.textures, api, packName, fileRoot, undefined, undefined, part.tints), 16)
       partLayout = buildMcLayout(part.elements, part.textures, api, packName, fileRoot)
     } else {
       /* sprite 合成 element（mesh 挂引用 → 贴图替换联动；UV 编辑不适用） */
@@ -61,8 +64,15 @@ export async function viewMcModelInViewport({ api, packName, rel, fileRoot }) {
     setLastLayout(layout)
     notifyModelShown(getLastModelLayout())
     bindActiveModel(group, { type: 'mc', parts, filename: rel.split('/').pop() || 'model.json', ctx: { api, packName } })
+    lastRenderFn = () => viewMcModelInViewport({ api, packName, rel, fileRoot })
   }
   return { shown, noElements }
+}
+
+/* 生物群系切换后重渲染最近一次展示的 MC 模型（单模型或左右对比） */
+export async function rerenderLastMcModel() {
+  if (!lastRenderFn) return false
+  return lastRenderFn()
 }
 
 
@@ -77,7 +87,7 @@ export async function buildMcGroupFromRel(fileRoot, rel, texRoot, overrideUrl) {
     let sub = null
     let partLayout = null
     if (part.elements.length) {
-      sub = buildModelGroup(part.elements, mcMatFor(part.textures, undefined, undefined, texSource, fbRoot, overrideUrl), 16)
+      sub = buildModelGroup(part.elements, mcMatFor(part.textures, undefined, undefined, texSource, fbRoot, overrideUrl, part.tints), 16)
       partLayout = buildMcLayout(part.elements, part.textures, undefined, undefined, texSource)
     } else {
       const spriteEl = { faces: { sprite: { texture: spriteTexKey(part.textures) || undefined } } }
@@ -97,10 +107,14 @@ export async function buildMcGroupFromRel(fileRoot, rel, texRoot, overrideUrl) {
   return { group, layout, parts, filename: rel.split('/').pop() || 'model.json' }
 }
 
-export async function viewMcModelPairInViewport({ left, right, isStale }) {
+export async function viewMcModelPairInViewport({ left, right, rightRoot, isStale }) {
   const [lr, rr] = await Promise.all([
     left ? buildMcGroupFromRel(left.fileRoot, left.rel).catch(() => null) : Promise.resolve(null),
-    right ? buildMcGroupFromRel(right.fileRoot, right.rel).catch(() => null) : Promise.resolve(null),
+    right
+      ? buildMcGroupFromRel(right.fileRoot, right.rel).catch(() => null)
+      : (left && rightRoot)
+        ? buildMcGroupFromRel(left.fileRoot, left.rel, rightRoot).catch(() => null)
+        : Promise.resolve(null),
   ])
   if (isStale && isStale()) return { shown: false }
   if (!lr && !rr) return { shown: false }
@@ -110,6 +124,7 @@ export async function viewMcModelPairInViewport({ left, right, isStale }) {
     notifyModelShown(getLastModelLayout())
     if (lr) bindActiveModel(lr.group, { type: 'mc', parts: lr.parts, filename: lr.filename })
     else if (rr) bindActiveModel(rr.group, { type: 'mc', parts: rr.parts, filename: rr.filename })
+    lastRenderFn = () => viewMcModelPairInViewport({ left, right, rightRoot })
   }
   return { shown }
 }

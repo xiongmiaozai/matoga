@@ -1,0 +1,47 @@
+<div class="theme-editor">
+  <div class="settings-section-title" data-i18n="theme.manager">主题</div>
+
+  <div class="theme-grid" id="themeGrid"></div>
+
+  <div class="theme-editor-actions">
+    <button class="btn btn-ghost btn-sm" id="themeNewBtn" data-i18n="theme.new">新建主题</button>
+    <button class="btn btn-ghost btn-sm" id="themeImportBtn" data-i18n="theme.import">导入</button>
+    <input type="file" id="themeImportFile" accept=".json" style="display: none" />
+  </div>
+
+  <div class="theme-edit-form" id="themeEditForm" style="display: none">
+    <div class="theme-edit-header">
+      <input
+        type="text"
+        class="input-text theme-name-input"
+        id="themeNameInput"
+        data-i18n-placeholder="theme.namePlaceholder"
+        placeholder="主题名称"
+      />
+      <label class="theme-mode-opt"
+        ><input type="checkbox" id="themeModeChk" /><span data-i18n="theme.darkVariant">深色变体</span></label
+      >
+    </div>
+
+    <div class="theme-edit-group">
+      <div class="theme-edit-group-title" data-i18n="theme.colors">颜色</div>
+      <div class="theme-token-list" id="themeColorList"></div>
+    </div>
+
+    <div class="theme-edit-group">
+      <div class="theme-edit-group-title" data-i18n="theme.sizes">尺寸 / 圆角 / 字号</div>
+      <div class="theme-token-list" id="themeSizeList"></div>
+    </div>
+
+    <div class="theme-edit-group">
+      <div class="theme-edit-group-title" data-i18n="theme.other">其他</div>
+      <div class="theme-token-list" id="themeOtherList"></div>
+    </div>
+
+    <div class="theme-edit-footer">
+      <button class="btn btn-primary btn-sm" id="themeSaveBtn" data-i18n="common.confirm">保存</button>
+      <button class="btn btn-ghost btn-sm" id="themeExportBtn" data-i18n="theme.export">导出</button>
+      <button class="btn btn-ghost btn-sm" id="themeDeleteBtn" data-i18n="theme.delete">删除</button>
+    </div>
+  </div>
+</div>

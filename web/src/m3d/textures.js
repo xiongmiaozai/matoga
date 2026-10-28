@@ -12,6 +12,7 @@ import { applyHeightFilter, detectFormat, extractChannel, extractEmissive, extra
 import { hideLoading, setLoadingProgress, showLoading } from './loading.js'
 import { applyFilterToAllTextures, applyOpacityMode, applyTextureFilter, createLabel, makeMaterial } from './material.js'
 import { clamp01, disposeAllMaterialTextures, disposeGroupDeep, disposeTexture } from './dispose-utils.js'
+import { attachTextureAnimOnly } from '../mc-model-viewer.js'
 
 export function applySourceSide() {
   if (!S.initialized) return
@@ -37,28 +38,39 @@ export function applySourceSide() {
 export function applyTexturesToMesh(mesh, group, side) {
   const material = mesh.material
   disposeAllMaterialTextures(material)
-  if (!group) { material.color.set(0x888888); material.emissive.set(0x000000); material.needsUpdate = true; return }
+  const myVer = (material.userData.loadVer = (material.userData.loadVer || 0) + 1)
+  if (!group) { currentTintPaths[side] = null; material.color.set(0x888888); material.emissive.set(0x000000); material.needsUpdate = true; return }
 
   const loader = new THREE.TextureLoader()
   const getEntry = (role) => { const e = group[side] && group[side][role]; return (e && !e.isDirectory && isImageFile(e.name)) ? e : null }
   const mainEntry = getEntry('main'), normalEntry = getEntry('normal'), specEntry = getEntry('specular')
 
   if (mainEntry) {
-    loader.load(fileUrl(mainEntry.fullPath), (tex) => { tex.colorSpace = THREE.SRGBColorSpace; tex.wrapS = tex.wrapT = THREE.RepeatWrapping; disposeTexture(material.map); material.map = tex; applyTextureFilter(tex); material.color.set(0xffffff); const mi = new Image(); mi.onload = () => { const w = Math.min(mi.naturalWidth, 64), h = Math.min(mi.naturalHeight, 64); const tc = document.createElement('canvas'); tc.width = w; tc.height = h; const tctx = tc.getContext('2d', { willReadFrequently: true }); tctx.drawImage(mi, 0, 0, w, h); const td = tctx.getImageData(0, 0, w, h).data; let hasAlpha = false, semiCount = 0, total = 0; for (let i = 3; i < td.length; i += 4) { total++; const a = td[i]; if (a < 250) hasAlpha = true; if (a > 5 && a < 250) semiCount++ } material.userData.hasAlpha = hasAlpha; material.userData.hasSemiTrans = semiCount / total > 0.02; applyOpacityMode(material) }; mi.src = fileUrl(mainEntry.fullPath); material.needsUpdate = true })
-  } else { material.color.set(0x444466); material.userData.hasAlpha = false; material.userData.hasSemiTrans = false; applyOpacityMode(material) }
+    const mainUrl = fileUrl(mainEntry.fullPath)
+    const mcmetaUrl = fileUrl(mainEntry.fullPath + '.mcmeta')
+    loader.load(mainUrl, (tex) => {
+      if (material.userData.loadVer !== myVer) { tex.dispose(); return }
+      tex.colorSpace = THREE.SRGBColorSpace; tex.wrapS = tex.wrapT = THREE.RepeatWrapping; disposeTexture(material.map); material.map = tex; applyTextureFilter(tex); material.color.set(0xffffff); currentTintPaths[side] = mainEntry.fullPath; applyTintToMaterial(material, mainEntry.fullPath, myVer)
+      attachTextureAnimOnly(tex, fetch(mcmetaUrl).then(r => r.ok ? r.json() : null).catch(() => null)).then(anim => { if (anim) { tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.needsUpdate = true } })
+      const mi = new Image(); mi.onload = () => { if (material.userData.loadVer !== myVer) return; const w = Math.min(mi.naturalWidth, 64), h = Math.min(mi.naturalHeight, 64); const tc = document.createElement('canvas'); tc.width = w; tc.height = h; const tctx = tc.getContext('2d', { willReadFrequently: true }); tctx.drawImage(mi, 0, 0, w, h); const td = tctx.getImageData(0, 0, w, h).data; let hasAlpha = false, semiCount = 0, total = 0; for (let i = 3; i < td.length; i += 4) { total++; const a = td[i]; if (a < 250) hasAlpha = true; if (a > 5 && a < 250) semiCount++ } material.userData.hasAlpha = hasAlpha; material.userData.hasSemiTrans = semiCount / total > 0.02; applyOpacityMode(material) }; mi.src = mainUrl; material.needsUpdate = true
+    })
+  } else { currentTintPaths[side] = null; material.color.set(0x444466); material.userData.hasAlpha = false; material.userData.hasSemiTrans = false; applyOpacityMode(material) }
 
   if (normalEntry) {
     const nUrl = fileUrl(normalEntry.fullPath)
     const processNormal = (source) => {
+      if (material.userData.loadVer !== myVer) return
       const sc = document.createElement('canvas'); sc.width = imgW(source); sc.height = imgH(source)
       const sctx = sc.getContext('2d', { willReadFrequently: true }); sctx.drawImage(source, 0, 0)
       const src = sc
       if (side === 'left') showLoading(_t('m3d.loading'))
       if (side === 'left' && S.heightDetectCallback) S.heightDetectCallback('loading')
       requestAnimationFrame(() => {
+        if (material.userData.loadVer !== myVer) return
         setLoadingProgress(0.2)
         disposeTexture(material.normalMap); material.normalMap = reconstructNormal(src); applyTextureFilter(material.normalMap); material.normalScale.set(S.normalScale, S.normalScale)
         requestAnimationFrame(() => {
+          if (material.userData.loadVer !== myVer) return
           setLoadingProgress(0.4)
           let heightTex = extractHeight(src); let hStatus = heightTex ? 'alpha' : false
           if (!heightTex) { heightTex = extractHeightFromNormal(src); hStatus = heightTex ? 'normal' : false }
@@ -78,6 +90,7 @@ export function applyTexturesToMesh(mesh, group, side) {
 
   if (specEntry) {
     const specImg = new Image(); specImg.onload = () => {
+      if (material.userData.loadVer !== myVer) return
       let fmt = S.materialFormat
       if (fmt === 'auto') { fmt = detectFormat(specImg); if (S.formatDetectCallback) S.formatDetectCallback(fmt) }
       disposeTexture(material.roughnessMap); disposeTexture(material.metalnessMap); disposeTexture(material.emissiveMap)
@@ -88,6 +101,7 @@ export function applyTexturesToMesh(mesh, group, side) {
          material.roughnessMap = extractRoughness(specImg); material.metalnessMap = extractMetalness(specImg); applyTextureFilter(material.roughnessMap); applyTextureFilter(material.metalnessMap)
         if (mainEntry) {
           const mainImg = new Image(); mainImg.onload = () => {
+             if (material.userData.loadVer !== myVer) return
              disposeTexture(material.emissiveMap); material.emissiveMap = extractEmissive(specImg, mainImg); applyTextureFilter(material.emissiveMap)
             material.emissive.set(0xffffff); material.emissiveIntensity = S.emissiveIntensity; material.needsUpdate = true
           }; mainImg.src = fileUrl(mainEntry.fullPath)
@@ -97,6 +111,24 @@ export function applyTexturesToMesh(mesh, group, side) {
     }; specImg.src = fileUrl(specEntry.fullPath)
   } else { material.emissive.set(0x000000) }
   material.needsUpdate = true
+}
+
+/* ── 3D 普通贴图模式染色：贴图文件（非 MC 模型）3D 预览时，按贴图名推断 tint，
+    采样当前生物群系颜色设到 material.color（three.js 自动 color × map）。动态 import
+    mc-model-viewer 避免循环依赖。biome 切换时 refreshMaterial3DTint 重染当前贴图 */
+let currentTintPaths = { left: null, right: null }
+function applyTintToMaterial(material, texPath, myVer) {
+  import('../mc-model-viewer.js').then(m => m.sampleTintForTexture(texPath)).then(tint => {
+    if (material.userData.loadVer !== myVer) return
+    if (tint) material.color.setRGB(tint.r, tint.g, tint.b)
+    else material.color.set(0xffffff)
+    material.needsUpdate = true
+  }).catch(() => {})
+}
+export function refreshMaterial3DTint() {
+  if (!S.initialized) return
+  if (currentTintPaths.left) applyTintToMaterial(S.meshLeft.material, currentTintPaths.left, S.meshLeft.material.userData.loadVer || 0)
+  if (currentTintPaths.right) applyTintToMaterial(S.meshRight.material, currentTintPaths.right, S.meshRight.material.userData.loadVer || 0)
 }
 
 

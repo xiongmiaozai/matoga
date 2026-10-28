@@ -5,6 +5,9 @@
  */
 
 import { $ } from './core.js'
+import { t } from './i18n.js'
+import { sampleTintForTexture, getMcBiomes, getCurrentBiome, setCurrentBiome, rerenderLastMcModel } from './mc-model-viewer.js'
+import { refreshMaterial3DTint } from './material3d.js'
 
 let channel = 'all'
 let zoom = 100
@@ -45,6 +48,35 @@ function applyChannel(img) {
     img.src = c.toDataURL()
   }
   tmp.src = orig
+}
+
+function applyTint(img) {
+  if (channel !== 'all') return
+  const path = img.dataset.path
+  if (!path) return
+  img._tintSeq = (img._tintSeq || 0) + 1
+  const seq = img._tintSeq
+  sampleTintForTexture(path).then(tint => {
+    if (!tint || img._tintSeq !== seq) return
+    const orig = getOriginalSrc(img)
+    const tmp = new Image()
+    tmp.onload = () => {
+      if (img._tintSeq !== seq) return
+      const c = document.createElement('canvas')
+      c.width = tmp.naturalWidth; c.height = tmp.naturalHeight
+      const ctx = c.getContext('2d', { willReadFrequently: true })
+      ctx.drawImage(tmp, 0, 0)
+      const d = ctx.getImageData(0, 0, c.width, c.height).data
+      for (let i = 0; i < d.length; i += 4) {
+        d[i] = (d[i] * tint.r) | 0
+        d[i + 1] = (d[i + 1] * tint.g) | 0
+        d[i + 2] = (d[i + 2] * tint.b) | 0
+      }
+      ctx.putImageData(new ImageData(d, c.width, c.height), 0, 0)
+      img.src = c.toDataURL()
+    }
+    tmp.src = orig
+  })
 }
 
 function applyZoom(img) {
@@ -128,6 +160,7 @@ export function enhancePreview() {
   if (!panel) return
   panel.querySelectorAll('.pv-cell img').forEach(img => {
     applyChannel(img)
+    applyTint(img)
     applyZoom(img)
     applyFilter2d(img)
   })
@@ -161,4 +194,23 @@ export function initPreview2D() {
       enhancePreview()
     })
   })
+  const pvBiome = $('pvBiome')
+  if (pvBiome) {
+    const biomes = getMcBiomes()
+    const cur = getCurrentBiome()
+    for (const b of biomes) {
+      const opt = document.createElement('option')
+      opt.value = b.id
+      opt.textContent = t('preview.biome.' + b.id) || b.id
+      if (b.id === cur.id) opt.selected = true
+      pvBiome.appendChild(opt)
+    }
+    pvBiome.addEventListener('change', async (e) => {
+      setCurrentBiome(e.target.value)
+      const m3d = $('m3dBiome'); if (m3d) m3d.value = e.target.value
+      enhancePreview()
+      refreshMaterial3DTint()
+      await rerenderLastMcModel()
+    })
+  }
 }

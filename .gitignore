@@ -21,6 +21,7 @@ yarn-error.log*
 # 运行时 / 构建产物
 dist/
 dist-electron/
+web/dist/
 out/
 build/*
 !build/license.txt
@@ -55,3 +56,4 @@ craft-packs/
 mc-packs/
 official-packs/
 hdri-presets/
+.codeartsdoer/

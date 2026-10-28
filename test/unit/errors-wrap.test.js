@@ -5,7 +5,7 @@ loggerMod.logger.error = () => {}
 const { wrap } = require('../../server/middleware/errors')
 
 function makeRes() {
-  return { out: null, json(x) { this.out = x } }
+  return { out: null, status() { return this }, json(x) { this.out = x } }
 }
 
 test('wrap: 普通 Error 携带合法 code 时保留该 code', async () => {

@@ -28,7 +28,8 @@ import {
   setTextureFilter, setMipmapsEnabled, setAnisotropyLevel, getMaxAnisotropy
 } from './src/material3d.js'
 import { initWorkspace } from './src/workspace.js'
-import { initSettings, applyTheme } from './src/settings.js'
+import { initSettings } from './src/settings.js'
+import { initThemes } from './src/theme/registry.js'
 import { initPreview2D } from './src/preview2d.js'
 import { initHdrPreset, refreshHdrPreset, clearHdrPresetSelection, filterHdrPresets, openHdrPreview, initHdrDragDrop, disposeHdrPreview } from './src/hdri-preset.js'
 import { t, initI18n } from './src/i18n.js'
@@ -320,6 +321,7 @@ function initCtxMenu() {
 ;(async function init() {
   const step = async (name, fn) => { try { return await fn() } catch (e) { console.error('[init]', name, e) } }
   await step('initI18n', initI18n)
+  await step('initThemes', () => initThemes())
   await step('initPanelLoader', initPanelLoader)
   await step('initSettings', () => initSettings())
   await step('initWorkspace', initWorkspace)
@@ -335,7 +337,7 @@ function initCtxMenu() {
   await step('initCtxMenu', () => initCtxMenu())
 
   const cfg = (await step('getConfig', () => window.api.getConfig())) || {}
-  if (cfg.theme === 'dark') applyTheme('dark')
+
 
 
   if (cfg.recursive) recursiveChk.checked = true

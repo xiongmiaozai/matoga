@@ -26,6 +26,7 @@ export function clearCustomModel(){}
 export function isCustomModelActive(){ return false }
 export function hasVisibleViewport(){ return false }
 export function applyPbrMapsToModelMaterial(){}
+export function refreshMaterial3DTint(){}
 `
 
 export async function load(url, context, next) {

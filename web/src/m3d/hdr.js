@@ -11,6 +11,7 @@ import { applyHDREnvMode, ensureRotatedTexture, scheduleSkyBake, setEnvMode, upd
 
 export async function loadHDREnv(filePath) {
   if (!S.initialized || !filePath) return
+  window.dispatchEvent(new CustomEvent('material3d:hdrLoading', { detail: { url: filePath } }))
   try {
     const tex = await loadEnvTexture(filePath, extFromUrl(filePath))
     tex.mapping = THREE.EquirectangularReflectionMapping
@@ -26,7 +27,6 @@ export async function loadHDREnv(filePath) {
       format: tex._srcFormat || 'HDR (RGBE)',
       size: tex.image.data ? tex.image.data.byteLength : 0
     }
-    ensureRotatedTexture()
     S.currentEnvMode = 'hdri'
     applyHDREnvMode()
     window.dispatchEvent(new CustomEvent('material3d:hdrLoaded', { detail: S.hdrInfo }))
@@ -47,14 +47,20 @@ export function clearHDREnv() {
 
 export function setHdrRotation(val) {
   S.hdrRotation = val
-  if (S.hdrRotateTimer) clearTimeout(S.hdrRotateTimer)
-  S.hdrRotateTimer = setTimeout(() => {
-    S.hdrRotateTimer = null
-    if (S.initialized && S.currentEnvMode === 'hdri') {
-      ensureRotatedTexture()
-      applyHDREnvMode()
-    }
-  }, 30)
+  if (!S.initialized || S.currentEnvMode !== 'hdri') return
+  if (S.hdrUsage === 'env' || S.hdrUsage === 'both') {
+    S.scene.environmentRotation.set(0, S.hdrRotation * Math.PI / 180, 0)
+  }
+  if (S.hdrUsage === 'bg' || S.hdrUsage === 'both') {
+    if (S.hdrRotateTimer) clearTimeout(S.hdrRotateTimer)
+    S.hdrRotateTimer = setTimeout(() => {
+      S.hdrRotateTimer = null
+      if (S.currentEnvMode === 'hdri' && (S.hdrUsage === 'bg' || S.hdrUsage === 'both')) {
+        ensureRotatedTexture()
+        S.scene.background = S.hdrTextureRotated || S.hdrTextureOriginal
+      }
+    }, 80)
+  }
 }
 
 export function setHdrUsage(mode) { if (!['both', 'env', 'bg'].includes(mode)) return; S.hdrUsage = mode; if (S.initialized && S.currentEnvMode === 'hdri') applyHDREnvMode() }

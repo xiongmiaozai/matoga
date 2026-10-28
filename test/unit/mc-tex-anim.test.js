@@ -161,3 +161,36 @@ test('applyTexAnimFrame: 采样窗口永不触碰帧边界（防渗色线，任�
     }
   }
 })
+test('attachTextureAnimOnly / unloadTextureAnim: 动画注册、容错与移除', async () => {
+  const { attachTextureAnimOnly, unloadTextureAnim } = globalThis.__mcm
+  const THREE = require('three')
+  const mkTex = (w, h) => { const t = new THREE.Texture(); t.image = { width: w, height: h }; return t }
+
+  /* 动画贴图：返回 anim + 首帧采样矩阵已配置（repeat<1 / offset>0） */
+  const tex = mkTex(16, 128)
+  const anim = await attachTextureAnimOnly(tex, Promise.resolve({ animation: { frametime: 2 } }))
+  assert.ok(anim, '动画贴图返回 anim')
+  assert.equal(anim.frameCount, 8)
+  assert.ok(tex.repeat.x < 1 && tex.repeat.y < 1, '首帧 repeat 已缩至单帧区域')
+  assert.ok(tex.offset.y > 0, '首帧 offset 已平移到帧 0（贴图顶部）')
+
+  /* 移除注册不抛错（幂等） */
+  unloadTextureAnim(tex)
+  unloadTextureAnim(tex)
+  unloadTextureAnim(null)
+
+  /* 非动画 meta（单帧 / null / 缺 animation）→ null，贴图采样矩阵不变 */
+  const tex2 = mkTex(16, 16)
+  const r2 = await attachTextureAnimOnly(tex2, Promise.resolve({ animation: { frametime: 2 } }))
+  assert.equal(r2, null, '单帧贴图无动画')
+  const tex2b = mkTex(16, 128)
+  assert.equal(await attachTextureAnimOnly(tex2b, Promise.resolve(null)), null, 'null meta')
+  assert.equal(await attachTextureAnimOnly(mkTex(16, 128), Promise.resolve({})), null, '缺 animation')
+
+  /* metaPromise reject → null（网络失败容错，不抛错） */
+  assert.equal(await attachTextureAnimOnly(mkTex(16, 128), Promise.reject(new Error('404'))), null)
+
+  /* 无 image / null tex → null（不抛错） */
+  assert.equal(await attachTextureAnimOnly(new THREE.Texture(), Promise.resolve({ animation: { frametime: 2 } })), null, '无 image')
+  assert.equal(await attachTextureAnimOnly(null, Promise.resolve({ animation: { frametime: 2 } })), null, 'null tex')
+})

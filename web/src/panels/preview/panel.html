@@ -28,6 +28,9 @@
           <button data-pvf="trilinear" data-i18n="preview.filterTrilinear">三线性</button>
           <button data-pvf="anisotropic" data-i18n="preview.filterAniso">各向异性</button>
         </div>
+        <label class="m3d-hud-field pv-biome-field"><span data-i18n="preview.biome">生物群系</span>
+          <select id="pvBiome" class="input-select input-select-sm"></select>
+        </label>
       </div>
       <div class="preview-panel" id="previewPanel">
         <div class="pv-hint" data-i18n="preview.hint">点击表格中的材质查看预览</div>
@@ -52,6 +55,9 @@
             <button data-src="right" data-i18n="common.right">右</button>
 
           </div>
+          <label class="m3d-hud-field" id="m3dBiomeField"><span data-i18n="preview.biome">生物群系</span>
+            <select id="m3dBiome" class="input-select input-select-sm"></select>
+          </label>
           <div class="m3d-hud-spacer"></div>
 
           <button class="m3d-hud-btn" id="m3dUvBtn" data-i18n-title="m3d.uv" title="UV 贴图"><svg class="ico ico-sm"><use href="#i-grid"/></svg></button>
@@ -240,7 +246,7 @@
                 <span class="m3d-light-label" data-i18n="m3d.format">材质格式</span>
                 <select id="m3dFormat" class="input-select input-select-sm">
                   <option value="auto" data-i18n="m3d.formatAuto">自动检测</option>
-                  <option value="labpbr">labPBR</option>
+                  <option value="labpbr" selected>labPBR</option>
                   <option value="old" data-i18n="m3d.formatOld">旧版 PBR</option>
                 </select>
                 <span class="m3d-format-detected" id="m3dFormatDetected"></span>

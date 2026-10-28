@@ -42,7 +42,7 @@ export const S = {
   /* ── 材质参数 ── */
   emissiveIntensity: 1.0,
   normalScale: 1.0,
-  materialFormat: 'auto',
+  materialFormat: 'labpbr',
   formatDetectCallback: null,
   heightDetectCallback: null,
   sourceSide: 'dual',

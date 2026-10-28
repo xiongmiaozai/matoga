@@ -67,7 +67,11 @@ export async function refreshAssetLibrary() {
   rebuild()
 }
 
+let _initialized = false
+
 export function initAssetLibrary() {
+  if (_initialized) return
+  _initialized = true
   const search = document.getElementById('assetLibSearch')
   if (search) search.addEventListener('input', () => { S.searchTerm = search.value; applyFilter() })
   buildToolbar()

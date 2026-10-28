@@ -1,17 +1,27 @@
 {
   "name": "matoga",
-  "version": "3.0.0",
+  "version": "3.2.0",
   "description": "材质贴图对比工具 - 本地 Web 服务版（B/S 架构）",
   "main": "electron/main.js",
+  "workspaces": [
+    "server",
+    "web",
+    "electron"
+  ],
   "scripts": {
     "start": "node server/index.js",
     "web": "node server/index.js",
     "web:lan": "node server/index.js --lan",
     "test": "node --test \"test/unit/**/*.test.js\"",
     "test:smoke": "node test/smoke/run.mjs",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"**/*.{js,mjs,css,html,json}\" --ignore-path .prettierignore",
+    "format:check": "prettier --check \"**/*.{js,mjs,css,html,json}\" --ignore-path .prettierignore",
     "build:win": "pkg server/index.js --target node22-win-x64 --output dist/matoga-win-x64.exe",
     "build:mac": "pkg server/index.js --target node22-macos-arm64 --output dist/matoga-macos-arm64",
     "build:linux": "pkg server/index.js --target node22-linux-x64 --output dist/matoga-linux-x64",
+    "build:web": "node scripts/build-web.mjs",
     "electron": "node electron/launch.js",
     "electron:dev": "node electron/launch.js --dev",
     "dist:win": "electron-builder --win",
@@ -34,9 +44,9 @@
   "license": "MIT",
   "dependencies": {
     "express": "^5.3.0",
-    "golden-layout": "^2.6.0",
+    "ws": "^8.22.0",
     "three": "^0.186.1",
-    "ws": "^8.22.0"
+    "golden-layout": "^2.6.0"
   },
   "engines": {
     "node": ">=18"
@@ -60,12 +70,12 @@
   "build": {
     "appId": "com.xiongmiaozai.matoga",
     "productName": "matoga",
+    "icon": "build/icon.png",
     "directories": {
       "output": "dist-electron"
     },
     "files": [
       "server/**/*",
-      "shared/**/*",
       "web/**/*",
       "electron/main.js",
       "package.json",
@@ -102,7 +112,8 @@
     "win": {
       "target": [
         "nsis"
-      ]
+      ],
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "oneClick": false,
@@ -118,19 +129,27 @@
       "target": [
         "dmg"
       ],
-      "category": "public.app-category.utilities"
+      "category": "public.app-category.utilities",
+      "icon": "build/icon.icns",
+      "identity": "-"
     },
     "linux": {
       "target": [
         "AppImage",
         "deb"
       ],
-      "category": "Utility"
+      "category": "Utility",
+      "icon": "build/icon.png"
     }
   },
   "devDependencies": {
+    "@eslint/js": "^9.0.0",
     "@yao-pkg/pkg": "^6.23.0",
     "electron": "^44.9.0",
-    "electron-builder": "^26.15.3"
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.0",
+    "eslint": "^9.0.0",
+    "globals": "^15.0.0",
+    "prettier": "^3.0.0"
   }
 }

@@ -1,0 +1,10 @@
+node_modules
+web/dist
+web/vendor
+dist
+dist-electron
+data
+releases
+package-lock.json
+*.min.js
+*.min.css

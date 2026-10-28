@@ -13,13 +13,15 @@ import { clearCustomModel } from './custom-model.js'
 import { applySpecTextureToMaterial, clearMainTexture, clearNormalMap, clearSpecTexture, clearSpecularTexture, setBaseColor, setEmissiveColor, setMainTextureFromUrl, setNormalMapFromUrl, setSpecularFromUrl } from './textures.js'
 import { setEnvIntensity, setExposure, setGeometry, setLightPreset, setMetalness, setNormalScale, setOpacity, setRoughness } from '../material3d.js'
 
-export function applyPbrMapsToModelMaterial(mat, normalUrl, specUrl) {
+/* force=true 跳过 replaced 守卫（编辑器替换主图后强制覆盖旧 PBR；模型加载流程保持 replaced 守卫阻断竞态） */
+export function applyPbrMapsToModelMaterial(mat, normalUrl, specUrl, force) {
   if (!mat) return
+  const blocked = () => !force && mat.userData && mat.userData.replaced
   if (normalUrl) {
     const img = new Image()
     img.crossOrigin = 'anonymous'
     img.onload = () => {
-      if (mat.userData.replaced) return
+      if (blocked()) return
       disposeTexture(mat.normalMap)
       const nTex = reconstructNormal(img)
       nTex.magFilter = THREE.NearestFilter; nTex.minFilter = THREE.NearestFilter
@@ -33,7 +35,7 @@ export function applyPbrMapsToModelMaterial(mat, normalUrl, specUrl) {
     const img = new Image()
     img.crossOrigin = 'anonymous'
     img.onload = () => {
-      if (mat.userData.replaced) return
+      if (blocked()) return
       disposeTexture(mat.roughnessMap); disposeTexture(mat.metalnessMap)
       const rTex = extractRoughness(img)
       const mTex = extractMetalness(img)

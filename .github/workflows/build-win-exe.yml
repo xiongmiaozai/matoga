@@ -1,0 +1,64 @@
+name: build-win-exe
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'server/**'
+      - 'web/**'
+      - 'scripts/**'
+      - 'electron/**'
+      - 'hdri-presets/**'
+      - 'mc-packs/**'
+      - 'official-packs/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/build-win-exe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Windows NSIS installer (electron-builder)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run dist:win
+
+      - name: Verify artifact
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem dist-electron\*.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $exe) { throw "No exe installer found in dist-electron" }
+          $size = $exe.Length
+          Write-Host "Installer: $($exe.Name), size: $size bytes ($([math]::Round($size/1MB,2)) MB)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: matoga-win-installer
+          path: |
+            dist-electron/*.exe
+            dist-electron/latest*.yml
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Attach to release (on tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist-electron/*.exe
+            dist-electron/latest*.yml

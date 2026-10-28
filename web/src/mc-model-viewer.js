@@ -36,8 +36,9 @@ export { parentModelPath, resolveMcModel, resolveItemDefRefs, isItemDefPath, isT
 export { mcMatFor, buildItemSpriteGroup, bbMatFor } from './mcv/textures.js'
 export { buildMcLayout, buildSpriteLayout, buildBbLayout, getLastModelLayout, resolveModelTexList } from './mcv/layout.js'
 export { bindActiveModel, updateModelFaceUv, updateModelFaceRotation, updateModelTexture, clearModelTexture, highlightModelFace, exportActiveModelJson } from './mcv/face-edit.js'
-export { fetchImportedModelJson, viewMcModelInViewport, viewMcModelPairInViewport, viewMcModelTexCompareInViewport, viewImportedModelInViewport, viewCustomModelInViewport, isViewportVisible } from './mcv/view.js'
+export { fetchImportedModelJson, viewMcModelInViewport, viewMcModelPairInViewport, viewMcModelTexCompareInViewport, viewImportedModelInViewport, viewCustomModelInViewport, isViewportVisible, rerenderLastMcModel } from './mcv/view.js'
 export { buildModelGroup, defaultFaceUv } from './mcv/geometry.js'
-export { getModelTexAnims, applyTexAnimFrame, animFrameIndexAt, parseAnimMeta } from './mcv/anim.js'
+export { getModelTexAnims, applyTexAnimFrame, animFrameIndexAt, parseAnimMeta, attachTextureAnimOnly, unloadTextureAnim } from './mcv/anim.js'
+export { getMcBiomes, getCurrentBiome, setCurrentBiome, sampleTintForTexture } from './mcv/biome.js'
 export { texUrlToRef, writeMcTexRef, texPathForRef, textureAssetPath, resolveTextureRef, expandTextureAliases, spriteTexKey } from './mcv/tex-refs.js'
 

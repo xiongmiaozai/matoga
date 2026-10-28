@@ -84,10 +84,10 @@ const hooks = {
       offlineWriteFace(el, key, 'rotation', rotation)
     }
   },
-  onTexture(texIndex, texUrl, layout) {
+  onTexture(texIndex, texUrl, layout, extra) {
     if (source.mode === 'viewport') {
-      /* 空串 = 移除材质（面变纯色） */
-      return texUrl === '' ? clearModelTexture(texIndex, layout) : updateModelTexture(texIndex, texUrl, layout)
+      /* 空串 = 移除材质（面变纯色）；extra（材质球 normal/specular）→ 3D 视口 PBR 预览 */
+      return texUrl === '' ? clearModelTexture(texIndex, layout) : updateModelTexture(texIndex, texUrl, layout, extra)
     }
     /* 离线：bbmodel 内嵌贴图写回本地 JSON 副本（保存时持久化）。
        贴图库 raw URL 无法直接内嵌（bbmodel 标准仅支持 dataURL）→ 异步 fetch 转 dataURL 写回；

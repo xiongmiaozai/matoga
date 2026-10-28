@@ -56,14 +56,19 @@ async function main() {
   const server = http.createServer(createApp())
   const port = await listen(server, requestedPort, host, 0)
   const wss = wsSetup.setup(server)
-  const display = lan ? localIp() : 'localhost'
-  const url = `http://${display}:${port}/${token ? '?token=' + token : ''}`
-  console.log('')
-  console.log('  matoga Web 服务已启动')
-  console.log(`  ${url}`)
-  if (lan) console.log('  （LAN 模式：请将含 token 的完整地址发给局域网内其他设备）')
-  console.log('')
-  if (PKG) openBrowser(url)
+
+  if (process.env.MATOGA_SPAWNED) {
+    process.stdout.write(`MATOGA_LISTENING:${port}\n`)
+  } else {
+    const display = lan ? localIp() : 'localhost'
+    const url = `http://${display}:${port}/${token ? '?token=' + token : ''}`
+    console.log('')
+    console.log('  matoga Web 服务已启动')
+    console.log(`  ${url}`)
+    if (lan) console.log('  （LAN 模式：请将含 token 的完整地址发给局域网内其他设备）')
+    console.log('')
+    if (PKG) openBrowser(url)
+  }
 
   const { gracefulShutdown } = require('./shutdown')
   process.on('SIGTERM', () => gracefulShutdown({ server, wss, signal: 'SIGTERM', exit: true }))

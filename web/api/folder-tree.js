@@ -229,12 +229,13 @@
     let acc = ''
     parts.forEach((part, i) => {
       acc = isAbsUnix ? acc + sep + part : (i === 0 ? part + sep : acc + sep + part)
+      const target = acc
       if (i > 0) { const s = document.createElement('span'); s.className = 'mft-csep'; s.textContent = sep; crumbEl.appendChild(s) }
       const seg = document.createElement('span')
       const isLast = i === parts.length - 1
       seg.className = 'mft-cseg' + (isLast ? ' mft-ccur' : '')
       seg.textContent = part
-      if (!isLast) seg.addEventListener('click', () => browseTo(acc))
+      if (!isLast) seg.addEventListener('click', () => browseTo(target))
       crumbEl.appendChild(seg)
     })
   }
@@ -377,8 +378,8 @@
       try {
         const res = await window.api.createFolder(full)
         if (res && res.success) { row.remove(); browseTo(currentPath) }
-        else { okBtn.disabled = false; inp.title = (res && res.error) || t('createErr'); inp.style.borderColor = '#e53935' }
-      } catch (e) { okBtn.disabled = false; inp.title = e.message; inp.style.borderColor = '#e53935' }
+        else { okBtn.disabled = false; inp.title = (res && res.error) || t('createErr'); inp.style.borderColor = 'var(--danger)' }
+      } catch (e) { okBtn.disabled = false; inp.title = e.message; inp.style.borderColor = 'var(--danger)' }
     }
     okBtn.addEventListener('click', commit)
     noBtn.addEventListener('click', () => row.remove())

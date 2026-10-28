@@ -121,7 +121,7 @@
   color: #fff;
   border-color: #000;
 }
-.ctx-sep { height: 2px; background: #000; margin: 2px 0; }
+.ctx-sep { height: 2px; background: var(--border); margin: 2px 0; }
 
 /* ═══════════════════════════════════════════════
    MODAL — MC fullscreen overlay
@@ -137,7 +137,7 @@
   color: #fff;
   box-shadow: inset 1px 1px 0 0 var(--mc-border-light), 0 3px 0 0 rgba(0,0,0,.5);
 }
-.preview-close:hover { background: #a02e2e; }
+.preview-close:hover { background: var(--danger); }
 .preview-caption {
   font-family: 'Press Start 2P', 'Courier New', monospace;
   font-size: 11px;

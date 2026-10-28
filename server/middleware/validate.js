@@ -5,7 +5,7 @@
  */
 
 const path = require('path')
-const { AppError } = require('../../core/errors')
+const { AppError } = require('../lib/errors')
 
 const trustedRoots = new Set()
 

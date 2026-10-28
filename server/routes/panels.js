@@ -10,10 +10,10 @@
 const express = require('express')
 const fs = require('fs')
 const path = require('path')
+const { WEB_ROOT } = require('../paths')
 const router = express.Router()
 
-const ROOT = path.join(__dirname, '..', '..')
-const PANELS_DIR = path.join(ROOT, 'web', 'src', 'panels')
+const PANELS_DIR = path.join(WEB_ROOT, 'src', 'panels')
 
 router.get('/', (req, res) => {
   const panels = []

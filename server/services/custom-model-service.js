@@ -299,8 +299,8 @@ function generateModel({ template, name, namespace }) {
     e.code = 'ERR_INVALID_PARAM'
     throw e
   }
-  const ns = String(namespace || 'minecraft').replace(/[^a-z0-9_\-]/gi, '').toLowerCase() || 'minecraft'
-  const safeName = String(name || 'model').replace(/[^a-z0-9_\-]/gi, '_').toLowerCase() || 'model'
+  const ns = String(namespace || 'minecraft').replace(/[^a-z0-9_-]/gi, '').toLowerCase() || 'minecraft'
+  const safeName = String(name || 'model').replace(/[^a-z0-9_-]/gi, '_').toLowerCase() || 'model'
   const model = tpl.generate(safeName, ns)
   if (!model || typeof model !== 'object') throw new Error('模板生成失败')
   return { model, namespace: ns, name: safeName, template: tpl.id }

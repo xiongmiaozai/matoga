@@ -6,7 +6,7 @@
  * 从 material3d.js 原样搬出，逻辑未改。
  */
 import {
-  state, $, ROLE_LABEL, KIND_TEXT, STATUS_ORDER,
+  state, $, ROLES, ROLE_LABEL, KIND_TEXT, STATUS_ORDER,
   leftBtn, rightBtn, onlyMissingChk, summaryEl, resultBody,
   leftPathEl, rightPathEl
 } from '../core.js'
@@ -76,7 +76,7 @@ export function appendGroupRows(frag, g) {
 }
 
 export function appendSubRows(frag, g) {
-  for (const role of ['main', 'normal', 'specular']) {
+  for (const role of ROLES) {
     const le = g.left && g.left[role], re = g.right && g.right[role]
     if (!le && !re) continue
     const sub = document.createElement('tr')

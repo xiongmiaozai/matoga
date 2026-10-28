@@ -1,0 +1,10 @@
+{
+  "name": "@matoga/web",
+  "version": "3.2.0",
+  "description": "matoga 前端（Three.js + Golden Layout）",
+  "license": "MIT",
+  "dependencies": {
+    "three": "^0.186.1",
+    "golden-layout": "^2.6.0"
+  }
+}

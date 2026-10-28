@@ -233,10 +233,13 @@ export function buildUvUi(p) {
   canvasWrap.addEventListener('drop', (e) => {
     e.preventDefault()
     canvasWrap.classList.remove('uvv-drop-active')
-    /* 资产库贴图卡片拖入：raw URL 直接替换当前贴图槽位 */
+    /* 资产库贴图卡片拖入：raw URL 直接替换当前贴图槽位（材质球带 normal/specular → PBR 预览） */
     const tex = getTexDragData(e.dataTransfer)
     if (tex) {
-      if (state.layout && isUsableTexUrl(tex.url)) applyCustomTexture(tex.url, tex.name || null)
+      if (state.layout && isUsableTexUrl(tex.url)) {
+        const extra = (tex.normal || tex.specular) ? { normal: tex.normal || '', specular: tex.specular || '' } : undefined
+        applyCustomTexture(tex.url, tex.name || null, null, extra)
+      }
       return
     }
     const files = e.dataTransfer && e.dataTransfer.files

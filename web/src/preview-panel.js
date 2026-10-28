@@ -22,14 +22,19 @@ import {
   setFreeCameraMode, isFreeCameraMode,
   setOpacityMode, setOpacity, setTransmission, setIOR, setClearcoat,
   setTextureFilter, setMipmapsEnabled, setAnisotropyLevel, getMaxAnisotropy,
-  isMaterial3DReady, activateMaterial3DHost
+  isMaterial3DReady, activateMaterial3DHost, refreshMaterial3DTint
 } from './material3d.js'
 import {
   initHdrPreset, refreshHdrPreset, clearHdrPresetSelection, filterHdrPresets,
   openHdrPreview, initHdrDragDrop, disposeHdrPreview
 } from './hdri-preset.js'
+import { getMcBiomes, getCurrentBiome, setCurrentBiome, rerenderLastMcModel } from './mc-model-viewer.js'
+import { enhancePreview } from './preview2d.js'
 
+let _initialized = false
 export async function initPreviewPanel() {
+  if (_initialized) return
+  _initialized = true
   /* ── 2D/3D 顶层 tab 切换 ── */
   document.querySelectorAll('.pv-tabs button[data-pv-tab]').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -58,6 +63,25 @@ export async function initPreviewPanel() {
 
   bindSegment('m3dGeoSeg', 'geo', setGeometry)
   bindSegment('m3dSrcSeg', 'src', setSourceSide)
+  const biomeSel = $('m3dBiome')
+  if (biomeSel) {
+    const biomes = getMcBiomes()
+    const cur = getCurrentBiome()
+    for (const b of biomes) {
+      const opt = document.createElement('option')
+      opt.value = b.id
+      opt.textContent = t('preview.biome.' + b.id) || b.id
+      if (b.id === cur.id) opt.selected = true
+      biomeSel.appendChild(opt)
+    }
+    biomeSel.addEventListener('change', async (e) => {
+      setCurrentBiome(e.target.value)
+      const pv = $('pvBiome'); if (pv) pv.value = e.target.value
+      enhancePreview()
+      refreshMaterial3DTint()
+      await rerenderLastMcModel()
+    })
+  }
   bindSegment('m3dLightSeg', 'light', (key) => { setLightPreset(key); renderLightEditor(getCustomLightConfig()) })
   const _hexToNum = (hex) => parseInt(hex.slice(1), 16)
   const _numToHex = (n) => '#' + (n & 0xffffff).toString(16).padStart(6, '0')
@@ -310,6 +334,13 @@ export async function initPreviewPanel() {
     const el = $('m3dHdrInfo'); if (!el) return
     const sz = info.size ? (info.size / 1024 / 1024).toFixed(1) + ' MB' : '--'
     el.textContent = `${info.width}×${info.height} · ${info.format} · ${sz}`
+  })
+  window.addEventListener('material3d:hdrLoading', () => {
+    const el = $('m3dHdrInfo'); if (el) el.textContent = t('m3d.hdrLoading')
+  })
+  window.addEventListener('material3d:hdrLoadFailed', () => {
+    const el = $('m3dHdrInfo'); if (el) el.textContent = ''
+    showToast(t('toast.loadHdrFailed'))
   })
   const hdrGrid = $('m3dHdrPresetGrid'); if (hdrGrid) initHdrDragDrop(hdrGrid)
   ;(() => {

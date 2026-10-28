@@ -1,32 +1,41 @@
 /**
- * matoga - UV 贴图库选择器（浮动窗口）
+ * matoga - UV 贴图库选择器（浮动窗口）—— 材质球模式
  * Copyright (c) 2026 芝世 (xiongmiaozai). All rights reserved.
  * SPDX-License-Identifier: MIT.
  *
  * 供 UV 编辑器（uv-editor-core）「贴图库」按钮调用：
- *   openTexPicker() → Promise<{ name, url } | null>
+ *   openTexPicker() → Promise<{ name, url, normal, specular } | null>
+ *   - name：材质名（主图去扩展名 + 后缀剥离后的 groupKey）
+ *   - url：主图 raw URL（写入 UV 槽位）
+ *   - normal：法线贴图（-n/_n）raw URL，无则空串（3D 视口 PBR 预览）
+ *   - specular：高光贴图（-s/_s）raw URL，无则空串（3D 视口 PBR 预览）
  * 数据源：/api/asset/tex（MC 材质包 + 官方包贴图聚合，每包按类别分组）。
  * raw URL 构造与 asset-library 一致：
  *   zip 包  → /api/mc-official|mc-packs/<name>/raw?path=<rel>
  *   dir 包  → /api/file/raw?path=<root>/<rel>
  * URL 经 apiUrl() 包装（LAN 模式自动附加 token）。
+ * 展示：按文件名后缀（_n/-n/_s/-s/_h/-h/_e/-e）聚合为材质组（材质球），
+ *   以主图为缩略图，角标标识配套法线(N)/高光(S)/高度(H)/自发光(E)；
+ *   仅展示含主图的材质组（材质球以主图为代表）。
  * 交互：包下拉 + 名称搜索（前端过滤）+ 缩略图网格 + 分页加载（每页 80），
- * 点击贴图项即 resolve 并关窗。
+ * 点击材质组即 resolve 并关窗。
  */
 
 import { createFloatingWindow } from './floating-window.js'
-import { apiUrl, setTexDragData } from './utils.js'
+import { apiUrl, setTexDragData, parseTexGroup } from './utils.js'
 import { t, onLocaleChange } from './i18n.js'
 
 const PAGE_SIZE = 80
 const IMG_EXTS = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'tga'])
+/* 角标角色顺序（与展示优先级一致） */
+const BADGE_ROLES = [['normal', 'n'], ['specular', 's'], ['height', 'h'], ['emissive', 'e']]
 
 const state = {
-  packs: [],        /* [{ source, name, kind, root, label, files: [{ name, path, url }] }] */
+  packs: [],        /* [{ source, name, kind, root, label, materials: [材质组] }] */
   packIdx: 0,
   searchText: '',
   shown: 0,         /* 当前渲染条数（分页） */
-  filtered: [],     /* 当前包 + 搜索过滤后的贴图列表 */
+  filtered: [],     /* 当前包 + 搜索过滤后的材质组列表 */
   loadError: null,
   resolve: null,    /* 本次打开的 Promise resolve */
 }
@@ -50,7 +59,35 @@ function packTexRawUrl(pack, relPath) {
   return apiUrl(api + '/' + encodeURIComponent(pack.name) + '/raw?path=' + encodeURIComponent(relPath))
 }
 
-/* ── 数据加载（/api/asset/tex，一次拉全量包结构，展平到包级列表） ────────── */
+/* 解析贴图角色：parseTexGroup 对非 core.IMG_EXTS 扩展（如 tga）返回 role='file'，
+     此处统一当作 main（groupKey 去扩展名），确保 tga 等也能作为主图聚合 */
+function texRoleOf(name) {
+  const p = parseTexGroup(name)
+  if (p.role === 'file') {
+    const dot = name.lastIndexOf('.')
+    return { groupKey: dot > 0 ? name.slice(0, dot) : name, role: 'main' }
+  }
+  return p
+}
+
+/* 把包内扁平贴图文件聚合为材质组（按 目录+groupKey 聚合，避免跨目录同名合并）：
+     材质组 = { key, name, main, normal, specular, height, emissive }，各角色为 { name, path, url } */
+function buildMaterials(files) {
+  const map = new Map()
+  for (const f of files) {
+    const p = texRoleOf(f.name)
+    const slash = f.path.lastIndexOf('/')
+    const dir = slash >= 0 ? f.path.slice(0, slash) : ''
+    const key = dir ? dir + '/' + p.groupKey : p.groupKey
+    let g = map.get(key)
+    if (!g) { g = { key, name: p.groupKey }; map.set(key, g) }
+    g[p.role] = f
+  }
+  /* 仅展示含主图的材质组（材质球以主图为代表） */
+  return [...map.values()].filter(g => g.main)
+}
+
+/* ── 数据加载（/api/asset/tex，一次拉全量包结构，聚合为材质组） ────────── */
 
 async function loadPacks() {
   if (state.packs.length || state.loadError) return
@@ -69,8 +106,9 @@ async function loadPacks() {
           files.push({ name: f.name, path: f.path, url: packTexRawUrl(p, f.path) })
         }
       }
-      return { source: p.source, name: p.name, kind: p.kind, root: p.root, label: p.name + '（' + files.length + '）', files }
-    }).filter(p => p.files.length)
+      const materials = buildMaterials(files)
+      return { source: p.source, name: p.name, kind: p.kind, root: p.root, label: p.name + '（' + materials.length + '）', materials }
+    }).filter(p => p.materials.length)
     if (!state.packs.length) state.loadError = 'empty'
   } catch (e) {
     state.loadError = e.message || 'load fail'
@@ -82,33 +120,57 @@ async function loadPacks() {
 function applyFilter() {
   const pack = state.packs[state.packIdx]
   const q = state.searchText.trim().toLowerCase()
-  state.filtered = pack ? pack.files.filter(f => !q || String(f.name).toLowerCase().includes(q)) : []
+  state.filtered = pack ? pack.materials.filter(m => !q || String(m.name).toLowerCase().includes(q) || String(m.key).toLowerCase().includes(q)) : []
   state.shown = 0
   renderGrid()
+}
+
+/* 材质组 → resolve 值（主图 url + 配套法线/高光 url，空则空串） */
+function materialPickValue(m) {
+  return {
+    name: m.name,
+    url: m.main.url,
+    normal: (m.normal && m.normal.url) || '',
+    specular: (m.specular && m.specular.url) || '',
+  }
 }
 
 function renderGrid() {
   if (!gridEl) return
   if (state.shown === 0) gridEl.innerHTML = ''
   const slice = state.filtered.slice(state.shown, state.shown + PAGE_SIZE)
-  for (const f of slice) {
+  for (const m of slice) {
     const cell = document.createElement('button')
     cell.className = 'uvp-cell'
-    cell.title = f.path
+    cell.title = m.main.path
     cell.draggable = true
     const img = document.createElement('img')
     img.alt = ''
     img.loading = 'lazy'
     img.draggable = false
-    img.src = f.url
+    img.src = m.main.url
+    cell.appendChild(img)
+    /* 角标：标识材质球配套的 PBR 贴图（N=法线 S=高光 H=高度 E=自发光） */
+    const badges = BADGE_ROLES.filter(([r]) => m[r]).map(([, b]) => {
+      const span = document.createElement('span')
+      span.className = 'uvp-badge ' + b
+      span.textContent = b.toUpperCase()
+      return span
+    })
+    if (badges.length) {
+      const wrap = document.createElement('span')
+      wrap.className = 'uvp-badges'
+      for (const b of badges) wrap.appendChild(b)
+      cell.appendChild(wrap)
+    }
     const name = document.createElement('span')
     name.className = 'uvp-name'
-    name.textContent = f.name
-    cell.appendChild(img)
+    name.textContent = m.name
     cell.appendChild(name)
-    /* 拖拽到 UV 编辑器画布 = 直接替换贴图（与点击选择等价） */
+    /* 拖拽到 UV 编辑器画布 = 直接替换贴图（与点击选择等价，带 PBR 配套） */
     cell.addEventListener('dragstart', (e) => {
-      if (setTexDragData(e.dataTransfer, { name: f.name, url: f.url, path: f.path })) {
+      const v = materialPickValue(m)
+      if (setTexDragData(e.dataTransfer, { name: v.name, url: v.url, path: m.main.path, normal: v.normal, specular: v.specular })) {
         e.dataTransfer.effectAllowed = 'copy'
       } else {
         e.preventDefault()
@@ -116,7 +178,7 @@ function renderGrid() {
     })
     cell.addEventListener('click', () => {
       if (state.resolve) {
-        try { state.resolve({ name: String(f.name || '').replace(/\.[^.]+$/, ''), url: f.url }) } catch {}
+        try { state.resolve(materialPickValue(m)) } catch {}
         state.resolve = null
       }
       win.close()
@@ -230,7 +292,7 @@ function initPicker() {
   return win
 }
 
-/* ── 入口：打开选择器，选择完成 resolve { name, url }；关闭未选 resolve null ── */
+/* ── 入口：打开选择器，选择材质组 resolve { name, url, normal, specular }；关闭未选 resolve null ── */
 
 export async function openTexPicker() {
   initPicker()
