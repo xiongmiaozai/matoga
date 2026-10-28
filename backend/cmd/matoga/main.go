@@ -70,11 +70,12 @@ func main() {
 	r := httpx.NewRouter(auth, log)
 
 	api.Mount(r, api.Services{
-		Deps:   &api.Deps{StartedAt: time.Now(), Auth: auth, Version: version},
-		Config: cfg,
-		Thumbs: media.NewThumb(paths),
-		HDRI:   media.NewHDRI(paths, cfg),
-		Assets: store.NewAssetStore(paths.DataRoot, log),
+		Deps:        &api.Deps{StartedAt: time.Now(), Auth: auth, Version: version},
+		Config:      cfg,
+		Thumbs:      media.NewThumb(paths),
+		HDRI:        media.NewHDRI(paths, cfg),
+		Assets:      store.NewAssetStore(paths.DataRoot, log),
+		ModelThumbs: media.NewModelThumb(paths.DataRoot),
 	})
 
 	// 静态前端

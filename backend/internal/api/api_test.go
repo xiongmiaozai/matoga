@@ -26,13 +26,14 @@ import (
 )
 
 type testEnv struct {
-	srv    *httptest.Server
-	dir    string
-	paths  platform.Paths
-	auth   *httpx.Auth
-	config *store.Config
-	thumb  *media.Thumb
-	assets *store.AssetStore
+	srv         *httptest.Server
+	dir         string
+	paths       platform.Paths
+	auth        *httpx.Auth
+	config      *store.Config
+	thumb       *media.Thumb
+	assets      *store.AssetStore
+	modelThumbs *media.ModelThumb
 }
 
 func newEnv(t *testing.T) *testEnv {
@@ -50,16 +51,21 @@ func newEnv(t *testing.T) *testEnv {
 	r := httpx.NewRouter(auth, log)
 	hdri := media.NewHDRI(paths, cfg)
 	assets := store.NewAssetStore(dir, log)
+	modelThumbs := media.NewModelThumb(dir)
 	api.Mount(r, api.Services{
-		Deps:   &api.Deps{Auth: auth},
-		Config: cfg,
-		Thumbs: thumb,
-		HDRI:   hdri,
-		Assets: assets,
+		Deps:        &api.Deps{Auth: auth},
+		Config:      cfg,
+		Thumbs:      thumb,
+		HDRI:        hdri,
+		Assets:      assets,
+		ModelThumbs: modelThumbs,
 	})
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
-	return &testEnv{srv: srv, dir: dir, paths: paths, auth: auth, config: cfg, thumb: thumb, assets: assets}
+	return &testEnv{
+		srv: srv, dir: dir, paths: paths, auth: auth, config: cfg,
+		thumb: thumb, assets: assets, modelThumbs: modelThumbs,
+	}
 }
 
 func (e *testEnv) get(t *testing.T, path string) map[string]any {

@@ -12,11 +12,12 @@ import (
 
 // Services 汇总挂载路由所需的全部依赖。
 type Services struct {
-	Deps   *Deps
-	Config *store.Config
-	Thumbs *media.Thumb
-	HDRI   *media.HDRI
-	Assets *store.AssetStore
+	Deps        *Deps
+	Config      *store.Config
+	Thumbs      *media.Thumb
+	HDRI        *media.HDRI
+	Assets      *store.AssetStore
+	ModelThumbs *media.ModelThumb
 }
 
 // Mount 把所有 API 挂到根路由。
@@ -64,12 +65,15 @@ func Mount(r *httpx.Router, s Services) {
 	hdriGroup.Post("/cleanup", httpx.Wrap(hdriHandler.Cleanup))
 
 	// /api/asset
-	assetHandler := &AssetHandler{Store: s.Assets, Config: s.Config}
+	assetHandler := &AssetHandler{Store: s.Assets, Config: s.Config, Thumbs: s.ModelThumbs}
 	assetGroup := r.APIGroup("/asset")
 	assetGroup.Get("/", httpx.Wrap(assetHandler.Get))
 	assetGroup.Get("/type/{type}", httpx.Wrap(assetHandler.ByType))
 	assetGroup.Get("/tex", httpx.Wrap(assetHandler.Tex))
 	assetGroup.Get("/model", httpx.Wrap(assetHandler.Model))
+	assetGroup.Get("/model-thumb-info", httpx.Wrap(assetHandler.ModelThumbInfo))
+	assetGroup.Get("/model-thumb", httpx.Wrap(assetHandler.ModelThumb))
+	assetGroup.Post("/model-thumb", httpx.Wrap(assetHandler.SaveModelThumb))
 	assetGroup.Get("/info", httpx.Wrap(assetHandler.Info))
 	assetGroup.Put("/favorites", httpx.Wrap(assetHandler.SetFavorites))
 	assetGroup.Put("/recent", httpx.Wrap(assetHandler.SetRecent))

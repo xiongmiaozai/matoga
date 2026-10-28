@@ -8,12 +8,15 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"regexp"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/xiongmiaozai/matoga/backend/internal/fsx"
 	"github.com/xiongmiaozai/matoga/backend/internal/httpx"
 	"github.com/xiongmiaozai/matoga/backend/internal/mcmeta"
+	"github.com/xiongmiaozai/matoga/backend/internal/media"
 	"github.com/xiongmiaozai/matoga/backend/internal/store"
 )
 
@@ -21,6 +24,70 @@ import (
 type AssetHandler struct {
 	Store  *store.AssetStore
 	Config *store.Config
+	Thumbs *media.ModelThumb
+}
+
+// modelThumbKeyRe 校验模型缩略图的虚拟路径键。
+//
+// key 仅参与 md5（文件名恒为 hex，按类型落入专属子目录），不进入文件系统路径，无目录穿越面。
+var modelThumbKeyRe = regexp.MustCompile(`^(packmodel:(mc|official):[^:]+/.+|bb:.+|im:.+|cm:.+)$`)
+
+// guardModelThumbKey 校验 key；不合法返回空串。
+func guardModelThumbKey(raw string) string {
+	if raw == "" || len(raw) > 512 || !modelThumbKeyRe.MatchString(raw) {
+		return ""
+	}
+	return raw
+}
+
+// ModelThumbInfo 返回模型缩略图缓存状态。
+func (h *AssetHandler) ModelThumbInfo(w http.ResponseWriter, r *http.Request) error {
+	key := guardModelThumbKey(r.URL.Query().Get("key"))
+	if key == "" {
+		return httpx.Errorf(httpx.CodeInvalidParam, "invalid model thumb key")
+	}
+	mtime, _ := strconv.ParseFloat(r.URL.Query().Get("mtime"), 64)
+	httpx.OK(w, h.Thumbs.Info(key, mtime))
+	return nil
+}
+
+// ModelThumb 返回模型缩略图 PNG（按 frame 取帧，缺省帧 0）。
+func (h *AssetHandler) ModelThumb(w http.ResponseWriter, r *http.Request) error {
+	key := guardModelThumbKey(r.URL.Query().Get("key"))
+	if key == "" {
+		return httpx.Errorf(httpx.CodeInvalidParam, "invalid model thumb key")
+	}
+	frame := media.ParseFrameParam(r.URL.Query().Get("frame"))
+	p := h.Thumbs.Path(key, frame)
+	if _, err := os.Stat(p); err != nil {
+		httpx.Fail(w, httpx.CodeFSNotFound, "model thumb not generated yet")
+		return nil
+	}
+	http.ServeFile(w, r, p)
+	return nil
+}
+
+// SaveModelThumb 保存前端离屏渲染的模型缩略图（单帧或动画多帧）。
+func (h *AssetHandler) SaveModelThumb(w http.ResponseWriter, r *http.Request) error {
+	var body struct {
+		Key   string  `json:"key"`
+		Mtime float64 `json:"mtime"`
+		media.SavePayload
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		return httpx.Errorf(httpx.CodeInvalidParam, "invalid json")
+	}
+	key := guardModelThumbKey(body.Key)
+	if key == "" {
+		return httpx.Errorf(httpx.CodeInvalidParam, "invalid model thumb key")
+	}
+	res := h.Thumbs.Save(key, body.Mtime, body.SavePayload)
+	if !res.Success {
+		httpx.Fail(w, httpx.CodeInvalidParam, res.Error)
+		return nil
+	}
+	httpx.OK(w, res)
+	return nil
 }
 
 // Get 返回收藏夹与最近使用。
