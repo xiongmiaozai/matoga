@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/xiongmiaozai/matoga/backend/internal/api"
+	"github.com/xiongmiaozai/matoga/backend/internal/craftpack"
 	"github.com/xiongmiaozai/matoga/backend/internal/fsx"
 	"github.com/xiongmiaozai/matoga/backend/internal/httpx"
 	"github.com/xiongmiaozai/matoga/backend/internal/media"
@@ -74,6 +75,7 @@ func newEnv(t *testing.T) *testEnv {
 		NodeProjects:   store.NewNodeProjectStore(filepath.Join(dir, "data"), log),
 		ImportedModels: store.NewImportedModelStore(filepath.Join(dir, "data")),
 		CustomModels:   store.NewCustomModelStore(dir),
+		CraftPack:      craftpack.New(dir, assets, cfg),
 	})
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)

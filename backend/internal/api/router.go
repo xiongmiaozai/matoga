@@ -5,6 +5,7 @@
 package api
 
 import (
+	"github.com/xiongmiaozai/matoga/backend/internal/craftpack"
 	"github.com/xiongmiaozai/matoga/backend/internal/httpx"
 	"github.com/xiongmiaozai/matoga/backend/internal/media"
 	"github.com/xiongmiaozai/matoga/backend/internal/store"
@@ -25,6 +26,7 @@ type Services struct {
 	NodeProjects   *store.NodeProjectStore
 	ImportedModels *store.ImportedModelStore
 	CustomModels   *store.CustomModelStore
+	CraftPack      *craftpack.Service
 }
 
 // Mount 把所有 API 挂到根路由。
@@ -149,4 +151,17 @@ func Mount(r *httpx.Router, s Services) {
 	cmGroup.Get("/{id}/raw", httpx.Wrap(cmHandler.Raw))
 	cmGroup.Put("/{id}", httpx.Wrap(cmHandler.Update))
 	cmGroup.Delete("/{id}", httpx.Wrap(cmHandler.Delete))
+
+	// /api/craft-pack
+	cpHandler := &CraftPackHandler{Svc: s.CraftPack}
+	cpGroup := r.APIGroup("/craft-pack")
+	cpGroup.Get("/", httpx.Wrap(cpHandler.Get))
+	cpGroup.Put("/items", httpx.Wrap(cpHandler.PutItems))
+	cpGroup.Post("/items", httpx.Wrap(cpHandler.PostItem))
+	cpGroup.Delete("/items/{key}", httpx.Wrap(cpHandler.DeleteItem))
+	cpGroup.Delete("/items", httpx.Wrap(cpHandler.DeleteItems))
+	cpGroup.Post("/copy", httpx.Wrap(cpHandler.Copy))
+	cpGroup.Post("/export", httpx.Wrap(cpHandler.Export))
+	cpGroup.Get("/packs", httpx.Wrap(cpHandler.Packs))
+	cpGroup.Get("/current", httpx.Wrap(cpHandler.Current))
 }

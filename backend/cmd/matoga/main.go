@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/xiongmiaozai/matoga/backend/internal/api"
+	"github.com/xiongmiaozai/matoga/backend/internal/craftpack"
 	"github.com/xiongmiaozai/matoga/backend/internal/fsx"
 	"github.com/xiongmiaozai/matoga/backend/internal/httpx"
 	"github.com/xiongmiaozai/matoga/backend/internal/media"
@@ -68,6 +69,7 @@ func main() {
 	auth := httpx.NewAuth(token)
 
 	cfg := store.NewConfig(paths, log)
+	assetStore := store.NewAssetStore(paths.DataRoot, log)
 	r := httpx.NewRouter(auth, log)
 
 	api.Mount(r, api.Services{
@@ -75,7 +77,7 @@ func main() {
 		Config:         cfg,
 		Thumbs:         media.NewThumb(paths),
 		HDRI:           media.NewHDRI(paths, cfg),
-		Assets:         store.NewAssetStore(paths.DataRoot, log),
+		Assets:         assetStore,
 		ModelThumbs:    media.NewModelThumb(paths.DataRoot),
 		Upload:         upload.New(paths.DataRoot),
 		PanelsDir:      filepath.Join(paths.ResRoot, "web", "src", "panels"),
@@ -83,6 +85,7 @@ func main() {
 		NodeProjects:   store.NewNodeProjectStore(filepath.Join(paths.DataRoot, "data"), log),
 		ImportedModels: store.NewImportedModelStore(filepath.Join(paths.DataRoot, "data")),
 		CustomModels:   store.NewCustomModelStore(paths.DataRoot),
+		CraftPack:      craftpack.New(paths.DataRoot, assetStore, cfg),
 	})
 
 	// 静态前端
