@@ -44,7 +44,7 @@
   background:var(--bg); border:1px solid var(--border-soft); color:var(--text-muted); font-size:12px}
 .preview-pane .pp-icbtn:hover{color:var(--primary); border-color:var(--primary)}
 .preview-pane .pp-icbtn.active{color:var(--primary); border-color:var(--primary)}
-.pp-body{flex:1; position:relative; overflow:hidden; background:#1a1a2e}
+.pp-body{flex:1; position:relative; overflow:hidden; background:var(--mc-darker)}
 .pp-body .pp-content{position:absolute; inset:0; display:none}
 .pp-body .pp-content.active{display:block}
 #material3dContainer{width:100%; height:100%; position:relative; overflow:hidden}
@@ -64,12 +64,12 @@
 .pp-foot .seg{display:inline-flex; align-items:center; gap:4px}
 .pp-foot .seg b{color:var(--text); font-variant-numeric:tabular-nums}
 .m3d-ctrl{position:absolute; top:8px; right:8px; z-index:5; display:flex; gap:4px; flex-wrap:wrap; justify-content:flex-end; max-width:180px}
-.m3d-ctrl select, .m3d-ctrl button{height:22px; background:rgba(20,20,30,.85); border:1px solid var(--border);
+.m3d-ctrl select, .m3d-ctrl button{height:22px; background:var(--panel-3); border:1px solid var(--border);
   color:var(--text); font-size:10px; padding:0 6px; backdrop-filter:blur(4px)}
 .m3d-ctrl select:hover, .m3d-ctrl button:hover{border-color:var(--primary); color:var(--primary)}
 .m3d-ctrl button.active{color:var(--primary); border-color:var(--primary)}
 .m3d-badge{position:absolute; top:8px; left:8px; z-index:5; padding:3px 8px;
-  background:rgba(20,20,30,.85); border:1px solid var(--border-soft); color:var(--text-dim);
+  background:var(--panel-3); border:1px solid var(--border-soft); color:var(--text-dim);
   font-size:10px; backdrop-filter:blur(4px)}
 .m3d-badge.ok{color:var(--primary); border-color:var(--primary)}
 .m3d-badge.err{color:var(--danger); border-color:var(--danger)}
