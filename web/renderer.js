@@ -50,6 +50,7 @@ import {
   recursiveChk, onlyMissingChk, hashChk, ignoreChk, ignoreInput,
   resultBody, leftPathEl, rightPathEl
 } from './src/core.js'
+import { initTableColumnResize } from './src/renderer-table.js'
 
 {
   const nrBtn = document.getElementById('nodeRelBtn')
@@ -151,49 +152,7 @@ if (swapBtn2) swapBtn2.addEventListener('click', swapFolders)
 
 
 
-;(() => {
-  const table = $('resultTable')
-  if (!table) return
-  const ths = table.querySelectorAll('thead th')
-  const COL_MIN = 40, COL_MAX = 600
-  const colKey = (th) => th.dataset.key || (th.className.match(/col-(\w+)/) || [])[1] || th.cellIndex
-  const saveWidths = async () => {
-    const widths = {}
-    ths.forEach(th => { const k = colKey(th); if (k) widths[k] = th.offsetWidth })
-    await window.api.setConfig({ tableColWidths: widths })
-  }
-  ths.forEach((th, i) => {
-    if (i === ths.length - 1) return
-    const handle = document.createElement('div')
-    handle.className = 'col-resize-handle'
-    th.appendChild(handle)
-    handle.addEventListener('mousedown', (e) => {
-      e.preventDefault(); e.stopPropagation()
-      const startX = e.clientX, startW = th.offsetWidth
-      handle.classList.add('dragging'); table.classList.add('resizing')
-      const onMove = (ev) => { th.style.width = Math.max(COL_MIN, Math.min(COL_MAX, startW + ev.clientX - startX)) + 'px' }
-      const onUp = () => {
-        handle.classList.remove('dragging'); table.classList.remove('resizing')
-        document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp)
-        saveWidths()
-      }
-      document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp)
-    })
-    handle.addEventListener('dblclick', () => {
-      const ci = i + 1
-      const prevW = th.style.width
-      th.style.width = 'auto'
-      void table.offsetWidth
-      const naturalW = th.offsetWidth
-      th.style.width = Math.max(COL_MIN, Math.min(COL_MAX, naturalW)) + 'px'
-      saveWidths()
-    })
-  })
-  window.api.getConfig().then(cfg => {
-    if (!cfg.tableColWidths) return
-    ths.forEach(th => { const k = colKey(th); if (k && cfg.tableColWidths[k]) th.style.width = cfg.tableColWidths[k] + 'px' })
-  })
-})()
+initTableColumnResize()
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
@@ -248,75 +207,6 @@ document.addEventListener('keydown', (e) => {
   }
 })
 
-function initCtxMenu() {
-  const menu = $('ctxMenu')
-  const tbody = $('resultBody')
-  if (!menu || !tbody) return
-  tbody.addEventListener('contextmenu', (ev) => {
-    const tr = ev.target.closest('tr')
-    if (!tr || !tr._group) return
-    ev.preventDefault()
-    const g = tr._group
-    state.selected = g
-    selectGroup(g)
-    menu.style.display = 'block'
-    const mx = Math.min(ev.clientX, window.innerWidth - 180)
-    const my = Math.min(ev.clientY, window.innerHeight - 260)
-    menu.style.left = mx + 'px'
-    menu.style.top = my + 'px'
-    menu.querySelectorAll('.ctx-item').forEach(item => {
-      const act = item.dataset.act
-      const pickEntry = (side) => { const s = g[side]; if (!s) return null; return s.main || s.file || s.dir || s.normal || s.specular || null }
-      let enabled = true
-      if (act === 'open-left' || act === 'loc-left') enabled = !!pickEntry('left')
-      else if (act === 'open-right' || act === 'loc-right') enabled = !!pickEntry('right')
-      else if (act === 'copy-to-right') enabled = !!(g.left && state.rightPath)
-      else if (act === 'copy-to-left') enabled = !!(g.right && state.leftPath)
-      else if (act === 'copy-source') enabled = !!(g.left || g.right)
-      else if (act === 'paste-source') enabled = !!state.copySource
-      else if (act === 'hide') enabled = !state.hiddenKeys.has(g.key)
-      else if (act === 'unhide') enabled = state.hiddenKeys.has(g.key)
-      else if (act === 'set-tag') enabled = true
-      else if (act === 'clear-tag') enabled = !!state.customTags[g.key]
-      item.classList.toggle('disabled', !enabled)
-      item.onclick = enabled ? () => {
-        if (act === 'hide') {
-          state.hiddenKeys.add(g.key)
-          saveOptions()
-          renderResult()
-        } else if (act === 'unhide') {
-          state.hiddenKeys.delete(g.key)
-          saveOptions()
-          renderResult()
-        } else if (act === 'set-tag') {
-          uiPrompt({ title: t('ctx.setTag'), label: t('ctx.setTagLabel'), value: state.customTags[g.key] || '', placeholder: t('ctx.setTagPh'), okText: t('common.confirm'), cancelText: t('common.cancel') }).then(tag => {
-            if (tag != null && tag.trim()) setGroupTag(g, tag.trim())
-          })
-        } else if (act === 'clear-tag') {
-          clearGroupTag(g)
-        } else if (act === 'copy-source') {
-          const side = g.left ? 'left' : 'right'
-          state.copySource = { key: g.key, side }
-          showToast(t('toast.copySourceSet', { name: g.key, dest: t('common.' + (side === 'left' ? 'right' : 'left')) }))
-        } else if (act === 'paste-source') {
-          const src = state.copySource
-          if (!src) { showToast(t('toast.noCopySource')); return }
-          const fresh = state.result.find(r => r.key === src.key)
-          if (!fresh) { showToast(t('toast.noCopySource')); return }
-          const destSide = src.side === 'left' ? 'right' : 'left'
-          handleAction(destSide === 'right' ? 'copy-to-right' : 'copy-to-left', fresh)
-        } else {
-          handleAction(act, g)
-        }
-        menu.style.display = 'none'
-      } : null
-    })
-  })
-  document.addEventListener('click', () => { menu.style.display = 'none' })
-  document.addEventListener('contextmenu', (ev) => {
-    if (!ev.target.closest('tr')) menu.style.display = 'none'
-  })
-}
 
 ;(async function init() {
   const step = async (name, fn) => { try { return await fn() } catch (e) { console.error('[init]', name, e) } }
