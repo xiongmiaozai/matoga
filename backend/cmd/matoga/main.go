@@ -82,6 +82,7 @@ func main() {
 		Workspaces:     store.NewWorkspaceStore(filepath.Join(paths.DataRoot, "data"), log),
 		NodeProjects:   store.NewNodeProjectStore(filepath.Join(paths.DataRoot, "data"), log),
 		ImportedModels: store.NewImportedModelStore(filepath.Join(paths.DataRoot, "data")),
+		CustomModels:   store.NewCustomModelStore(paths.DataRoot),
 	})
 
 	// 静态前端

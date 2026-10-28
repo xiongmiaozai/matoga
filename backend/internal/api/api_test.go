@@ -40,6 +40,7 @@ type testEnv struct {
 	workspaces     *store.WorkspaceStore
 	nodeProjects   *store.NodeProjectStore
 	importedModels *store.ImportedModelStore
+	customModels   *store.CustomModelStore
 }
 
 func newEnv(t *testing.T) *testEnv {
@@ -72,6 +73,7 @@ func newEnv(t *testing.T) *testEnv {
 		Workspaces:     store.NewWorkspaceStore(filepath.Join(dir, "data"), log),
 		NodeProjects:   store.NewNodeProjectStore(filepath.Join(dir, "data"), log),
 		ImportedModels: store.NewImportedModelStore(filepath.Join(dir, "data")),
+		CustomModels:   store.NewCustomModelStore(dir),
 	})
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)

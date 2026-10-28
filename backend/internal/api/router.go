@@ -24,6 +24,7 @@ type Services struct {
 	Workspaces     *store.WorkspaceStore
 	NodeProjects   *store.NodeProjectStore
 	ImportedModels *store.ImportedModelStore
+	CustomModels   *store.CustomModelStore
 }
 
 // Mount 把所有 API 挂到根路由。
@@ -136,4 +137,16 @@ func Mount(r *httpx.Router, s Services) {
 	imGroup.Get("/{id}", httpx.Wrap(imHandler.Load))
 	imGroup.Put("/{id}", httpx.Wrap(imHandler.Update))
 	imGroup.Delete("/{id}", httpx.Wrap(imHandler.Delete))
+
+	// /api/custom-models
+	cmHandler := &CustomModelHandler{Store: s.CustomModels, Thumbs: s.ModelThumbs}
+	cmGroup := r.APIGroup("/custom-models")
+	cmGroup.Get("/templates", httpx.Wrap(cmHandler.Templates))
+	cmGroup.Get("/location", httpx.Wrap(cmHandler.Location))
+	cmGroup.Get("/", httpx.Wrap(cmHandler.List))
+	cmGroup.Post("/", httpx.Wrap(cmHandler.Create))
+	cmGroup.Get("/{id}", httpx.Wrap(cmHandler.Load))
+	cmGroup.Get("/{id}/raw", httpx.Wrap(cmHandler.Raw))
+	cmGroup.Put("/{id}", httpx.Wrap(cmHandler.Update))
+	cmGroup.Delete("/{id}", httpx.Wrap(cmHandler.Delete))
 }
