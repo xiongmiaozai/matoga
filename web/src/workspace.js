@@ -11,7 +11,25 @@ import { $, showToast } from './core.js'
 import { sanitizeLayoutConfig } from './layout-config.js'
 import { getPanelDefs } from './panel-loader.js'
 import { showPrompt, showConfirm } from './ws/dialogs.js'
-import { PANEL_DEFS, comp, stack, col, row, DEFAULT_LAYOUT } from './ws/panel-defs.js'
+import { PANEL_DEFS, comp, stack, col, row } from './ws/panel-defs.js'
+import {
+  collectComponentTypes,
+  countComponentTypes,
+  isConfigComplete,
+  getDefaultConfig,
+} from './ws/layout-tree.js'
+import {
+  presetNames,
+  getPresetConfig,
+  setPreset,
+  deletePresetEntry,
+  renamePresetEntry,
+  buildPresetExport,
+  presetExportFileName,
+  buildAllPresetsExport,
+  ALL_PRESETS_FILE_NAME,
+  parsePresetImport,
+} from './ws/preset-model.js'
 
 
 const call = (m, p, b) => window.matogaCore.call(m, p, b)
@@ -29,22 +47,6 @@ let glReady = false
 let suppressAutoSave = false
 
 let ALL_PANEL_IDS = new Set(PANEL_DEFS.map(d => d.id))
-
-function collectComponentTypes(node, out) {
-  if (!node || typeof node !== 'object') return
-  if (node.type === 'component' && node.componentType) out.add(node.componentType)
-  const content = node.content
-  if (Array.isArray(content)) for (const c of content) collectComponentTypes(c, out)
-}
-
-function isConfigComplete(config) {
-  if (!config) return false
-  const root = config.root || config
-  if (!root) return false
-  const found = new Set()
-  collectComponentTypes(root, found)
-  return found.size >= 2
-}
 
 let panelHomes = []
 
@@ -254,10 +256,6 @@ function applyConfig(config) {
   document.dispatchEvent(new CustomEvent('workspace:activated', { detail: { components: [...comps] } }))
 }
 
-function getDefaultConfig() {
-  return { root: JSON.parse(JSON.stringify(DEFAULT_LAYOUT)) }
-}
-
 function initGoldenLayout(savedConfig) {
   layout = new GoldenLayout(layoutRoot)
   layout.resizeWithContainerAutomatically = true
@@ -291,9 +289,7 @@ function onStateChanged() {
 function autoSavePreset(cfg) {
   const name = activePreset
   if (!name) return
-  userPresets[name] = userPresets[name] || {}
-  userPresets[name].config = cfg
-  userPresets[name].updatedAt = Date.now()
+  setPreset(userPresets, name, cfg)
   call('PUT', '/api/workspace/preset', { name, config: cfg }).catch(() => {})
 }
 
@@ -324,7 +320,7 @@ function notifyResize() {
 
 function renderWorkspaceBar() {
   if (!barEl) return
-  const allNames = [...new Set([activePreset, ...Object.keys(userPresets)])].filter(Boolean)
+  const allNames = presetNames(activePreset, userPresets)
   barEl.innerHTML = ''
   const label = document.createElement('span')
   label.className = 'workspace-bar-label'
@@ -442,7 +438,7 @@ async function saveCurrentAs() {
     if (LayoutConfig.isResolved(cfg)) cfg = LayoutConfig.fromResolved(cfg)
     if (!isConfigComplete(cfg)) { showToast('当前布局不完整，无法保存'); return }
     await call('PUT', '/api/workspace/preset', { name, config: cfg })
-    userPresets[name] = { config: cfg }
+    setPreset(userPresets, name, cfg)
     activePreset = name
     await call('PUT', '/api/workspace/active', { name })
     renderWorkspaceBar()
@@ -456,7 +452,7 @@ async function saveCurrent() {
     if (LayoutConfig.isResolved(cfg)) cfg = LayoutConfig.fromResolved(cfg)
     if (!isConfigComplete(cfg)) { showToast('当前布局不完整，无法保存'); return }
     await call('PUT', '/api/workspace/preset', { name: activePreset, config: cfg })
-    userPresets[activePreset] = { config: cfg }
+    setPreset(userPresets, activePreset, cfg)
     renderWorkspaceBar()
     showToast('已保存当前工作区「' + activePreset + '」')
   } catch (e) { showToast('保存失败: ' + e.message) }
@@ -467,7 +463,7 @@ async function deletePreset(name) {
   try {
     await call('DELETE', '/api/workspace/preset?name=' + encodeURIComponent(name))
     const wasActive = activePreset === name
-    delete userPresets[name]
+    deletePresetEntry(userPresets, name)
     if (wasActive) { await activatePreset('默认') }
     else { renderWorkspaceBar() }
     showToast('已删除')
@@ -506,10 +502,8 @@ async function resetCurrent() {
   renderWorkspaceBar()
 }
 
-function getPresetConfig(name) {
-  if (userPresets[name] && userPresets[name].config) return userPresets[name].config
-
-  return null
+function getPresetConfigOf(name) {
+  return getPresetConfig(userPresets, name)
 }
 
 async function renamePresetDialog(name, onDone) {
@@ -517,8 +511,7 @@ async function renamePresetDialog(name, onDone) {
   if (!newName || newName === name) return
   try {
     await call('PUT', '/api/workspace/rename', { oldName: name, newName })
-    userPresets[newName] = userPresets[name]
-    delete userPresets[name]
+    renamePresetEntry(userPresets, name, newName)
     if (activePreset === name) activePreset = newName
     renderWorkspaceBar()
     if (onDone) onDone()
@@ -527,38 +520,35 @@ async function renamePresetDialog(name, onDone) {
 }
 
 async function duplicatePreset(name) {
-  const cfg = getPresetConfig(name)
+  const cfg = getPresetConfigOf(name)
   if (!cfg) return
   const newName = await showPrompt('复制工作区「' + name + '」为新预设', name + ' 副本')
   if (!newName) return
   try {
     await call('PUT', '/api/workspace/preset', { name: newName, config: cfg })
-    userPresets[newName] = { config: cfg }
+    setPreset(userPresets, newName, cfg)
     renderWorkspaceBar()
     showToast('已复制为「' + newName + '」')
   } catch (e) { showToast('复制失败: ' + e.message) }
 }
 
 function exportPreset(name) {
-  const cfg = getPresetConfig(name)
+  const cfg = getPresetConfigOf(name)
   if (!cfg) return
-  const blob = new Blob([JSON.stringify({ name, config: cfg, version: 1 }, null, 2)], { type: 'application/json' })
+  const blob = new Blob([buildPresetExport(name, cfg)], { type: 'application/json' })
   const a = document.createElement('a')
   a.href = URL.createObjectURL(blob)
-  a.download = 'workspace-' + name.replace(/[^\w\u4e00-\u9fa5]/g, '_') + '.json'
+  a.download = presetExportFileName(name)
   a.click()
   URL.revokeObjectURL(a.href)
   showToast('已导出「' + name + '」')
 }
 
 function exportAllPresets() {
-  const all = {}
-
-  for (const [name, p] of Object.entries(userPresets)) all[name] = p
-  const blob = new Blob([JSON.stringify({ presets: all, version: 1 }, null, 2)], { type: 'application/json' })
+  const blob = new Blob([buildAllPresetsExport(userPresets)], { type: 'application/json' })
   const a = document.createElement('a')
   a.href = URL.createObjectURL(blob)
-  a.download = 'workspaces-all.json'
+  a.download = ALL_PRESETS_FILE_NAME
   a.click()
   URL.revokeObjectURL(a.href)
   showToast('已导出全部预设')
@@ -573,24 +563,22 @@ async function importPreset(onDone) {
     if (!file) return
     try {
       const text = await file.text()
-      const data = JSON.parse(text)
-      if (data.presets) {
-        for (const [n, p] of Object.entries(data.presets)) {
-          if (p && p.config) {
-            await call('PUT', '/api/workspace/preset', { name: n, config: p.config })
-            userPresets[n] = { config: p.config }
-          }
+      const parsed = parsePresetImport(text)
+      if (parsed.kind === 'invalid') { showToast(parsed.reason); return }
+      if (parsed.kind === 'batch') {
+        for (const [n, p] of parsed.entries) {
+          await call('PUT', '/api/workspace/preset', { name: n, config: p.config })
+          userPresets[n] = { config: p.config }
         }
         renderWorkspaceBar()
         if (onDone) onDone()
         showToast('已批量导入预设')
       } else {
-        if (!data.name || !data.config) { showToast('无效的预设文件'); return }
-        await call('PUT', '/api/workspace/preset', { name: data.name, config: data.config })
-        userPresets[data.name] = { config: data.config }
+        await call('PUT', '/api/workspace/preset', { name: parsed.name, config: parsed.config })
+        userPresets[parsed.name] = { config: parsed.config }
         renderWorkspaceBar()
         if (onDone) onDone()
-        showToast('已导入「' + data.name + '」')
+        showToast('已导入「' + parsed.name + '」')
       }
     } catch (e) { showToast('导入失败: ' + e.message) }
   })
@@ -613,7 +601,7 @@ async function createNewPreset(onDone) {
   if (!newName) return
   try {
     await call('PUT', '/api/workspace/preset', { name: newName, config: cfg })
-    userPresets[newName] = { config: cfg }
+    setPreset(userPresets, newName, cfg)
     activePreset = newName
     await call('PUT', '/api/workspace/active', { name: newName })
     applyConfig(cfg)
@@ -763,7 +751,7 @@ function openPresetManager() {
 
   function renderList() {
     list.innerHTML = ''
-    const allNames = [...new Set([activePreset, ...Object.keys(userPresets)])].filter(Boolean)
+    const allNames = presetNames(activePreset, userPresets)
     for (const name of allNames) {
       const isSaved = !!userPresets[name]
       const item = document.createElement('div')

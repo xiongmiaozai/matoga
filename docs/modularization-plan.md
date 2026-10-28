@@ -324,5 +324,37 @@ npm run dist:win                  # 打包契约不被破坏
 | B3 | mc-model-viewer.js（1452→32，`mcv/` 10 模块） | DONE | 552 pass / e2e 全绿 | 多 commit |
 | B2 | render.js（1299→44，`rnd/` 10 模块） | DONE | 552 pass / 冒烟通过 | 多 commit（268f666…730541a） |
 | B3 | uv-editor-core.js（1272→395，`uvc/` 16 模块） | DONE | 552 pass / 冒烟 19+5+10 | 多 commit（consts…highlight） |
-| B2 | workspace.js | TODO | — | — |
+| B2 | workspace.js | DONE | 585 pass / 冒烟 19+10 | 只抽纯逻辑（见下） |
+
+### 9.1 workspace.js：为什么只抽纯逻辑
+
+`docs/migration-go-vue.md:268` 写明 `workspace.js` 会被 dockview 方案整体替换，**不再继续拆**；
+而本文档原先把它列为待拆 TODO。两份文档结论冲突，经确认采用折中方案：
+
+- **抽出与 Golden-Layout 无关的纯逻辑**，Vue 迁移时可直接复用：
+  - `web/src/ws/layout-tree.js`（68 行）：`walkConfig` / `collectComponentTypes` /
+    `countComponentTypes` / `isConfigComplete` / `getDefaultConfig` —— 只处理普通 JSON。
+  - `web/src/ws/preset-model.js`（122 行）：预设增删改查（`presetNames` / `setPreset` /
+    `deletePresetEntry` / `renamePresetEntry` / `getPresetConfig`）与导入导出序列化
+    （`buildPresetExport` / `buildAllPresetsExport` / `parsePresetImport` 等），无 DOM 依赖。
+- **布局壳不拆**：`GoldenLayout` 实例操作、面板 DOM 克隆与委托、工作区栏渲染、
+  右键菜单与预设管理弹窗仍留在主文件，等 dockview 替换时整体废弃。
+
+`workspace.js` 862 → 782 行。新增 `test/unit/ws-layout-tree.test.js`（13 例）与
+`test/unit/ws-preset-model.test.js`（20 例），此前该文件**零测试覆盖**。
+
+顺带删除死代码 `web/src/ws/state.js`（37 行）——`94c26030` 创建后从未被任何文件 import。
+
+
+### 9.1 workspace.js：为什么只抽纯逻辑（862 → 782 行）
+
+`docs/migration-go-vue.md` §9 已判定该文件「不再继续拆 —— 会被 dockview 方案整体替换」，与本计划的 B2 TODO 冲突。经确认采取折中：
+
+- **抽出可复用的纯逻辑**（不依赖 Golden-Layout 实例、不碰 DOM，Vue 化时可直接搬走）：
+  - `web/src/ws/layout-tree.js`（73 行）：`walkConfig`、`collectComponentTypes`、`countComponentTypes`、`isConfigComplete`、`getDefaultConfig`
+  - `web/src/ws/preset-model.js`（137 行）：`presetNames`、`isSavedPreset`、`getPresetConfig`、`setPreset`、`deletePresetEntry`、`renamePresetEntry`、`buildPresetExport`、`presetExportFileName`、`buildAllPresetsExport`、`ALL_PRESETS_FILE_NAME`、`parsePresetImport`
+- **不拆布局壳部分**（`initGoldenLayout` / `applyConfig` / 面板克隆 / 工作区栏渲染 / 右键菜单），因为它们与 Golden-Layout API 深度绑定，dockview 替换时整体作废。
+- **顺带删除死代码**：`web/src/ws/state.js`（37 行）自 `94c26030` 创建后从未被任何文件 import，已 `git rm`。
+- 新增 33 个单测（`test/unit/ws-layout-tree.test.js` 13 个、`test/unit/ws-preset-model.test.js` 20 个），此前这两个模块零覆盖。
+
 
