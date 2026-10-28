@@ -17,7 +17,7 @@ import {
   countComponentTypes,
   isConfigComplete,
   getDefaultConfig,
-} from './ws/S.layout-tree.js'
+} from './ws/layout-tree.js'
 import {
   presetNames,
   getPresetConfig,
