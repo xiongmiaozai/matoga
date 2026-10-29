@@ -7,9 +7,15 @@
  * toolbar / canvasWrap / status / 隐藏 fileInput。
  *
  * 所有交互回调由调用方通过 cbs 注入（闭包内函数声明，存在提升，可在构建时引用）。
+ *
+ * 本文件只做装配：工具栏、画布区、事件绑定分别由 ui-toolbar.js /
+ * ui-canvas.js / ui-interactions.js 承担，三者都接收同一个 el 引用集合，
+ * 就地写入各自的元素引用。
  */
 
-import { ZOOM_STEPS } from './consts.js'
+import { buildToolbar } from './ui-toolbar.js'
+import { buildCanvasArea } from './ui-canvas.js'
+import { bindUvInteractions } from './ui-interactions.js'
 
 /**
  * 构建 UV 编辑器全部 DOM。
@@ -65,311 +71,30 @@ export function buildUvUi(p) {
   const wrap = document.createElement('div')
   wrap.className = 'uvv-wrap'
 
-  const toolbar = document.createElement('div')
-  toolbar.className = 'uvv-toolbar'
-  el.toolbar = toolbar
-
-  el.chipsEl = document.createElement('div')
-  el.chipsEl.className = 'uvv-tex-chips'
-  toolbar.appendChild(el.chipsEl)
-
-  const zoomSeg = document.createElement('div')
-  zoomSeg.className = 'm3d-segment uvv-zoom-seg'
-  el.zoomSeg = zoomSeg
-  ZOOM_STEPS.forEach(z => {
-    const btn = document.createElement('button')
-    btn.dataset.zoom = String(z)
-    btn.textContent = z === 'fit' ? t('uv.fit') : z + 'x'
-    if (z === 'fit') btn.classList.add('active')
-    btn.addEventListener('click', () => {
-      state.zoom = z === 'fit' ? 'fit' : +z
-      zoomSeg.querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn))
-      draw()
-    })
-    zoomSeg.appendChild(btn)
+  // ── 工具栏 ──
+  buildToolbar({
+    el, t, state, draw, setEdit, selectedFace, applyUvInput, rotateSelected,
+    mirrorSelected, remakeSelected, undoEdit, redoEdit, resetEdits,
+    pickLibraryTexture, exportModel, exportUvTemplate,
   })
-  toolbar.appendChild(zoomSeg)
+  wrap.appendChild(el.toolbar)
 
-  el.gridBtn = document.createElement('button')
-  el.gridBtn.className = 'uvv-grid-btn active'
-  el.gridBtn.title = t('uv.grid')
-  el.gridBtn.textContent = t('uv.grid')
-  el.gridBtn.addEventListener('click', () => {
-    state.grid = !state.grid
-    el.gridBtn.classList.toggle('active', state.grid)
-    draw()
+  // ── 画布区（含隐藏上传 input / 空态 / 状态栏） ──
+  const { canvasWrap, canvas, fileInput } = buildCanvasArea({
+    el, state, wrap, getTexDragData, isUsableTexUrl, applyCustomTexture, handleTextureFiles,
   })
-  toolbar.appendChild(el.gridBtn)
-
-  el.editBtn = document.createElement('button')
-  el.editBtn.className = 'uvv-grid-btn uvv-edit-btn'
-  el.editBtn.title = t('uv.editTitle')
-  el.editBtn.textContent = t('uv.edit')
-  el.editBtn.addEventListener('click', () => setEdit(!state.edit))
-  toolbar.appendChild(el.editBtn)
-
-  el.uploadBtn = document.createElement('button')
-  el.uploadBtn.className = 'uvv-grid-btn'
-  el.uploadBtn.title = t('uv.uploadTitle')
-  el.uploadBtn.textContent = t('uv.upload')
-  el.uploadBtn.addEventListener('click', () => { if (el.fileInput) el.fileInput.click() })
-  toolbar.appendChild(el.uploadBtn)
-
-  el.libraryBtn = document.createElement('button')
-  el.libraryBtn.className = 'uvv-grid-btn uvv-library-btn'
-  el.libraryBtn.title = t('uv.libraryTitle')
-  el.libraryBtn.textContent = t('uv.library')
-  el.libraryBtn.addEventListener('click', pickLibraryTexture)
-  toolbar.appendChild(el.libraryBtn)
-
-  el.exportBtn = document.createElement('button')
-  el.exportBtn.className = 'uvv-grid-btn'
-  el.exportBtn.title = t('uv.exportTitle')
-  el.exportBtn.textContent = t('uv.export')
-  el.exportBtn.addEventListener('click', exportModel)
-  toolbar.appendChild(el.exportBtn)
-
-  el.templateBtn = document.createElement('button')
-  el.templateBtn.className = 'uvv-grid-btn'
-  el.templateBtn.title = t('uv.templateTitle')
-  el.templateBtn.textContent = t('uv.template')
-  el.templateBtn.addEventListener('click', exportUvTemplate)
-  toolbar.appendChild(el.templateBtn)
-
-  /* 编辑工具条（编辑模式显示；放 toolbar 内随 flex-wrap 换行，不动外层结构） */
-  const editBar = document.createElement('div')
-  editBar.className = 'uvv-edit-bar'
-  el.editBar = editBar
-  const uvLabel = document.createElement('span')
-  uvLabel.className = 'uvv-edit-label'
-  uvLabel.textContent = t('uv.uvLabel')
-  editBar.appendChild(uvLabel)
-  el.uvInputs = [0, 1, 2, 3].map(() => {
-    const inp = document.createElement('input')
-    inp.type = 'number'
-    inp.className = 'uvv-uv-input'
-    inp.step = '1'
-    inp.disabled = true
-    inp.addEventListener('focus', () => {
-      const f = selectedFace()
-      state.inputOrig = f ? [...f.uv] : null
-    })
-    inp.addEventListener('change', () => { applyUvInput() })
-    editBar.appendChild(inp)
-    return inp
-  })
-  el.rotBtn = document.createElement('button')
-  el.rotBtn.className = 'uvv-grid-btn'
-  el.rotBtn.title = t('uv.rotateTitle')
-  el.rotBtn.textContent = t('uv.rotate')
-  el.rotBtn.addEventListener('click', rotateSelected)
-  editBar.appendChild(el.rotBtn)
-  el.mirrorBtn = document.createElement('button')
-  el.mirrorBtn.className = 'uvv-grid-btn'
-  el.mirrorBtn.title = t('uv.mirrorTitle')
-  el.mirrorBtn.textContent = t('uv.mirror')
-  el.mirrorBtn.addEventListener('click', mirrorSelected)
-  editBar.appendChild(el.mirrorBtn)
-  el.remakeBtn = document.createElement('button')
-  el.remakeBtn.className = 'uvv-grid-btn'
-  el.remakeBtn.title = t('uv.remakeTitle')
-  el.remakeBtn.textContent = t('uv.remake')
-  el.remakeBtn.addEventListener('click', remakeSelected)
-  editBar.appendChild(el.remakeBtn)
-  el.undoBtn = document.createElement('button')
-  el.undoBtn.className = 'uvv-grid-btn'
-  el.undoBtn.title = t('uv.undoTitle') + ' (Ctrl+Z)'
-  el.undoBtn.textContent = t('uv.undo')
-  el.undoBtn.addEventListener('click', undoEdit)
-  editBar.appendChild(el.undoBtn)
-  el.redoBtn = document.createElement('button')
-  el.redoBtn.className = 'uvv-grid-btn'
-  el.redoBtn.title = t('uv.redoTitle') + ' (Ctrl+Shift+Z / Ctrl+Y)'
-  el.redoBtn.textContent = t('uv.redo')
-  el.redoBtn.disabled = true
-  el.redoBtn.addEventListener('click', redoEdit)
-  editBar.appendChild(el.redoBtn)
-  el.resetBtn = document.createElement('button')
-  el.resetBtn.className = 'uvv-grid-btn'
-  el.resetBtn.title = t('uv.resetTitle')
-  el.resetBtn.textContent = t('uv.reset')
-  el.resetBtn.addEventListener('click', resetEdits)
-  editBar.appendChild(el.resetBtn)
-  const hint = document.createElement('span')
-  hint.className = 'uvv-edit-hint'
-  hint.textContent = t('uv.editHint')
-  editBar.appendChild(hint)
-  toolbar.appendChild(editBar)
-
-  wrap.appendChild(toolbar)
-
-  /* 画布区 */
-  const canvasWrap = document.createElement('div')
-  canvasWrap.className = 'uvv-canvas-wrap'
-  el.canvasWrap = canvasWrap
-  const canvas = document.createElement('canvas')
-  canvas.className = 'uvv-canvas'
-  el.canvas = canvas
-  canvasWrap.appendChild(canvas)
-
-  /* 自定义贴图上传（隐藏 input 挂 wrap 尾部，保持 canvasWrap 子结构不变；拖放目标为画布区） */
-  const fileInput = document.createElement('input')
-  el.fileInput = fileInput
-  fileInput.type = 'file'
-  fileInput.multiple = true
-  fileInput.accept = 'image/png,image/jpeg,image/webp,image/gif'
-  fileInput.style.display = 'none'
-  fileInput.addEventListener('change', () => {
-    handleTextureFiles(fileInput.files)
-    try { fileInput.value = '' } catch {}
-  })
-
-  canvasWrap.addEventListener('dragover', (e) => {
-    if (!state.layout) return
-    e.preventDefault()
-    canvasWrap.classList.add('uvv-drop-active')
-  })
-  canvasWrap.addEventListener('dragleave', () => canvasWrap.classList.remove('uvv-drop-active'))
-  canvasWrap.addEventListener('drop', (e) => {
-    e.preventDefault()
-    canvasWrap.classList.remove('uvv-drop-active')
-    /* 资产库贴图卡片拖入：raw URL 直接替换当前贴图槽位（材质球带 normal/specular → PBR 预览） */
-    const tex = getTexDragData(e.dataTransfer)
-    if (tex) {
-      if (state.layout && isUsableTexUrl(tex.url)) {
-        const extra = (tex.normal || tex.specular) ? { normal: tex.normal || '', specular: tex.specular || '' } : undefined
-        applyCustomTexture(tex.url, tex.name || null, null, extra)
-      }
-      return
-    }
-    const files = e.dataTransfer && e.dataTransfer.files
-    handleTextureFiles(files)
-  })
-
-  el.emptyEl = document.createElement('div')
-  el.emptyEl.className = 'uvv-empty'
-  canvasWrap.appendChild(el.emptyEl)
-  wrap.appendChild(canvasWrap)
-
-  /* 状态栏 */
-  el.statusEl = document.createElement('div')
-  el.statusEl.className = 'uvv-status'
-  wrap.appendChild(el.statusEl)
-  wrap.appendChild(fileInput)   /* 隐藏上传 input（尾部，不占结构索引） */
 
   container.appendChild(wrap)
   ctx = canvas.getContext('2d')
 
-  canvas.addEventListener('mousemove', (e) => {
-    if (state.drag) return
-    const r = canvas.getBoundingClientRect()
-    const mx = e.clientX - r.left, my = e.clientY - r.top
-    const hit = hitRect(mx, my)
-    const same = hit && state.hover
-      ? (hit.el === state.hover.el && hit.key === state.hover.key)
-      : (!hit && !state.hover)
-    if (!same) {
-      state.hover = hit ? { el: hit.el, face: hit.face, key: hit.key } : null
-      updateStatus()
-      updateActiveHighlight()
-      draw()
-    }
-    if (state.edit) {
-      const h = state.selected ? hitHandle(mx, my) : null
-      canvas.style.cursor = h ? HANDLE_CURSOR_UI[h.mode] : (hit ? 'move' : 'crosshair')
-    }
+  // ── 交互绑定 ──
+  bindUvInteractions({
+    el, state, canvas, canvasWrap, t, draw, hitRect, hitHandle, updateStatus,
+    updateActiveHighlight, selectFace, clearSelection, startDrag, onDragMove, pushUndo,
+    visible, undoEdit, redoEdit, onModelShown, autoRefreshOnModelShown, onLocaleChange, refresh,
   })
-  canvas.addEventListener('mouseleave', () => {
-    if (state.hover) { state.hover = null; updateStatus(); updateActiveHighlight(); draw() }
-  })
-
-  /* 编辑拖拽（pointer events 支持触控笔/触摸） */
-  canvas.addEventListener('pointerdown', (e) => {
-    if (!state.edit || state.drag || !state.layout) return
-    const r = canvas.getBoundingClientRect()
-    const mx = e.clientX - r.left, my = e.clientY - r.top
-    const h = state.selected ? hitHandle(mx, my) : null
-    if (h) { startDrag(e, h.mode, mx, my); return }
-    const rc = hitRect(mx, my)
-    if (rc) {
-      selectFace(rc)
-      startDrag(e, 'move', mx, my)
-    } else if (state.selected) {
-      clearSelection()
-    }
-  })
-  canvas.addEventListener('pointermove', (e) => {
-    if (!state.drag) return
-    const r = canvas.getBoundingClientRect()
-    onDragMove(e.clientX - r.left, e.clientY - r.top, e.altKey)
-  })
-  const endDrag = (e) => {
-    const d = state.drag
-    if (!d) return
-    state.drag = null
-    try { canvas.releasePointerCapture && canvas.releasePointerCapture(e.pointerId) } catch {}
-    if (d.moved) pushUndo({ layEl: d.rc.el, key: d.rc.key, uv: [...d.orig], rotation: d.rc.face.rotation })
-    updateStatus()
-    draw()
-  }
-  canvas.addEventListener('pointerup', endDrag)
-  canvas.addEventListener('pointercancel', endDrag)
-
-  /* Ctrl+Z 撤销 / Ctrl+Shift+Z 或 Ctrl+Y 重做（输入框聚焦时放行浏览器原生行为） */
-  const onKeyDown = (e) => {
-    if (!visible() || !state.edit) return
-    if (!(e.ctrlKey || e.metaKey)) return
-    const k = e.key
-    const isUndo = (k === 'z' || k === 'Z') && !e.shiftKey
-    const isRedo = (k === 'y' || k === 'Y') || ((k === 'z' || k === 'Z') && e.shiftKey)
-    if (!isUndo && !isRedo) return
-    const tag = e.target && e.target.tagName
-    if (tag === 'INPUT' || tag === 'TEXTAREA') return
-    e.preventDefault()
-    if (isUndo) undoEdit()
-    else redoEdit()
-  }
-  window.addEventListener('keydown', onKeyDown)
-  el.onKeyDown = onKeyDown
-
-  if (onModelShown && autoRefreshOnModelShown !== false) {
-    window.addEventListener('mcmodel:shown', onModelShown)
-  }
-
-  const offLocaleChange = onLocaleChange(() => {
-    el.gridBtn.title = t('uv.grid')
-    el.gridBtn.textContent = t('uv.grid')
-    el.editBtn.title = t('uv.editTitle')
-    el.editBtn.textContent = t('uv.edit')
-    el.uploadBtn.title = t('uv.uploadTitle')
-    el.uploadBtn.textContent = t('uv.upload')
-    el.libraryBtn.title = t('uv.libraryTitle')
-    el.libraryBtn.textContent = t('uv.library')
-    el.exportBtn.title = t('uv.exportTitle')
-    el.exportBtn.textContent = t('uv.export')
-    el.templateBtn.title = t('uv.templateTitle')
-    el.templateBtn.textContent = t('uv.template')
-    el.rotBtn.textContent = t('uv.rotate')
-    el.mirrorBtn.textContent = t('uv.mirror')
-    el.remakeBtn.textContent = t('uv.remake')
-    el.undoBtn.textContent = t('uv.undo')
-    el.redoBtn.textContent = t('uv.redo')
-    el.resetBtn.textContent = t('uv.reset')
-    refresh()
-  })
-  el.offLocaleChange = offLocaleChange
-
-  const resizeObserver = new ResizeObserver(() => draw())
-  resizeObserver.observe(canvasWrap)
-  el.resizeObserver = resizeObserver
 
   el.getCtx = () => ctx
   el.wrap = wrap
   return el
-}
-
-/* 手柄 cursor 表（与 consts.js 的 HANDLE_CURSOR 同值，避免此文件反向依赖主文件） */
-const HANDLE_CURSOR_UI = {
-  n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize',
-  ne: 'nesw-resize', sw: 'nesw-resize', nw: 'nwse-resize', se: 'nwse-resize',
 }

@@ -31,6 +31,12 @@ import {
 import { getMcBiomes, getCurrentBiome, setCurrentBiome, rerenderLastMcModel } from './mc-model-viewer.js'
 import { enhancePreview } from './preview2d.js'
 import { bindInput, hexToNum, numToHex, MAT_PRESET_INPUTS, SKY_PRESETS } from './preview-presets.js'
+import { bindSegment } from './pp/segment.js'
+import { renderLightEditor, renderLightCustomList } from './pp/light.js'
+import { applySkyPreset, getSkyPresetFromUI, renderSkyCustomList } from './pp/sky.js'
+import { updateFilterControls, getMaterialPresetFromUI, applyMaterialPreset, renderMatCustomList } from './pp/material.js'
+import { bindHdrPreviewModal } from './pp/hdr-preview.js'
+import { bindParamsDrag } from './pp/params-drag.js'
 
 let _initialized = false
 export async function initPreviewPanel() {
@@ -49,18 +55,6 @@ export async function initPreviewPanel() {
       }
     })
   })
-
-  function bindSegment(segId, attr, fn) {
-    const seg = $(segId)
-    if (!seg) return
-    seg.querySelectorAll('button').forEach(btn => {
-      btn.addEventListener('click', () => {
-        seg.querySelectorAll('button').forEach(b => b.classList.remove('active'))
-        btn.classList.add('active')
-        fn(btn.dataset[attr])
-      })
-    })
-  }
 
   bindSegment('m3dGeoSeg', 'geo', setGeometry)
   bindSegment('m3dSrcSeg', 'src', setSourceSide)
@@ -84,70 +78,10 @@ export async function initPreviewPanel() {
     })
   }
   bindSegment('m3dLightSeg', 'light', (key) => { setLightPreset(key); renderLightEditor(getCustomLightConfig()) })
-  function renderLightEditor(config) {
-    if (!config) return
-    const ac = $('m3dAmbientColor'), ai = $('m3dAmbientIntensity'), aiv = $('m3dAmbientIntensityVal'), bg = $('m3dBgColor'), list = $('m3dLightList')
-    if (ac) ac.value = numToHex(config.ambient.color)
-    if (ai) { ai.value = config.ambient.intensity; if (aiv) aiv.textContent = config.ambient.intensity.toFixed(2) }
-    if (bg) bg.value = numToHex(config.bg)
-    if (!list) return
-    list.innerHTML = ''
-    config.lights.forEach((light, i) => {
-      const item = document.createElement('div'); item.className = 'm3d-light-item'
-      const head = document.createElement('div'); head.className = 'm3d-light-item-head'
-      const dot = document.createElement('span'); dot.className = 'm3d-light-dot'; dot.style.background = numToHex(light.color)
-      const title = document.createElement('span'); title.className = 'm3d-light-title'; title.textContent = t('m3d.lightLabel') + ' ' + (i + 1)
-      const del = document.createElement('button'); del.className = 'm3d-light-del'; del.innerHTML = '&times;'
-      del.addEventListener('click', () => {
-        const c = getCustomLightConfig(); if (!c || c.lights.length <= 1) return
-        c.lights.splice(i, 1); applyCustomLightConfigExport(c); renderLightEditor(c)
-      })
-      head.appendChild(dot); head.appendChild(title); head.appendChild(del); item.appendChild(head)
-      const r1 = document.createElement('div'); r1.className = 'm3d-ctrl-group'
-      const ci = document.createElement('input'); ci.type = 'color'; ci.className = 'm3d-color-input'; ci.value = numToHex(light.color)
-      ci.addEventListener('input', () => { const c = getCustomLightConfig(); if (!c) return; c.lights[i].color = hexToNum(ci.value); dot.style.background = ci.value; applyCustomLightConfigExport(c) })
-      const il = document.createElement('label'); il.className = 'm3d-slider'
-      const isp = document.createElement('span'); isp.textContent = t('m3d.lightIntensity')
-      const iin = document.createElement('input'); iin.type = 'range'; iin.min = '0'; iin.max = '5'; iin.step = '0.01'; iin.value = light.intensity
-      const ivl = document.createElement('span'); ivl.className = 'm3d-val'; ivl.textContent = light.intensity.toFixed(2)
-      iin.addEventListener('input', () => { const v = parseFloat(iin.value); ivl.textContent = v.toFixed(2); const c = getCustomLightConfig(); if (!c) return; c.lights[i].intensity = v; applyCustomLightConfigExport(c) })
-      il.appendChild(isp); il.appendChild(iin); il.appendChild(ivl); r1.appendChild(ci); r1.appendChild(il); item.appendChild(r1)
-      const r2 = document.createElement('div'); r2.className = 'm3d-ctrl-group'
-      ;['x', 'y', 'z'].forEach((axis, ai2) => {
-        const lbl = document.createElement('label'); lbl.className = 'm3d-slider'
-        const sp = document.createElement('span'); sp.textContent = axis.toUpperCase()
-        const inp = document.createElement('input'); inp.type = 'range'; inp.min = '-10'; inp.max = '10'; inp.step = '0.1'; inp.value = light.pos[ai2]
-        const vl = document.createElement('span'); vl.className = 'm3d-val'; vl.textContent = light.pos[ai2].toFixed(1)
-        inp.addEventListener('input', () => { const v = parseFloat(inp.value); vl.textContent = v.toFixed(1); const c = getCustomLightConfig(); if (!c) return; c.lights[i].pos[ai2] = v; applyCustomLightConfigExport(c) })
-        lbl.appendChild(sp); lbl.appendChild(inp); lbl.appendChild(vl); r2.appendChild(lbl)
-      })
-      item.appendChild(r2); list.appendChild(item)
-    })
-  }
   const acEl = $('m3dAmbientColor'); if (acEl) acEl.addEventListener('input', (e) => { const c = getCustomLightConfig(); if (!c) return; c.ambient.color = hexToNum(e.target.value); applyCustomLightConfigExport(c) })
   const aiEl = $('m3dAmbientIntensity'); if (aiEl) aiEl.addEventListener('input', (e) => { const v = parseFloat(e.target.value); const aiv2 = $('m3dAmbientIntensityVal'); if (aiv2) aiv2.textContent = v.toFixed(2); const c = getCustomLightConfig(); if (!c) return; c.ambient.intensity = v; applyCustomLightConfigExport(c) })
   const bgEl = $('m3dBgColor'); if (bgEl) bgEl.addEventListener('input', (e) => { const c = getCustomLightConfig(); if (!c) return; c.bg = hexToNum(e.target.value); applyCustomLightConfigExport(c) })
   const addLight = $('m3dAddLight'); if (addLight) addLight.addEventListener('click', () => { const c = getCustomLightConfig(); if (!c) return; c.lights.push({ color: 0xffffff, intensity: 1.0, pos: [3, 3, 4] }); applyCustomLightConfigExport(c); renderLightEditor(c) })
-  function renderLightCustomList(customPresets) {
-    const list = $('m3dLightCustomList'); if (!list) return; list.innerHTML = ''
-    if (!customPresets || customPresets.length === 0) return
-    customPresets.forEach((preset, i) => {
-      const item = document.createElement('div'); item.className = 'm3d-light-custom-item'
-      const applyBtn = document.createElement('button'); applyBtn.className = 'm3d-light-custom-apply'; applyBtn.textContent = preset.name
-      applyBtn.addEventListener('click', () => {
-        document.querySelectorAll('#m3dLightSeg button').forEach(b => b.classList.remove('active'))
-        applyCustomLightConfigExport(preset.config); renderLightEditor(preset.config)
-      })
-      const delBtn = document.createElement('button'); delBtn.className = 'm3d-light-custom-del'; delBtn.innerHTML = '&times;'
-      delBtn.addEventListener('click', async () => {
-        const cfg = await window.api.getConfig()
-        const presets = (cfg.lightCustomPresets || []).filter((_, j) => j !== i)
-        await window.api.setConfig({ lightCustomPresets: presets })
-        renderLightCustomList(presets); showToast(t('m3d.lightPresetDeleted'))
-      })
-      item.appendChild(applyBtn); item.appendChild(delBtn); list.appendChild(item)
-    })
-  }
   const lightSave = $('m3dLightSaveBtn'); if (lightSave) lightSave.addEventListener('click', async () => {
     const name = $('m3dLightPresetName').value.trim()
     if (!name) { showToast(t('m3d.lightPresetNameEmpty')); return }
@@ -166,15 +100,6 @@ export async function initPreviewPanel() {
     setEnvModeExport(mode)
     document.querySelectorAll('.m3d-env-subpane').forEach(p => p.classList.toggle('active', p.dataset.envpane === mode))
   })
-  function updateFilterControls() {
-    const active = document.querySelector('#m3dFilterSeg button.active')
-    const mode = active ? active.dataset.filter : 'trilinear'
-    const aniso = $('m3dAniso'), anisoVal = $('m3dAnisoVal'), mipmap = $('m3dMipmaps')
-    const anisoOn = mode === 'anisotropic'
-    const mipmapOn = mode === 'trilinear' || mode === 'anisotropic'
-    if (aniso) { aniso.disabled = !anisoOn; if (anisoVal) anisoVal.style.opacity = anisoOn ? '1' : '.4' }
-    if (mipmap) { mipmap.disabled = !mipmapOn; mipmap.parentElement.style.opacity = mipmapOn ? '1' : '.4' }
-  }
   updateFilterControls()
 
   bindInput('m3dMetalness', (v) => { const n = parseFloat(v); setMetalness(n); $('m3dMetalnessVal').textContent = n.toFixed(2) })
@@ -202,56 +127,6 @@ export async function initPreviewPanel() {
   bindInput('m3dSkyMieG', (v) => { const n = parseFloat(v); setSkyMieDirectionalG(n); $('m3dSkyMieGVal').textContent = n.toFixed(3) })
 
   const skyTint = $('m3dSkyTint'); if (skyTint) skyTint.addEventListener('input', (e) => setSkyTint(e.target.value))
-  function applySkyPreset(p) {
-    const apply = (id, val, valId, text, fn) => { $(id).value = val; $(valId).textContent = text; fn(val) }
-    apply('m3dSkyElevation', p.elevation, 'm3dSkyElevationVal', p.elevation + '°', setSkySunElevation)
-    apply('m3dSkyAzimuth', p.azimuth, 'm3dSkyAzimuthVal', p.azimuth + '°', setSkySunAzimuth)
-    apply('m3dSkyTurbidity', p.turbidity, 'm3dSkyTurbidityVal', p.turbidity.toFixed(1), setSkyTurbidity)
-    apply('m3dSkyRayleigh', p.rayleigh, 'm3dSkyRayleighVal', p.rayleigh.toFixed(2), setSkyRayleigh)
-    apply('m3dSkyMie', p.mie, 'm3dSkyMieVal', p.mie.toFixed(3), setSkyMieCoefficient)
-    apply('m3dSkyMieG', p.mieG, 'm3dSkyMieGVal', p.mieG.toFixed(3), setSkyMieDirectionalG)
-    $('m3dSkyTint').value = p.tint; setSkyTint(p.tint)
-  }
-  function getSkyPresetFromUI() {
-    return {
-      elevation: parseFloat($('m3dSkyElevation').value),
-      azimuth: parseFloat($('m3dSkyAzimuth').value),
-      turbidity: parseFloat($('m3dSkyTurbidity').value),
-      rayleigh: parseFloat($('m3dSkyRayleigh').value),
-      mie: parseFloat($('m3dSkyMie').value),
-      mieG: parseFloat($('m3dSkyMieG').value),
-      tint: $('m3dSkyTint').value
-    }
-  }
-  function renderSkyCustomList(customPresets) {
-    const list = $('m3dSkyCustomList'); if (!list) return
-    list.innerHTML = ''
-    if (!customPresets || customPresets.length === 0) return
-    customPresets.forEach((preset, i) => {
-      const item = document.createElement('div')
-      item.className = 'm3d-sky-custom-item'
-      const applyBtn = document.createElement('button')
-      applyBtn.className = 'm3d-sky-custom-apply'
-      applyBtn.textContent = preset.name
-      applyBtn.addEventListener('click', () => {
-        document.querySelectorAll('#m3dSkyPresetSeg button').forEach(b => b.classList.remove('active'))
-        applySkyPreset(preset)
-      })
-      const delBtn = document.createElement('button')
-      delBtn.className = 'm3d-sky-custom-del'
-      delBtn.innerHTML = '&times;'
-      delBtn.addEventListener('click', async () => {
-        const cfg = await window.api.getConfig()
-        const presets = (cfg.skyCustomPresets || []).filter((_, j) => j !== i)
-        await window.api.setConfig({ skyCustomPresets: presets })
-        renderSkyCustomList(presets)
-        showToast(t('m3d.skyPresetDeleted'))
-      })
-      item.appendChild(applyBtn)
-      item.appendChild(delBtn)
-      list.appendChild(item)
-    })
-  }
   document.querySelectorAll('#m3dSkyPresetSeg button').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('#m3dSkyPresetSeg button').forEach(b => b.classList.remove('active'))
@@ -331,16 +206,7 @@ export async function initPreviewPanel() {
     showToast(t('toast.loadHdrFailed'))
   })
   const hdrGrid = $('m3dHdrPresetGrid'); if (hdrGrid) initHdrDragDrop(hdrGrid)
-  ;(() => {
-    const modal = $('hdrPreviewModal'), canvas = $('hdrPreviewCanvas'), closeBtn = $('hdrPreviewClose')
-    const expSlider = $('hdrPreviewExposure'), expVal = $('hdrPreviewExposureVal'), infoEl = $('hdrPreviewInfo')
-    if (!modal || !canvas || !closeBtn) return
-    const closePreview = () => { modal.classList.remove('show'); disposeHdrPreview() }
-    closeBtn.addEventListener('click', closePreview)
-    modal.addEventListener('click', (e) => { if (e.target === modal) closePreview() })
-    expSlider.addEventListener('input', (e) => { const v = parseFloat(e.target.value); expVal.textContent = v.toFixed(1); openHdrPreview(null, v) })
-    window.addEventListener('hdr:preview', (e) => { const { url, name, info } = e.detail; openHdrPreview({ url, name, info, canvas, modal, expSlider, expVal, infoEl }) })
-  })()
+  bindHdrPreviewModal()
 
   const fmtSel = $('m3dFormat'); if (fmtSel) fmtSel.addEventListener('change', (e) => { setMaterialFormat(e.target.value); const d = $('m3dFormatDetected'); if (d) d.textContent = '' })
   setFormatDetectCallback((fmt) => { const el = $('m3dFormatDetected'); if (el) el.textContent = fmt === 'labpbr' ? t('m3d.detectedLabpbr') : t('m3d.detectedOld') })
@@ -364,27 +230,7 @@ export async function initPreviewPanel() {
     } catch (e) { console.error('[preview-panel] uv-view', e) }
   })
 
-  ;(() => {
-    const ov = $('m3dParamsOverlay'), drag = $('m3dParamsDrag'), container = $('material3dContainer')
-    if (!ov || !drag || !container) return
-    let dragging = false, sx = 0, sy = 0, sl = 0, st = 0
-    drag.addEventListener('mousedown', (e) => {
-      if (e.target.closest('.m3d-params-close')) return
-      e.preventDefault(); dragging = true
-      const r = ov.getBoundingClientRect(), cr = container.getBoundingClientRect()
-      sl = r.left - cr.left; st = r.top - cr.top; sx = e.clientX; sy = e.clientY
-      ov.style.right = 'auto'; ov.style.bottom = 'auto'; ov.style.left = sl + 'px'; ov.style.top = st + 'px'
-      document.body.style.cursor = 'grabbing'; document.body.style.userSelect = 'none'
-    })
-    document.addEventListener('mousemove', (e) => {
-      if (!dragging) return
-      const cr = container.getBoundingClientRect()
-      const nl = Math.max(0, Math.min(cr.width - ov.offsetWidth, sl + e.clientX - sx))
-      const nt = Math.max(0, Math.min(cr.height - ov.offsetHeight, st + e.clientY - sy))
-      ov.style.left = nl + 'px'; ov.style.top = nt + 'px'
-    })
-    document.addEventListener('mouseup', () => { if (!dragging) return; dragging = false; document.body.style.cursor = ''; document.body.style.userSelect = '' })
-  })()
+  bindParamsDrag()
   const m3dContainer = $('material3dContainer'); if (m3dContainer) m3dContainer.addEventListener('mousedown', (e) => { const ov = $('m3dParamsOverlay'); if (ov && ov.classList.contains('show') && !ov.contains(e.target)) ov.classList.remove('show') })
   document.querySelectorAll('.m3d-tabs button').forEach(btn => btn.addEventListener('click', () => {
     const tab = btn.dataset.tab
@@ -403,37 +249,6 @@ export async function initPreviewPanel() {
   }))
 
   /* ── 自定义材质预设：收集滑条值 → 存 config.materialCustomPresets ── */
-  function getMaterialPresetFromUI() {
-    const p = {}
-    MAT_PRESET_INPUTS.forEach(id => { const el = $(id); if (el) p[id] = parseFloat(el.value) })
-    return p
-  }
-  function applyMaterialPreset(p) {
-    if (!p) return
-    MAT_PRESET_INPUTS.forEach(id => {
-      if (p[id] === undefined || p[id] === null) return
-      const el = $(id)
-      if (el) { el.value = p[id]; el.dispatchEvent(new Event('input', { bubbles: true })) }
-    })
-  }
-  function renderMatCustomList(customPresets) {
-    const list = $('m3dMatCustomList'); if (!list) return
-    list.innerHTML = ''
-    if (!customPresets || customPresets.length === 0) return
-    customPresets.forEach((preset, i) => {
-      const item = document.createElement('div'); item.className = 'm3d-light-custom-item'
-      const applyBtn = document.createElement('button'); applyBtn.className = 'm3d-light-custom-apply'; applyBtn.textContent = preset.name
-      applyBtn.addEventListener('click', () => applyMaterialPreset(preset.config || preset))
-      const delBtn = document.createElement('button'); delBtn.className = 'm3d-light-custom-del'; delBtn.innerHTML = '&times;'
-      delBtn.addEventListener('click', async () => {
-        const cfg = await window.api.getConfig()
-        const presets = ((cfg && cfg.materialCustomPresets) || []).filter((_, j) => j !== i)
-        await window.api.setConfig({ materialCustomPresets: presets })
-        renderMatCustomList(presets); showToast(t('m3d.matPresetDeleted'))
-      })
-      item.appendChild(applyBtn); item.appendChild(delBtn); list.appendChild(item)
-    })
-  }
   const matSave = $('m3dMatSaveBtn'); if (matSave) matSave.addEventListener('click', async () => {
     const name = $('m3dMatPresetName').value.trim()
     if (!name) { showToast(t('m3d.matPresetNameEmpty')); return }

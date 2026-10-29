@@ -302,7 +302,7 @@ npm run dist:win                  # 打包契约不被破坏
 
 | # | 条目 | 要求 | 实测结果 | 状态 |
 | --- | --- | --- | --- | --- |
-| 1 | 大文件全部分拆 | ≥300 行文件仅保留计划确认不可拆的 10 个 | **10 个**（逐条见报告 §8.2） | ✅ |
+| 1 | 大文件全部分拆 | ≥300 行文件仅保留确认不可拆的（原估 10 个） | **6 个**（本轮再拆 5 个，逐条原因见 §8.3） | ✅ |
 | 2 | 每个文件有验证记录 | 单测计数 + 冒烟 + health | 见 §9 执行记录与 `docs/modularization-report.md` | ✅ |
 | 3 | 单测全绿 | `npm test` 全绿且用例 ≥ 550 | **617 pass / 0 fail** | ✅ |
 | 4 | 冒烟与服务 | 冒烟通过 + `/api/health` 响应 | 冒烟 **29 通过 / 0 失败**（含 WS 集成 10/0）；health **200** `{"ok":true,...}` | ✅ |
@@ -324,10 +324,34 @@ npm run dist:win                  # 打包契约不被破坏
 
 | 项 | 结果 |
 | --- | --- |
-| 真实浏览器全流程实测 | 9 步操作全通过，控制台错误 **0**、页面异常 **0**、失败请求 **0** |
+| 真实浏览器全流程实测 | 9 步操作全通过，控制台错误 **0**、页面异常 **0**、失败请求 **0**；截图 5 张存于 `docs/verification/` |
 | ESLint `no-undef` | **139 → 0**（其中 20+ 处是拆分引入的真实缺陷） |
-| ESLint `no-unused-vars` | 1263 条（整洁度问题，不影响功能；批量正则清理会破坏语法，已回退，见报告 §8.1） |
+| ESLint `no-unused-vars` | 1293 条（整洁度问题，不影响功能；批量正则清理会破坏语法，已回退，见报告 §8.1） |
 | 跨模块引用静态审计 | `scripts/audit-web-refs.mjs` → 未发现缺失引用 |
+
+### 8.3 ≥300 行文件的最终状态
+
+验收初期有 10 个 ≥300 行文件。经用户确认「拆低风险 2 个 + 中风险 2 个」后，本轮实际拆了 **4 个**，另追加拆了 `folder-tree.js`（共 5 个），最终剩 **6 个**：
+
+| 文件 | 行数 | 为何不拆（经实测确认） |
+| --- | --- | --- |
+| `test/unit/uv-view.test.js` | 811 | 30 个 `test()` 是**连续状态机**：首个 `setup` 测试建立窗口/stub，后续用例依赖该状态。拆到独立进程即断链（已两次尝试失败）。顶层有 18 个 `let/const` 共享变量。 |
+| `web/node-editor.html` | 447 | HTML 结构主体。`core.js` 在**同步阶段**用 `getElementById` 取元素，抽片段改异步注入会破坏时序。 |
+| `test/unit/mc-model-e2e.test.js` | 422 | 同上：顶层 `let MC_ROOT/BASE/mcm/THREE` 由首个 `setup` 赋值，17 个用例共享。 |
+| `web/src/uv-editor-core.js` | 402 | 计划 §9 已标 **DONE**（1272→402 即目标）。剩余为单工厂闭包，需参数化改写。 |
+| `test/unit/mcofficial-tex.test.js` | 395 | 首个 `setup` 会**备份真实用户配置**、teardown 恢复。拆成多文件会让各文件互相踩真实配置。 |
+| `test/unit/craft-pack.test.js` | 322 | 同上：顶层 `let MC_ROOT/TEX_DIR/diskTex/selBackup` 由 setup 赋值。 |
+
+**本轮实际拆掉的 5 个**：
+
+| 文件 | 拆分前 | 拆分后 | 新增模块 |
+| --- | --- | --- | --- |
+| `web/css/node-editor/ne-01-*.css` | 299 | 入口 8 | 3 个 CSS 分片 |
+| `web/src/uvc/ui-build.js` | 375 | 100 | `ui-toolbar.js`(177) / `ui-canvas.js`(81) / `ui-interactions.js`(152) |
+| `web/src/preview-panel.js` | 461 | 276 | `pp/` 下 6 个模块（segment/light/sky/material/hdr-preview/params-drag） |
+| `web/api/folder-tree.js` | 452 | 289 | 7 个模块（i18n/icons/path/css/template/ctxmenu/render/toast） |
+
+拆分方式：全部**按行区间原样搬运**，不改逻辑；仅两处必要的参数化——`folder-tree-render.js` 的三个渲染函数与 `folder-tree-ctxmenu.js` 通过 deps 对象注入闭包依赖（否则子模块会反向依赖主文件形成循环）。
 
 ## 9. 执行记录
 
@@ -352,6 +376,11 @@ npm run dist:win                  # 打包契约不被破坏
 | B12 | 拆分引入的运行时缺陷修复（12 类 30 处） | DONE | 617 pass / 冒烟 29+10 / 浏览器错误 119→0 | `9949604e` |
 | B13 | ESLint no-undef 清零（139→0） | DONE | 617 pass / 冒烟 29+10 / lint 0 error | `e77e3cf7` |
 | B14 | 安装/卸载回归 + DoD 验收 | DONE | 静默装 exit 0（75 文件）/ 卸 exit 0（目录清空）/ health 200 / dist:win 成功 | 本文档 |
+| B15 | ne-01 CSS（299 → 入口 8 + 3 分片） | DONE | 617 pass / 冒烟 29 / 去空行后逐字符一致、规则块 161/161 | 本轮 |
+| B16 | uvc/ui-build.js（375 → 100，+3 模块） | DONE | 617 pass / 冒烟 29 / no-undef 0 | 本轮 |
+| B17 | preview-panel.js（461 → 276，+6 模块 `pp/`） | DONE | 617 pass / 冒烟 29 / 浏览器 0 异常 | 本轮 |
+| B18 | folder-tree.js（452 → 289，+7 模块） | DONE | 617 pass / 冒烟 29 / 浏览器 0 异常 / no-undef 0 | 本轮 |
+| B19 | 浏览器截图留证（`scripts/browser-shots.mjs`） | DONE | 5 张截图存 `docs/verification/`，9 步 0 错误 | 本轮 |
 
 ### 9.1 workspace.js：为什么只抽纯逻辑
 
