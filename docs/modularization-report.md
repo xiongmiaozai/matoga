@@ -129,6 +129,59 @@ golden-layout 主题 CSS 用相对路径 `url('../../img/lm_close_white.png')`�
 | 未推送 / 未开 PR | 按要求本次取消 | 如需推送，仍需 token 具备 `workflow` scope（历史含 `.github/workflows` 改动） |
 | 浏览器实测为无头模式 | 覆盖 JS/DOM 逻辑与请求，未覆盖真实 GPU 渲染的视觉正确性 | 需要视觉验收时补有头截图比对 |
 
-## 7. 本轮未做的事
+## 8. 补充轮：ESLint no-undef 清零（139 → 0）
+
+上一轮的 `scripts/audit-web-refs.mjs` 只匹配「被当作函数或属性访问」的标识符，
+漏掉了**常量类（全大写）**与**模块级可变状态（漏加 `S.` 前缀）**两类。ESLint 的
+`no-undef` 把这两类全部抓了出来，共 139 条，其中 20+ 处是**真实缺陷**：
+
+| 文件 | 缺失符号 | 性质 |
+| --- | --- | --- |
+| `hpre/preview.js` | previewScene/previewCamera/previewMesh/previewPitch/previewDragging/previewLastX/previewLastY | 原文件 L186-187 声明 9 个 preview 变量，state.js 只搬了 4 个 |
+| `uv-editor-core.js` | wrap / onKeyDown / offLocaleChange | 由 ui-build.js 创建、destroy 时使用，闭包内从未声明 |
+| `themeEditor/tp/draft.js` | draftTokens ×2、editing ×1 | 漏 `S.` 前缀 |
+| `asset-lib/*`（8 文件） | IMPORT_API/CUSTOM_API/MC_PACKS_API/MC_OFFICIAL_API/PROJECTS_API/MAX_RECENT/TEX_GROUP_PAGE/splitGroupsByPrefix/packRawUrl | 漏从 helpers.js 或 model-prefix.js 导入 |
+| `rnd/*`（4 文件） | statusBadge / t / escHtml | 漏导入 |
+| `node-canvas/*` | updateStats、S.currentProject ×2 | 漏导入 / 漏 S. 前缀 |
+| `node-preview/pack-textures.js` | truncStr | 漏导入 |
+| `ws/menus.js` | exportAllPresets | 漏导入 |
+| `sections-tex.js` | escAttr | 误从 helpers.js 导入（实际在 utils.js） |
+
+另有 116 条 `'document' is not defined` 是 **eslint.config.js 的配置缺口**
+（单测通过 `globalThis` 注入 DOM stub、browser-e2e 在 evaluate 里跑浏览器代码），
+已给 test/scripts 环境补上 browser globals。
+
+补充验证：`no-undef` 139 → **0**；总 warning 1426 → 1263；单测 617、冒烟 29、
+浏览器三项全 0 均保持通过。
+
+## 9. 未能处理的项与原因
+
+### 9.1 1263 条 no-unused-vars
+
+集中在拆分后的**主文件**（`node-canvas.js` 93 条、`asset-library.js` 与
+`render.js` 各 70 条、`renderer.js` 66 条），是符号搬到子模块后主文件残留的
+失效 import，属**整洁度问题，不影响功能**。
+
+尝试用正则脚本批量剔除（`tools/prune-unused-imports.mjs`）时**破坏了 42 个文件
+的 import 语法**，已 `git checkout` 回退并删除该脚本。结论：这类清理需要 AST
+级工具（如 `eslint-plugin-unused-imports`）或逐文件人工确认，不适合本轮用手写
+正则处理。目前仅用 `eslint --fix` 安全修正了 1 处。
+
+### 9.2 剩余 10 个 ≥300 行文件
+
+见第 6 节风险表的说明，均为「结构上不可拆」或「计划已认定为目标行数」：
+
+| 文件 | 行数 | 原因 |
+| --- | --- | --- |
+| `uv-editor-core.js` | 396 | 计划 §9 已标 DONE（1272→395 即目标） |
+| `uv-view.test.js` | 811 | 状态机式连续序列，两次拆分尝试均因顺序依赖失败 |
+| `mc-model-e2e.test.js` / `craft-pack.test.js` / `mcofficial-tex.test.js` | 422/322/395 | 顶层 `let` + setup 赋值；后者还涉及真实配置备份恢复 |
+| `preview-panel.js` | 461 | 单工厂大闭包，已抽 5 个常量（474→461），其余函数依赖 DOM 与 3D 就绪态 |
+| `folder-tree.js` | 452 | 单 IIFE，23 个内层函数全闭包 |
+| `uvc/ui-build.js` | 376 | 单函数 buildUvUi（320 行连续 DOM 构造） |
+| `node-editor.html` | 447 | HTML 结构主体，抽片段会破坏 core.js 同步 getElementById 时序 |
+| `css/node-editor/ne-01-*.css` | 300 | 已是 node-editor.css 的分片 |
+
+## 10. 本轮未做的事
 
 按用户要求第 2 条，**未推送 fork、未开 PR、未合并 PR**。所有改动仅存于本地 `main` 分支。
