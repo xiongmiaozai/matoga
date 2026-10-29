@@ -112,7 +112,7 @@ export function renderSidebar() {
   })
   bindEmptyCellActions(panel, g)
 
- 
+
   const diffBtn = $('pixelDiffBtn')
   if (diffBtn) diffBtn.addEventListener('click', () => showPixelDiff(diffPairs, panel))
   if (g.isModel) { loadModelDiffView(g, panel); loadModelPreview(g); loadModelTexList(g) }
