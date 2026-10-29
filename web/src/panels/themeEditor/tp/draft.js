@@ -55,7 +55,7 @@ export function showForm() {
 export function currentResolved() {
   const base = getRegistry().get(S.draftBase)
   const baseTokens = base ? resolveTokens(base) : {}
-  return { ...baseTokens, ...draftTokens }
+  return { ...baseTokens, ...S.draftTokens }
 }
 
 
@@ -63,7 +63,7 @@ export function applyDraft() {
   const mode = S.draftMode === 'dark' ? 'dark' : 'light'
   const base = getRegistry().get(S.draftBase)
   const baseTokens = base ? resolveTokens(base) : {}
-  const tokens = { ...baseTokens, ...draftTokens }
+  const tokens = { ...baseTokens, ...S.draftTokens }
   document.documentElement.setAttribute('data-theme', mode)
   document.body.setAttribute('data-theme', mode)
   let el = document.getElementById('theme-vars')
@@ -124,7 +124,7 @@ export async function deleteCurrent() {
 
 export function exportCurrent() {
   const def = S.editing
-    ? { ...editing, tokens: S.draftTokens }
+    ? { ...S.editing, tokens: S.draftTokens }
     : { name: S.draftName, base: S.draftBase, mode: S.draftMode, tokens: S.draftTokens }
   const blob = new Blob([JSON.stringify(def, null, 2)], { type: 'application/json' })
   const a = document.createElement('a')

@@ -7,6 +7,7 @@
  */
 import { S, BROWSE_CLICK_DELAY } from './store.js'
 import { assetApiCall } from './api.js'
+import { IMPORT_API, MC_PACKS_API } from './helpers.js'
 
 export async function loadHdri() {
   try {

@@ -18,6 +18,13 @@ export const S = {
   previewState: null,
   previewRenderer: null,
   previewYaw: 0,
+  previewPitch: 0,
+  previewDragging: false,
+  previewLastX: 0,
+  previewLastY: 0,
+  previewScene: null,
+  previewCamera: null,
+  previewMesh: null,
   previewAutoExposure: 1,
   previewKeyBound: false,
 }

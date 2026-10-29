@@ -62,6 +62,9 @@ export function createUvEditor(opts) {
 
   let canvas = null
   let ctx = null
+  let wrap = null            // 外层容器（ui-build 创建，destroy 时移除）
+  let onKeyDown = null       // 快捷键监听器（ui-build 创建，destroy 时卸载）
+  let offLocaleChange = null // 语言切换退订（ui-build 创建，destroy 时调用）
   let canvasWrap = null
   let chipsEl = null
   let zoomSeg = null
@@ -147,6 +150,9 @@ export function createUvEditor(opts) {
   canvas = ui.canvas
   ctx = ui.getCtx()
   canvasWrap = ui.canvasWrap
+  wrap = ui.wrap
+  onKeyDown = ui.onKeyDown
+  offLocaleChange = ui.offLocaleChange
   chipsEl = ui.chipsEl
   zoomSeg = ui.zoomSeg
   gridBtn = ui.gridBtn

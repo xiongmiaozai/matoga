@@ -17,6 +17,7 @@ import { rebuild } from './filters.js'
 import { sortItems } from './items.js'
 import { collapsedSet, saveCollapsed } from './collapse.js'
 import { makeCard } from './card.js'
+import { PROJECTS_API } from './helpers.js'
 
 export async function loadProjects() {
   try {

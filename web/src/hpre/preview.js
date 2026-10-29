@@ -14,19 +14,20 @@ import { loadHDREnv } from '../material3d.js'
 import { t } from '../i18n.js'
 import { S } from './state.js'
 import { workerParse } from './worker.js'
+import * as THREE from 'three'
 
-export function previewOnDown(x, y) { previewDragging = true; previewLastX = x; previewLastY = y }
+export function previewOnDown(x, y) { S.previewDragging = true; S.previewLastX = x; S.previewLastY = y }
 export function previewOnMove(x, y) {
-  if (!previewDragging) return
-  S.previewYaw -= (x - previewLastX) * 0.005
-  previewPitch = Math.max(-1.4, Math.min(1.4, previewPitch - (y - previewLastY) * 0.005))
-  previewLastX = x; previewLastY = y
+  if (!S.previewDragging) return
+  S.previewYaw -= (x - S.previewLastX) * 0.005
+  S.previewPitch = Math.max(-1.4, Math.min(1.4, S.previewPitch - (y - S.previewLastY) * 0.005))
+  S.previewLastX = x; S.previewLastY = y
   updatePreviewCamera()
 }
 
 export function resetHdrPreviewView() {
-  S.previewYaw = 0; previewPitch = 0
-  if (previewCamera) { previewCamera.fov = 75; previewCamera.updateProjectionMatrix() }
+  S.previewYaw = 0; S.previewPitch = 0
+  if (S.previewCamera) { S.previewCamera.fov = 75; S.previewCamera.updateProjectionMatrix() }
   updatePreviewCamera()
 }
 
@@ -63,21 +64,21 @@ export function ensureSpherePreview(canvas) {
   S.previewRenderer.toneMapping = THREE.ACESFilmicToneMapping
   S.previewRenderer.toneMappingExposure = 1
   S.previewRenderer.outputColorSpace = THREE.SRGBColorSpace
-  previewScene = new THREE.Scene()
-  previewCamera = new THREE.PerspectiveCamera(75, 2, 0.1, 110)
-  previewCamera.position.set(0, 0, 0)
+  S.previewScene = new THREE.Scene()
+  S.previewCamera = new THREE.PerspectiveCamera(75, 2, 0.1, 110)
+  S.previewCamera.position.set(0, 0, 0)
   const geo = new THREE.SphereGeometry(50, 80, 40)
-  previewMesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ side: THREE.BackSide }))
-  previewScene.add(previewMesh)
-  S.previewYaw = 0; previewPitch = 0
+  S.previewMesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ side: THREE.BackSide }))
+  S.previewScene.add(S.previewMesh)
+  S.previewYaw = 0; S.previewPitch = 0
   canvas.addEventListener('mousedown', (e) => previewOnDown(e.clientX, e.clientY))
   canvas.addEventListener('touchstart', (e) => { if (e.touches[0]) previewOnDown(e.touches[0].clientX, e.touches[0].clientY) }, { passive: true })
   canvas.addEventListener('touchmove', (e) => { if (e.touches[0]) { previewOnMove(e.touches[0].clientX, e.touches[0].clientY); e.preventDefault() } }, { passive: false })
-  canvas.addEventListener('touchend', () => { previewDragging = false })
+  canvas.addEventListener('touchend', () => { S.previewDragging = false })
   canvas.addEventListener('wheel', (e) => {
-    if (!previewCamera) return
-    previewCamera.fov = Math.max(20, Math.min(100, previewCamera.fov + e.deltaY * 0.05))
-    previewCamera.updateProjectionMatrix()
+    if (!S.previewCamera) return
+    S.previewCamera.fov = Math.max(20, Math.min(100, S.previewCamera.fov + e.deltaY * 0.05))
+    S.previewCamera.updateProjectionMatrix()
     renderSpherePreview()
   }, { passive: true })
   if (typeof ResizeObserver !== 'undefined') {
@@ -86,7 +87,7 @@ export function ensureSpherePreview(canvas) {
   if (!S.previewKeyBound) {
     S.previewKeyBound = true
     window.addEventListener('mousemove', (e) => previewOnMove(e.clientX, e.clientY))
-    window.addEventListener('mouseup', () => { previewDragging = false })
+    window.addEventListener('mouseup', () => { S.previewDragging = false })
     window.addEventListener('keydown', (e) => {
       const modal = $('hdrPreviewModal')
       if (!modal || !modal.classList.contains('show')) return
@@ -94,8 +95,8 @@ export function ensureSpherePreview(canvas) {
       switch (e.key) {
         case 'ArrowLeft': S.previewYaw -= 0.1; updatePreviewCamera(); break
         case 'ArrowRight': S.previewYaw += 0.1; updatePreviewCamera(); break
-        case 'ArrowUp': previewPitch = Math.max(-1.4, previewPitch - 0.1); updatePreviewCamera(); break
-        case 'ArrowDown': previewPitch = Math.min(1.4, previewPitch + 0.1); updatePreviewCamera(); break
+        case 'ArrowUp': S.previewPitch = Math.max(-1.4, S.previewPitch - 0.1); updatePreviewCamera(); break
+        case 'ArrowDown': S.previewPitch = Math.min(1.4, S.previewPitch + 0.1); updatePreviewCamera(); break
         case 'r': case 'R': resetHdrPreviewView(); break
         case 'f': case 'F': toggleHdrPreviewFullscreen(); break
       }
@@ -105,10 +106,10 @@ export function ensureSpherePreview(canvas) {
 }
 
 export function updatePreviewCamera() {
-  if (!previewCamera) return
-  previewCamera.rotation.order = 'YXZ'
-  previewCamera.rotation.y = S.previewYaw
-  previewCamera.rotation.x = previewPitch
+  if (!S.previewCamera) return
+  S.previewCamera.rotation.order = 'YXZ'
+  S.previewCamera.rotation.y = S.previewYaw
+  S.previewCamera.rotation.x = S.previewPitch
   renderSpherePreview()
 }
 
@@ -116,8 +117,8 @@ export function resizePreview(canvas) {
   if (!S.previewRenderer) return
   const w = canvas.clientWidth || 960, h = canvas.clientHeight || 480
   S.previewRenderer.setSize(w, h, false)
-  previewCamera.aspect = w / h
-  previewCamera.updateProjectionMatrix()
+  S.previewCamera.aspect = w / h
+  S.previewCamera.updateProjectionMatrix()
 }
 
 export function setPreviewTexture(data, width, height) {
@@ -128,9 +129,9 @@ export function setPreviewTexture(data, width, height) {
   tex.generateMipmaps = false
   tex.flipY = true
   tex.needsUpdate = true
-  if (previewMesh.material.map) previewMesh.material.map.dispose()
-  previewMesh.material.map = tex
-  previewMesh.material.needsUpdate = true
+  if (S.previewMesh.material.map) S.previewMesh.material.map.dispose()
+  S.previewMesh.material.map = tex
+  S.previewMesh.material.needsUpdate = true
   let logSum = 0, logCount = 0
   for (let i = 0; i < width * height; i++) {
     const lum = 0.2126 * data[i * 4] + 0.7152 * data[i * 4 + 1] + 0.0722 * data[i * 4 + 2]
@@ -142,8 +143,8 @@ export function setPreviewTexture(data, width, height) {
 }
 
 export function renderSpherePreview() {
-  if (!S.previewRenderer || !previewScene || !previewCamera) return
-  S.previewRenderer.render(previewScene, previewCamera)
+  if (!S.previewRenderer || !S.previewScene || !S.previewCamera) return
+  S.previewRenderer.render(S.previewScene, S.previewCamera)
 }
 
 
@@ -212,8 +213,8 @@ export function openHdrPreview(opts, exposure) {
 }
 
 export function disposeHdrPreview() {
-  if (previewMesh) { if (previewMesh.material.map) previewMesh.material.map.dispose(); previewMesh.material.dispose(); previewMesh.geometry.dispose(); previewMesh = null }
+  if (S.previewMesh) { if (S.previewMesh.material.map) S.previewMesh.material.map.dispose(); S.previewMesh.material.dispose(); S.previewMesh.geometry.dispose(); S.previewMesh = null }
   if (S.previewRenderer) { S.previewRenderer.dispose(); S.previewRenderer = null }
-  previewScene = null; previewCamera = null; S.previewState = null
+  S.previewScene = null; S.previewCamera = null; S.previewState = null
 }
 

@@ -5,7 +5,7 @@
  */
 import { t } from '../i18n.js'
 import { getAsset, setPackTexs, setPackBrowse, getPackBrowse } from './state.js'
-import { esc, viewEl } from './parts.js'
+import { esc, viewEl, truncStr } from './parts.js'
 
 export function renderPackTextures(a){
   if (!a.fetchTextures) return ''

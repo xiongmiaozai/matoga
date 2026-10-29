@@ -6,7 +6,7 @@
  * 从 pack-browser.js 按职责搬出，逻辑未改。
  */
 
-import { packRawUrl, MODEL_DIR_PATH_RE, MODEL_JSON_RE } from '../helpers.js'
+import { packRawUrl, MODEL_DIR_PATH_RE, MODEL_JSON_RE, MC_OFFICIAL_API } from '../helpers.js'
 
 import { S, BROWSE_CLICK_DELAY } from '../store.js'
 

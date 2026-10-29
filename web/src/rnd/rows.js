@@ -21,9 +21,10 @@ import { t, onLocaleChange } from '../i18n.js'
 import { appendModelCard, modelThumbSpec, renderModelThumbPair } from './model-cards.js'
 import { renderSidebar } from './sidebar.js'
 import { _filteredCache, _lastBaseSet, _renderedCount, _rowMap, setFilteredCache, setRenderedCount, setLastBaseSet } from './state.js'
-import { renderThumbPair } from './cells.js'
+import { renderThumbPair, statusBadge } from './cells.js'
 import { renderModelTypeResult } from './model-result.js'
 import { renderResult } from '../render.js'
+import { escHtml } from '../model-diff.js'
 
 export function appendGroupRows(frag, g) {
   const tr = document.createElement('tr')

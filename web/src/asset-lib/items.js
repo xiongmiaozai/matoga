@@ -15,7 +15,7 @@ import { addPackTextureToCanvas } from './sections-official.js'
 import { persistFavorites, persistRecent } from './api.js'
 import { rebuild } from './filters.js'
 import { refreshDetailFav } from './detail.js'
-import { isValidAssetKey, packApiFor, parsePackModelPath, parsePackTexPath, presetName } from './helpers.js'
+import { isValidAssetKey, packApiFor, parsePackModelPath, parsePackTexPath, presetName, MAX_RECENT } from './helpers.js'
 
 export function sortItems(items) {
   const arr = items.slice()

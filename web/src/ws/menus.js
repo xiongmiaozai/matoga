@@ -10,7 +10,7 @@ import { showPrompt, showConfirm } from './dialogs.js'
 import { presetNames } from './preset-model.js'
 import {
   activatePreset, createNewPreset, deletePreset, duplicatePreset,
-  exportPreset, importPreset, renamePresetDialog,
+  exportAllPresets, exportPreset, importPreset, renamePresetDialog,
 } from './presets.js'
 import { focusPanel } from './panels.js'
 import { S } from './state.js'

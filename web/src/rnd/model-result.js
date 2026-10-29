@@ -22,6 +22,7 @@ import { observeModelThumbs } from '../model-thumb.js'
 import { t, onLocaleChange } from '../i18n.js'
 import { modelPrefixOf } from '../model-prefix.js'
 import { appendModelCard, modelThumbSpec, renderModelThumbPair } from './model-cards.js'
+import { escHtml } from '../model-diff.js'
 
 export function renderModelTypeResult() {
   const body = $('modelGridBody')

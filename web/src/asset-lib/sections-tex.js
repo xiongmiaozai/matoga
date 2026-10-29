@@ -9,6 +9,7 @@ import { state, IMG_EXTS, showToast } from '../core.js'
 import { addNodeAt, addTextureAt, loadPreset, saveNodeProject, loadNodeProject, serializeGraphData, loadCanvasPresetGraph } from '../node-canvas.js'
 import { t, onLocaleChange } from '../i18n.js'
 import { ensureModelThumb, observeModelThumbs } from '../model-thumb.js'
+import { escAttr } from '../utils.js'
 import { el, shade, loadList, saveList } from './dom.js'
 import { S, BROWSE_CLICK_DELAY } from './store.js'
 import { addPackTextureToCanvas } from './sections-official.js'
@@ -16,7 +17,7 @@ import { collapsedSet, saveCollapsed, saveTexCollapsed, texCollapsedSet } from '
 import { sortItems } from './items.js'
 import { makeCard } from './card.js'
 import { applyFilter } from './filters.js'
-import { classifyByRole, isImg, packTexThumbUrl, thumbUrl } from './helpers.js'
+import { classifyByRole, isImg, packTexThumbUrl, thumbUrl, TEX_GROUP_PAGE } from './helpers.js'
 
 function collectTexGroups() {
   const groups = []

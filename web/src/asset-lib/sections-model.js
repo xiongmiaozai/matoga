@@ -22,7 +22,8 @@ import { officialBadge } from './sections-official.js'
 import { openPackBrowser } from './pack-browser.js'
 import { sortItems } from './items.js'
 import { makeCard } from './card.js'
-import { MODEL_JSON_RE, hdriThumbUrl, mcRawUrl, packApiFor, userModelFilePath } from './helpers.js'
+import { MODEL_JSON_RE, hdriThumbUrl, mcRawUrl, packApiFor, userModelFilePath, IMPORT_API, CUSTOM_API } from './helpers.js'
+import { splitGroupsByPrefix } from '../model-prefix.js'
 
 /* 在系统文件管理器中打开某类模型的专属本地目录（imported / custom） */
 function openModelDir(kind) {

@@ -56,7 +56,7 @@ export function rebuildSelect(lists, groups) {
     S.sel.appendChild(og)
   })
 
-  if (prev && [...sel.options].some(o => o.value === prev)) S.sel.value = prev
+  if (prev && [...S.sel.options].some(o => o.value === prev)) S.sel.value = prev
 }
 
 /* ── 离线打开 ─────────────────────────────────── */

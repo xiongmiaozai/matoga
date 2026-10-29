@@ -17,7 +17,7 @@ import { collapsedSet, saveCollapsed } from './collapse.js'
 import { makeCard } from './card.js'
 import { assetApiCall, persistFavorites, persistRecent } from './api.js'
 import { rebuild } from './filters.js'
-import { officialRawUrl, packApiFor } from './helpers.js'
+import { officialRawUrl, packApiFor, MC_OFFICIAL_API, packRawUrl } from './helpers.js'
 
 export async function addPackTextureToCanvas(item, pack, tex) {
   try {

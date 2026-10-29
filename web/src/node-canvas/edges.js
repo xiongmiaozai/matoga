@@ -13,6 +13,7 @@
 import { $ } from '../core.js'
 import { state } from './state.js'
 import { canvasWrap, screenToWorld, updateMinimap } from './viewport.js'
+import { updateStats } from './status.js'
 
 const NS = 'http://www.w3.org/2000/svg'
 

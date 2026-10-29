@@ -19,6 +19,8 @@ import {
 import { parseModelText, buildModelSummary, diffLines, escHtml, isModelEntry } from '../model-diff.js'
 import { viewMcModelPairInViewport, viewMcModelTexCompareInViewport, isViewportVisible, resolveModelTexList, textureAssetPath } from '../mc-model-viewer.js'
 import { loadModelTexEffectPreview, renderSidebar } from '../render.js'
+import { t } from '../i18n.js'
+import { statusBadge } from './cells.js'
 
 export function modelThumbSpec(entry, root) {
   if (!entry || !isModelEntry(entry)) return null

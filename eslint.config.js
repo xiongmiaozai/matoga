@@ -69,12 +69,16 @@ export default [
   },
 
   {
+    // 测试与工具脚本：CommonJS + Node 环境；但大量单测通过 globalThis 注入
+    // DOM stub（document / window / Image 等）来跑前端模块，且 browser-e2e
+    // 在 evaluate 里执行浏览器侧代码，故同时提供 browser 全局。
     files: ['test/**/*.js', 'test/**/*.mjs', 'scripts/**/*.mjs', 'tools/**/*.mjs'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',
       globals: {
         ...globals.node,
+        ...globals.browser,
       },
     },
     rules: {

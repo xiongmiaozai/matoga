@@ -89,7 +89,7 @@ export async function _autoSave(force, opts){
   S.saving = true;
   _setAutoSaveState('saving', '自动保存中…');
   _updateProjectIndicator();
-  const proj = { ..._currentProject };
+  const proj = { ...S.currentProject };
   try {
     await saveNodeProject(proj.name, proj.id, { keepalive: !!(opts && opts.keepalive) });
     if(S.currentProject && S.currentProject.id === proj.id){

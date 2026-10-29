@@ -19,6 +19,7 @@ import {
 import { initMaterial3D, updateMaterial3D, clearCustomModel } from '../material3d.js'
 import { parseModelText, buildModelSummary, diffLines, escHtml, isModelEntry } from '../model-diff.js'
 import { viewMcModelPairInViewport, viewMcModelTexCompareInViewport, isViewportVisible, resolveModelTexList, textureAssetPath } from '../mc-model-viewer.js'
+import { t } from '../i18n.js'
 
 /* 3D 视口未激活时自动切到预览面板 3D tab（等价用户点击）；返回视口是否就绪 */
 export function tryActivateCompareModelViewport() {
