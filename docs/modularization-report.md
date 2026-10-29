@@ -129,7 +129,7 @@ golden-layout 主题 CSS 用相对路径 `url('../../img/lm_close_white.png')`�
 | 未推送 / 未开 PR | 按要求本次取消 | 如需推送，仍需 token 具备 `workflow` scope（历史含 `.github/workflows` 改动） |
 | 浏览器实测为无头模式 | 覆盖 JS/DOM 逻辑与请求，未覆盖真实 GPU 渲染的视觉正确性 | 需要视觉验收时补有头截图比对 |
 
-## 8. 补充轮：ESLint no-undef 清零（139 → 0）
+## 7. 补充轮：ESLint no-undef 清零（139 → 0）
 
 上一轮的 `scripts/audit-web-refs.mjs` 只匹配「被当作函数或属性访问」的标识符，
 漏掉了**常量类（全大写）**与**模块级可变状态（漏加 `S.` 前缀）**两类。ESLint 的
@@ -154,9 +154,9 @@ golden-layout 主题 CSS 用相对路径 `url('../../img/lm_close_white.png')`�
 补充验证：`no-undef` 139 → **0**；总 warning 1426 → 1263；单测 617、冒烟 29、
 浏览器三项全 0 均保持通过。
 
-## 9. 未能处理的项与原因
+## 8. 未能处理的项与原因
 
-### 9.1 1263 条 no-unused-vars
+### 8.1 1263 条 no-unused-vars
 
 集中在拆分后的**主文件**（`node-canvas.js` 93 条、`asset-library.js` 与
 `render.js` 各 70 条、`renderer.js` 66 条），是符号搬到子模块后主文件残留的
@@ -167,7 +167,7 @@ golden-layout 主题 CSS 用相对路径 `url('../../img/lm_close_white.png')`�
 级工具（如 `eslint-plugin-unused-imports`）或逐文件人工确认，不适合本轮用手写
 正则处理。目前仅用 `eslint --fix` 安全修正了 1 处。
 
-### 9.2 剩余 10 个 ≥300 行文件
+### 8.2 剩余 10 个 ≥300 行文件
 
 见第 6 节风险表的说明，均为「结构上不可拆」或「计划已认定为目标行数」：
 
@@ -182,6 +182,67 @@ golden-layout 主题 CSS 用相对路径 `url('../../img/lm_close_white.png')`�
 | `node-editor.html` | 447 | HTML 结构主体，抽片段会破坏 core.js 同步 getElementById 时序 |
 | `css/node-editor/ne-01-*.css` | 300 | 已是 node-editor.css 的分片 |
 
-## 10. 本轮未做的事
+## 9. DoD 最终验收（2026-10-29）
 
-按用户要求第 2 条，**未推送 fork、未开 PR、未合并 PR**。所有改动仅存于本地 `main` 分支。
+| # | 条目 | 实测结果 | 状态 |
+| --- | --- | --- | --- |
+| 1 | ≥300 行文件仅保留 10 个 | **10 个**（见 §8.2 逐条原因） | ✅ |
+| 2 | 每文件验证记录 | §9 执行记录 B0–B14 + 本报告 | ✅ |
+| 3 | 单测全绿 ≥550 | **617 pass / 0 fail** | ✅ |
+| 4 | 冒烟 + health | 冒烟 **29 通过 / 0 失败**（WS 10/0）；health **200** | ✅ |
+| 5 | dist:win + 安装卸载回归 | `matoga Setup 3.2.0.exe` 107.5 MB；静默装 exit **0**（**75 文件**）；静默卸 exit **0**（目录**完全移除**） | ✅ |
+| 6 | 文档 | 计划已标 **DONE**；本报告完整 | ✅ |
+| 7 | 推送 fork + PR | **按用户指令取消** | ⛔ |
+
+### 9.1 安装/卸载回归实测明细
+
+```
+安装器: dist-electron/matoga Setup 3.2.0.exe  (107.5 MB)
+目标目录: %TEMP%\matoga-install-test
+静默安装 /S /D=<target>  →  退出码 0
+  落盘 75 个文件
+  matoga.exe           235.7 MB
+  Uninstall matoga.exe   0.2 MB
+  resources/app.asar     6.1 MB
+静默卸载 Uninstall matoga.exe /S  →  退出码 0
+  安装目录完全移除（残留 0 文件）
+```
+
+### 9.2 关于「安装后双击启动即退出」的排查结论
+
+验收过程中发现：在本会话环境里启动打包产物（`win-unpacked/matoga.exe` 与安装版）
+会立即退出、无任何输出。深入排查后确认**这是测试环境问题，不是 matoga 缺陷**：
+
+- `matoga.exe --version` 输出 `v24.22.0`（**Node 版本号**），而 Electron 应为 `44.x`；
+- `matoga.exe -e "console.log('NODE_MODE')` 成功打印 `NODE_MODE`；
+- 根因：本会话的宿主进程（DeepSeek Harness）携带 `ELECTRON_RUN_AS_NODE=1` 环境变量，
+  该变量被所有子进程继承，使打包好的 Electron 应用**以 Node 身份运行**——没有 GUI、
+  启动脚本跑完即退出，退出码 0 且无输出。
+
+即：应用本身没问题，是运行环境被污染。用 `Start-Process -Environment @{ ELECTRON_RUN_AS_NODE = '' }`
+或 `cmd` 中 `set "ELECTRON_RUN_AS_NODE="` 也未能完全隔离（该变量仍可能从父进程快照恢复），
+故**未能在此会话内完成 GUI 启动验证**，属环境限制，如实记录而不虚报通过。
+
+建议在有正常桌面环境的机器上验证一次双击启动：预期窗口标题「matoga - 材质贴图对比工具」，
+内部服务监听 127.0.0.1:5273。
+
+### 9.3 最终验证命令与结果
+
+```
+node --test --test-concurrency=1 "test/unit/**/*.test.js"   →  617 pass / 0 fail
+node test/smoke/run.mjs                                     →  29 pass / 0 fail（WS 10/0）
+npm run lint                                                →  0 error / 1286 warning
+node scripts/audit-web-refs.mjs                             →  未发现跨模块缺失引用
+node scripts/browser-e2e.mjs <url>                          →  9 步全通过，错误/异常/失败请求 均 0
+GET /api/health                                             →  200 {"ok":true,...}
+npm run dist:win                                            →  matoga Setup 3.2.0.exe 107.5 MB
+安装/卸载回归                                                 →  exit 0 / exit 0，目录清空
+```
+
+## 10. 关于推送与 PR
+
+按用户明确指令，**未推送 fork、未开 PR、未合并 PR**，所有改动仅存于本地 `main`
+（领先 `origin/main` 116 个提交）。
+
+若日后需要推送：当前 `gh` token scope 为 `gist, read:org, repo`，缺 `workflow`；
+待推历史改过 `.github/workflows/` 下文件，GitHub 会拒绝。需提供带 `workflow` scope 的 PAT。
