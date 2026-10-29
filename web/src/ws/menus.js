@@ -106,7 +106,7 @@ export function addWindowMenu() {
   }, 0)
 }
 
-function openPresetManager() {
+export function openPresetManager() {
   const existing = document.getElementById('presetMgrOverlay')
   if (existing) { existing.remove(); return }
 

@@ -9,6 +9,8 @@ const fs = require('fs'), path = require('path')
 const { DIR, FORMAT, VERSION, MAX_NAME, MAX_THUMB_BYTES, ID_RE } = require('./consts')
 const { atomicWrite, sanitizeName, safeTextureName, decodeDataUrl, projectDir, projectFile, newId, enqueue } = require('./fs-utils')
 const { readProjectMeta, exists, sanitizeGraph, sanitizeTextures } = require('./meta')
+const { logger } = require('../../middleware/logger')
+const { AppError } = require('../../lib/errors')
 
 async function save({ id, name, graph, thumbnail, textures }) {
   const cleanName = sanitizeName(name)

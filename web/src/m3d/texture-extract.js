@@ -6,6 +6,8 @@
  * 从 material3d.js 原样搬出，逻辑未改。
  */
 
+import * as THREE from 'three'
+
 export function imgW(img) { return img.naturalWidth || img.width }
 export function imgH(img) { return img.naturalHeight || img.height }
 

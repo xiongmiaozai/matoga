@@ -53,6 +53,10 @@ function createApp() {
   app.use('/vendor/three', express.static(path.join(ROOT, 'node_modules', 'three', 'build')))
   app.use('/vendor/golden-layout', express.static(path.join(ROOT, 'node_modules', 'golden-layout', 'dist', 'esm'), { extensions: ['js'], setHeaders: (res) => res.set('Cache-Control', 'no-store') }))
   app.use('/vendor/golden-layout-css', express.static(path.join(ROOT, 'node_modules', 'golden-layout', 'dist', 'css'), { setHeaders: (res) => res.set('Cache-Control', 'no-store') }))
+  // golden-layout 主题 CSS 里的图标是相对路径 ../../img/xxx.png，从
+  // /vendor/golden-layout-css/themes/ 解析后落到 /vendor/img/，需单独挂载，
+  // 否则面板工具栏的关闭/最大化/弹出图标全部 404。
+  app.use('/vendor/img', express.static(path.join(ROOT, 'node_modules', 'golden-layout', 'dist', 'img'), { setHeaders: (res) => res.set('Cache-Control', 'no-store') }))
 
 
   app.use(express.static(WEB_ROOT, {

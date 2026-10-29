@@ -19,6 +19,7 @@ import { assetApiCall } from './api.js'
 import { pbLoadView } from './pb/persist.js'
 import { buildBrowseHead, buildBrowseToolbar } from './pb/head.js'
 import { fillBrowseError, fillBrowseView } from './pb/fill.js'
+import { packApiFor } from './helpers.js'
 
 /* 返回上一级：原文件即从本模块导出（asset-library.js 的面板返回按钮依赖）。 */
 export { browseUp } from './pb/nav.js'

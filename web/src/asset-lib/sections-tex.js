@@ -16,6 +16,7 @@ import { collapsedSet, saveCollapsed, saveTexCollapsed, texCollapsedSet } from '
 import { sortItems } from './items.js'
 import { makeCard } from './card.js'
 import { applyFilter } from './filters.js'
+import { classifyByRole, isImg, packTexThumbUrl, thumbUrl } from './helpers.js'
 
 function collectTexGroups() {
   const groups = []

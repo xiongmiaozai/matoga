@@ -8,6 +8,7 @@
 const fs = require('fs'), path = require('path')
 const { DIR, MAX_PROJECTS, ID_RE, FORMAT } = require('./consts')
 const { projectDir, projectFile, decodeDataUrl } = require('./fs-utils')
+const { logger } = require('../../middleware/logger')
 
 function readProjectMeta(id) {
   try {

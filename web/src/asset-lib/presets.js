@@ -16,6 +16,7 @@ import { persistFavorites, persistRecent } from './api.js'
 import { sortItems } from './items.js'
 import { collapsedSet, saveCollapsed } from './collapse.js'
 import { makeCard } from './card.js'
+import { PRESETS, presetName } from './helpers.js'
 
 const CANVAS_PRESET_MAX_BYTES = 8 * 1024 * 1024  /* 后端 body 上限 12MB，留余量 */
 

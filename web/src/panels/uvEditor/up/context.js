@@ -47,6 +47,8 @@ export async function api(method, path, body) {
 /* ── 数据源与钩子（按 S.source.mode 动态分派） ────────────────── */
 
 export function currentLayout() {
+  // 面板尚未选定时（S.source 为 null）没有布局可读，直接返回 null
+  if (!S.source) return null
   if (S.source.mode === 'viewport') {
     return (typeof isCustomModelActive === 'function' && isCustomModelActive()) ? getLastModelLayout() : null
   }

@@ -5,6 +5,9 @@
  *
  * 从 material3d.js 原样搬出，逻辑未改。
  */
+
+import * as THREE from 'three'
+
 import { S, FLY_KEYS, FLY_SPEED, FLY_BOOST } from './state.js'
 import { fileUrl, isImageFile } from '../utils.js'
 import { t as _t } from '../i18n.js'

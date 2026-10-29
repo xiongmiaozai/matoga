@@ -19,8 +19,10 @@ export function setStatusHooks({ markDirty }) {
 
 /* ── 状态/Toast ─────────────────────────────── */
 export function updateStats(){
-  $('#stat-nodes').textContent = state.nodes.size;
-  $('#stat-edges').textContent = state.edges.size;
+  const nodesEl = $('#stat-nodes');
+  const edgesEl = $('#stat-edges');
+  if (nodesEl) nodesEl.textContent = state.nodes.size;
+  if (edgesEl) edgesEl.textContent = state.edges.size;
   _notifyGraphChanged();
   updateMinimap();
 }
@@ -30,7 +32,9 @@ export function _notifyGraphChanged(){
 }
 let toastTimer=null;
 export function toast(msg){
-  const t=$('#toast'); t.textContent=msg; t.classList.add('show');
+  const t=$('#toast');
+  if(!t) return;               // 无 toast 元素（无头/未挂载）时静默跳过
+  t.textContent=msg; t.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer=setTimeout(()=>t.classList.remove('show'), 2000);
 }

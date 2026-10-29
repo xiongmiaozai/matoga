@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 /* 分片入口：顺序 = 原行号升序，层叠结果与拆分前等价 */
-@import './styles/st-01-ico-head.css';
-@import './styles/st-02-folder-card-panel-card.css';
-@import './styles/st-03-center-head-padding-14px-18p.css';
-@import './styles/st-04-panel.css';
-@import './styles/st-05-pv-tabs-display-flex-gap-2px.css';
+@import './css/styles/st-01-ico-head.css';
+@import './css/styles/st-02-folder-card-panel-card.css';
+@import './css/styles/st-03-center-head-padding-14px-18p.css';
+@import './css/styles/st-04-panel.css';
+@import './css/styles/st-05-pv-tabs-display-flex-gap-2px.css';

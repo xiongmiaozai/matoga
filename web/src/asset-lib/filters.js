@@ -16,6 +16,7 @@ import { buildPresetSection } from './presets.js'
 import { buildTexSection } from './sections-tex.js'
 import { buildHdriSection, buildMcSection, buildModelSection } from './sections-model.js'
 import { buildOfficialSection } from './sections-official.js'
+import { QUICK_CATS, SECTION_CATS, categoryLabel } from './helpers.js'
 
 function buildFavSection() {
   if (!S.favorites.length) return null

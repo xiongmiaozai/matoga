@@ -44,3 +44,16 @@ export const S = {
   browseSeq: 0,
   clickTimer: null,
 }
+
+/* 刷新回调：由主文件 asset-library.js 注入。
+   子模块（sections-model.js 等）需要触发整库刷新，若直接 import 主文件会
+   形成 主文件 → 子模块 → 主文件 的循环依赖（ESM 下静默变空绑定）。 */
+let _refresh = async () => {}
+
+export function setRefreshHooks(fn) {
+  if (typeof fn === 'function') _refresh = fn
+}
+
+export async function refreshVia() {
+  return _refresh()
+}

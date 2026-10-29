@@ -15,6 +15,7 @@ import { isFav, pushRecent, resolveLocatePath, toggleFav } from './items.js'
 import { copyText } from './ctx-menu.js'
 import { deleteUserModel } from './sections-model.js'
 import { addPackTextureToCanvas, renameOfficialAsset } from './sections-official.js'
+import { isVirtualAssetPath, packApiFor, packRawUrl, parsePackModelPath, roleText } from './helpers.js'
 
 function detailRow(label, value) {
   const row = el('div', 'asset-detail-row')

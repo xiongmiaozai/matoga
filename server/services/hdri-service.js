@@ -26,7 +26,10 @@ function thumbPathFor(filePath) {
 async function list() {
   const cfg = configStore.get()
   const dir = cfg.hdriPresetPath
-  const dirStat = await fs.promises.stat(dir)
+  // 目录可能尚未创建或被移动：视为空列表，不让整个端点 500
+  if (!dir || typeof dir !== 'string') return []
+  const dirStat = await fs.promises.stat(dir).catch(() => null)
+  if (!dirStat) return []
   const dirMtime = Math.round(dirStat.mtimeMs)
   const cached = LIST_CACHE.get(dir)
   if (cached && cached.mtime === dirMtime) return cached.value

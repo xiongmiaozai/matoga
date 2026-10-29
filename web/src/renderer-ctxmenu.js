@@ -5,7 +5,7 @@
  *
  * 从 renderer.js 抽出，逻辑未改。
  */
-import { state, showToast } from './core.js'
+import { state, $, showToast } from './core.js'
 import { t } from './i18n.js'
 import { selectGroup, renderResult } from './render.js'
 import { uiPrompt } from './ui-dialog.js'

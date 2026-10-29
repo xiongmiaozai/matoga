@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 /* 分片入口：顺序 = 原行号升序，层叠结果与拆分前等价 */
-@import './mc-theme/mc-01-font-face-本地字体-Press-Start-2.css';
-@import './mc-theme/mc-02-MC-BUTTONS-Block-style-with.css';
-@import './mc-theme/mc-03-TABLE-MC-grid-style.css';
-@import './mc-theme/mc-04-CHARTS-MC-styled.css';
-@import './mc-theme/mc-05-LIGHT-THEME-MC-daylight-vari.css';
-@import './mc-theme/mc-06-SKEUOMORPHISM-增强-触感深度-机械弹簧动画.css';
+@import './css/mc-theme/mc-01-font-face-本地字体-Press-Start-2.css';
+@import './css/mc-theme/mc-02-MC-BUTTONS-Block-style-with.css';
+@import './css/mc-theme/mc-03-TABLE-MC-grid-style.css';
+@import './css/mc-theme/mc-04-CHARTS-MC-styled.css';
+@import './css/mc-theme/mc-05-LIGHT-THEME-MC-daylight-vari.css';
+@import './css/mc-theme/mc-06-SKEUOMORPHISM-增强-触感深度-机械弹簧动画.css';

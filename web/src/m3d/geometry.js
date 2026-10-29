@@ -6,6 +6,8 @@
  * 从 material3d.js 原样搬出，逻辑未改。
  */
 
+import * as THREE from 'three'
+
 export function scaleUV(geometry, su, sv) {
   const uv = geometry.attributes.uv
   if (!uv) return geometry

@@ -44,7 +44,7 @@ import {
 } from './asset-lib/helpers.js'
 import { el, shade, loadList, saveList } from './asset-lib/dom.js'
 import { tryActivateModelViewport, viewMcModelAsset, viewImportedModelAsset } from './asset-lib/model-view.js'
-import { S, BROWSE_CLICK_DELAY } from './asset-lib/store.js'
+import { S, BROWSE_CLICK_DELAY, setRefreshHooks } from './asset-lib/store.js'
 import { loadHdri, loadMc, loadModelAssets, loadTexPacks } from './asset-lib/loaders.js'
 import { loadOfficial } from './asset-lib/sections-official.js'
 import { loadProjects, refreshProjectsQuiet } from './asset-lib/projects.js'
@@ -66,6 +66,10 @@ export async function refreshAssetLibrary() {
   await Promise.all([loadHdri(), loadMc(), loadOfficial(), loadProjects(), loadTexPacks(), loadModelAssets(), loadCanvasPresets()])
   rebuild()
 }
+
+/* 注入：子模块通过 store.refreshVia() 触发整库刷新 */
+setRefreshHooks(refreshAssetLibrary)
+
 
 let _initialized = false
 

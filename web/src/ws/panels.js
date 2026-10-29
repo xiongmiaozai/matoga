@@ -5,6 +5,7 @@
  *
  * 从 workspace.js 按职责搬出，逻辑未改。
  */
+import { $ } from '../core.js'
 import { S } from './state.js'
 import { createPanelClone } from './clone.js'
 

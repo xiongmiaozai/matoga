@@ -6,14 +6,14 @@
  * Adobe 风格浮动面板系统主题（覆盖 Golden-Layout 默认）
  */
 /* 分片入口：顺序 = 原行号升序，层叠结果与拆分前等价 */
-@import './workspace/ws-01-布局根容器.css';
-@import './workspace/ws-02-工作区切换栏.css';
-@import './workspace/ws-03-Golden-Layout-Adobe-风格覆盖.css';
-@import './workspace/ws-04-面板内容自适应-迁移进来的原-DOM-.css';
-@import './workspace/ws-05-深色模式覆盖.css';
-@import './workspace/ws-06-面板标题栏图标.css';
-@import './workspace/ws-07-浮动面板浮层按钮区.css';
-@import './workspace/ws-08-工作区预设管理对话框.css';
-@import './workspace/ws-09-添加窗口菜单.css';
-@import './workspace/ws-10-克隆面板实例-多窗口-.css';
-@import './workspace/ws-11-自定义-prompt-confirm-对话框.css';
+@import './css/workspace/ws-01-布局根容器.css';
+@import './css/workspace/ws-02-工作区切换栏.css';
+@import './css/workspace/ws-03-Golden-Layout-Adobe-风格覆盖.css';
+@import './css/workspace/ws-04-面板内容自适应-迁移进来的原-DOM-.css';
+@import './css/workspace/ws-05-深色模式覆盖.css';
+@import './css/workspace/ws-06-面板标题栏图标.css';
+@import './css/workspace/ws-07-浮动面板浮层按钮区.css';
+@import './css/workspace/ws-08-工作区预设管理对话框.css';
+@import './css/workspace/ws-09-添加窗口菜单.css';
+@import './css/workspace/ws-10-克隆面板实例-多窗口-.css';
+@import './css/workspace/ws-11-自定义-prompt-confirm-对话框.css';

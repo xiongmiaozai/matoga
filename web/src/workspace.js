@@ -11,12 +11,12 @@ import {
   presetNames,
 } from './ws/preset-model.js'
 import { S } from './ws/state.js'
+import { call, setWorkspaceBarRenderer } from './ws/call.js'
 
 import { activatePreset, deletePreset, loadPresets, resetCurrent, saveCurrent, saveCurrentAs } from './ws/presets.js'
 import { createLayoutRoot, extractPanels, focusPanel, restorePanelsToClassic } from './ws/panels.js'
 import { initGoldenLayout, notifyResize } from './ws/layout.js'
 import { addWindowMenu, openPresetManager } from './ws/menus.js'
-const call = (m, p, b) => window.matogaCore.call(m, p, b)
 
 /* 面板清单：默认值来自 ws/panel-defs.js，运行时由 getPanelDefs() 覆盖为清单实况 */
 
@@ -114,3 +114,6 @@ export async function initWorkspace() {
     if (S.barEl) S.barEl.style.display = 'none'
   }
 }
+
+/* 注入：子模块（ws/presets.js）需要一个渲染入口，用回调避免反向 import 主文件 */
+setWorkspaceBarRenderer(renderWorkspaceBar)

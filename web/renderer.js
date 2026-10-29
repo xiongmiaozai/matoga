@@ -51,6 +51,7 @@ import {
   resultBody, leftPathEl, rightPathEl
 } from './src/core.js'
 import { initTableColumnResize } from './src/renderer-table.js'
+import { initCtxMenu } from './src/renderer-ctxmenu.js'
 
 {
   const nrBtn = document.getElementById('nodeRelBtn')

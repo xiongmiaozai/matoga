@@ -12,6 +12,7 @@ import { S, BROWSE_CLICK_DELAY } from './store.js'
 import { isFav, pushRecent, toggleFav } from './items.js'
 import { openDetail } from './detail.js'
 import { showCtxMenu } from './ctx-menu.js'
+import { roleText } from './helpers.js'
 
 export function makeCard(item) {
   const card = el('div', 'asset-card')

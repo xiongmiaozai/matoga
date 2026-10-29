@@ -13,7 +13,7 @@ import { ensureModelThumb, observeModelThumbs } from '../model-thumb.js'
 import { openCreateModelDialog, previewCustomModel } from '../create-model-dialog.js'
 import { el, shade, loadList, saveList } from './dom.js'
 import { tryActivateModelViewport, viewMcModelAsset, viewImportedModelAsset } from './model-view.js'
-import { S, BROWSE_CLICK_DELAY } from './store.js'
+import { S, BROWSE_CLICK_DELAY, refreshVia } from './store.js'
 import { assetApiCall, persistFavorites, persistRecent } from './api.js'
 import { hideDetail } from './detail.js'
 import { buildSection, collapsedSet, modelCollapsedSet, saveCollapsed, saveModelCollapsed } from './collapse.js'
@@ -22,6 +22,7 @@ import { officialBadge } from './sections-official.js'
 import { openPackBrowser } from './pack-browser.js'
 import { sortItems } from './items.js'
 import { makeCard } from './card.js'
+import { MODEL_JSON_RE, hdriThumbUrl, mcRawUrl, packApiFor, userModelFilePath } from './helpers.js'
 
 /* 在系统文件管理器中打开某类模型的专属本地目录（imported / custom） */
 function openModelDir(kind) {
@@ -119,7 +120,7 @@ async function uploadModelToLibrary() {
       const ext = /\.bbmodel$/i.test(f.name) ? 'bbmodel' : 'json'
       await assetApiCall('POST', IMPORT_API, { name, data: text, ext })
       showToast(t('asset.toastModelImported', { name }))
-      await refreshAssetLibrary()
+      await refreshVia()
     } catch (e) {
       showToast(t('asset.toastModelUploadFail', { msg: e.message || '' }))
     }
@@ -140,7 +141,7 @@ export async function deleteUserModel(item) {
     persistRecent()
     showToast(t('asset.toastModelDeleted', { name: item.name }))
     if (S.detailCurrent === item) hideDetail()
-    await refreshAssetLibrary()
+    await refreshVia()
   } catch (e) {
     showToast(t('asset.toastModelDeleteFail', { msg: e.message || '' }))
   }
@@ -166,7 +167,7 @@ export function buildModelSection() {
   newBtn.type = 'button'
   newBtn.title = t('asset.newModelTitle')
   newBtn.innerHTML = `<svg class="ico ico-sm"><use href="#i-cube"/></svg><span>${t('asset.newModel')}</span>`
-  newBtn.addEventListener('click', (e) => { e.stopPropagation(); openCreateModelDialog({ onCreated: () => refreshAssetLibrary() }) })
+  newBtn.addEventListener('click', (e) => { e.stopPropagation(); openCreateModelDialog({ onCreated: () => refreshVia() }) })
   head.appendChild(newBtn)
   head.addEventListener('click', () => {
     sec.classList.toggle('collapsed')

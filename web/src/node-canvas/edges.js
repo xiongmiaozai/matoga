@@ -65,10 +65,12 @@ function portCenterWorld(portEl){
   return screenToWorld(cx, cy);
 }
 export function renderEdges(){
+  // 画布层尚未挂载（如无头环境或提前调用）时直接跳过，不让初始化中断
+  if (!edgesSvg) return;
   // 清空（保留 defs）
   const defs = edgesSvg.querySelector('defs');
   edgesSvg.innerHTML='';
-  edgesSvg.appendChild(defs);
+  if (defs) edgesSvg.appendChild(defs);
   state.edges.forEach((e,id)=>{
     const fromN = state.nodes.get(e.from.node);
     const toN = state.nodes.get(e.to.node);

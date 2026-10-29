@@ -29,7 +29,7 @@ import {
 } from './preset-model.js'
 import { S } from './state.js'
 import { applyConfig, flushAutoSave, notifyResize, sanitizeSavedConfig, suppressAutoSaveBriefly } from './layout.js'
-import { call, renderWorkspaceBar } from '../workspace.js'
+import { call, renderWorkspaceBarVia } from './call.js'
 
 export async function loadPresets() {
   let data = null
@@ -76,7 +76,7 @@ export async function saveCurrentAs() {
     setPreset(S.userPresets, name, cfg)
     S.activePreset = name
     await call('PUT', '/api/workspace/active', { name })
-    renderWorkspaceBar()
+    renderWorkspaceBarVia()
     showToast('已保存工作区「' + name + '」')
   } catch (e) { showToast('保存失败: ' + e.message) }
 }
@@ -88,7 +88,7 @@ export async function saveCurrent() {
     if (!isConfigComplete(cfg)) { showToast('当前布局不完整，无法保存'); return }
     await call('PUT', '/api/workspace/preset', { name: S.activePreset, config: cfg })
     setPreset(S.userPresets, S.activePreset, cfg)
-    renderWorkspaceBar()
+    renderWorkspaceBarVia()
     showToast('已保存当前工作区「' + S.activePreset + '」')
   } catch (e) { showToast('保存失败: ' + e.message) }
 }
@@ -100,7 +100,7 @@ export async function deletePreset(name) {
     const wasActive = S.activePreset === name
     deletePresetEntry(S.userPresets, name)
     if (wasActive) { await activatePreset('默认') }
-    else { renderWorkspaceBar() }
+    else { renderWorkspaceBarVia() }
     showToast('已删除')
   } catch (e) { showToast('删除失败: ' + e.message) }
 }
@@ -122,7 +122,7 @@ export async function activatePreset(name, force) {
     console.error('[workspace] activate failed', e)
     try { applyConfig(getDefaultConfig()) } catch (e2) { console.error('[workspace] activate fallback failed', e2) }
   }
-  renderWorkspaceBar()
+  renderWorkspaceBarVia()
 }
 
 export async function resetCurrent() {
@@ -134,7 +134,7 @@ export async function resetCurrent() {
     applyConfig(cfg)
     notifyResize()
   } catch (e) { console.error('[workspace] reset failed', e) }
-  renderWorkspaceBar()
+  renderWorkspaceBarVia()
 }
 
 export function getPresetConfigOf(name) {
@@ -148,7 +148,7 @@ export async function renamePresetDialog(name, onDone) {
     await call('PUT', '/api/workspace/rename', { oldName: name, newName })
     renamePresetEntry(S.userPresets, name, newName)
     if (S.activePreset === name) S.activePreset = newName
-    renderWorkspaceBar()
+    renderWorkspaceBarVia()
     if (onDone) onDone()
     showToast('已重命名为「' + newName + '」')
   } catch (e) { showToast('重命名失败: ' + e.message) }
@@ -162,7 +162,7 @@ export async function duplicatePreset(name) {
   try {
     await call('PUT', '/api/workspace/preset', { name: newName, config: cfg })
     setPreset(S.userPresets, newName, cfg)
-    renderWorkspaceBar()
+    renderWorkspaceBarVia()
     showToast('已复制为「' + newName + '」')
   } catch (e) { showToast('复制失败: ' + e.message) }
 }
@@ -205,13 +205,13 @@ export async function importPreset(onDone) {
           await call('PUT', '/api/workspace/preset', { name: n, config: p.config })
           S.userPresets[n] = { config: p.config }
         }
-        renderWorkspaceBar()
+        renderWorkspaceBarVia()
         if (onDone) onDone()
         showToast('已批量导入预设')
       } else {
         await call('PUT', '/api/workspace/preset', { name: parsed.name, config: parsed.config })
         S.userPresets[parsed.name] = { config: parsed.config }
-        renderWorkspaceBar()
+        renderWorkspaceBarVia()
         if (onDone) onDone()
         showToast('已导入「' + parsed.name + '」')
       }
@@ -240,7 +240,7 @@ export async function createNewPreset(onDone) {
     S.activePreset = newName
     await call('PUT', '/api/workspace/active', { name: newName })
     applyConfig(cfg)
-    renderWorkspaceBar()
+    renderWorkspaceBarVia()
     if (onDone) onDone()
     showToast('已创建工作区「' + newName + '」')
   } catch (e) { showToast('创建失败: ' + e.message) }

@@ -7,6 +7,7 @@
  */
 
 import { fmtUvNum } from './utils.js'
+import { t } from '../i18n.js'
 
 /**
  * 组装状态栏文本。

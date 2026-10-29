@@ -11,7 +11,7 @@ import { assetApiCall } from './api.js'
 export async function loadHdri() {
   try {
     const data = await assetApiCall('GET', '/api/hdri/list')
-    S.hdriEntries = (data && data.entries) || []
+    S.hdriEntries = Array.isArray(data) ? data : ((data && data.entries) || [])
     S.loadErrors.hdri = null
   } catch (e) {
     S.loadErrors.hdri = e.message || '未知错误'

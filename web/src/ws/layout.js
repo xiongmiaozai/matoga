@@ -27,7 +27,7 @@ import {
 } from './preset-model.js'
 import { S } from './state.js'
 import { reconcileOrphanPanels, registerComponents } from './panels.js'
-import { call } from '../workspace.js'
+import { call } from './call.js'
 
 export const GL_SETTINGS = {
   constrainDragToContainer: false,
@@ -60,7 +60,7 @@ export function sanitizeConfig(config) {
 }
 
 export function applyConfig(config) {
-  S.cloneObservers.forEach(o => o.disconnect())
+  if (Array.isArray(S.cloneObservers)) S.cloneObservers.forEach(o => o.disconnect())
   S.cloneObservers = []
   const cfg = sanitizeConfig(config)
   cfg.settings = GL_SETTINGS
