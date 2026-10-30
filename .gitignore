@@ -62,6 +62,7 @@ hdri-presets/
 .archside/
 # 对话粘贴缓存
 pastes/
-# 浏览器实测过程的临时截图
+# 浏览器实测过程的临时截图（本地验证产物，不入库）
 scripts/.e2e-*.png
+docs/verification/
 
