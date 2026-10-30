@@ -93,6 +93,9 @@ for (const f of files) {
   for (const m of code.matchAll(/for\s*\(\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)/g)) local.add(m[1])
   for (const m of code.matchAll(/\{([^{}]*)\}\s*=/g)) for (const s of m[1].split(',')) { const n = s.trim().split(':')[0].split('=')[0].trim(); if (/^[A-Za-z_$][\w$]*$/.test(n)) local.add(n) }
   for (const m of code.matchAll(/([A-Za-z_$][\w$]*)\s*:\s*(?:function|\()/g)) local.add(m[1])  // 对象字面量方法
+  /* 类/对象里的方法简写定义：`  init() {` / `  static build() {`。
+     缩进 + 名字 + 参数表 + `{`，且该行不以 . 或 = 开头，避免把调用当定义。 */
+  for (const m of code.matchAll(/^[ \t]+(?:static\s+|async\s+|get\s+|set\s+)*([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*\{/gm)) local.add(m[1])
 
   // 4) 被当作函数/属性访问的标识符
   const used = new Set()

@@ -21,6 +21,17 @@ export function setWidgetHooks(hooks) {
   if (typeof hooks.markDirty === 'function') _markDirty = hooks.markDirty
 }
 
+/* 轻提示。主文件的 toast 是模块内私有函数，拆分后此处需要自带一份：
+   只操作 #toast、定时器挂在本函数上，无跨模块状态，与主文件行为一致。 */
+export function toast(msg) {
+  const t = document.querySelector('#toast')
+  if (!t) return
+  t.textContent = msg
+  t.classList.add('show')
+  clearTimeout(toast._timer)
+  toast._timer = setTimeout(() => t.classList.remove('show'), 2000)
+}
+
 /* ── widgets ───────────────────────────────── */
 /* 滑条/取色 input 高频触发的求值合并到下一帧（rAF）：拖动时每帧至多一次 evaluate，
    避免 input 事件栈内同步执行整图求值+纹理生成导致掉帧 */
