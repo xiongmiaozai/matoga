@@ -5,7 +5,9 @@
 package httpx
 
 import (
+	"bufio"
 	"log/slog"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -87,6 +89,26 @@ type statusRecorder struct {
 func (s *statusRecorder) WriteHeader(code int) {
 	s.status = code
 	s.ResponseWriter.WriteHeader(code)
+}
+
+// Hijack 把连接劫持透传给底层 ResponseWriter。
+//
+// WebSocket 升级必须劫持原始 TCP 连接。若不实现此方法，coder/websocket
+// 检测不到 http.Hijacker 就会返回 501 Not Implemented —— 这是包装
+// ResponseWriter 的中间件最常见的坑。
+func (s *statusRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	h, ok := s.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, http.ErrNotSupported
+	}
+	return h.Hijack()
+}
+
+// Flush 透传给底层，保证流式响应不被缓冲层卡住。
+func (s *statusRecorder) Flush() {
+	if f, ok := s.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
 }
 
 // Recover 捕获 panic，返回 ERR_UNKNOWN，避免进程退出。

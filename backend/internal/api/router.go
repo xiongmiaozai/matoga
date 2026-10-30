@@ -10,6 +10,7 @@ import (
 	"github.com/xiongmiaozai/matoga/backend/internal/lang"
 	"github.com/xiongmiaozai/matoga/backend/internal/media"
 	"github.com/xiongmiaozai/matoga/backend/internal/store"
+	"github.com/xiongmiaozai/matoga/backend/internal/syncjob"
 	"github.com/xiongmiaozai/matoga/backend/internal/theme"
 	"github.com/xiongmiaozai/matoga/backend/internal/upload"
 )
@@ -31,6 +32,8 @@ type Services struct {
 	CraftPack      *craftpack.Service
 	Lang           *lang.Service
 	Themes         *theme.Store
+	// SyncJobs 是批量复制的任务执行器，供 /api/ws 使用。
+	SyncJobs *syncjob.Runner
 	// CraftPacksRoot / McPacksRoot / McOfficialRoot 是三个包路由的根目录解析器。
 	// 走函数而不是字符串，是为了每次请求都读最新配置（用户可在运行时改路径）。
 	CraftPacksRoot func() string
@@ -194,6 +197,19 @@ func Mount(r *httpx.Router, s Services) {
 	mountPackGroup(r, "/craft-packs", s.CraftPacksRoot, false)
 	mountPackGroup(r, "/mc-packs", s.McPacksRoot, false)
 	mountPackGroup(r, "/mc-official", s.McOfficialRoot, true)
+
+	// /api/ws —— 批量复制进度通道（对齐 Node 侧 server/ws.js 协议）
+	if s.SyncJobs != nil {
+		wsHandler := &WSHandler{Runner: s.SyncJobs}
+		if s.Deps != nil && s.Deps.Auth != nil {
+			wsHandler.TokenFor = s.Deps.Auth.Token
+		}
+		// 同时注册带/不带尾部斜杠：浏览器与 ws 客户端通常连 /api/ws，
+		// 而 chi 的 Get("/") 只匹配 /api/ws/。
+		wsGroup := r.APIGroup("/ws")
+		wsGroup.Get("/", httpx.Wrap(wsHandler.Serve))
+		r.APIGroup("").Get("/api/ws", httpx.Wrap(wsHandler.Serve))
+	}
 
 	// /api/lang
 	if s.Lang != nil {

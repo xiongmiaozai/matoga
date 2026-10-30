@@ -80,17 +80,22 @@ func GuardWrite(p string) (string, error) {
 	return "", httpx.Errorf(httpx.CodePathDenied, "path outside trusted roots")
 }
 
+// withinTrusted 判断规范化后的绝对路径是否落在某个可信根内。
+//
+// 分隔符必须统一：Windows 下前端常传 `C:/a/b`，而 trustedRoots 经
+// filepath.Clean 后是 `C:\a\b`。不归一会导致前缀比较假阴性
+// （把合法路径误判为越界而拒绝）。统一转成 `/` 再比较。
 func withinTrusted(n string) bool {
-	cmp := n
+	cmp := strings.ReplaceAll(n, `\`, "/")
 	if isWindows() {
 		cmp = strings.ToLower(cmp)
 	}
 	for _, root := range trustedRoots {
-		r := root
+		r := strings.TrimRight(strings.ReplaceAll(root, `\`, "/"), "/")
 		if isWindows() {
 			r = strings.ToLower(r)
 		}
-		if cmp == r || strings.HasPrefix(cmp, r+string(os.PathSeparator)) || strings.HasPrefix(cmp, r+"/") {
+		if cmp == r || strings.HasPrefix(cmp, r+"/") {
 			return true
 		}
 	}

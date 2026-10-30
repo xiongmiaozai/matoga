@@ -12,6 +12,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -27,6 +28,7 @@ import (
 	"github.com/xiongmiaozai/matoga/backend/internal/media"
 	"github.com/xiongmiaozai/matoga/backend/internal/platform"
 	"github.com/xiongmiaozai/matoga/backend/internal/store"
+	"github.com/xiongmiaozai/matoga/backend/internal/syncjob"
 	"github.com/xiongmiaozai/matoga/backend/internal/theme"
 	"github.com/xiongmiaozai/matoga/backend/internal/upload"
 )
@@ -90,6 +92,7 @@ func main() {
 		CraftPack:      craftpack.New(paths.DataRoot, assetStore, cfg),
 		Lang:           lang.New(filepath.Join(paths.ResRoot, "server", "assets", "zh_cn.json")),
 		Themes:         theme.NewStore(filepath.Join(paths.DataRoot, "data", "themes")),
+		SyncJobs:       syncjob.NewRunner(),
 		// 三个包路由的根目录：每次请求都读最新配置，支持运行时改路径。
 		CraftPacksRoot: func() string { return cfgPath(cfg, "craftPacksPath") },
 		McPacksRoot:    func() string { return cfgPath(cfg, "mcPacksPath") },
@@ -101,6 +104,10 @@ func main() {
 	if web == "" {
 		web = filepath.Join(paths.ResRoot, "web")
 	}
+	// 第三方前端依赖（three / golden-layout）必须挂载，否则 SPA 回退会把
+	// index.html 当模块返回，页面因 MIME 错误无法启动。
+	r.Vendor(filepath.Join(paths.ResRoot, "node_modules"))
+
 	if err := r.Static(web); err != nil {
 		log.Warn("静态目录挂载失败", "dir", web, "err", err.Error())
 	}
@@ -115,12 +122,23 @@ func main() {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
+	// 先显式 bind 再宣布就绪：ListenAndServe 内部的 Listen 与就绪日志之间
+	// 存在竞态，客户端/Electron 可能在端口真正监听前就开始连接。
+	// 显式 net.Listen 拿到 listener 后，端口一定已就绪。
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		log.Error("端口监听失败", "addr", addr, "err", err.Error())
+		os.Exit(1)
+	}
+
 	go func() {
 		log.Info("HTTP 服务就绪", "addr", addr, "mode", auth.Mode())
+		// Electron 主进程靠这一行判断服务可连接（与 Node 版 server/index.js 对齐）。
+		fmt.Printf("MATOGA_LISTENING:%d\n", *port)
 		if token != "" {
 			fmt.Printf("\n  LAN 访问地址: http://<本机IP>:%d/?token=%s\n\n", *port, token)
 		}
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Error("服务异常退出", "err", err.Error())
 			os.Exit(1)
 		}
