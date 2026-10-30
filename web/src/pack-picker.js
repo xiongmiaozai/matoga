@@ -62,12 +62,13 @@ function ensureMenu() {
     if (menuEl.contains(e.target) || (openBtn && openBtn.contains(e.target))) return
     closeMenu()
   }, true)
-  window.addEventListener('resize', closeMenu)
+  window.addEventListener('resize', (e) => { if (e.isTrusted) closeMenu() })
   onLocaleChange(() => { if (openSide) { const s = openSide; closeMenu(); openMenu(s) } })
   return menuEl
 }
 
 function closeMenu() {
+
   if (menuEl) menuEl.style.display = 'none'
   if (openBtn) openBtn.classList.remove('active')
   openSide = null

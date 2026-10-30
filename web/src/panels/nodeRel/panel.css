@@ -1,0 +1,126 @@
+/* ════════════════════════════════════════════════════════════
+   matoga Node Relations — 节点关系面板（父子层级树）
+   现代精致主题：精致网格 · 圆角节点 · 柔和连线
+   ════════════════════════════════════════════════════════════ */
+
+/* 视图根 */
+.nr-view{
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-2, #141418);
+}
+
+.nr-scroll{
+  flex: 1; min-height: 0;
+  overflow: hidden;
+  position: relative;
+  background:
+    radial-gradient(circle, rgba(255,255,255,.04) 1px, transparent 1.5px) 0 0 / 24px 24px,
+    var(--bg-2, #141418);
+}
+
+.nr-svg{
+  width: 100%; height: 100%;
+  display: block;
+  cursor: grab;
+  touch-action: none;
+}
+.nr-svg.grabbing{ cursor: grabbing }
+
+/* ── 树节点 ── */
+.nr-node{ cursor: pointer; transition: transform .12s }
+.nr-node .nr-box{
+  fill: rgba(46,46,52,.9);
+  stroke: var(--border, #4a4a52);
+  stroke-width: 1;
+  rx: 7;
+  transition: stroke .15s, filter .15s, fill .15s;
+}
+.nr-node:hover .nr-box{ stroke: var(--primary); filter: brightness(1.1) }
+.nr-node.hl .nr-box{ stroke: var(--warn); stroke-width: 1.5 }
+.nr-node.active .nr-box{
+  stroke: var(--primary); stroke-width: 2;
+  fill: rgba(124,189,86,.16);
+  filter: drop-shadow(0 0 6px rgba(124,189,86,.4));
+}
+
+.nr-node .nr-title{
+  fill: var(--text, #e8e8e8);
+  font-size: 12px; font-weight: 600;
+  dominant-baseline: middle;
+}
+.nr-node .nr-sub{
+  fill: var(--text-muted, #9a9a9a);
+  font-size: 10px;
+  dominant-baseline: middle;
+}
+.nr-node .nr-type-badge{
+  fill: var(--text-dim, #6a6a6a);
+  font-size: 9px; font-style: italic;
+  dominant-baseline: middle;
+}
+
+/* 引用节点（DAG 共享子节点） */
+.nr-node.ref{ opacity: .85 }
+.nr-node.ref .nr-box{ stroke-dasharray: 5 3; fill: rgba(58,58,64,.7) }
+.nr-node.ref .nr-title{ fill: var(--text-muted) }
+.nr-ref-badge{ fill: var(--warn, #f5a623); font-size: 9px; dominant-baseline: middle }
+
+/* ── 连线 ── */
+.nr-edge{
+  fill: none; stroke-width: 1.8; opacity: .7;
+  stroke-linecap: round;
+  transition: opacity .15s, stroke-width .15s;
+}
+.nr-edge.ref{ stroke-dasharray: 4 4; opacity: .5 }
+.nr-edge:hover{ opacity: 1; stroke-width: 2.6; filter: drop-shadow(0 0 3px currentColor) }
+
+/* ── 折叠切换 ── */
+.nr-toggle{ cursor: pointer }
+.nr-toggle .nr-toggle-box{
+  fill: rgba(58,58,64,.8);
+  stroke: var(--border, #4a4a52);
+  rx: 4;
+  transition: stroke .15s, fill .15s;
+}
+.nr-toggle .nr-toggle-sign{
+  fill: var(--text-muted); font-size: 11px; font-weight: 700;
+  dominant-baseline: middle;
+}
+.nr-toggle:hover .nr-toggle-box{ stroke: var(--primary); fill: rgba(124,189,86,.15) }
+.nr-toggle:hover .nr-toggle-sign{ fill: var(--primary) }
+.nr-fold-count{
+  fill: var(--text-muted); font-size: 10px; font-weight: 600;
+  dominant-baseline: middle;
+}
+
+/* ── 状态栏 ── */
+.nr-status{
+  flex: none; height: 28px;
+  display: flex; align-items: center; gap: 14px;
+  padding: 0 12px;
+  border-top: 1px solid var(--border-soft, #3a3a40);
+  background: rgba(0,0,0,.22); backdrop-filter: blur(8px);
+  font-size: 10.5px; color: var(--text-muted, #9a9a9a);
+  white-space: nowrap; overflow: hidden;
+}
+.nr-status .nr-dir{
+  margin-left: auto; color: var(--primary);
+  border: 1px solid var(--border-soft);
+  border-radius: 4px; padding: 1px 7px; font-weight: 500;
+}
+
+/* ── 空状态 ── */
+.nr-empty{
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  color: var(--text-dim, #6a6a6a); font-size: 12px;
+  text-align: center; padding: 24px;
+}
+
+/* 深浅主题适配 */
+:root:not([data-theme="dark"]) .nr-scroll{
+  background:
+    radial-gradient(circle, rgba(20,30,50,.07) 1px, transparent 1.5px) 0 0 / 24px 24px,
+    var(--bg, #c6c6c6);
+}

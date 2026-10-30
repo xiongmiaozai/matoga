@@ -18,8 +18,13 @@ const crypto = require('crypto')
 const { logger } = require('../middleware/logger')
 const { DATA_ROOT } = require('../paths')
 const { AppError } = require('../lib/errors')
+const { atomicWrite } = require('./atomic-write')
+const configStore = require('./config-store')
 
-const DIR = path.join(DATA_ROOT, 'data', 'node-projects')
+const DEFAULT_DIR = path.join(DATA_ROOT, 'data', 'node-projects')
+function dir() {
+  return configStore.get().nodeProjectsPath || DEFAULT_DIR
+}
 const FORMAT = 'matoga-node-project'
 const VERSION = 1
 const MAX_NAME = 100
@@ -32,26 +37,26 @@ const IMG_EXT_RE = /\.(png|jpe?g|webp|gif|bmp|tiff?|avif|svg|ico)$/i
 
 let writeQueue = Promise.resolve()
 
-function atomicWrite(file, data) {
-  fs.mkdirSync(path.dirname(file), { recursive: true })
-  const tmp = file + '.' + crypto.randomUUID() + '.tmp'
-  fs.writeFileSync(tmp, data)
-  fs.renameSync(tmp, file)
-}
-
 function sanitizeName(name) {
   if (typeof name !== 'string') return null
-  const s = name.trim().replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, ' ')
+  const s = name
+    .trim()
+    .replace(/[\\/:*?"<>|]/g, '_')
+    .replace(/\s+/g, ' ')
   if (!s || s === '.' || s === '..' || s.length > MAX_NAME) return null
   return s
 }
 
 function safeTextureName(name, i) {
-  const base = typeof name === 'string' && name.trim()
-    ? name.trim().replace(/[\\/:*?"<>|\s]/g, '_').slice(0, 64)
-    : ''
+  const base =
+    typeof name === 'string' && name.trim()
+      ? name
+          .trim()
+          .replace(/[\\/:*?"<>|\s]/g, '_')
+          .slice(0, 64)
+      : ''
   const ext = base && IMG_EXT_RE.test(base) ? '' : '.png'
-  const safe = base || ('texture_' + i)
+  const safe = base || 'texture_' + i
   return i + '-' + safe + ext
 }
 
@@ -65,7 +70,7 @@ function decodeDataUrl(dataUrl) {
 }
 
 function projectDir(id) {
-  return path.join(DIR, id + '.mtgp')
+  return path.join(dir(), id + '.mtgp')
 }
 
 function projectFile(id) {
@@ -89,7 +94,7 @@ function readProjectMeta(id) {
         edgeCount: Array.isArray(raw.graph.links) ? raw.graph.links.length : 0,
         textureCount: Array.isArray(raw.textures) ? raw.textures.length : 0,
         hasThumb: fs.existsSync(path.join(projectDir(id), 'thumbnail.png')),
-        dir: projectDir(id),
+        dir: projectDir(id)
       }
     }
   } catch (e) {
@@ -99,10 +104,14 @@ function readProjectMeta(id) {
 }
 
 function list() {
-  fs.mkdirSync(DIR, { recursive: true })
+  fs.mkdirSync(dir(), { recursive: true })
   const out = []
   let entries
-  try { entries = fs.readdirSync(DIR, { withFileTypes: true }) } catch { return out }
+  try {
+    entries = fs.readdirSync(dir(), { withFileTypes: true })
+  } catch {
+    return out
+  }
   for (const e of entries) {
     if (!e.isDirectory() || !e.name.endsWith('.mtgp')) continue
     const id = e.name.slice(0, -5)
@@ -123,7 +132,7 @@ function sanitizeGraph(graph) {
   if (!graph || typeof graph !== 'object' || !Array.isArray(graph.nodes)) return null
   return {
     nodes: graph.nodes,
-    links: Array.isArray(graph.links) ? graph.links : (Array.isArray(graph.edges) ? graph.edges : []),
+    links: Array.isArray(graph.links) ? graph.links : Array.isArray(graph.edges) ? graph.edges : []
   }
 }
 
@@ -146,12 +155,28 @@ function sanitizeTextures(items) {
 async function save({ id, name, graph, thumbnail, textures }) {
   const cleanName = sanitizeName(name)
   const cleanGraph = sanitizeGraph(graph)
-  if (!cleanName) { const e = new Error('invalid project name'); e.code = 'ERR_INVALID_PARAM'; throw e }
-  if (!cleanGraph) { const e = new Error('invalid graph'); e.code = 'ERR_INVALID_PARAM'; throw e }
+  if (!cleanName) {
+    const e = new Error('invalid project name')
+    e.code = 'ERR_INVALID_PARAM'
+    throw e
+  }
+  if (!cleanGraph) {
+    const e = new Error('invalid graph')
+    e.code = 'ERR_INVALID_PARAM'
+    throw e
+  }
 
   const isUpdate = id !== undefined && id !== null && id !== ''
-  if (isUpdate && !ID_RE.test(id)) { const e = new Error('invalid project id'); e.code = 'ERR_INVALID_PARAM'; throw e }
-  if (isUpdate && !exists(id)) { const e = new Error('project not found'); e.code = 'ERR_NOT_FOUND'; throw e }
+  if (isUpdate && !ID_RE.test(id)) {
+    const e = new Error('invalid project id')
+    e.code = 'ERR_INVALID_PARAM'
+    throw e
+  }
+  if (isUpdate && !exists(id)) {
+    const e = new Error('project not found')
+    e.code = 'ERR_NOT_FOUND'
+    throw e
+  }
 
   const finalId = isUpdate ? id : newId()
   const dir = projectDir(finalId)
@@ -174,7 +199,9 @@ async function save({ id, name, graph, thumbnail, textures }) {
             t.buf = await fs.promises.readFile(sp)
             t.source = 'embedded'
             delete t.sourcePath
-          } catch (e) { logger.warn('node-projects', 'in-project texture read failed: ' + e.message) }
+          } catch (e) {
+            logger.warn('node-projects', 'in-project texture read failed: ' + e.message)
+          }
         }
       }
     }
@@ -217,10 +244,10 @@ async function save({ id, name, graph, thumbnail, textures }) {
         updatedAt: now,
         nodeCount: cleanGraph.nodes.length,
         edgeCount: cleanGraph.links.length,
-        textureCount: texMeta.length,
+        textureCount: texMeta.length
       },
       graph: cleanGraph,
-      textures: texMeta,
+      textures: texMeta
     }
     atomicWrite(projectFile(finalId), JSON.stringify(doc, null, 2))
     return finalId
@@ -233,16 +260,22 @@ async function save({ id, name, graph, thumbnail, textures }) {
 
 function load(id) {
   if (!ID_RE.test(id) || !exists(id)) {
-    const e = new Error('project not found'); e.code = 'ERR_NOT_FOUND'; throw e
+    const e = new Error('project not found')
+    e.code = 'ERR_NOT_FOUND'
+    throw e
   }
   let doc
   try {
     doc = JSON.parse(fs.readFileSync(projectFile(id), 'utf8'))
   } catch (e) {
-    const err = new Error('bad project file: ' + e.message); err.code = 'ERR_UNKNOWN'; throw err
+    const err = new Error('bad project file: ' + e.message)
+    err.code = 'ERR_UNKNOWN'
+    throw err
   }
   if (!doc || doc.format !== FORMAT || !doc.meta || !doc.graph) {
-    const e = new Error('bad project file'); e.code = 'ERR_UNKNOWN'; throw e
+    const e = new Error('bad project file')
+    e.code = 'ERR_UNKNOWN'
+    throw e
   }
   const texDir = path.join(projectDir(id), 'textures')
   const textures = (Array.isArray(doc.textures) ? doc.textures : [])
@@ -250,7 +283,9 @@ function load(id) {
     .map(t => {
       const fullPath = path.join(texDir, t.file)
       let size = 0
-      try { size = fs.statSync(fullPath).size } catch {}
+      try {
+        size = fs.statSync(fullPath).size
+      } catch {}
       return { file: t.file, name: t.name || t.file, source: t.source || null, fullPath, size, exists: size > 0 }
     })
   return {
@@ -261,23 +296,31 @@ function load(id) {
     graph: doc.graph,
     textures,
     hasThumb: fs.existsSync(path.join(projectDir(id), 'thumbnail.png')),
-    dir: projectDir(id),
+    dir: projectDir(id)
   }
 }
 
 function remove(id) {
   if (!ID_RE.test(id) || !exists(id)) {
-    const e = new Error('project not found'); e.code = 'ERR_NOT_FOUND'; throw e
+    const e = new Error('project not found')
+    e.code = 'ERR_NOT_FOUND'
+    throw e
   }
   const dir = projectDir(id)
-  const run = () => { fs.rmSync(dir, { recursive: true, force: true }) }
+  const run = () => {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
   writeQueue = writeQueue.then(run, run)
   return writeQueue
 }
 
 function rename(id, name) {
   const cleanName = sanitizeName(name)
-  if (!cleanName) { const e = new Error('invalid project name'); e.code = 'ERR_INVALID_PARAM'; throw e }
+  if (!cleanName) {
+    const e = new Error('invalid project name')
+    e.code = 'ERR_INVALID_PARAM'
+    throw e
+  }
   const doc = load(id)
   const run = () => {
     const file = projectFile(id)
@@ -297,7 +340,16 @@ function thumbPath(id) {
 }
 
 module.exports = {
-  DIR, FORMAT, VERSION,
-  list, save, load, remove, rename, exists, thumbPath,
-  sanitizeName, projectDir,
+  getDir: dir,
+  FORMAT,
+  VERSION,
+  list,
+  save,
+  load,
+  remove,
+  rename,
+  exists,
+  thumbPath,
+  sanitizeName,
+  projectDir
 }

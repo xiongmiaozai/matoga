@@ -11,14 +11,11 @@
  */
 
 const NAME_EXT_RE = /\.(json|bbmodel)$/i
-const PREFIX_SEP_RE = /[_\-\s]/
+import { prefixOfBaseName } from './model-group-dims.js'
 
 /* 提取名称前缀：无分隔符（或以分隔符开头）返回 null（归入未分组） */
 export function modelPrefixOf(name) {
-  const base = String(name || '').replace(NAME_EXT_RE, '').trim()
-  const i = base.search(PREFIX_SEP_RE)
-  if (i <= 0) return null
-  return base.slice(0, i).toLowerCase()
+  return prefixOfBaseName(String(name || '').replace(NAME_EXT_RE, '').trim())
 }
 
 /**

@@ -401,7 +401,12 @@ async function updateModel(id, { model, name }) {
   const p = modelFileIn(path.join(CUSTOM_MODELS_DIR, id))
   if (!p) throw new Error('model not found: ' + id)
   const raw = await fs.promises.readFile(p, 'utf8')
-  const record = JSON.parse(raw)
+  let record
+  try { record = JSON.parse(raw) } catch (e) {
+    const err = new Error('model file corrupted: ' + id)
+    err.code = 'ERR_PARSE'
+    throw err
+  }
   if (model !== undefined) record.model = typeof model === 'string' ? JSON.parse(model) : model
   if (name !== undefined) record.name = String(name)
   record.updatedAt = new Date().toISOString()

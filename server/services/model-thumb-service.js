@@ -30,6 +30,7 @@ const fs = require('fs')
 const path = require('path')
 const crypto = require('crypto')
 const { DATA_ROOT } = require('../paths')
+const { dirStats, clearDir } = require('./cache-stats')
 
 const MODEL_THUMB_DIR = path.join(DATA_ROOT, 'data', 'model-thumbs')
 /* 缩略图按模型类型分离专属子目录：导入模型 / 自定义模型 / 材质包内模型
@@ -38,7 +39,7 @@ const THUMB_KIND_DIRS = {
   imported: path.join(MODEL_THUMB_DIR, 'imported'),
   custom: path.join(MODEL_THUMB_DIR, 'custom'),
   mc: path.join(MODEL_THUMB_DIR, 'mc'),
-  misc: MODEL_THUMB_DIR,
+  misc: MODEL_THUMB_DIR
 }
 const MAX_DATA_URL = 5 * 1024 * 1024
 const MAX_FRAMES = 8
@@ -80,8 +81,13 @@ function parseFrameParam(v) {
     stale = 缓存 mtime 早于当前源 mtime，或缓存渲染器版本落后（渲染算法升级后旧图失效）。
     frameCount / frameDelay 供前端轮播（单帧为 1 / 0） */
 async function thumbInfo(key, mtime) {
-  const png = pngPathFor(key), meta = metaPathFor(key)
-  let exists = false, stale = true, cachedMtime = 0, frameCount = 1, frameDelay = 0
+  const png = pngPathFor(key),
+    meta = metaPathFor(key)
+  let exists = false,
+    stale = true,
+    cachedMtime = 0,
+    frameCount = 1,
+    frameDelay = 0
   try {
     const raw = await fs.promises.readFile(meta, 'utf8')
     const j = JSON.parse(raw)
@@ -90,7 +96,8 @@ async function thumbInfo(key, mtime) {
     exists = true
     const outdated = !j || typeof j.renderer !== 'number' || j.renderer < RENDERER_VERSION
     stale = outdated || cachedMtime < (Number(mtime) || 0)
-    if (Number.isFinite(j && j.frameCount) && j.frameCount > 1) frameCount = Math.min(MAX_FRAMES, Math.floor(j.frameCount))
+    if (Number.isFinite(j && j.frameCount) && j.frameCount > 1)
+      frameCount = Math.min(MAX_FRAMES, Math.floor(j.frameCount))
     if (Number.isFinite(j && j.frameDelay) && j.frameDelay > 0) frameDelay = Math.floor(j.frameDelay)
   } catch {}
   const thumbUrl = '/api/asset/model-thumb?key=' + encodeURIComponent(key)
@@ -102,9 +109,10 @@ async function thumbInfo(key, mtime) {
 async function saveThumb(key, mtime, payload) {
   if (typeof payload === 'string') payload = { dataUrl: payload }
   if (!payload || typeof payload !== 'object') return { success: false, error: 'invalid payload' }
-  const frames = Array.isArray(payload.frames) && payload.frames.length
-    ? payload.frames.slice(0, MAX_FRAMES)
-    : [{ dataUrl: payload.dataUrl, delay: 0 }]
+  const frames =
+    Array.isArray(payload.frames) && payload.frames.length
+      ? payload.frames.slice(0, MAX_FRAMES)
+      : [{ dataUrl: payload.dataUrl, delay: 0 }]
   if (!frames.length) return { success: false, error: 'invalid payload' }
   const items = []
   for (const f of frames) {
@@ -126,10 +134,17 @@ async function saveThumb(key, mtime, payload) {
     }
   } catch {}
   const writes = items.map((base64, i) => fs.promises.writeFile(pngPathFor(key, i), Buffer.from(base64, 'base64')))
-  writes.push(fs.promises.writeFile(metaPathFor(key), JSON.stringify({
-    mtime: Number(mtime) || 0, renderer: RENDERER_VERSION,
-    frameCount: frames.length, frameDelay,
-  })))
+  writes.push(
+    fs.promises.writeFile(
+      metaPathFor(key),
+      JSON.stringify({
+        mtime: Number(mtime) || 0,
+        renderer: RENDERER_VERSION,
+        frameCount: frames.length,
+        frameDelay
+      })
+    )
+  )
   await Promise.all(writes)
   const thumbUrl = '/api/asset/model-thumb?key=' + encodeURIComponent(key)
   return { success: true, thumbUrl, frameCount: frames.length, frameDelay }
@@ -138,7 +153,8 @@ async function saveThumb(key, mtime, payload) {
 async function sendThumb(res, key, frame = 0) {
   const png = pngPathFor(key, parseFrameParam(frame))
   await fs.promises.access(png)
-  res.sendFile(png, (err) => {
+  res.set('Cache-Control', 'public, max-age=3600')
+  res.sendFile(png, err => {
     if (err && !res.headersSent) {
       res.status(404).json({ ok: false, code: 'ERR_FS_NOT_FOUND', msg: 'model thumb not generated yet' })
     }
@@ -153,4 +169,31 @@ function invalidate(key) {
   } catch {}
 }
 
-module.exports = { thumbInfo, saveThumb, sendThumb, invalidate, pngPathFor, metaPathFor, kindFor, dirFor, MODEL_THUMB_DIR, THUMB_KIND_DIRS, RENDERER_VERSION }
+async function stats() {
+  const base = await dirStats(MODEL_THUMB_DIR)
+  const byKind = {}
+  for (const [k, d] of Object.entries(THUMB_KIND_DIRS)) byKind[k] = await dirStats(d)
+  return { files: base.files, bytes: base.bytes, byKind }
+}
+
+async function clearAll() {
+  let removed = 0
+  for (const d of Object.values(THUMB_KIND_DIRS)) removed += (await clearDir(d)).removed
+  return { removed }
+}
+
+module.exports = {
+  thumbInfo,
+  saveThumb,
+  sendThumb,
+  invalidate,
+  stats,
+  clearAll,
+  pngPathFor,
+  metaPathFor,
+  kindFor,
+  dirFor,
+  MODEL_THUMB_DIR,
+  THUMB_KIND_DIRS,
+  RENDERER_VERSION
+}

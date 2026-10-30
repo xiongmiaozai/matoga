@@ -131,6 +131,15 @@ test('setup: 构造测试包 / 起服务 / patch TextureLoader', async () => {
     parent: 'minecraft:item/template_shulker_box',
     textures: { particle: 'minecraft:block/yellow_shulker_box' },
   }))
+  /* 1.21.4+ shulker_box item 定义：special + 内嵌 shulker_box 渲染器 → 实体贴图 cube */
+  put(MC_ROOT, 'MyPack/assets/minecraft/items/yellow_shulker_box.json', JSON.stringify({
+    model: {
+      type: 'minecraft:special',
+      base: 'minecraft:item/yellow_shulker_box',
+      model: { type: 'minecraft:shulker_box', texture: 'minecraft:shulker_yellow' },
+    },
+  }))
+  put(MC_ROOT, 'MyPack/assets/minecraft/textures/entity/shulker/shulker_yellow.png', PNG)
   put(MC_ROOT, 'MyPack/version.json', Buffer.from('{}'))
 
   const configStore = require('../../server/config/config-store')
@@ -326,6 +335,20 @@ test('shulker_box particle 回退 + template_shulker_box 内置兜底：sprite �
   assert.ok(texUrls.some(u => u.endsWith('yellow_shulker_box.png')), 'particle 贴图已请求')
   await new Promise(res => setTimeout(res, 10))
   assert.ok(mesh.material.map instanceof THREE.Texture, 'particle 贴图异步应用到 sprite')
+})
+
+test('shulker_box 内嵌渲染器：items/ 定义 → 实体贴图 cube（非 particle 纯色 sprite）', async () => {
+  texUrls.length = 0
+  const { r, group } = await view('assets/minecraft/items/yellow_shulker_box.json')
+  assert.equal(r.shown, true, 'shulker_box 渲染器产出虚拟 cube')
+  assert.equal(r.noElements, false, '有 elements → cube 分支（非 sprite 回退）')
+  assert.ok(texUrls.some(u => u.includes('shulker_yellow.png')), '实体贴图已请求')
+  assert.ok(!texUrls.some(u => u.endsWith('block/yellow_shulker_box.png')), '不使用 particle 纯色贴图')
+  const mesh = group.children[0]
+  const mats = mesh.material
+  for (let i = 0; i < 6; i++) {
+    assert.ok(mats[i].map instanceof THREE.Texture, `面 ${i} 实体贴图已应用`)
+  }
 })
 
 test('动画模型：getModelTexAnims 收集 + 多帧采样计划（缩略图动图数据源）', async () => {

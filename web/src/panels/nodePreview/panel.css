@@ -1,0 +1,250 @@
+/* ════════════════════════════════════════════════════════════
+   matoga Node Preview — 节点预览面板（点击节点查看内容预览图）
+   现代精致主题：毛玻璃 · 圆角 · 柔和阴影 · 精致过渡
+   ════════════════════════════════════════════════════════════ */
+
+/* 视图根 */
+.np-view{
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-2, #141418);
+}
+
+/* ── 多选提示 ── */
+.np-multi{
+  flex: none; padding: 5px 12px;
+  background: rgba(245,166,35,.14); color: var(--warn);
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 10.5px;
+}
+
+/* ── 头部 ── */
+.np-head{
+  flex: none; display: flex; align-items: center; gap: 11px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border-soft);
+  background: rgba(0,0,0,.18);
+}
+.np-head-accent{
+  width: 4px; height: 36px; border-radius: 2px; flex: none;
+  box-shadow: 0 0 8px currentColor;
+}
+.np-head-main{ min-width: 0 }
+.np-head-title{
+  font-size: 14px; font-weight: 600; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  letter-spacing: .2px;
+}
+.np-head-sub{
+  display: flex; align-items: center; gap: 8px; margin-top: 4px;
+  font-size: 10px; color: var(--text-muted);
+}
+.np-badge{
+  border: 1px solid var(--border-soft); border-radius: 4px;
+  padding: 0 6px; font-style: italic; color: var(--text-muted);
+}
+.np-group{ color: var(--primary); font-weight: 500 }
+.np-id{
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  color: var(--text-dim);
+  white-space: nowrap; overflow: hidden; text-overflow:ellipsis;
+}
+
+/* ── 预览舞台 ── */
+.np-stage{
+  flex: none; height: 220px;
+  display: flex; align-items: center; justify-content: center;
+  flex-direction: column; gap: 7px;
+  border-bottom: 1px solid var(--border-soft);
+  position: relative; overflow: hidden;
+  background:
+    linear-gradient(45deg, var(--checker, #3a3a3a) 25%, transparent 25%, transparent 75%, var(--checker, #3a3a3a) 75%) 0 0 / 16px 16px,
+    linear-gradient(45deg, var(--checker, #3a3a3a) 25%, var(--checker-2, #2e2e2e) 25%, var(--checker-2, #2e2e2e) 75%, var(--checker, #3a3a3a) 75%) 8px 8px / 16px 16px;
+}
+.np-img{
+  max-width: calc(100% - 24px); max-height: calc(100% - 16px);
+  object-fit: contain;
+  image-rendering: pixelated;
+  cursor: zoom-in;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.4);
+}
+.np-color{
+  width: 128px; height: 128px;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.4);
+}
+.np-color-hex{
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 12px; color: var(--text);
+  background: rgba(0,0,0,.4); backdrop-filter: blur(6px);
+  padding: 3px 9px; border-radius: 5px;
+  border: 1px solid var(--border-soft);
+}
+.np-value{
+  font-size: 44px; font-weight: 700; color: var(--primary);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 18px rgba(124,189,86,.3);
+}
+.np-none{ color: var(--text-dim); font-size: 12px; }
+
+/* ── 详情滚动区 ── */
+.np-scroll{
+  flex: 1; min-height: 0;
+  overflow-y: auto; overflow-x: hidden;
+  background: rgba(0,0,0,.1);
+  scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+}
+.np-scroll::-webkit-scrollbar{ width: 8px }
+.np-scroll::-webkit-scrollbar-thumb{ background: var(--border-soft); border-radius: 4px; border: 2px solid transparent; background-clip: padding-box }
+.np-section{
+  padding: 9px 14px 11px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.np-section:last-child{ border-bottom: none }
+.np-section-title{
+  font-size: 10px; font-weight: 600; letter-spacing: .6px;
+  text-transform: uppercase; color: var(--text-muted);
+  margin-bottom: 7px;
+}
+.np-table{ width: 100%; border-collapse: collapse; table-layout: fixed }
+.np-table td{
+  padding: 3px 0; vertical-align: top;
+  font-size: 11px; overflow-wrap: break-word;
+}
+.np-k{
+  width: 32%; color: var(--text-muted);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+.np-v{ color: var(--text) }
+.np-type{
+  display: inline-block;
+  font-size: 9.5px; font-style: italic;
+  color: var(--text-muted);
+  border: 1px solid var(--border-soft); border-radius: 4px;
+  padding: 0 5px; margin-right: 6px;
+}
+.np-conn{ color: var(--primary); margin-right: 4px }
+.np-unconn{ color: var(--text-dim) }
+.np-ports-cols{
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+}
+.np-ports-sub{
+  font-size: 10px; color: var(--text-dim); margin-bottom: 4px;
+}
+
+/* ── 资产操作按钮 ── */
+.np-actions{ display: flex; flex-wrap: wrap; gap: 7px; }
+.np-btn{
+  padding: 6px 11px;
+  background: rgba(0,0,0,.25);
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 12px; cursor: pointer;
+  transition: all .15s cubic-bezier(.2,.7,.2,1);
+}
+.np-btn:hover{ border-color: var(--primary); color: var(--primary); background: rgba(124,189,86,.08) }
+.np-btn.primary{
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+  box-shadow: 0 1px 4px rgba(124,189,86,.3);
+}
+.np-btn.primary:hover{ filter: brightness(1.1); color: #fff }
+.np-btn.danger{ border-color: var(--danger); color: var(--danger) }
+.np-btn.danger:hover{ background: rgba(198,58,58,.14); border-color: var(--danger); color: var(--danger) }
+
+/* ── 空状态 ── */
+.np-empty{
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  color: var(--text-dim); font-size: 12px;
+  text-align: center; padding: 24px;
+}
+
+@media (max-width: 360px){
+  .np-stage{ height: 150px }
+  .np-ports-cols{ grid-template-columns: 1fr }
+}
+
+/* ── 官方材质包：包内贴图网格 ── */
+.np-pack-tex .np-section-title{ display: flex; align-items: baseline; gap: 5px }
+.np-tex-count{ font-size: 10px; color: var(--text-dim); font-weight: 400 }
+.np-tex-grid{
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
+  gap: 7px;
+  margin-top: 7px;
+}
+.np-tex-cell{
+  cursor: pointer;
+  border: 1px solid var(--border-soft);
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--bg-2, #141418);
+  transition: border-color .15s, transform .15s, box-shadow .15s;
+}
+.np-tex-cell:hover{
+  border-color: var(--primary); transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,.3);
+}
+.np-tex-cell img{
+  display: block; width: 100%; aspect-ratio: 1;
+  object-fit: cover; background:
+    repeating-conic-gradient(var(--bg-2,#1a1a20) 0 25%, var(--bg-1,#111116) 0 50%) 0 0/12px 12px;
+}
+.np-tex-name{
+  display: block; padding: 3px 5px;
+  font-size: 9px; line-height: 1.3; color: var(--text-dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.np-tex-more{
+  grid-column: 1 / -1;
+  font-size: 10px; color: var(--text-dim);
+  text-align: center; padding: 5px 0;
+}
+.np-tx-empty{
+  grid-column: 1 / -1;
+  font-size: 10.5px; color: var(--text-dim);
+  padding: 12px 4px; text-align: center;
+}
+.np-tex-hint{
+  margin-top: 7px; font-size: 10px; color: var(--text-dim);
+  text-align: center;
+}
+
+/* ── 官方材质包：类别 chips / 面包屑 / 子目录 / 分页 ── */
+.np-tex-cats, .np-tex-dirs{
+  display: flex; flex-wrap: wrap; gap: 5px;
+  margin-top: 7px;
+}
+.np-tex-crumb{
+  display: flex; align-items: center; flex-wrap: wrap; gap: 2px;
+  margin-top: 7px; font-size: 10.5px;
+}
+.np-chip{
+  padding: 2px 9px;
+  font-size: 10px; line-height: 1.5;
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid var(--border-soft);
+  border-radius: 11px;
+  cursor: pointer;
+  transition: color .15s, border-color .15s, background .15s;
+}
+.np-chip:hover{ color: var(--primary); border-color: var(--primary) }
+.np-chip.on{ color: var(--primary); border-color: var(--primary); background: rgba(124,189,86,.1) }
+.np-chip.dir{ border-style: dashed }
+.np-crumb{
+  padding: 1px 5px;
+  font-size: 10.5px; color: var(--text-dim);
+  background: none; border: none; cursor: pointer;
+  border-radius: 3px; transition: color .12s, background .12s;
+}
+.np-crumb:hover{ color: var(--primary); background: rgba(124,189,86,.08) }
+.np-crumb.on{ color: var(--text); font-weight: 600; cursor: default }
+.np-crumb-sep{ color: var(--text-dim); opacity: .6 }
+.np-tex-foot{ margin-top: 7px; text-align: center; }
+.np-tex-more-btn{ font-size: 10.5px; padding: 3px 14px; border-radius: 5px; cursor: pointer; border: 1px solid var(--border-soft); background: rgba(0,0,0,.2); color: var(--text-muted); transition: all .15s }
+.np-tex-more-btn:hover{ border-color: var(--primary); color: var(--primary) }

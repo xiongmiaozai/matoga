@@ -89,6 +89,33 @@ export default [
   },
 
   {
+    files: ['blockbench-plugins/**/*.js'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: {
+        ...globals.browser,
+        Blockbench: 'readonly',
+        Texture: 'readonly',
+        Project: 'readonly',
+        Codecs: 'readonly',
+        Dialog: 'readonly',
+        Plugin: 'readonly',
+        Action: 'readonly',
+        MenuBar: 'readonly',
+        prompt: 'readonly',
+        btoa: 'readonly',
+      },
+    },
+    rules: {
+      'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+      'no-empty': 'off',
+      'no-console': 'off',
+      'no-undef': 'warn',
+    },
+  },
+
+  {
     ignores: [
       'node_modules/**',
       'web/dist/**',

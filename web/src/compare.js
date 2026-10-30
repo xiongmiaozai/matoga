@@ -5,10 +5,12 @@
  */
 
 import { state, compareBtn2, hashChk, exportBtn, exportHtmlBtn, batchRightBtn, batchLeftBtn, STATUS_ORDER, ROLES } from './core.js'
-import { buildGroups, materialKind, singleKind, mainEntryOf, hasAny, leftRoles, rightRoles } from './utils.js'
+import { buildGroups, materialKind, singleKind, mainEntryOf, hasAny, leftRoles, rightRoles, fileUrl } from './utils.js'
 import { isModelEntry } from './model-diff.js'
 import { renderResult, renderSidebar } from './render.js'
 import { t } from './i18n.js'
+import { loadImageDHash, hammingDistance, SIMILAR_THRESHOLD } from './perceptual-hash.js'
+
 
 export function computeCounts() {
   const c = { have: 0, diff: 0, partial: 0, miss: 0, extra: 0, leftTex: 0, rightTex: 0, rightMatch: 0, pbrExtra: 0, leftModel: 0, rightModel: 0, modelMatch: 0 }
@@ -84,7 +86,8 @@ export async function compare() {
       async function worker() {
         while (idx < pairs.length) {
           const [le, re, g] = pairs[idx++]
-          const [h1, h2] = await Promise.all([window.api.hashFile(le.fullPath), window.api.hashFile(re.fullPath)])
+          const canonical = !!g.isModel
+          const [h1, h2] = await Promise.all([window.api.hashFile(le.fullPath, canonical), window.api.hashFile(re.fullPath, canonical)])
           if (h1 && h2 && h1 !== h2) { g.kind = 'diff'; state.counts.have--; state.counts.diff++ }
         }
       }
@@ -92,7 +95,35 @@ export async function compare() {
       if (compareBtn2) { compareBtn2.disabled = false; compareBtn2.textContent = t('compare.start') }
       renderResult()
       if (state.selected) renderSidebar()
+
+      const diffPairs = []
+      for (const g of result) {
+        if (g.kind !== 'diff' || !g.isMaterial) continue
+        const le = g.left && g.left.main, re = g.right && g.right.main
+        if (le && re) diffPairs.push([le, re, g])
+      }
+      if (diffPairs.length) {
+        let sIdx = 0
+        const SN = Math.min(navigator.hardwareConcurrency || 4, 4)
+        async function similarWorker() {
+          while (sIdx < diffPairs.length) {
+            const [le, re, g] = diffPairs[sIdx++]
+            const [dh1, dh2] = await Promise.all([loadImageDHash(fileUrl(le.fullPath)), loadImageDHash(fileUrl(re.fullPath))])
+            if (dh1 && dh2) {
+            const dist = hammingDistance(dh1, dh2)
+            if (dist >= 0) {
+              g.hammingDist = dist
+              if (dist <= SIMILAR_THRESHOLD) g.similar = true
+            }
+            }
+          }
+        }
+        await Promise.all(Array.from({ length: SN }, similarWorker))
+        renderResult()
+        if (state.selected) renderSidebar()
+      }
     }
+
   }
   exportBtn.disabled = false
   exportHtmlBtn.disabled = false

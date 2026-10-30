@@ -20,18 +20,26 @@ import { showToast } from '../../core.js'
 import { apiUrl } from '../../utils.js'
 import { createUvEditor } from '../../uv-editor-core.js'
 import {
-  buildMcLayout, buildBbLayout,
+  buildMcLayout,
+  buildBbLayout,
   getLastModelLayout,
-  updateModelFaceUv, updateModelFaceRotation, updateModelTexture, clearModelTexture,
-  highlightModelFace, exportActiveModelJson,
-  texUrlToRef, writeMcTexRef, texPathForRef,
+  getLastModelLayoutPair,
+  updateModelFaceUv,
+  updateModelFaceRotation,
+  updateModelTexture,
+  clearModelTexture,
+  highlightModelFace,
+  exportActiveModelJson,
+  getActiveModelSource,
+  texUrlToRef,
+  writeMcTexRef,
+  texPathForRef
 } from '../../mc-model-viewer.js'
 import { isCustomModelActive } from '../../material3d.js'
 import { t, onLocaleChange } from '../../i18n.js'
 
 const IM_API = '/api/imported-models'
 const CM_API = '/api/custom-models'
-
 
 let editor = null
 let sel = null
@@ -48,7 +56,7 @@ async function api(method, path, body) {
   const res = await fetch(apiUrl(path), {
     method,
     headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: body !== undefined ? JSON.stringify(body) : undefined
   })
   const j = await res.json()
   if (!j || !j.ok) throw new Error((j && j.msg) || 'bad response')
@@ -59,9 +67,16 @@ async function api(method, path, body) {
 
 function currentLayout() {
   if (source.mode === 'viewport') {
-    return (typeof isCustomModelActive === 'function' && isCustomModelActive()) ? getLastModelLayout() : null
+    return isCustomModelActive() ? getLastModelLayout() : null
   }
   return source.layout || null
+}
+
+function currentLayoutPair() {
+  if (source.mode === 'viewport') {
+    return isCustomModelActive() ? getLastModelLayoutPair() : null
+  }
+  return null
 }
 
 function offlineWriteFace(el, key, prop, val) {
@@ -72,14 +87,18 @@ function offlineWriteFace(el, key, prop, val) {
 const hooks = {
   onFaceUv(el, key, uv) {
     if (source.mode === 'viewport') {
-      try { updateModelFaceUv(el, key, uv) } catch {}
+      try {
+        updateModelFaceUv(el, key, uv)
+      } catch {}
     } else {
       offlineWriteFace(el, key, 'uv', [...uv])
     }
   },
   onFaceRotation(el, key, rotation) {
     if (source.mode === 'viewport') {
-      try { updateModelFaceRotation(el, key, rotation) } catch {}
+      try {
+        updateModelFaceRotation(el, key, rotation)
+      } catch {}
     } else {
       offlineWriteFace(el, key, 'rotation', rotation)
     }
@@ -96,7 +115,7 @@ const hooks = {
       const origin = layout && Array.isArray(layout.texOrigin) ? layout.texOrigin : null
       const jsonTextures = Array.isArray(source.json.textures) ? source.json.textures : null
       if (!origin || !jsonTextures) return Promise.resolve()
-      const writeBack = (val) => {
+      const writeBack = val => {
         for (let rawIdx = 0; rawIdx < origin.length; rawIdx++) {
           if (origin[rawIdx] === texIndex && jsonTextures[rawIdx]) jsonTextures[rawIdx].source = val
         }
@@ -114,19 +133,31 @@ const hooks = {
       if (url.startsWith('/')) {
         return fetch(apiUrl(url))
           .then(r => (r.ok ? r.blob() : null))
-          .then(blob => (blob ? new Promise((resolve) => {
-            const rd = new FileReader()
-            rd.onload = () => resolve(String(rd.result))
-            rd.onerror = () => resolve(null)
-            rd.readAsDataURL(blob)
-          }) : null))
-          .then(dataUrl => { if (dataUrl) writeBack(dataUrl) })
+          .then(blob =>
+            blob
+              ? new Promise(resolve => {
+                  const rd = new FileReader()
+                  rd.onload = () => resolve(String(rd.result))
+                  rd.onerror = () => resolve(null)
+                  rd.readAsDataURL(blob)
+                })
+              : null
+          )
+          .then(dataUrl => {
+            if (dataUrl) writeBack(dataUrl)
+          })
           .catch(() => {})
       }
     }
     /* 离线：MC .json（im/cm）贴图引用写回（保存时持久化，重新打开自动加载）。
        无包上下文 → 一律扩展引用形式（data: 内嵌 / file: 磁盘路径 / 站内 URL） */
-    if (source.mode === 'offline' && !source.isBb && source.json && source.json.textures && typeof source.json.textures === 'object') {
+    if (
+      source.mode === 'offline' &&
+      !source.isBb &&
+      source.json &&
+      source.json.textures &&
+      typeof source.json.textures === 'object'
+    ) {
       const lay = layout || source.layout
       const oldPath = lay && Array.isArray(lay.texPaths) ? lay.texPaths[texIndex] : null
       if (typeof oldPath === 'string') {
@@ -141,15 +172,23 @@ const hooks = {
   },
   highlightFace(el, key, on) {
     if (source.mode !== 'viewport') return false
-    try { return highlightModelFace(el, key, on) } catch { return false }
+    try {
+      return highlightModelFace(el, key, on)
+    } catch {
+      return false
+    }
   },
   exportJson() {
     if (source.mode === 'viewport') {
-      try { return exportActiveModelJson() } catch { return null }
+      try {
+        return exportActiveModelJson()
+      } catch {
+        return null
+      }
     }
     if (source.mode !== 'offline' || !source.json) return null
     return { json: source.json, filename: (source.id || 'model') + (source.isBb ? '.bbmodel' : '.json') }
-  },
+  }
 }
 
 /* ── 模型列表 ─────────────────────────────────── */
@@ -157,10 +196,15 @@ const hooks = {
 async function loadModelOptions() {
   const groups = [
     { key: 'im', api: IM_API, labelKey: 'uv.panelSourceIm' },
-    { key: 'cm', api: CM_API, labelKey: 'uv.panelSourceCm' },
-
+    { key: 'cm', api: CM_API, labelKey: 'uv.panelSourceCm' }
   ]
-  const lists = await Promise.all(groups.map(g => api('GET', g.api).then(d => (d && d.models) || []).catch(() => [])))
+  const lists = await Promise.all(
+    groups.map(g =>
+      api('GET', g.api)
+        .then(d => (d && d.models) || [])
+        .catch(() => [])
+    )
+  )
   options = [{ kind: 'viewport', id: '', name: '' }]
   rebuildSelect(lists, groups)
 }
@@ -214,7 +258,7 @@ async function openOfflineModel(kind, id) {
       layout = buildBbLayout(json)
     } else {
       const elements = Array.isArray(json.elements) ? json.elements : []
-      const textures = (json.textures && typeof json.textures === 'object') ? json.textures : {}
+      const textures = json.textures && typeof json.textures === 'object' ? json.textures : {}
       if (!elements.length) throw new Error('no elements')
       layout = buildMcLayout(elements, textures, undefined, undefined)
     }
@@ -233,6 +277,64 @@ async function openOfflineModel(kind, id) {
   }
 }
 
+/* ── 同步到 MC 资源包（使 Minecraft 可直接加载） ────────────────── */
+
+async function syncToPack(kind, id, json) {
+  let packs = []
+  try {
+    const data = await api('GET', '/api/mc-packs/list')
+    const arr = (data && data.packs) || []
+    packs = arr.map(p => (typeof p === 'string' ? p : p.name)).filter(Boolean)
+  } catch {}
+  if (!packs.length) return
+  const isBb = !!(json && json.meta && (json.meta.format === 'bbmodel' || json.meta.model_format))
+  if (isBb) {
+    showToast(t('uv.panelSyncSkipBb'))
+    return
+  }
+  for (const packName of packs) {
+    try {
+      if (kind === 'cm') {
+        await api('POST', CM_API + '/' + encodeURIComponent(id) + '/sync-pack', { packName })
+      } else if (kind === 'im') {
+        const ns = inferNamespace(json) || 'minecraft'
+        const name = id || 'model'
+        const cat = inferModelCategory(json)
+        const relPath = `assets/${ns}/models/${cat}/${name}.json`
+        await api('POST', IM_API + '/' + encodeURIComponent(id) + '/sync-pack', { packName, relPath })
+      }
+    } catch (e) {
+      console.warn('[uv-editor-panel] sync-pack', e)
+    }
+  }
+}
+
+function inferNamespace(json) {
+  const tex = json && json.textures
+  if (tex && typeof tex === 'object') {
+    for (const k in tex) {
+      const v = String(tex[k] || '')
+      const m = v.match(/^([a-z0-9_]+):/)
+      if (m) return m[1]
+    }
+  }
+  return null
+}
+
+function inferModelCategory(json) {
+  const parent = json && typeof json.parent === 'string' ? json.parent : ''
+  if (/^item\//.test(parent)) return 'item'
+  if (/^block\//.test(parent)) return 'block'
+  const tex = json && json.textures
+  if (tex && typeof tex === 'object') {
+    for (const k in tex) {
+      if (/^item\//.test(k)) return 'item'
+      if (/^block\//.test(k)) return 'block'
+    }
+  }
+  return 'block'
+}
+
 /* ── 保存（离线模式） ─────────────────────────────────── */
 
 /* bbmodel 内嵌贴图烘焙：编辑中被替换为贴图库 raw URL 的槽位（layout.url ≠ json.source
@@ -243,7 +345,7 @@ async function bakeTexUrls(json, layout) {
   for (let rawIdx = 0; rawIdx < layout.texOrigin.length; rawIdx++) {
     const layIdx = layout.texOrigin[rawIdx]
     const raw = json.textures[rawIdx]
-    const lay = (layIdx >= 0 && layIdx < layout.textures.length) ? layout.textures[layIdx] : null
+    const lay = layIdx >= 0 && layIdx < layout.textures.length ? layout.textures[layIdx] : null
     if (!raw || typeof raw.source !== 'string' || !lay || typeof lay.url !== 'string') continue
     if (lay.url === raw.source) continue
     if (lay.url.startsWith('data:') || /^https?:\/\//i.test(lay.url)) {
@@ -255,7 +357,7 @@ async function bakeTexUrls(json, layout) {
       const res = await fetch(apiUrl(lay.url))
       if (!res.ok) continue
       const blob = await res.blob()
-      const dataUrl = await new Promise((resolve) => {
+      const dataUrl = await new Promise(resolve => {
         const r = new FileReader()
         r.onload = () => resolve(String(r.result))
         r.onerror = () => resolve(null)
@@ -270,14 +372,30 @@ async function bakeTexUrls(json, layout) {
 }
 
 async function saveOfflineModel() {
-  if (source.mode !== 'offline' || !source.json) return
-  const { kind, id, json, layout } = source
+  let kind, id, json, layout
+  if (source.mode === 'offline') {
+    if (!source.json) return
+    kind = source.kind
+    id = source.id
+    json = source.json
+    layout = source.layout
+  } else if (source.mode === 'viewport') {
+    const ms = getActiveModelSource()
+    if (!ms || !ms.id) return
+    const exp = exportActiveModelJson()
+    if (!exp || !exp.json) return
+    kind = ms.kind
+    id = ms.id
+    json = exp.json
+    layout = currentLayout()
+  } else {
+    return
+  }
   saveBtn.disabled = true
   try {
     await bakeTexUrls(json, layout)
     if (kind === 'im') {
       await api('PUT', IM_API + '/' + encodeURIComponent(id), { data: JSON.stringify(json, null, 2) })
-
     } else if (kind === 'cm') {
       await api('PUT', CM_API + '/' + encodeURIComponent(id), { model: JSON.stringify(json) })
     } else {
@@ -286,6 +404,7 @@ async function saveOfflineModel() {
     if (editor) editor.markClean()
     updateHint()
     showToast(t('uv.panelSaved'))
+    syncToPack(kind, id, json).catch(() => {})
     loadModelOptions().catch(() => {})
   } catch (e) {
     console.error('[uv-editor-panel] save', e)
@@ -297,7 +416,12 @@ async function saveOfflineModel() {
 /* ── 状态 UI ─────────────────────────────────── */
 
 function canSave() {
-  return source.mode === 'offline' && !!source.json
+  if (source.mode === 'offline') return !!source.json
+  if (source.mode === 'viewport') {
+    const ms = getActiveModelSource()
+    return !!(ms && (ms.kind === 'im' || ms.kind === 'cm') && ms.id)
+  }
+  return false
 }
 
 function updateSaveButton() {
@@ -311,7 +435,12 @@ function updateHint() {
   if (!hintEl) return
   const dirty = !!(editor && editor.isDirty())
   if (source.mode === 'viewport') {
-    hintEl.textContent = t('uv.panelViewportHint')
+    const ms = getActiveModelSource()
+    if (ms && ms.id) {
+      hintEl.textContent = (ms.kind === 'cm' ? '自定义·' : '导入·') + ms.id
+    } else {
+      hintEl.textContent = t('uv.panelViewportHint')
+    }
   } else {
     hintEl.textContent = (source.name || source.id || '') + (source.isBb ? ' · bbmodel' : ' · mc json')
   }
@@ -338,8 +467,9 @@ export function init() {
     container: host,
     visible: () => host.isConnected && host.clientWidth > 0,
     getLayout: currentLayout,
+    getLayoutPair: currentLayoutPair,
     hooks,
-    onDirty: () => updateHint(),
+    onDirty: () => updateHint()
   })
 
   if (sel) {

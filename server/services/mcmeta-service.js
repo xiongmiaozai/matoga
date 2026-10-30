@@ -14,6 +14,7 @@ const fs = require('fs')
 const path = require('path')
 const zlib = require('zlib')
 const { AppError } = require('../lib/errors')
+const { SCAN_TEX_EXTS, SCAN_TEX_EXT_RE } = require('./img-exts')
 
 const ZIP_EXTS = new Set(['zip', 'mcpack', 'resourcepack'])
 const MCMETA_NAME = 'pack.mcmeta'
@@ -21,7 +22,7 @@ const VERSION_JSON_NAME = 'version.json'
 const ASSETS_PREFIX = 'assets/'
 
 /* 包内贴图：assets/<ns>/textures/** 下的图片文件 */
-const IMG_EXT_RE = /\.(png|jpe?g|webp|gif|bmp|tiff?|avif)$/i
+const IMG_EXT_RE = SCAN_TEX_EXT_RE
 const TEX_DIR_RE = /^assets\/[^/]+\/textures\//
 /* 包内模型：assets/<ns>/models/** 下的 JSON 文件 + 1.21.4+ 物品模型定义 assets/<ns>/items/*.json */
 const MODEL_DIR_RE = /^assets\/[^/]+\/(models|items)\//
@@ -57,6 +58,10 @@ const PACK_FORMAT_VERSIONS = [
   { format: 55, versions: '1.21.5' },
   { format: 63, versions: '1.21.6' },
   { format: 64, versions: '1.21.7 – 1.21.8' },
+  { format: 69, versions: '1.21.9 – 1.21.10' },
+  { format: 75, versions: '1.21.11' },
+  { format: 84, versions: '26.1 – 26.1.2' },
+  { format: 88, versions: '26.2' },
   { format: 97, versions: '26.3' },
 ]
 
@@ -123,7 +128,7 @@ function pickMcmetaEntry(entries) {
 }
 
 /* 图片扩展名变体集合（模糊匹配：模型引用 .png 而包内实为 .jpg 等的社区包） */
-const IMG_EXT_LIST = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'tif', 'tiff', 'avif']
+const IMG_EXT_LIST = [...SCAN_TEX_EXTS]
 const MCMETA_SUFFIX = '.mcmeta'
 
 /* 请求路径（小写）→ 同 stem 的图片扩展名候选集合；非图片扩展名返回 null。
@@ -151,17 +156,38 @@ function fuzzyVariantKey(nameL, isMetaQuery) {
    3. 任意层嵌套根前缀（取最浅）   4. 以上三级的大小写不敏感形态
    5. 图片扩展名变体（.png ↔ .jpg 等，mcmeta 查询剥后缀同 stem 比较）
    模糊层仅兜底原本 404 的请求：zip 实际条目名大小写 / 扩展名与模型引用不一致的场景 */
+
+/* zip 条目索引缓存：精确名 + 归一化名 → entry，避免批量查找时重复线性扫描 */
+const zipIndexCache = new WeakMap()
+function getZipIndex(entries) {
+  let idx = zipIndexCache.get(entries)
+  if (idx) return idx
+  idx = { exact: new Map(), norm: new Map() }
+  for (const e of entries) {
+    const n = e.name
+    if (!idx.exact.has(n)) idx.exact.set(n, e)
+    const p = normalizeZipTexName(n)
+    if (p && !idx.norm.has(p)) idx.norm.set(p, e)
+
+  }
+  zipIndexCache.set(entries, idx)
+  return idx
+}
+
 function findZipEntry(entries, rel) {
+  const idx = getZipIndex(entries)
+  const exact = idx.exact.get(rel)
+  if (exact) return exact
+  const normHit = idx.norm.get(rel)
+  if (normHit) return normHit
   const relL = rel.toLowerCase()
   const isMeta = relL.endsWith(MCMETA_SUFFIX)
   const variants = imgVariantKeys(relL)
-  let norm = null, nested = null, nestedDepth = Infinity
+  let nested = null, nestedDepth = Infinity
   let icExact = null, icNorm = null, icNested = null, icNestedDepth = Infinity, variantHit = null
   for (const e of entries) {
     const n = e.name
-    if (n === rel) return e
     const p = normalizeZipTexName(n)
-    if (!norm && p === rel) norm = e
     const nL = n.toLowerCase()
     if (!icExact && nL === relL) icExact = e
     if (p && !icNorm && p.toLowerCase() === relL) icNorm = e
@@ -173,7 +199,7 @@ function findZipEntry(entries, rel) {
       if (key != null && variants.has(key)) variantHit = e
     }
   }
-  return norm || nested || icExact || icNorm || icNested || variantHit || null
+  return nested || icExact || icNorm || icNested || variantHit || null
 }
 
 function collectNamespaces(entries) {
@@ -495,6 +521,36 @@ async function listOfficialPacks(root) {
   return { root, exists: true, packs }
 }
 
+/* 扁平收集 root 下所有包内贴图相对路径（去重），供前端校验模型贴图引用是否由原版提供 */
+async function listAllTexPaths(root) {
+  let names
+  try {
+    names = await fs.promises.readdir(root, { withFileTypes: true })
+  } catch (e) {
+    if (e && e.code === 'ENOENT') return []
+    throw new AppError('ERR_FS_NOT_FOUND', e.message)
+  }
+  const set = new Set()
+  for (const d of names) {
+    if (d.name.startsWith('.')) continue
+    const full = path.join(root, d.name)
+    const st = await fs.promises.stat(full).catch(() => null)
+    if (!st) continue
+    let texs = []
+    if (st.isDirectory()) {
+      const r = await resolveDirPack(full)
+      texs = await walkDirTextures(r ? r.root : full)
+    } else if (ZIP_EXTS.has((d.name.split('.').pop() || '').toLowerCase())) {
+      const buf = await fs.promises.readFile(full)
+      texs = zipTextureEntries(parseZipCentralDirectory(buf))
+    } else {
+      continue
+    }
+    for (const t of texs) set.add(t.path)
+  }
+  return [...set]
+}
+
 function validPackName(name) {
   if (typeof name !== 'string') return false
   const n = name
@@ -518,6 +574,24 @@ async function renamePack(root, fromName, toName) {
   if (targetExists) throw new AppError('ERR_ALREADY_EXISTS', 'target already exists: ' + toName)
   await fs.promises.rename(from, to)
   return { from, to, name: toName }
+}
+
+async function deletePack(root, name) {
+  if (!validPackName(name)) throw new AppError('ERR_INVALID_PARAM', 'invalid pack name')
+  const full = path.join(root, name)
+  try {
+    await fs.promises.access(full)
+  } catch {
+    throw new AppError('ERR_FS_NOT_FOUND', 'pack not found: ' + name)
+  }
+  const st = await fs.promises.stat(full)
+  if (st.isDirectory()) {
+    await fs.promises.rm(full, { recursive: true, force: true })
+  } else {
+    await fs.promises.unlink(full)
+  }
+
+  return { name, deleted: true }
 }
 
 function suggestName(entry) {
@@ -890,7 +964,9 @@ module.exports = {
   parseMcmetaText,
   analyzePack,
   listOfficialPacks,
+  listAllTexPaths,
   renamePack,
+  deletePack,
   suggestName,
   validPackName,
   listPackTextures,
@@ -900,7 +976,11 @@ module.exports = {
   readPackFile,
   resolveDirPack,
   parseZipCentralDirectory,
+  readZipEntry,
+  findZipEntry,
   statPack,
   normalizeZipBrowseName,
+  walkDirModels,
+  zipModelEntries,
   ZIP_EXTS,
 }

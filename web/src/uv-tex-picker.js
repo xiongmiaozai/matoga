@@ -24,20 +24,26 @@
 import { createFloatingWindow } from './floating-window.js'
 import { apiUrl, setTexDragData, parseTexGroup } from './utils.js'
 import { t, onLocaleChange } from './i18n.js'
+import { loadZhNames, zhOfTexName } from './zh-names.js'
 
 const PAGE_SIZE = 80
 const IMG_EXTS = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'tga'])
 /* 角标角色顺序（与展示优先级一致） */
-const BADGE_ROLES = [['normal', 'n'], ['specular', 's'], ['height', 'h'], ['emissive', 'e']]
+const BADGE_ROLES = [
+  ['normal', 'n'],
+  ['specular', 's'],
+  ['height', 'h'],
+  ['emissive', 'e']
+]
 
 const state = {
-  packs: [],        /* [{ source, name, kind, root, label, materials: [材质组] }] */
+  packs: [] /* [{ source, name, kind, root, label, materials: [材质组] }] */,
   packIdx: 0,
   searchText: '',
-  shown: 0,         /* 当前渲染条数（分页） */
-  filtered: [],     /* 当前包 + 搜索过滤后的材质组列表 */
+  shown: 0 /* 当前渲染条数（分页） */,
+  filtered: [] /* 当前包 + 搜索过滤后的材质组列表 */,
   loadError: null,
-  resolve: null,    /* 本次打开的 Promise resolve */
+  resolve: null /* 本次打开的 Promise resolve */
 }
 
 let win = null
@@ -47,7 +53,6 @@ let gridEl = null
 let moreBtn = null
 let emptyEl = null
 let statusEl = null
-
 
 /* ── raw URL 构造（与 asset-library packRawUrl 一致） ────────── */
 
@@ -80,7 +85,10 @@ function buildMaterials(files) {
     const dir = slash >= 0 ? f.path.slice(0, slash) : ''
     const key = dir ? dir + '/' + p.groupKey : p.groupKey
     let g = map.get(key)
-    if (!g) { g = { key, name: p.groupKey }; map.set(key, g) }
+    if (!g) {
+      g = { key, name: p.groupKey }
+      map.set(key, g)
+    }
     g[p.role] = f
   }
   /* 仅展示含主图的材质组（材质球以主图为代表） */
@@ -92,23 +100,37 @@ function buildMaterials(files) {
 async function loadPacks() {
   if (state.packs.length || state.loadError) return
   try {
+    await loadZhNames()
     const res = await fetch(apiUrl('/api/asset/tex'))
     const j = await res.json()
     if (!j || !j.ok) throw new Error((j && j.msg) || 'bad response')
     const packs = (j.data && j.data.packs) || []
-    state.packs = packs.map(p => {
-      const files = []
-      for (const g of (p.groups || [])) {
-        for (const f of (g.files || [])) {
-          if (!f || !f.path) continue
-          const ext = (String(f.name || f.path).split('.').pop() || '').toLowerCase()
-          if (!IMG_EXTS.has(ext)) continue
-          files.push({ name: f.name, path: f.path, url: packTexRawUrl(p, f.path) })
+    state.packs = packs
+      .map(p => {
+        const files = []
+        for (const g of p.groups || []) {
+          for (const f of g.files || []) {
+            if (!f || !f.path) continue
+            const ext = (
+              String(f.name || f.path)
+                .split('.')
+                .pop() || ''
+            ).toLowerCase()
+            if (!IMG_EXTS.has(ext)) continue
+            files.push({ name: f.name, path: f.path, url: packTexRawUrl(p, f.path) })
+          }
         }
-      }
-      const materials = buildMaterials(files)
-      return { source: p.source, name: p.name, kind: p.kind, root: p.root, label: p.name + '（' + materials.length + '）', materials }
-    }).filter(p => p.materials.length)
+        const materials = buildMaterials(files)
+        return {
+          source: p.source,
+          name: p.name,
+          kind: p.kind,
+          root: p.root,
+          label: p.name + '（' + materials.length + '）',
+          materials
+        }
+      })
+      .filter(p => p.materials.length)
     if (!state.packs.length) state.loadError = 'empty'
   } catch (e) {
     state.loadError = e.message || 'load fail'
@@ -120,7 +142,14 @@ async function loadPacks() {
 function applyFilter() {
   const pack = state.packs[state.packIdx]
   const q = state.searchText.trim().toLowerCase()
-  state.filtered = pack ? pack.materials.filter(m => !q || String(m.name).toLowerCase().includes(q) || String(m.key).toLowerCase().includes(q)) : []
+  state.filtered = pack
+    ? pack.materials.filter(m => {
+        if (!q) return true
+        if (String(m.name).toLowerCase().includes(q) || String(m.key).toLowerCase().includes(q)) return true
+        const z = zhOfTexName(String(m.name).replace(/\.png$/i, ''))
+        return !!z && z.toLowerCase().includes(q)
+      })
+    : []
   state.shown = 0
   renderGrid()
 }
@@ -131,7 +160,7 @@ function materialPickValue(m) {
     name: m.name,
     url: m.main.url,
     normal: (m.normal && m.normal.url) || '',
-    specular: (m.specular && m.specular.url) || '',
+    specular: (m.specular && m.specular.url) || ''
   }
 }
 
@@ -168,9 +197,17 @@ function renderGrid() {
     name.textContent = m.name
     cell.appendChild(name)
     /* 拖拽到 UV 编辑器画布 = 直接替换贴图（与点击选择等价，带 PBR 配套） */
-    cell.addEventListener('dragstart', (e) => {
+    cell.addEventListener('dragstart', e => {
       const v = materialPickValue(m)
-      if (setTexDragData(e.dataTransfer, { name: v.name, url: v.url, path: m.main.path, normal: v.normal, specular: v.specular })) {
+      if (
+        setTexDragData(e.dataTransfer, {
+          name: v.name,
+          url: v.url,
+          path: m.main.path,
+          normal: v.normal,
+          specular: v.specular
+        })
+      ) {
         e.dataTransfer.effectAllowed = 'copy'
       } else {
         e.preventDefault()
@@ -178,7 +215,9 @@ function renderGrid() {
     })
     cell.addEventListener('click', () => {
       if (state.resolve) {
-        try { state.resolve(materialPickValue(m)) } catch {}
+        try {
+          state.resolve(materialPickValue(m))
+        } catch {}
         state.resolve = null
       }
       win.close()
@@ -191,9 +230,12 @@ function renderGrid() {
     emptyEl.style.display = state.filtered.length ? 'none' : ''
     emptyEl.textContent = state.loadError === 'empty' ? t('uv.pickerEmpty') : t('uv.pickerNoMatch')
   }
-  if (statusEl) statusEl.textContent = state.filtered.length
-    ? t('uv.pickerCount', { n: state.shown + '/' + state.filtered.length })
-    : (state.loadError === 'empty' ? t('uv.pickerEmpty') : t('uv.pickerNoMatch'))
+  if (statusEl)
+    statusEl.textContent = state.filtered.length
+      ? t('uv.pickerCount', { n: state.shown + '/' + state.filtered.length })
+      : state.loadError === 'empty'
+        ? t('uv.pickerEmpty')
+        : t('uv.pickerNoMatch')
 }
 
 function rebuildPackSelect() {
@@ -224,8 +266,11 @@ function initPicker() {
     id: 'uvTexPicker',
     title: t('uv.pickerTitle'),
     icon: 'i-image',
-    x: 320, y: 120, w: 620, h: 520,
-    open: false,
+    x: 320,
+    y: 120,
+    w: 620,
+    h: 520,
+    open: false
   })
 
   const wrap = document.createElement('div')
@@ -274,9 +319,11 @@ function initPicker() {
 
   win.body.appendChild(wrap)
 
-  win.onToggle = (open) => {
+  win.onToggle = open => {
     if (!open && state.resolve) {
-      try { state.resolve(null) } catch {}
+      try {
+        state.resolve(null)
+      } catch {}
       state.resolve = null
     }
   }
@@ -301,5 +348,7 @@ export async function openTexPicker() {
   if (searchInput) searchInput.value = ''
   win.open()
   await refreshView()
-  return new Promise((resolve) => { state.resolve = resolve })
+  return new Promise(resolve => {
+    state.resolve = resolve
+  })
 }

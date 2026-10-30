@@ -4,7 +4,7 @@ const fs = require('fs')
 const path = require('path')
 const store = require('../../server/config/node-project-store')
 
-const DIR = store.DIR
+const DIR = store.getDir()
 let backup = null
 let existed = false
 
@@ -28,17 +28,22 @@ test('save: 新建项目生成 .mtgp 目录结构', async () => {
   const graph = {
     nodes: [
       { id: 'n1', type: 'texture', pos: [0, 0], widgets_values: { tex: '@tex/0-a.png' } },
-      { id: 'n2', type: 'mix', pos: [100, 0], widgets_values: {} },
+      { id: 'n2', type: 'mix', pos: [100, 0], widgets_values: {} }
     ],
-    links: [['e1', 'n1', 'tex', 'n2', 'a']],
+    links: [['e1', 'n1', 'tex', 'n2', 'a']]
   }
   const id = await store.save({
     name: '测试工程 <A>',
     graph,
-    thumbnail: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+    thumbnail:
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
     textures: [
-      { name: 'a.png', dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==' },
-    ],
+      {
+        name: 'a.png',
+        dataUrl:
+          'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+      }
+    ]
   })
   assert.match(id, /^p[A-Za-z0-9_-]+$/)
   const dir = store.projectDir(id)
@@ -84,7 +89,7 @@ test('save: 再次保存时贴图 sourcePath 指向工程内 texDir 不丢失（
     id,
     name: '测试工程 <A>',
     graph: { nodes: [{ id: 'n1', type: 'texture', pos: [0, 0], widgets_values: { tex: '@tex/0-a.png' } }], links: [] },
-    textures: [{ name: 'a.png', path: fp }],
+    textures: [{ name: 'a.png', path: fp }]
   })
   const p = store.load(id)
   assert.equal(p.textures.length, 1, '再次保存后贴图不应丢失')
@@ -99,7 +104,7 @@ test('save: 更新已存在项目（覆盖贴图）', async () => {
     id,
     name: '更新后的工程',
     graph: { nodes: [{ id: 'n1', type: 'color', widgets_values: {} }], links: [] },
-    textures: [],
+    textures: []
   })
   const p = store.load(id)
   assert.equal(p.name, '更新后的工程')
@@ -112,7 +117,10 @@ test('save: 更新已存在项目（覆盖贴图）', async () => {
 test('save: 非法参数抛错', async () => {
   await assert.rejects(async () => store.save({ name: '', graph: { nodes: [] } }), /invalid project name/)
   await assert.rejects(async () => store.save({ name: 'x', graph: null }), /invalid graph/)
-  await assert.rejects(async () => store.save({ id: '不合法的 id!', name: 'x', graph: { nodes: [] } }), /invalid project id/)
+  await assert.rejects(
+    async () => store.save({ id: '不合法的 id!', name: 'x', graph: { nodes: [] } }),
+    /invalid project id/
+  )
   await assert.rejects(async () => store.save({ id: 'pnoexist', name: 'x', graph: { nodes: [] } }), /project not found/)
 })
 

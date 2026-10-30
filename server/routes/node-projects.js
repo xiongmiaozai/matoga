@@ -18,45 +18,63 @@ const store = require('../config/node-project-store')
 
 const router = express.Router()
 
-router.get('/', wrap(async (req, res) => {
-  ok(res, { projects: store.list(), dir: store.DIR })
-}))
-
-router.post('/', wrap(async (req, res) => {
-  const b = req.body || {}
-  const id = await store.save({
-    id: b.id,
-    name: b.name,
-    graph: b.graph,
-    thumbnail: b.thumbnail,
-    textures: b.textures,
+router.get(
+  '/',
+  wrap(async (req, res) => {
+    ok(res, { projects: store.list(), dir: store.getDir() })
   })
-  ok(res, { id, dir: store.projectDir(id) })
-}))
+)
 
-router.get('/:id', wrap(async (req, res) => {
-  ok(res, store.load(req.params.id))
-}))
-
-router.delete('/:id', wrap(async (req, res) => {
-  await store.remove(req.params.id)
-  ok(res, { id: req.params.id })
-}))
-
-router.put('/:id/rename', wrap(async (req, res) => {
-  ok(res, await store.rename(req.params.id, req.body && req.body.name))
-}))
-
-router.get('/:id/thumb', wrap(async (req, res) => {
-  const p = store.thumbPath(req.params.id)
-  try {
-    await fs.promises.access(p)
-  } catch {
-    return fail(res, 'ERR_FS_NOT_FOUND', 'thumbnail not found')
-  }
-  res.sendFile(p, (err) => {
-    if (err && !res.headersSent) fail(res, 'ERR_FS_NOT_FOUND', err.message)
+router.post(
+  '/',
+  wrap(async (req, res) => {
+    const b = req.body || {}
+    const id = await store.save({
+      id: b.id,
+      name: b.name,
+      graph: b.graph,
+      thumbnail: b.thumbnail,
+      textures: b.textures
+    })
+    ok(res, { id, dir: store.projectDir(id) })
   })
-}))
+)
+
+router.get(
+  '/:id',
+  wrap(async (req, res) => {
+    ok(res, store.load(req.params.id))
+  })
+)
+
+router.delete(
+  '/:id',
+  wrap(async (req, res) => {
+    await store.remove(req.params.id)
+    ok(res, { id: req.params.id })
+  })
+)
+
+router.put(
+  '/:id/rename',
+  wrap(async (req, res) => {
+    ok(res, await store.rename(req.params.id, req.body && req.body.name))
+  })
+)
+
+router.get(
+  '/:id/thumb',
+  wrap(async (req, res) => {
+    const p = store.thumbPath(req.params.id)
+    try {
+      await fs.promises.access(p)
+    } catch {
+      return fail(res, 'ERR_FS_NOT_FOUND', 'thumbnail not found')
+    }
+    res.sendFile(p, err => {
+      if (err && !res.headersSent) fail(res, 'ERR_FS_NOT_FOUND', err.message)
+    })
+  })
+)
 
 module.exports = router

@@ -21,6 +21,8 @@ const crypto = require('crypto')
 const { logger } = require('../middleware/logger')
 const { DATA_ROOT } = require('../paths')
 const { AppError } = require('../lib/errors')
+const { BUILD_TEX_EXTS } = require('./img-exts')
+const { atomicWriteJson } = require('../config/atomic-write')
 const { guardRead } = require('../middleware/validate')
 const configStore = require('../config/config-store')
 const assetStore = require('../config/asset-store')
@@ -36,7 +38,7 @@ const MAX_ITEMS = 500
 const MAX_EXPORT_ITEMS = 2000
 const MAX_FILE_BYTES = 256 * 1024 * 1024
 
-const IMG_EXTS = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'tga', 'tif', 'tiff'])
+const IMG_EXTS = BUILD_TEX_EXTS
 const MODEL_EXTS = new Set(['json', 'bbmodel'])
 const HDRI_EXTS = new Set(['hdr', 'exr'])
 const DEFAULT_NAME = '我的制作包'
@@ -55,12 +57,7 @@ function readRaw(file) {
   }
 }
 
-function atomicWrite(file, data) {
-  fs.mkdirSync(path.dirname(file), { recursive: true })
-  const tmp = file + '.' + crypto.randomUUID() + '.tmp'
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2))
-  fs.renameSync(tmp, file)
-}
+
 
 function sanitizeItem(item) {
   if (!item || typeof item !== 'object') return null
@@ -105,7 +102,7 @@ function getSelection() {
 function setSelection(items) {
   const clean = sanitizeList(items, MAX_ITEMS)
   const result = writeQueue.then(() => {
-    atomicWrite(SELECTION_FILE, { items: clean })
+    atomicWriteJson(SELECTION_FILE, { items: clean })
     return clean
   })
   writeQueue = result.catch((e) => { logger.error('craft', 'setSelection failed: ' + e.message) })

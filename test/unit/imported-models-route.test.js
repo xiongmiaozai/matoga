@@ -36,7 +36,7 @@ async function api(method, p, body) {
   const res = await fetch(base + p, {
     method,
     headers: body ? { 'Content-Type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
+    body: body ? JSON.stringify(body) : undefined
   })
   const json = await res.json().catch(() => null)
   return { status: res.status, json }
@@ -82,7 +82,10 @@ test('PUT /:id 覆盖更新模型（保留扩展名）', async () => {
   const r = await api('POST', '/api/imported-models', { name: 'demo-put', data })
   const id = r.json.data.id
 
-  const upd = JSON.stringify({ meta: { format: 'bbmodel' }, elements: [{ name: 'cube2', faces: { north: { uv: [1, 2, 3, 4] } } }] })
+  const upd = JSON.stringify({
+    meta: { format: 'bbmodel' },
+    elements: [{ name: 'cube2', faces: { north: { uv: [1, 2, 3, 4] } } }]
+  })
   const pu = await api('PUT', '/api/imported-models/' + encodeURIComponent(id), { data: upd })
   assert.equal(pu.json.ok, true)
 
@@ -103,5 +106,50 @@ test('PUT /:id 缺 data → ok:false；不存在 id → ok:false', async () => {
   const id = r2.json.data.id
   const r3 = await api('PUT', '/api/imported-models/' + encodeURIComponent(id), {})
   assert.equal(r3.json.ok, false)
+  await api('DELETE', '/api/imported-models/' + encodeURIComponent(id))
+})
+const PNG_URL =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
+
+test('POST /:id/textures 批量上传 → GET /:id/textures 列出 → DELETE 删除', async () => {
+  const r = await api('POST', '/api/imported-models', { name: 'texroute', data: '{"elements":[]}' })
+  const id = r.json.data.id
+  const rel = 'assets/minecraft/textures/block/stone.png'
+
+  const up = await api('POST', '/api/imported-models/' + encodeURIComponent(id) + '/textures', {
+    textures: { [rel]: PNG_URL, '../evil.png': PNG_URL }
+  })
+  assert.equal(up.json.ok, true)
+  assert.equal(up.json.data.count, 1)
+
+  const list = await api('GET', '/api/imported-models/' + encodeURIComponent(id) + '/textures')
+  assert.equal(list.json.ok, true)
+  assert.ok(list.json.data.textures.find(t => t.path === rel))
+
+  const del = await api('DELETE', '/api/imported-models/' + encodeURIComponent(id) + '/textures', { path: rel })
+  assert.equal(del.json.ok, true)
+  const list2 = await api('GET', '/api/imported-models/' + encodeURIComponent(id) + '/textures')
+  assert.ok(!list2.json.data.textures.find(t => t.path === rel))
+
+  await api('DELETE', '/api/imported-models/' + encodeURIComponent(id))
+})
+
+test('POST 一次性 textures 字段 → texCount 返回', async () => {
+  const r = await api('POST', '/api/imported-models', {
+    name: 'onetime-route',
+    data: JSON.stringify({ textures: { all: 'minecraft:block/stone' } }),
+    textures: { 'assets/minecraft/textures/block/stone.png': PNG_URL }
+  })
+  assert.equal(r.json.ok, true)
+  assert.equal(r.json.data.texCount, 1)
+  await api('DELETE', '/api/imported-models/' + encodeURIComponent(r.json.data.id))
+})
+
+test('GET /:id 返回 texDir', async () => {
+  const r = await api('POST', '/api/imported-models', { name: 'texdir-route', data: '{}' })
+  const id = r.json.data.id
+  const one = await api('GET', '/api/imported-models/' + encodeURIComponent(id))
+  assert.equal(one.json.ok, true)
+  assert.ok(typeof one.json.data.texDir === 'string')
   await api('DELETE', '/api/imported-models/' + encodeURIComponent(id))
 })

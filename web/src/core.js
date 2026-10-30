@@ -24,11 +24,17 @@ export const state = {
   history: [],
   renderLimit: 200,
   modelLoadSeq: 0,
+  modelViewMode: 'grid',
+  modelPreviewTab: 'model',
+  modelGroupBy: 'type',
+  modelGroupDir: 'asc',
+  modelMeta: null,
+  modelGroupRules: [],
   categoryFilter: { type: 'all', content: 'all', status: 'all', folder: 'all', tag: 'all' },
   customTags: {}
 }
 
-export const $ = (id) => document.getElementById(id)
+export const $ = id => document.getElementById(id)
 
 export const leftBtn = $('leftBtn')
 export const rightBtn = $('rightBtn')
@@ -48,7 +54,6 @@ export const hashChk = $('hashChk')
 export const ignoreChk = $('ignoreChk')
 export const ignoreInput = $('ignoreInput')
 
-
 export const leftPathEl = $('leftPath')
 export const rightPathEl = $('rightPath')
 
@@ -58,21 +63,45 @@ export const folderCard = $('folderCard')
 
 export const IMG_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'ico', 'tif', 'tiff', 'avif'])
 export const TEX_SUFFIXES = [
-  ['_n', 'normal'], ['-n', 'normal'],
-  ['_s', 'specular'], ['-s', 'specular'],
-  ['_h', 'height'], ['-h', 'height'],
-  ['_e', 'emissive'], ['-e', 'emissive']
+  ['_normal', 'normal'],
+  ['-normal', 'normal'],
+  ['_n', 'normal'],
+  ['-n', 'normal'],
+  ['_specular', 'specular'],
+  ['-specular', 'specular'],
+  ['_s', 'specular'],
+  ['-s', 'specular'],
+  ['_height', 'height'],
+  ['-height', 'height'],
+  ['_h', 'height'],
+  ['-h', 'height'],
+  ['_emissive', 'emissive'],
+  ['-emissive', 'emissive'],
+  ['_e', 'emissive'],
+  ['-e', 'emissive']
 ]
 export const ROLES = ['main', 'normal', 'specular', 'height', 'emissive']
 export const STATUS_ORDER = { miss: 0, partial: 1, diff: 2, extra: 3, have: 4 }
 
 export function roleLabel(role) {
-  const labels = { main: 'preview.roleMain', normal: 'preview.roleNormal', specular: 'preview.roleSpecular', height: 'preview.roleHeight', emissive: 'preview.roleEmissive' }
+  const labels = {
+    main: 'preview.roleMain',
+    normal: 'preview.roleNormal',
+    specular: 'preview.roleSpecular',
+    height: 'preview.roleHeight',
+    emissive: 'preview.roleEmissive'
+  }
   return _t(labels[role] || role)
 }
 
 export function kindText(kind) {
-  const labels = { have: 'status.have', diff: 'status.diff', partial: 'status.partial', miss: 'status.miss', extra: 'status.extra' }
+  const labels = {
+    have: 'status.have',
+    diff: 'status.diff',
+    partial: 'status.partial',
+    miss: 'status.miss',
+    extra: 'status.extra'
+  }
   return _t(labels[kind] || kind)
 }
 

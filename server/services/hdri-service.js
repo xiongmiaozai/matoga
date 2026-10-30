@@ -10,6 +10,7 @@ const crypto = require('crypto')
 const configStore = require('../config/config-store')
 const { DATA_ROOT } = require('../paths')
 const { generateThumb } = require('./thumb-encode')
+const { dirStats, clearDir } = require('./cache-stats')
 
 const THUMB_DIR = path.join(DATA_ROOT, 'data', 'hdri-thumbs')
 const THUMB_W = 480
@@ -48,7 +49,10 @@ async function list() {
 }
 
 function invalidateList(dir) {
-  if (!dir) { LIST_CACHE.clear(); return }
+  if (!dir) {
+    LIST_CACHE.clear()
+    return
+  }
   LIST_CACHE.delete(dir)
 }
 
@@ -56,7 +60,10 @@ async function thumbInfo(fullPath) {
   const thumbPath = thumbPathFor(fullPath)
   const metaPath = thumbPath + '.json'
   const hdrStat = await fs.promises.stat(fullPath)
-  let exists = false, stale = true, mtime = 0, blurhash = null
+  let exists = false,
+    stale = true,
+    mtime = 0,
+    blurhash = null
   try {
     const tStat = await fs.promises.stat(thumbPath)
     exists = true
@@ -124,10 +131,34 @@ async function cleanupOrphans() {
     const files = await fs.promises.readdir(THUMB_DIR)
     for (const f of files) {
       const base = f.endsWith('.json') ? f.slice(0, -5) : f
-      if (!valid.has(base)) { await fs.promises.unlink(path.join(THUMB_DIR, f)).catch(() => {}); removed++ }
+      if (!valid.has(base)) {
+        await fs.promises.unlink(path.join(THUMB_DIR, f)).catch(() => {})
+        removed++
+      }
     }
   } catch {}
   return { removed, valid: valid.size }
 }
 
-module.exports = { list, invalidateList, thumbInfo, saveThumb, ensureThumb, cleanupOrphans, thumbPathFor, THUMB_DIR, THUMB_W, THUMB_H }
+async function stats() {
+  return dirStats(THUMB_DIR)
+}
+
+async function clearAll() {
+  return clearDir(THUMB_DIR)
+}
+
+module.exports = {
+  list,
+  invalidateList,
+  thumbInfo,
+  saveThumb,
+  ensureThumb,
+  cleanupOrphans,
+  stats,
+  clearAll,
+  thumbPathFor,
+  THUMB_DIR,
+  THUMB_W,
+  THUMB_H
+}

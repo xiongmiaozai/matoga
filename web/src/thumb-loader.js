@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { fileUrl } from './utils.js'
+import { fileUrl, apiUrl } from './utils.js'
 
 const THUMB_W = 160
 const memCache = new Map()
@@ -13,15 +13,21 @@ const generating = new Map()
 let io = null
 function getIO() {
   if (io) return io
-  io = new IntersectionObserver((entries) => {
-    for (const e of entries) {
-      if (e.isIntersecting) {
-        const img = e.target
-        const p = img.dataset.thumb
-        if (p) { io.unobserve(img); loadThumb(img, p) }
+  io = new IntersectionObserver(
+    entries => {
+      for (const e of entries) {
+        if (e.isIntersecting) {
+          const img = e.target
+          const p = img.dataset.thumb
+          if (p) {
+            io.unobserve(img)
+            loadThumb(img, p)
+          }
+        }
       }
-    }
-  }, { rootMargin: '300px' })
+    },
+    { rootMargin: '300px' }
+  )
   return io
 }
 
@@ -32,30 +38,63 @@ export function observeThumbs(root) {
 
 async function loadThumb(img, fullPath) {
   if (img.src) return
-  if (memCache.has(fullPath)) { img.src = memCache.get(fullPath); return }
-  if (!generating.has(fullPath)) generating.set(fullPath, generateAndSave(fullPath))
+  if (memCache.has(fullPath)) {
+    img.src = memCache.get(fullPath)
+    return
+  }
+  const thumbUrl = apiUrl('/api/file/thumb?path=' + encodeURIComponent(fullPath))
+  img.src = thumbUrl
+  if (!generating.has(fullPath)) {
+    generating.set(fullPath, verifyAndRefresh(fullPath, img, thumbUrl))
+  }
+  generating
+    .get(fullPath)
+    .catch(() => {})
+    .finally(() => generating.delete(fullPath))
+}
+
+async function verifyAndRefresh(fullPath, img, optimisticUrl) {
+  let info
   try {
-    const thumbUrl = await generating.get(fullPath)
-    memCache.set(fullPath, thumbUrl)
-    img.src = thumbUrl
+    info = await batchThumbInfo(fullPath)
+  } catch {}
+  if (info && info.exists && !info.stale) {
+    memCache.set(fullPath, optimisticUrl)
+    return
+  }
+  try {
+    const dataUrl = await generateThumbDataUrl(fileUrl(fullPath), fullPath)
+    const saved = await window.api.saveThumb(fullPath, dataUrl)
+    const url = saved && saved.success && saved.thumbUrl ? saved.thumbUrl : dataUrl
+    memCache.set(fullPath, url)
+    img.src = url
   } catch {
     img.src = fileUrl(fullPath)
-  } finally {
-    generating.delete(fullPath)
   }
 }
 
-async function generateAndSave(fullPath) {
+const batchQueue = []
+let batchTimer = null
+function batchThumbInfo(fullPath) {
+  return new Promise((resolve, reject) => {
+    batchQueue.push({ fullPath, resolve, reject })
+    if (batchQueue.length >= 32) flushBatch()
+    else if (!batchTimer) batchTimer = setTimeout(flushBatch, 16)
+  })
+}
+async function flushBatch() {
+  if (batchTimer) {
+    clearTimeout(batchTimer)
+    batchTimer = null
+  }
+  const batch = batchQueue.splice(0)
+  const paths = batch.map(b => b.fullPath)
   try {
-    const info = await window.api.thumbInfo(fullPath)
-    if (info && info.exists && !info.stale && info.thumbUrl) return info.thumbUrl
-  } catch {}
-  const dataUrl = await generateThumbDataUrl(fileUrl(fullPath), fullPath)
-  try {
-    const saved = await window.api.saveThumb(fullPath, dataUrl)
-    if (saved && saved.success && saved.thumbUrl) return saved.thumbUrl
-  } catch {}
-  return dataUrl
+    const results = await window.api.thumbInfoBatch(paths)
+    for (const b of batch) b.resolve(results[b.fullPath] || { exists: false, stale: true })
+  } catch (e) {
+    for (const b of batch) b.reject(e)
+  }
 }
 
 /* 读取动画贴图元数据（同目录 <name>.png.mcmeta；非动画 / 读取失败 → null）。
@@ -72,7 +111,9 @@ async function fetchAnimFrameSize(fullPath, w, h) {
     const fh = Number.isFinite(+anim.height) && +anim.height > 0 ? Math.floor(+anim.height) : fw
     if (fw <= 0 || fh <= 0 || fw > w || fh > h) return null
     return { fw, fh }
-  } catch { return null }
+  } catch {
+    return null
+  }
 }
 
 /* 生成缩略图：动画贴图（竖长条 + mcmeta animation）裁剪首帧（顶部 fw×fh 区域），
@@ -90,12 +131,15 @@ function generateThumbDataUrl(srcUrl, fullPath) {
         const w = Math.max(1, Math.round(srcW * scale))
         const h = Math.max(1, Math.round(srcH * scale))
         const canvas = document.createElement('canvas')
-        canvas.width = w; canvas.height = h
+        canvas.width = w
+        canvas.height = h
         const ctx = canvas.getContext('2d')
         if (anim) ctx.drawImage(img, 0, 0, anim.fw, anim.fh, 0, 0, w, h)
         else ctx.drawImage(img, 0, 0, w, h)
         resolve(canvas.toDataURL('image/jpeg', 0.8))
-      } catch (e) { reject(e) }
+      } catch (e) {
+        reject(e)
+      }
     }
     img.onerror = reject
     img.src = srcUrl

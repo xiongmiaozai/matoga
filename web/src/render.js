@@ -5,31 +5,123 @@
  */
 
 import {
-  state, $, ROLES, ROLE_LABEL, KIND_TEXT, STATUS_ORDER,
-  leftBtn, rightBtn, onlyMissingChk, summaryEl, resultBody,
-  leftPathEl, rightPathEl
+  state,
+  $,
+  ROLES,
+  ROLE_LABEL,
+  KIND_TEXT,
+  STATUS_ORDER,
+  leftBtn,
+  rightBtn,
+  onlyMissingChk,
+  summaryEl,
+  resultBody,
+  leftPathEl,
+  rightPathEl
 } from './core.js'
 import {
-  formatSize, formatDate, isImageFile, fileUrl, escAttr,
-  folderOf, mainEntryOf, hasAny, leftRoles, rightRoles, subKind,
-  openPreview, relPath, joinPath, modelTypeOf, modelBaseNameOf,
-  groupTypeOf, groupContentKind, groupTagOf
+  formatSize,
+  formatDate,
+  isImageFile,
+  fileUrl,
+  escAttr,
+  folderOf,
+  mainEntryOf,
+  hasAny,
+  leftRoles,
+  rightRoles,
+  subKind,
+  openPreview,
+  relPath,
+  joinPath,
+  modelTypeOf,
+  modelNsOf,
+  modelFormatOf,
+  modelTexBucketOf,
+  modelAnimatedOf,
+  modelCustomGroupOf,
+  modelNameBucketOf,
+  modelPrefixBucketOf,
+  groupTypeOf,
+  groupContentKind,
+  groupTagOf,
+  contentKindOfPath
 } from './utils.js'
 import { sortResult } from './compare.js'
-import { replaceWithExternalFile, deleteTexture, handleAction, showPixelDiff, copySingleToRight, addTextureToRight, createBlankTextureToRight, saveOptions } from './actions.js'
-import { initMaterial3D, updateMaterial3D, clearCustomModel } from './material3d.js'
+
+import {
+  replaceWithExternalFile,
+  deleteTexture,
+  handleAction,
+  showPixelDiff,
+  copySingleToRight,
+  addTextureToRight,
+  createBlankTextureToRight,
+  saveOptions
+} from './actions.js'
+import { initMaterial3D, updateMaterial3D, clearCustomModel, setModelEmptyHint } from './material3d.js'
 import { enhancePreview } from './preview2d.js'
 import { observeThumbs } from './thumb-loader.js'
-import { observeModelThumbs } from './model-thumb.js'
-import { parseModelText, buildModelSummary, diffLines, escHtml, isModelEntry } from './model-diff.js'
-import { viewMcModelPairInViewport, viewMcModelTexCompareInViewport, isViewportVisible, resolveModelTexList, textureAssetPath } from './mc-model-viewer.js'
+import { observeModelThumbs, prefetchModelThumbs } from './model-thumb.js'
+import { parseModelText, buildModelSummary, diffLines, escHtml, isModelEntry, checkTexRefs } from './model-diff.js'
+import { modelBaseNameOf } from './model-group-dims.js'
+import {
+  viewMcModelPairInViewport,
+  viewMcModelTexCompareInViewport,
+  isViewportVisible,
+  resolveModelTexList,
+  textureAssetPath
+} from './mc-model-viewer.js'
 import { t, onLocaleChange } from './i18n.js'
-import { modelPrefixOf } from './model-prefix.js'
+import { loadZhNames, zhOfTexPath, zhOfTexName } from './zh-names.js'
+loadZhNames().catch(() => {})
+
+function zhOfKey(key) {
+  if (!key) return ''
+  const z = zhOfTexPath(key) || zhOfTexPath(key + '.png')
+  if (z) return z
+  const base = String(key)
+    .split('/')
+    .pop()
+    .replace(/\.png$/i, '')
+  return zhOfTexName(base)
+}
 
 const _rowMap = new Map()
 let _filteredCache = null
 let _renderedCount = 0
 let _lastBaseSet = []
+let _modelMetaLoading = false
+
+/* 懒加载模型元数据（ns/format/texRefs/animated），供贴图数/动画分组维度使用 */
+async function ensureModelMeta() {
+  if (state.modelMeta || _modelMetaLoading) return
+  _modelMetaLoading = true
+  try {
+    const res = await fetch('/api/asset/model?meta=1')
+    const data = await res.json()
+    if (data && data.ok && data.data && Array.isArray(data.data.packs)) {
+      const map = new Map()
+      for (const pack of data.data.packs) {
+        for (const g of pack.groups || []) {
+          for (const f of g.files || []) {
+            map.set(f.path, {
+              ns: f.ns,
+              format: f.format,
+              texRefs: f.texRefs,
+              texBucket: f.texBucket,
+              animated: f.animated
+            })
+          }
+        }
+      }
+      state.modelMeta = map
+    }
+  } catch {
+  } finally {
+    _modelMetaLoading = false
+  }
+}
 
 function _showMoreHandler() {
   state.renderLimit += 200
@@ -41,8 +133,12 @@ function _showMoreHandler() {
     let added = 0
     let truncated = false
     for (let i = start; i < _filteredCache.length; i++) {
-      if (added >= 200) { truncated = true; break }
-      appendGroupRows(frag, _filteredCache[i]); added++
+      if (added >= 200) {
+        truncated = true
+        break
+      }
+      appendGroupRows(frag, _filteredCache[i])
+      added++
     }
     _renderedCount += added
     for (const r of frag.children) if (r._group) _rowMap.set(r._group.key, r)
@@ -61,7 +157,6 @@ function _showMoreHandler() {
   }
 }
 
-
 onLocaleChange(() => {
   leftPathEl.textContent = state.leftPath || t('common.empty')
   rightPathEl.textContent = state.rightPath || t('common.empty')
@@ -78,52 +173,68 @@ export function setLoading(side, on) {
 
 export function applyEntries(side, folderPath, entries) {
   if (side === 'left') {
-    state.leftPath = folderPath; state.leftEntries = entries
+    state.leftPath = folderPath
+    state.leftEntries = entries
     leftPathEl.textContent = folderPath
   } else {
-    state.rightPath = folderPath; state.rightEntries = entries
+    state.rightPath = folderPath
+    state.rightEntries = entries
     rightPathEl.textContent = folderPath
   }
 }
 
 export function statusBadge(kind) {
   const icons = { have: 'i-check', diff: 'i-alert', partial: 'i-minus', miss: 'i-x', extra: 'i-plus' }
-  const labels = { have: t('status.haveShort'), diff: t('status.diffShort'), partial: t('status.partialShort'), miss: t('status.missShort'), extra: t('status.extraShort') }
+  const labels = {
+    have: t('status.haveShort'),
+    diff: t('status.diffShort'),
+    partial: t('status.partialShort'),
+    miss: t('status.missShort'),
+    extra: t('status.extraShort')
+  }
   return `<span class="status-badge status-${kind}"><svg class="ico"><use href="#${icons[kind]}"/></svg>${labels[kind]}</span>`
 }
 
 export function renderThumbPair(le, re) {
-  const isImgE = (e) => e && !e.isDirectory && isImageFile(e.name)
+  const isImgE = e => e && !e.isDirectory && isImageFile(e.name)
   if (!isImgE(le) && !isImgE(re)) return '<span class="cell-empty">—</span>'
-  const lt = isImgE(le) ? `<img class="thumb thumb-left" data-thumb="${escAttr(le.fullPath)}" />` : '<span class="thumb-ph thumb-left-ph">L</span>'
-  const rt = isImgE(re) ? `<img class="thumb thumb-right" data-thumb="${escAttr(re.fullPath)}" />` : '<span class="thumb-ph thumb-right-ph">R</span>'
+  const lt = isImgE(le)
+    ? `<img class="thumb thumb-left" data-thumb="${escAttr(le.fullPath)}" />`
+    : '<span class="thumb-ph thumb-left-ph">L</span>'
+  const rt = isImgE(re)
+    ? `<img class="thumb thumb-right" data-thumb="${escAttr(re.fullPath)}" />`
+    : '<span class="thumb-ph thumb-right-ph">R</span>'
   return `<div class="thumb-pair">${lt}${rt}</div>`
 }
 
 /* 模型行预览列：左右各一个 3D 缩略图占位（.ac-thumb + _modelThumbItem，observeModelThumbs 懒加载）。
    noCache 跳过后端缓存（对比场景为任意文件夹，缓存 key 含绝对路径，仅前端离屏渲染 + 内存去重） */
-function modelThumbSpec(entry, root) {
+function modelThumbSpec(entry, root, texRoot) {
   if (!entry || !isModelEntry(entry)) return null
   return {
     kind: 'mc',
     fileRoot: root,
+    texRoot: texRoot || undefined,
     rel: entry.name,
-    path: 'cmp:' + root + '/' + entry.name,
-    mtime: entry.mtime || 0,
-    noCache: true,
+    path: 'cmp:' + (texRoot || root) + '/' + entry.name,
+    mtime: entry.mtime || 0
   }
 }
 
-function renderModelThumbCell(entry, root, side) {
-  if (!modelThumbSpec(entry, root)) return `<span class="thumb-ph thumb-${side}-ph">${side === 'left' ? 'L' : 'R'}</span>`
-  return `<div class="ac-thumb thumb-model thumb-${side}" data-mroot="${escAttr(root)}" data-mrel="${escAttr(entry.name)}" data-mtime="${entry.mtime || 0}"></div>`
+function renderModelThumbCell(entry, root, side, texRoot) {
+  if (!modelThumbSpec(entry, root, texRoot))
+    return `<span class="thumb-ph thumb-${side}-ph">${side === 'left' ? 'L' : 'R'}</span>`
+  return `<div class="ac-thumb thumb-model thumb-${side}" data-mroot="${escAttr(root)}"${texRoot ? ` data-mtexroot="${escAttr(texRoot)}"` : ''} data-mrel="${escAttr(entry.name)}" data-mtime="${entry.mtime || 0}"></div>`
 }
 
-function renderModelThumbPair(le, re, leftRoot, rightRoot, rightFallback) {
-  const hasL = isModelEntry(le), hasR = isModelEntry(re)
+function renderModelThumbPair(le, re, leftRoot, rightRoot, rightFallback, rightTexRoot) {
+  const hasL = isModelEntry(le),
+    hasR = isModelEntry(re)
   if (!hasL && !hasR) return '<span class="cell-empty">—</span>'
   const lt = hasL ? renderModelThumbCell(le, leftRoot, 'left') : '<span class="thumb-ph thumb-left-ph">L</span>'
-  const rt = hasR ? renderModelThumbCell(re, rightRoot, 'right') : '<span class="thumb-ph thumb-right-ph">R</span>'
+  const rt = hasR
+    ? renderModelThumbCell(re, rightRoot, 'right', rightTexRoot)
+    : '<span class="thumb-ph thumb-right-ph">R</span>'
   return `<div class="thumb-pair${rightFallback ? ' thumb-pair-fallback' : ''}">${lt}${rt}</div>`
 }
 
@@ -132,39 +243,67 @@ export function appendGroupRows(frag, g) {
   tr.className = 'row-' + g.kind
   if (state.selected && state.selected.key === g.key) tr.classList.add('row-selected')
 
-  const roleCount = (g.isMaterial ? leftRoles(g).length + rightRoles(g).length : 0)
+  const roleCount = g.isMaterial ? leftRoles(g).length + rightRoles(g).length : 0
   const expandable = g.isMaterial && roleCount > 1
   const expanded = state.expandedKeys.has(g.key)
 
   let mainLeft, mainRight
-  if (g.isMaterial) { mainLeft = g.left && g.left.main; mainRight = g.right && g.right.main }
-  else { mainLeft = g.left && (g.left.file || g.left.dir); mainRight = g.right && (g.right.file || g.right.dir) }
+  if (g.isMaterial) {
+    mainLeft = g.left && g.left.main
+    mainRight = g.right && g.right.main
+  } else {
+    mainLeft = g.left && (g.left.file || g.left.dir)
+    mainRight = g.right && (g.right.file || g.right.dir)
+  }
 
-  const previewCell = g.isModel ? renderModelThumbPair(mainLeft, mainRight, state.leftPath, state.rightPath) : renderThumbPair(mainLeft, mainRight)
+  const previewCell = g.isModel
+    ? renderModelThumbPair(mainLeft, mainRight, state.leftPath, state.rightPath)
+    : renderThumbPair(mainLeft, mainRight)
   const arrow = expandable ? `<span class="expand-arrow">${expanded ? '▾' : '▸'}</span>` : ''
   const folder = folderOf(g)
-  const displayName = state.viewMode === 'byFolder' && folder !== t('render.rootFolder') ? g.key.slice(folder.length + 1) : g.key
-  const nameHtml = `${arrow}<span class="cell-name" title="${escAttr(g.key)}">${escHtml(displayName || g.key)}</span>`
-  const typeHtml = g.isMaterial ? `<span class="type-mat"><svg class="ico"><use href="#i-layers"/></svg>${t('type.material')}</span>` : g.isModel ? `<span class="type-model"><svg class="ico"><use href="#i-cube"/></svg>${t('type.model')}</span>` : g.isDir ? `<span class="type-dir"><svg class="ico"><use href="#i-folder"/></svg>${t('type.folder')}</span>` : `<span class="type-file"><svg class="ico"><use href="#i-image"/></svg>${t('type.file')}</span>`
+  const displayName =
+    state.viewMode === 'byFolder' && folder !== t('render.rootFolder') ? g.key.slice(folder.length + 1) : g.key
+  const zhName = zhOfKey(g.key)
+  const zhHtml = zhName
+    ? `<span class="cell-zh" style="margin-left:6px;color:var(--text-muted,#888);font-size:.85em">${escHtml(zhName)}</span>`
+    : ''
+  const nameHtml = `${arrow}<span class="cell-name" title="${escAttr(g.key)}">${escHtml(displayName || g.key)}</span>${zhHtml}`
+  const typeHtml = g.isMaterial
+    ? `<span class="type-mat"><svg class="ico"><use href="#i-layers"/></svg>${t('type.material')}</span>`
+    : g.isModel
+      ? `<span class="type-model"><svg class="ico"><use href="#i-cube"/></svg>${t('type.model')}</span>`
+      : g.isDir
+        ? `<span class="type-dir"><svg class="ico"><use href="#i-folder"/></svg>${t('type.folder')}</span>`
+        : `<span class="type-file"><svg class="ico"><use href="#i-image"/></svg>${t('type.file')}</span>`
   const me = mainLeft || mainRight
-  const sizeHtml = (g.kind === 'diff' && mainLeft && mainRight && mainLeft.size !== mainRight.size)
-    ? `<span class="size-diff" title="${t('common.left')} ${formatSize(mainLeft.size)} / ${t('common.right')} ${formatSize(mainRight.size)}">${formatSize(mainLeft.size)} ≠ ${formatSize(mainRight.size)}</span>`
-    : formatSize(me ? me.size : 0)
+  const sizeHtml =
+    g.kind === 'diff' && mainLeft && mainRight && mainLeft.size !== mainRight.size
+      ? `<span class="size-diff" title="${t('common.left')} ${formatSize(mainLeft.size)} / ${t('common.right')} ${formatSize(mainRight.size)}">${formatSize(mainLeft.size)} ≠ ${formatSize(mainRight.size)}</span>`
+      : formatSize(me ? me.size : 0)
   const mtimeHtml = formatDate(me ? me.mtime : 0)
   const leftCell = hasAny(g.left) ? '<span class="cell-yes">✓</span>' : '<span class="cell-empty">—</span>'
   const rightCell = hasAny(g.right) ? '<span class="cell-yes">✓</span>' : '<span class="cell-empty">—</span>'
 
-  tr.innerHTML = `<td>${statusBadge(g.kind)}</td><td class="preview-cell">${previewCell}</td><td>${nameHtml}</td><td>${typeHtml}</td><td>${sizeHtml}</td><td>${mtimeHtml}</td><td>${leftCell}</td><td>${rightCell}</td>`
+  const similarMark = g.similar ? `<span class="similar-mark" title="${escAttr(t('status.similar'))}">≈</span>` : ''
+  tr.innerHTML = `<td>${statusBadge(g.kind)}${similarMark}</td><td class="preview-cell">${previewCell}</td><td>${nameHtml}</td><td>${typeHtml}</td><td>${sizeHtml}</td><td>${mtimeHtml}</td><td>${leftCell}</td><td>${rightCell}</td>`
   if (g.isModel) {
     tr.querySelectorAll('.ac-thumb[data-mrel]').forEach(th => {
-      th._modelThumbItem = { modelThumb: modelThumbSpec({ name: th.dataset.mrel, mtime: +th.dataset.mtime || 0 }, th.dataset.mroot) }
+      th._modelThumbItem = {
+        modelThumb: modelThumbSpec(
+          { name: th.dataset.mrel, mtime: +th.dataset.mtime || 0 },
+          th.dataset.mroot,
+          th.dataset.mtexroot || undefined
+        )
+      }
     })
   }
   tr._group = g
 
-  tr.title = me ? `${g.key}\n${KIND_TEXT[g.kind] || g.kind} · ${formatSize(me.size)} · ${formatDate(me.mtime)}` : (g.key + (KIND_TEXT[g.kind] ? '\n' + KIND_TEXT[g.kind] : ''))
+  tr.title = me
+    ? `${g.key}\n${KIND_TEXT[g.kind] || g.kind} · ${formatSize(me.size)} · ${formatDate(me.mtime)}`
+    : g.key + (KIND_TEXT[g.kind] ? '\n' + KIND_TEXT[g.kind] : '')
   tr.addEventListener('click', () => selectGroup(g))
-  tr.addEventListener('dblclick', (ev) => {
+  tr.addEventListener('dblclick', ev => {
     const e = mainEntryOf(g)
     if (!e) return
     if (ev.metaKey || ev.ctrlKey) window.api.showInFolder(e.fullPath)
@@ -179,7 +318,8 @@ export function appendGroupRows(frag, g) {
 
 export function appendSubRows(frag, g) {
   for (const role of ROLES) {
-    const le = g.left && g.left[role], re = g.right && g.right[role]
+    const le = g.left && g.left[role],
+      re = g.right && g.right[role]
     if (!le && !re) continue
     const sub = document.createElement('tr')
     const sk = subKind(le, re)
@@ -187,7 +327,10 @@ export function appendSubRows(frag, g) {
     const subName = `<span class="sub-name">${ROLE_LABEL[role]}</span>`
     const se = le || re
     sub.innerHTML = `<td>${statusBadge(sk)}</td><td class="preview-cell">${renderThumbPair(le, re)}</td><td>${subName}</td><td></td><td>${formatSize(se.size)}</td><td>${formatDate(se.mtime)}</td><td>${le ? '<span class="cell-yes">✓</span>' : '<span class="cell-empty">—</span>'}</td><td>${re ? '<span class="cell-yes">✓</span>' : '<span class="cell-no">✗</span>'}</td>`
-    sub.addEventListener('click', () => { state.selected = g; renderSidebar() })
+    sub.addEventListener('click', () => {
+      state.selected = g
+      renderSidebar()
+    })
     frag.appendChild(sub)
   }
 }
@@ -197,17 +340,26 @@ function modelTexRoleThumbs(grp, role) {
   const rReal = grp && grp.right && grp.right[role]
   const rEntry = rReal || lEntry
   if (!lEntry && !rEntry) return ''
-  const thumbL = lEntry ? `<img class="thumb thumb-left" src="${escAttr(fileUrl(lEntry.fullPath))}" alt="" />` : '<span class="thumb-ph thumb-left-ph">L</span>'
-  const thumbR = rEntry ? `<img class="thumb thumb-right" src="${escAttr(fileUrl(rEntry.fullPath))}" alt="" />` : '<span class="thumb-ph thumb-right-ph">R</span>'
+  const thumbL = lEntry
+    ? `<img class="thumb thumb-left" src="${escAttr(fileUrl(lEntry.fullPath))}" alt="" />`
+    : '<span class="thumb-ph thumb-left-ph">L</span>'
+  const thumbR = rEntry
+    ? `<img class="thumb thumb-right" src="${escAttr(fileUrl(rEntry.fullPath))}" alt="" />`
+    : '<span class="thumb-ph thumb-right-ph">R</span>'
   return `<div class="model-tex-thumbs${!rReal && lEntry ? ' model-tex-role-fallback' : ''}">${thumbL}${thumbR}</div>`
 }
 
 async function loadModelCardTexs(card, g) {
-  const le = g.left && g.left.file, re = g.right && g.right.file
-  const leftList = le && isModelEntry(le) ? await resolveModelTexList({ fileRoot: state.leftPath, rel: le.name }).catch(() => null) : null
+  const le = g.left && g.left.file,
+    re = g.right && g.right.file
+  const leftList =
+    le && isModelEntry(le)
+      ? await resolveModelTexList({ fileRoot: state.leftPath, rel: le.name }).catch(() => null)
+      : null
   const hasRightModel = re && isModelEntry(re)
-  let rightList = hasRightModel ? await resolveModelTexList({ fileRoot: state.rightPath, rel: re.name }).catch(() => null) : null
-
+  let rightList = hasRightModel
+    ? await resolveModelTexList({ fileRoot: state.rightPath, rel: re.name }).catch(() => null)
+    : null
 
   if (!card.isConnected) return
   const groupMap = new Map()
@@ -239,11 +391,15 @@ async function loadModelCardTexs(card, g) {
     const kind = grp ? grp.kind : 'miss'
     const texEl = document.createElement('div')
     const rMain = grp && grp.right && grp.right.main
-    let rightUrl = rMain ? fileUrl(rMain.fullPath) : info.leftUrl
-    let texFallback = !rMain && !!info.leftUrl
+    let rightUrl = rMain ? fileUrl(rMain.fullPath) : info.rightUrl
+    let texFallback = !rMain && !!info.rightUrl
     texEl.className = 'model-tex-item row-' + kind + (texFallback ? ' model-tex-fallback' : '')
-    const thumbL = info.leftUrl ? `<img class="thumb thumb-left" src="${escAttr(info.leftUrl)}" alt="" />` : '<span class="thumb-ph thumb-left-ph">L</span>'
-    const thumbR = rightUrl ? `<img class="thumb thumb-right" src="${escAttr(rightUrl)}" alt="" />` : '<span class="thumb-ph thumb-right-ph">R</span>'
+    const thumbL = info.leftUrl
+      ? `<img class="thumb thumb-left" src="${escAttr(info.leftUrl)}" alt="" />`
+      : '<span class="thumb-ph thumb-left-ph">L</span>'
+    const thumbR = rightUrl
+      ? `<img class="thumb thumb-right" src="${escAttr(rightUrl)}" alt="" />`
+      : '<span class="thumb-ph thumb-right-ph">R</span>'
     const texName = (info.name || ap).replace(/^minecraft:/, '')
     let matHtml = ''
     if (grp) {
@@ -258,58 +414,34 @@ async function loadModelCardTexs(card, g) {
     }
     texEl.innerHTML = `<div class="model-tex-thumbs">${thumbL}${thumbR}</div>${matHtml}<span class="model-tex-name" title="${escAttr(ap || info.name)}">${escHtml(texName)}</span>`
     texEl.title = `${texName} · ${KIND_TEXT[kind] || kind}`
-    if (grp) texEl.addEventListener('click', (e) => {
-      e.stopPropagation()
-      state.selected = g
-      const cards = document.querySelectorAll('.model-card.selected')
-      cards.forEach(c => { if (c._group !== g) c.classList.remove('selected') })
-      const cardEl = texEl.closest('.model-card')
-      if (cardEl) cardEl.classList.add('selected')
-      const texsHost = texEl.parentElement
-      if (texsHost) texsHost.querySelectorAll('.model-tex-item.tex-active').forEach(el => el.classList.remove('tex-active'))
-      texEl.classList.add('tex-active')
-      loadModelTexEffectPreview(g, info.leftUrl, rightUrl)
-    })
+    if (grp)
+      texEl.addEventListener('click', e => {
+        e.stopPropagation()
+        state.selected = g
+        const cards = document.querySelectorAll('.model-card.selected')
+        cards.forEach(c => {
+          if (c._group !== g) c.classList.remove('selected')
+        })
+        const cardEl = texEl.closest('.model-card')
+        if (cardEl) cardEl.classList.add('selected')
+        const texsHost = texEl.parentElement
+        if (texsHost)
+          texsHost.querySelectorAll('.model-tex-item.tex-active').forEach(el => el.classList.remove('tex-active'))
+        texEl.classList.add('tex-active')
+        loadModelTexEffectPreview(g, info.leftUrl, rightUrl)
+      })
     frag.appendChild(texEl)
   }
   texsEl.innerHTML = ''
   texsEl.appendChild(frag)
   texsEl.querySelectorAll('img[src]').forEach(img => {
-    img.addEventListener('click', (e) => { e.stopPropagation(); openPreview(img.src, img.dataset.name || '') })
+    img.addEventListener('click', e => {
+      e.stopPropagation()
+      openPreview(img.src, img.dataset.name || '')
+    })
   })
 }
 
-function appendModelCard(container, g) {
-  const mainLeft = g.left && (g.left.file || g.left.dir)
-  const mainRight = g.right && (g.right.file || g.right.dir)
-  const me = mainLeft || mainRight
-  const card = document.createElement('div')
-  card.className = 'model-card row-' + g.kind
-  if (state.selected && state.selected.key === g.key) card.classList.add('selected')
-  const useLeftForRight = !mainRight && !!mainLeft
-  const previewHtml = renderModelThumbPair(mainLeft, mainRight || mainLeft, state.leftPath, mainRight ? state.rightPath : state.leftPath, useLeftForRight)
-  const shortName = g.key.replace(/^assets\/[^/]+\/models\//, '').replace(/^assets\/[^/]+\/items\//, '').replace(/\.json$/, '')
-  card.innerHTML = `<div class="model-card-head">${statusBadge(g.kind)}<span class="model-card-name" title="${escAttr(g.key)}">${escHtml(shortName)}</span></div><div class="model-card-preview">${previewHtml}</div><div class="model-card-texs"><span class="model-texs-loading">${t('render.modelTexLoading')}</span></div>`
-  card.querySelectorAll('.ac-thumb[data-mrel]').forEach(th => {
-    th._modelThumbItem = { modelThumb: modelThumbSpec({ name: th.dataset.mrel, mtime: +th.dataset.mtime || 0 }, th.dataset.mroot) }
-  })
-  card._group = g
-  card.addEventListener('click', () => {
-    state.selected = g
-    const body = $('modelGridBody')
-    if (body) body.querySelectorAll('.model-card.selected').forEach(c => c.classList.remove('selected'))
-    card.classList.add('selected')
-    renderSidebar()
-  })
-  card.addEventListener('dblclick', (ev) => {
-    const e = mainEntryOf(g)
-    if (!e) return
-    if (ev.metaKey || ev.ctrlKey) window.api.showInFolder(e.fullPath)
-    else window.api.openPath(e.fullPath)
-  })
-  container.appendChild(card)
-  loadModelCardTexs(card, g)
-}
 
 export function renderModelTypeResult() {
   const body = $('modelGridBody')
@@ -318,25 +450,57 @@ export function renderModelTypeResult() {
   let models = result.filter(g => g.isModel)
   const onlyDiff = onlyMissingChk.checked
   if (onlyDiff) models = models.filter(g => g.kind !== 'have')
+  const kindFilter = state.modelKindFilter || 'all'
+  if (kindFilter === 'diff') models = models.filter(g => g.kind !== 'have')
+  else if (kindFilter !== 'all') models = models.filter(g => g.kind === kindFilter)
   models = models.filter(g => !state.hiddenKeys.has(g.key))
+  models = applyCategoryFilter(models)
   sortResult(models)
   if (models.length === 0) {
-    const msg = !state.leftPath || !state.rightPath ? t('render.dragHint') : result.length === 0 ? t('render.bothEmpty') : t('render.noModel')
+    const msg =
+      !state.leftPath || !state.rightPath
+        ? t('render.dragHint')
+        : result.length === 0
+          ? t('render.bothEmpty')
+          : t('render.noModel')
     body.innerHTML = `<div class="model-grid-empty">${msg}</div>`
     return
   }
-  const typeMap = new Map()
+  const catMap = new Map()
+  const groupBy = state.modelGroupBy || 'type'
   for (const g of models) {
-    const tp = modelTypeOf(g) || t('render.rootFolder')
-    if (!typeMap.has(tp)) typeMap.set(tp, [])
-    typeMap.get(tp).push(g)
+    let cat
+    if (groupBy === 'ns') cat = modelNsOf(g)
+    else if (groupBy === 'kind') cat = g.kind || 'unknown'
+    else if (groupBy === 'format') cat = modelFormatOf(g)
+    else if (groupBy === 'tex') cat = modelTexBucketOf(g, state.modelMeta)
+    else if (groupBy === 'anim') cat = modelAnimatedOf(g, state.modelMeta) ? 'animated' : 'static'
+    else if (groupBy === 'name') cat = modelNameBucketOf(g)
+    else if (groupBy === 'prefix') cat = modelPrefixBucketOf(g)
+    else if (groupBy === 'custom') cat = modelCustomGroupOf(g, state.modelGroupRules) || '__ungrouped__'
+    else {
+      const tp = modelTypeOf(g)
+      cat = tp === 'block' ? 'block' : tp === 'item' ? 'item' : 'other'
+    }
+    if (!catMap.has(cat)) catMap.set(cat, [])
+    catMap.get(cat).push(g)
   }
-  const types = [...typeMap.keys()].sort((a, b) => a.localeCompare(b, 'zh'))
+  const _groupDir = state.modelGroupDir === 'desc' ? -1 : 1
+  const catOrder =
+    groupBy === 'type'
+      ? _groupDir === 1
+        ? ['block', 'item', 'other']
+        : ['other', 'item', 'block']
+      : groupBy === 'kind'
+        ? (_groupDir === 1
+            ? ['have', 'diff', 'partial', 'miss', 'extra']
+            : ['extra', 'miss', 'partial', 'diff', 'have']).filter(k => catMap.has(k))
+        : [...catMap.keys()].sort((a, b) => a.localeCompare(b, 'zh') * _groupDir)
   const frag = document.createDocumentFragment()
   const limit = state.renderLimit
   let rendered = 0
   let truncated = false
-  const buildSummary = (items) => {
+  const buildSummary = items => {
     const fc = { have: 0, diff: 0, partial: 0, miss: 0, extra: 0 }
     for (const g of items) fc[g.kind]++
     const sp = []
@@ -347,88 +511,564 @@ export function renderModelTypeResult() {
     if (fc.extra) sp.push(`<span class="fc fc-extra">＋${fc.extra}</span>`)
     return sp.join(' ')
   }
-  const renderCardsInto = (container, items) => {
-    for (const g of items) {
-      if (rendered >= limit) { truncated = true; break }
-      appendModelCard(container, g)
-      rendered++
+  const grid = state.modelViewMode !== 'list'
+
+  const groupDims = [
+    ['type', 'render.groupByType'],
+    ['kind', 'render.groupByKind'],
+    ['name', 'render.groupByName'],
+    ['prefix', 'render.groupByPrefix'],
+    ['ns', 'render.groupByNs'],
+    ['format', 'render.groupByFormat'],
+    ['tex', 'render.groupByTex'],
+    ['anim', 'render.groupByAnim']
+  ]
+  if (state.modelGroupRules && state.modelGroupRules.length) groupDims.push(['custom', 'render.groupByCustom'])
+  const groupOpts = groupDims
+    .map(([val, key]) => `<option value="${val}"${groupBy === val ? ' selected' : ''}>${t(key)}</option>`)
+    .join('')
+  const toolbar = document.createElement('div')
+  toolbar.className = 'mc-toolbar'
+  toolbar.innerHTML =
+    `<div class="mc-view-seg">` +
+    `<button class="mc-view-btn${grid ? ' on' : ''}" data-mc-view="grid">${t('render.viewModelGrid')}</button>` +
+    `<button class="mc-view-btn${!grid ? ' on' : ''}" data-mc-view="list">${t('render.viewModelList')}</button>` +
+    `</div>` +
+    `<div class="mc-group-sel"><span class="mc-group-lab">${t('render.groupByLabel')}</span><select class="mc-group-dd" data-mc-group>${groupOpts}</select><button class="mc-sort-dir mc-group-dir" data-mc-group-dir title="${t('render.groupDir')}">${state.modelGroupDir === 'asc' ? '↑' : '↓'}</button></div>` +
+    `<div class="mc-sort-sel"><span class="mc-group-lab">${t('render.sortByLabel')}</span><select class="mc-sort-dd" data-mc-sort-key>` +
+    `<option value="name"${state.sortKey === 'name' ? ' selected' : ''}>${t('render.sortByName')}</option>` +
+    `<option value="size"${state.sortKey === 'size' ? ' selected' : ''}>${t('render.sortBySize')}</option>` +
+    `<option value="mtime"${state.sortKey === 'mtime' ? ' selected' : ''}>${t('render.sortByTime')}</option>` +
+    `<option value="status"${state.sortKey === 'status' ? ' selected' : ''}>${t('render.sortByStatus')}</option>` +
+    `</select><button class="mc-sort-dir" data-mc-sort-dir title="${t('render.sortDir')}">${state.sortDir === 'asc' ? '↑' : '↓'}</button></div>` +
+    `<div class="mc-filter-sel"><span class="mc-group-lab">${t('render.filterLabel')}</span><select class="mc-filter-dd" data-mc-filter>` +
+    `<option value="all"${(state.modelKindFilter || 'all') === 'all' ? ' selected' : ''}>${t('render.filterAll')}</option>` +
+    `<option value="diff"${state.modelKindFilter === 'diff' ? ' selected' : ''}>${t('render.filterDiff')}</option>` +
+    `<option value="miss"${state.modelKindFilter === 'miss' ? ' selected' : ''}>${t('render.filterMiss')}</option>` +
+    `<option value="extra"${state.modelKindFilter === 'extra' ? ' selected' : ''}>${t('render.filterExtra')}</option>` +
+    `<option value="partial"${state.modelKindFilter === 'partial' ? ' selected' : ''}>${t('render.filterPartial')}</option>` +
+    `</select></div>`
+  toolbar.querySelectorAll('[data-mc-view]').forEach(b =>
+    b.addEventListener('click', () => {
+      state.modelViewMode = b.dataset.mcView
+      renderModelTypeResult()
+    })
+  )
+  const groupDd = toolbar.querySelector('[data-mc-group]')
+  if (groupDd)
+    groupDd.addEventListener('change', async () => {
+      state.modelGroupBy = groupDd.value
+      state.renderLimit = 200
+      saveOptions()
+      if (groupDd.value === 'tex' || groupDd.value === 'anim') await ensureModelMeta()
+      renderModelTypeResult()
+    })
+  const groupDirBtn = toolbar.querySelector('[data-mc-group-dir]')
+  if (groupDirBtn)
+    groupDirBtn.addEventListener('click', () => {
+      state.modelGroupDir = state.modelGroupDir === 'asc' ? 'desc' : 'asc'
+      groupDirBtn.textContent = state.modelGroupDir === 'asc' ? '↑' : '↓'
+      saveOptions()
+      renderModelTypeResult()
+    })
+  const sortKeyDd = toolbar.querySelector('[data-mc-sort-key]')
+  if (sortKeyDd)
+    sortKeyDd.addEventListener('change', () => {
+      state.sortKey = sortKeyDd.value
+      saveOptions()
+      renderModelTypeResult()
+    })
+  const sortDirBtn = toolbar.querySelector('[data-mc-sort-dir]')
+  if (sortDirBtn)
+    sortDirBtn.addEventListener('click', () => {
+      state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc'
+      sortDirBtn.textContent = state.sortDir === 'asc' ? '↑' : '↓'
+      saveOptions()
+      renderModelTypeResult()
+    })
+  const filterDd = toolbar.querySelector('[data-mc-filter]')
+  if (filterDd)
+    filterDd.addEventListener('change', () => {
+      state.modelKindFilter = filterDd.value
+      saveOptions()
+      renderModelTypeResult()
+    })
+  frag.appendChild(toolbar)
+  for (const cat of catOrder) {
+    const items = catMap.get(cat)
+    if (!items || !items.length) continue
+    if (rendered >= limit) {
+      truncated = true
+      break
     }
-  }
-  const groupByPrefix = (items) => {
-    const buckets = new Map()
-    const ungrouped = []
-    for (const g of items) {
-      const pfx = modelPrefixOf(modelBaseNameOf(g))
-      if (pfx == null) ungrouped.push(g)
-      else {
-        let b = buckets.get(pfx)
-        if (!b) { b = []; buckets.set(pfx, b) }
-        b.push(g)
-      }
-    }
-    if (buckets.size + (ungrouped.length ? 1 : 0) <= 1) return null
-    const out = [...buckets.entries()]
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([pfx, its]) => ({ prefix: pfx, items: its }))
-    if (ungrouped.length) out.push({ prefix: null, items: ungrouped })
-    return out
-  }
-  for (const tp of types) {
-    if (rendered >= limit) { truncated = true; break }
-    const items = typeMap.get(tp)
-    const collapsed = state.collapsedFolders.has(tp)
-    const section = document.createElement('div')
-    section.className = 'model-type-section'
-    section.innerHTML = `<div class="model-type-header"><span class="model-type-arrow">${collapsed ? '▸' : '▾'}</span><svg class="ico ico-sm"><use href="#i-cube"/></svg><span class="model-type-name">${tp}</span><span class="model-type-count">${t('render.modelTypeCount', { n: items.length })}</span><span class="model-type-summary">${buildSummary(items)}</span></div>`
-    section.querySelector('.model-type-header').addEventListener('click', () => {
-      if (state.collapsedFolders.has(tp)) state.collapsedFolders.delete(tp)
-      else state.collapsedFolders.add(tp)
+    const catKey = '__cat__' + cat
+    const collapsed = state.collapsedFolders.has(catKey)
+    const catLabel =
+      groupBy === 'type'
+        ? t('category.' + cat)
+        : groupBy === 'anim'
+          ? t('category.anim.' + cat)
+          : groupBy === 'tex'
+            ? t('category.tex.' + cat, { n: cat })
+            : groupBy === 'custom' && cat === '__ungrouped__'
+              ? t('category.untagged')
+              : cat
+    const grp = document.createElement('div')
+    grp.className = 'mc-grp' + (collapsed ? ' collapsed' : '')
+    grp.dataset.cat = cat
+    grp.innerHTML = `<div class="mc-grp-head"><span class="mc-arrow">${collapsed ? '▸' : '▾'}</span><svg class="ico ico-sm"><use href="#i-cube"/></svg><span class="mc-grp-lbl">${escHtml(catLabel)}</span><span class="mc-grp-cnt">${t('render.modelTypeCount', { n: items.length })}</span><span class="mc-grp-sum">${buildSummary(items)}</span></div><div class="mc-grp-body"></div>`
+    grp.querySelector('.mc-grp-head').addEventListener('click', () => {
+      if (state.collapsedFolders.has(catKey)) state.collapsedFolders.delete(catKey)
+      else state.collapsedFolders.add(catKey)
       renderModelTypeResult()
     })
     if (!collapsed) {
-      const prefixGroups = groupByPrefix(items)
-      if (!prefixGroups) {
-        const cards = document.createElement('div')
-        cards.className = 'model-cards'
-        renderCardsInto(cards, items)
-        section.appendChild(cards)
-      } else {
-        for (const pg of prefixGroups) {
-          if (rendered >= limit) { truncated = true; break }
-          const subKey = tp + '#' + (pg.prefix || '')
-          const subCollapsed = state.collapsedFolders.has(subKey)
-          const label = pg.prefix || t('render.modelUngrouped')
-          const sub = document.createElement('div')
-          sub.className = 'model-prefix-section'
-          sub.innerHTML = `<div class="model-prefix-header"><span class="model-type-arrow">${subCollapsed ? '▸' : '▾'}</span><span class="model-prefix-name">${escHtml(label)}</span><span class="model-type-count">${t('render.modelTypeCount', { n: pg.items.length })}</span><span class="model-type-summary">${buildSummary(pg.items)}</span></div>`
-          sub.querySelector('.model-prefix-header').addEventListener('click', () => {
-            if (state.collapsedFolders.has(subKey)) state.collapsedFolders.delete(subKey)
-            else state.collapsedFolders.add(subKey)
-            renderModelTypeResult()
-          })
-          if (!subCollapsed) {
-            const cards = document.createElement('div')
-            cards.className = 'model-cards'
-            renderCardsInto(cards, pg.items)
-            sub.appendChild(cards)
-          }
-          section.appendChild(sub)
+      const grpBody = grp.querySelector('.mc-grp-body')
+      const wrap = document.createElement('div')
+      wrap.className = grid ? 'mc-cards' : 'mc-rows'
+      for (const g of items) {
+        if (rendered >= limit) {
+          truncated = true
+          break
         }
+        if (grid) appendModelGridCard(wrap, g)
+        else appendModelCompareRow(wrap, g)
+        rendered++
       }
+      grpBody.appendChild(wrap)
     }
-    frag.appendChild(section)
+    frag.appendChild(grp)
   }
   if (truncated) {
     const more = document.createElement('div')
     more.className = 'model-show-more'
     more.innerHTML = `<button class="btn btn-ghost btn-sm">${t('render.showMore', { rendered, total: models.length })}</button>`
-    more.querySelector('button').addEventListener('click', () => { state.renderLimit += 200; renderModelTypeResult() })
+    more.querySelector('button').addEventListener('click', () => {
+      state.renderLimit += 200
+      renderModelTypeResult()
+    })
     frag.appendChild(more)
+  }
+  if (grid && state.selected && state.selected.isModel && models.includes(state.selected)) {
+    frag.appendChild(buildModelDetailPanel(state.selected))
   }
   body.innerHTML = ''
   body.appendChild(frag)
   observeThumbs(body)
   observeModelThumbs(body)
+  prefetchModelThumbs(body)
+}
+
+function appendModelGridCard(container, g) {
+  const mainLeft = g.left && (g.left.file || g.left.dir)
+  const mainRight = g.right && (g.right.file || g.right.dir)
+  const shortName = g.key
+    .replace(/^assets\/[^/]+\/models\//, '')
+    .replace(/^assets\/[^/]+\/items\//, '')
+    .replace(/\.json$/, '')
+  const useLeftForRight = !mainRight && !!mainLeft
+  const previewHtml = renderModelThumbPair(
+    mainLeft,
+    mainRight || mainLeft,
+    state.leftPath,
+    mainRight ? state.rightPath : state.leftPath,
+    useLeftForRight,
+    mainRight ? undefined : state.rightPath
+  )
+  const card = document.createElement('div')
+  card.className = 'mc-card row-' + g.kind
+  if (state.selected && state.selected.key === g.key) card.classList.add('selected')
+  card._group = g
+  card.innerHTML =
+    `<div class="mc-card-preview">${previewHtml}</div>` +
+    `<div class="mc-card-foot">${statusBadge(g.kind)}<span class="mc-card-nm" title="${escAttr(g.key)}">${escHtml(shortName)}</span></div>`
+  card.querySelectorAll('.ac-thumb[data-mrel]').forEach(th => {
+    th._modelThumbItem = {
+      modelThumb: modelThumbSpec(
+        { name: th.dataset.mrel, mtime: +th.dataset.mtime || 0 },
+        th.dataset.mroot,
+        th.dataset.mtexroot || undefined
+      )
+    }
+  })
+  card.addEventListener('click', () => {
+    state.selected = g
+    renderSidebar()
+    renderModelTypeResult()
+  })
+  container.appendChild(card)
+}
+
+function buildModelDetailPanel(g) {
+  const panel = document.createElement('div')
+  panel.className = 'mc-detail'
+  panel.innerHTML =
+    `<div class="mc-detail-head"><span class="mc-detail-title" title="${escAttr(g.key)}">${escHtml(g.key)}</span><button class="mc-detail-close" title="${t('common.close')}">✕</button></div>` +
+    `<div class="mc-detail-body">` +
+    `<div class="mc-model-acts">` +
+    `<span class="mc-acts-lab">${t('render.modelActs')}</span>` +
+    `<button class="btn btn-ghost btn-sm" data-mc-act="show">${t('render.modelShowInFolder')}</button>` +
+    `<button class="btn btn-ghost btn-sm" data-mc-act="select">${t('render.modelSelectDetail')}</button>` +
+    `</div>` +
+    `<div class="mc-model-preview"></div>` +
+    `<div class="mc-tex-wrap"><span class="mc-tex-loading">${t('render.modelTexLoading')}</span></div>` +
+    `</div>`
+  panel.querySelector('.mc-detail-close').addEventListener('click', () => {
+    state.selected = null
+    renderSidebar()
+    renderModelTypeResult()
+  })
+  panel.querySelector('[data-mc-act="show"]').addEventListener('click', e => {
+    e.stopPropagation()
+    const ent = mainEntryOf(g)
+    if (ent) window.api.showInFolder(ent.fullPath)
+  })
+  panel.querySelector('[data-mc-act="select"]').addEventListener('click', e => {
+    e.stopPropagation()
+    selectGroup(g)
+  })
+  fillModelPreview(panel, g)
+  loadModelTexComparePanel(panel, g)
+  return panel
+}
+
+function appendModelCompareRow(container, g) {
+  const mainLeft = g.left && (g.left.file || g.left.dir)
+  const mainRight = g.right && (g.right.file || g.right.dir)
+  const shortName = g.key
+    .replace(/^assets\/[^/]+\/models\//, '')
+    .replace(/^assets\/[^/]+\/items\//, '')
+    .replace(/\.json$/, '')
+  const expanded = state.expandedKeys.has(g.key)
+  const row = document.createElement('div')
+  row.className = 'mc-model' + (expanded ? ' open' : '')
+  if (state.selected && state.selected.key === g.key) row.classList.add('selected')
+  row.dataset.key = g.key
+  row._group = g
+  row.innerHTML =
+    `<div class="mc-model-head">` +
+    `<span class="mc-arrow">${expanded ? '▾' : '▸'}</span>` +
+    statusBadge(g.kind) +
+    `<span class="mc-model-nm" title="${escAttr(g.key)}">${escHtml(shortName)}</span>` +
+    `<span class="mc-model-path">${escHtml(g.key)}</span>` +
+    `<span class="mc-model-mini">` +
+    `<span class="mc-mini-l${mainLeft ? ' on' : ''}" title="${t('common.left')}">L</span>` +
+    `<span class="mc-mini-r${mainRight ? ' on' : ''}" title="${t('common.right')}">R</span>` +
+    `</span>` +
+    `</div>` +
+    `<div class="mc-model-body">` +
+    `<div class="mc-model-acts">` +
+    `<span class="mc-acts-lab">${t('render.modelActs')}</span>` +
+    `<button class="btn btn-ghost btn-sm" data-mc-act="show">${t('render.modelShowInFolder')}</button>` +
+    `<button class="btn btn-ghost btn-sm" data-mc-act="select">${t('render.modelSelectDetail')}</button>` +
+    `</div>` +
+    `<div class="mc-model-preview"></div>` +
+    `<div class="mc-tex-wrap"><span class="mc-tex-loading">${t('render.modelTexLoading')}</span></div>` +
+    `</div>`
+  row.querySelector('.mc-model-head').addEventListener('click', () => {
+    selectGroup(g, false)
+    if (state.expandedKeys.has(g.key)) state.expandedKeys.delete(g.key)
+    else state.expandedKeys.add(g.key)
+    renderModelTypeResult()
+  })
+  row.querySelector('[data-mc-act="show"]').addEventListener('click', e => {
+    e.stopPropagation()
+    const ent = mainEntryOf(g)
+    if (ent) window.api.showInFolder(ent.fullPath)
+  })
+  row.querySelector('[data-mc-act="select"]').addEventListener('click', e => {
+    e.stopPropagation()
+    selectGroup(g)
+  })
+  container.appendChild(row)
+  if (expanded) {
+    fillModelPreview(row, g)
+    loadModelTexComparePanel(row, g)
+  }
+}
+
+function fillModelPreview(row, g) {
+  const box = row.querySelector('.mc-model-preview')
+  if (!box) return
+  const mainLeft = g.left && (g.left.file || g.left.dir)
+  const mainRight = g.right && (g.right.file || g.right.dir)
+  if (!mainLeft && !mainRight) {
+    box.innerHTML = `<span class="mc-preview-lab">${t('render.modelPreview')}</span><span class="mc-tex-none">${t('render.modelTexNone')}</span>`
+    return
+  }
+  const tab = state.modelPreviewTab === 'tex2d' ? 'tex2d' : 'model'
+  box.innerHTML =
+    `<div class="mc-preview-tabs">` +
+    `<button class="mc-preview-tab${tab === 'model' ? ' on' : ''}" data-mc-ptab="model">${t('render.previewTabModel')}</button>` +
+    `<button class="mc-preview-tab${tab === 'tex2d' ? ' on' : ''}" data-mc-ptab="tex2d">${t('render.previewTabTex2d')}</button>` +
+    `</div>` +
+    `<div class="mc-preview-content"></div>`
+  box.querySelectorAll('[data-mc-ptab]').forEach(b =>
+    b.addEventListener('click', e => {
+      e.stopPropagation()
+      state.modelPreviewTab = b.dataset.mcPtab
+      fillModelPreview(row, g)
+    })
+  )
+  const content = box.querySelector('.mc-preview-content')
+  if (tab === 'model') renderPreviewModel(content, g)
+  else renderPreviewTex2d(content, g)
+}
+
+function renderPreviewModel(content, g) {
+  const mainLeft = g.left && (g.left.file || g.left.dir)
+  const mainRight = g.right && (g.right.file || g.right.dir)
+  const useLeftForRight = !mainRight && !!mainLeft
+  const html = renderModelThumbPair(
+    mainLeft,
+    mainRight || mainLeft,
+    state.leftPath,
+    mainRight ? state.rightPath : state.leftPath,
+    useLeftForRight,
+    mainRight ? undefined : state.rightPath
+  )
+  content.innerHTML = `<div class="mc-preview-thumbs">${html}</div>`
+  content.querySelectorAll('.ac-thumb[data-mrel]').forEach(th => {
+    th._modelThumbItem = {
+      modelThumb: modelThumbSpec(
+        { name: th.dataset.mrel, mtime: +th.dataset.mtime || 0 },
+        th.dataset.mroot,
+        th.dataset.mtexroot || undefined
+      )
+    }
+  })
+  content.querySelectorAll('.ac-thumb, .thumb-ph').forEach(th => {
+    th.addEventListener('click', e => {
+      e.stopPropagation()
+      selectGroup(g)
+    })
+  })
+  observeModelThumbs(content)
+}
+
+async function renderPreviewTex2d(content, g) {
+  content.innerHTML = `<span class="mc-tex-loading">${t('render.modelTexLoading')}</span>`
+  const le = g.left && g.left.file,
+    re = g.right && g.right.file
+  const leftList =
+    le && isModelEntry(le)
+      ? await resolveModelTexList({ fileRoot: state.leftPath, rel: le.name }).catch(() => null)
+      : null
+  const rightList =
+    re && isModelEntry(re)
+      ? await resolveModelTexList({ fileRoot: state.rightPath, rel: re.name }).catch(() => null)
+      : null
+  if (!content.isConnected) return
+  const col = (list, side) => {
+    const tag = `<span class="mc-pv2-tag mc-pv2-tag-${side}">${side === 'left' ? t('common.left') : t('common.right')}</span>`
+    if (!list || !list.length)
+      return `<div class="mc-pv2-col">${tag}<span class="mc-tex-none">${t('render.texNone')}</span></div>`
+    const items = list
+      .map(
+        tx =>
+          `<div class="mc-pv2-item">` +
+          `<img class="thumb thumb-${side}" src="${escAttr(tx.url)}" data-name="${escAttr(tx.name)}" alt="" />` +
+          `<span class="mc-pv2-name" title="${escAttr(tx.name)}">${escHtml(tx.name.replace(/^minecraft:/, ''))}</span>` +
+          `</div>`
+      )
+      .join('')
+    return `<div class="mc-pv2-col">${tag}${items}</div>`
+  }
+  content.innerHTML = `<div class="mc-pv2">${col(leftList, 'left')}${col(rightList, 'right')}</div>`
+  content.querySelectorAll('img.thumb').forEach(img => {
+    img.addEventListener('click', e => {
+      e.stopPropagation()
+      openPreview(img.src, img.dataset.name || '')
+    })
+  })
+  observeThumbs(content)
+}
+
+async function loadModelTexComparePanel(row, g) {
+  const wrap = row.querySelector('.mc-tex-wrap')
+  if (!wrap) return
+  const le = g.left && g.left.file,
+    re = g.right && g.right.file
+  const leftList =
+    le && isModelEntry(le)
+      ? await resolveModelTexList({ fileRoot: state.leftPath, rel: le.name }).catch(() => null)
+      : null
+  const rightList =
+    re && isModelEntry(re)
+      ? await resolveModelTexList({ fileRoot: state.rightPath, rel: re.name }).catch(() => null)
+      : null
+  if (!row.isConnected) return
+  const groupMap = new Map()
+  for (const grp of state.result) groupMap.set(grp.key, grp)
+  const texMap = new Map()
+  for (const tx of leftList || []) {
+    const ap = textureAssetPath(tx.name)
+    if (!ap) continue
+    if (!texMap.has(ap)) texMap.set(ap, { name: tx.name, leftUrl: tx.url, rightUrl: null })
+    else texMap.get(ap).leftUrl = tx.url
+  }
+  for (const tx of rightList || []) {
+    const ap = textureAssetPath(tx.name)
+    if (!ap) continue
+    if (!texMap.has(ap)) texMap.set(ap, { name: tx.name, leftUrl: null, rightUrl: tx.url })
+    else texMap.get(ap).rightUrl = tx.url
+  }
+  if (texMap.size === 0) {
+    wrap.innerHTML = `<span class="mc-tex-none">${t('render.modelTexNone')}</span>`
+    return
+  }
+  const buckets = { block: [], item: [], other: [] }
+  for (const [ap, info] of texMap) {
+    const dot = ap.lastIndexOf('.')
+    const key = dot >= 0 ? ap.slice(0, dot) : ap
+    const grp = groupMap.get(key)
+    const kind = grp ? grp.kind : 'miss'
+    const ck = contentKindOfPath(ap)
+    const bucket = ck === 'block' ? 'block' : ck === 'item' ? 'item' : 'other'
+    const lMain = grp && grp.left && grp.left.main
+    const rMain = grp && grp.right && grp.right.main
+    const leftUrl = lMain ? fileUrl(lMain.fullPath) : info.leftUrl
+    const rightUrl = rMain ? fileUrl(rMain.fullPath) : info.rightUrl
+    const texName = (info.name || ap).replace(/^minecraft:/, '')
+    buckets[bucket].push({ ap, texName, leftUrl, rightUrl, kind, grp })
+  }
+  const frag = document.createDocumentFragment()
+  for (const bk of ['block', 'item', 'other']) {
+    const items = buckets[bk]
+    const catEl = document.createElement('div')
+    catEl.className = 'mc-tex-cat' + (items.length ? '' : ' empty')
+    catEl.innerHTML = `<div class="mc-tex-cat-head"><span class="mc-tex-tag">${t('category.' + bk)}</span><span class="mc-tex-cat-cnt">${items.length ? items.length + ' ' + t('render.texCount') : t('render.texNone')}</span></div><div class="mc-tex-cat-body"></div>`
+    const bodyEl = catEl.querySelector('.mc-tex-cat-body')
+    for (const it of items) bodyEl.appendChild(buildTexCompareRow(it))
+    frag.appendChild(catEl)
+  }
+  wrap.innerHTML = ''
+  wrap.appendChild(frag)
+  observeThumbs(wrap)
+}
+
+function buildTexCompareRow(it) {
+  const row = document.createElement('div')
+  row.className = 'mc-tex-row row-' + it.kind
+  const thumbL = it.leftUrl
+    ? `<img class="thumb thumb-left" src="${escAttr(it.leftUrl)}" alt="" />`
+    : `<span class="thumb-ph thumb-left-ph">L</span>`
+  const thumbR = it.rightUrl
+    ? `<img class="thumb thumb-right" src="${escAttr(it.rightUrl)}" alt="" />`
+    : `<span class="thumb-ph thumb-right-ph">R</span>`
+  row.innerHTML =
+    `<div class="mc-tex-cell left">${thumbL}</div>` +
+    `<div class="mc-tex-mid"><span class="mc-tex-name" title="${escAttr(it.ap)}">${escHtml(it.texName)}</span>${statusBadge(it.kind)}</div>` +
+    `<div class="mc-tex-cell right">${thumbR}</div>`
+  row.querySelectorAll('img.thumb').forEach(img => {
+    img.addEventListener('click', e => {
+      e.stopPropagation()
+      openPreview(img.src, it.texName)
+    })
+  })
+  if (it.grp)
+    row.addEventListener('click', () => {
+      state.selected = it.grp
+      renderSidebar()
+    })
+  return row
+}
+
+function renderMaterialPreviewHtml(matG) {
+  const hasMain = (matG.left && matG.left.main) || (matG.right && matG.right.main)
+  let h = ''
+  for (const role of ROLES) {
+    const le = matG.left && matG.left[role],
+      re = matG.right && matG.right[role]
+    if (!le && !re) {
+      if ((role === 'normal' || role === 'specular') && hasMain && state.rightPath)
+        h += `<div class="pv-row pv-row-empty" data-role="${role}"><span class="pv-role">${ROLE_LABEL[role]}</span>${pvCell(null, t('common.left'))}${pvCell(null, t('common.right'))}</div>`
+      continue
+    }
+    h += `<div class="pv-row" data-role="${role}"><span class="pv-role">${ROLE_LABEL[role]}</span>${pvCell(le, t('common.left'))}${pvCell(re, t('common.right'))}</div>`
+  }
+  return h
+}
+
+function bindPreviewImages(container) {
+  container.querySelectorAll('img').forEach(img => {
+    const cell = img.parentElement
+    cell.classList.add('pv-loading')
+    img.addEventListener('click', () => openPreview(img.src, img.dataset.name || ''))
+    img.addEventListener('load', () => {
+      cell.classList.remove('pv-loading')
+      const sl = cell.querySelector('.pv-size')
+      if (sl && img.naturalWidth) sl.textContent = `${img.naturalWidth}×${img.naturalHeight}`
+    })
+    img.addEventListener('error', () => {
+      cell.classList.remove('pv-loading')
+      cell.classList.add('pv-error')
+    })
+    const btn = document.createElement('button')
+    btn.className = 'pv-replace-btn'
+    btn.textContent = t('preview.replace')
+    btn.title = t('preview.replaceTitle')
+    btn.addEventListener('click', e => {
+      e.stopPropagation()
+      replaceWithExternalFile(img.dataset.path)
+    })
+    cell.appendChild(btn)
+    const delBtn = document.createElement('button')
+    delBtn.className = 'pv-delete-btn'
+    delBtn.textContent = t('preview.delete')
+    delBtn.title = t('preview.deleteTitle')
+    delBtn.addEventListener('click', e => {
+      e.stopPropagation()
+      deleteTexture(img.dataset.path)
+    })
+    cell.appendChild(delBtn)
+  })
+}
+
+async function loadModelTex2dPreview(container, g) {
+  if (!container) return
+  container.innerHTML = `<span class="mc-tex-loading">${t('render.modelTexLoading')}</span>`
+  const le = g.left && g.left.file,
+    re = g.right && g.right.file
+  const leftList =
+    le && isModelEntry(le)
+      ? await resolveModelTexList({ fileRoot: state.leftPath, rel: le.name }).catch(() => null)
+      : null
+  const rightList =
+    re && isModelEntry(re)
+      ? await resolveModelTexList({ fileRoot: state.rightPath, rel: re.name }).catch(() => null)
+      : null
+  if (!container.isConnected) return
+  const groupMap = new Map()
+  for (const grp of state.result) groupMap.set(grp.key, grp)
+  const seen = new Set()
+  const mats = []
+  for (const tx of [...(leftList || []), ...(rightList || [])]) {
+    const ap = textureAssetPath(tx.name)
+    if (!ap) continue
+    const dot = ap.lastIndexOf('.')
+    const key = dot >= 0 ? ap.slice(0, dot) : ap
+    if (seen.has(key)) continue
+    seen.add(key)
+    const grp = groupMap.get(key)
+    if (grp && grp.isMaterial) mats.push(grp)
+  }
+  if (!mats.length) {
+    container.innerHTML = `<span class="mc-tex-none">${t('render.modelTexNone')}</span>`
+    return
+  }
+  const frag = document.createDocumentFragment()
+  for (const matG of mats) {
+    const block = document.createElement('div')
+    block.className = 'pv-model-mat'
+    block.innerHTML = `<div class="pv-model-mat-title" title="${escAttr(matG.key)}">${escHtml(matG.key)} ${statusBadge(matG.kind)}</div>${renderMaterialPreviewHtml(matG)}`
+    frag.appendChild(block)
+    bindPreviewImages(block)
+    bindEmptyCellActions(block, matG)
+  }
+  container.innerHTML = ''
+  container.appendChild(frag)
+  observeThumbs(container)
 }
 
 function applyCategoryFilter(arr) {
@@ -454,12 +1094,25 @@ function applyCategoryFilter(arr) {
 
 function buildCatRow(dim, labelKey, items, currentVal, scrollable) {
   const label = `<span class="cat-row-label" data-i18n="${labelKey}">${t(labelKey)}</span>`
-  const btns = items.map(([val, textKey, count, rawText]) => {
-    const text = rawText != null ? escHtml(rawText) : `<span data-i18n="${textKey}">${t(textKey)}</span>`
-    const active = currentVal === val ? ' active' : ''
-    const cnt = count != null ? `<span class="cat-cnt">${count}</span>` : ''
-    return `<button class="cat-btn${active}" data-dim="${dim}" data-val="${escAttr(val)}"><span class="cat-name">${text}</span>${cnt}</button>`
-  }).join('')
+  if (scrollable && items.length > 12) {
+    const opts = items
+      .map(([val, textKey, count, rawText]) => {
+        const text = rawText != null ? escHtml(rawText) : t(textKey)
+        const cnt = count != null ? ` (${count})` : ''
+        const sel = currentVal === val ? ' selected' : ''
+        return `<option value="${escAttr(val)}"${sel}>${text}${cnt}</option>`
+      })
+      .join('')
+    return `<div class="cat-row"><span class="cat-row-label" data-i18n="${labelKey}">${t(labelKey)}</span><select class="cat-select" data-dim="${dim}">${opts}</select></div>`
+  }
+  const btns = items
+    .map(([val, textKey, count, rawText]) => {
+      const text = rawText != null ? escHtml(rawText) : `<span data-i18n="${textKey}">${t(textKey)}</span>`
+      const active = currentVal === val ? ' active' : ''
+      const cnt = count != null ? `<span class="cat-cnt">${count}</span>` : ''
+      return `<button class="cat-btn${active}" data-dim="${dim}" data-val="${escAttr(val)}"><span class="cat-name">${text}</span>${cnt}</button>`
+    })
+    .join('')
   return `<div class="cat-row${scrollable ? ' cat-row-scroll' : ''}">${label}<div class="cat-btns">${btns}</div></div>`
 }
 
@@ -469,7 +1122,10 @@ function renderCategoryBar(baseSet) {
   if (!bar) return
   const f = state.categoryFilter || { type: 'all', content: 'all', status: 'all', folder: 'all', tag: 'all' }
   const total = _lastBaseSet.length
-  if (total === 0) { bar.innerHTML = ''; return }
+  if (total === 0) {
+    bar.innerHTML = ''
+    return
+  }
 
   const typeCounts = { material: 0, model: 0, dir: 0, file: 0 }
   const contentCounts = { block: 0, item: 0, other: 0 }
@@ -487,33 +1143,57 @@ function renderCategoryBar(baseSet) {
     const fo = folderOf(g)
     folderCounts.set(fo, (folderCounts.get(fo) || 0) + 1)
     const tg = groupTagOf(g, state.customTags)
-    if (tg) { tagCounts.set(tg, (tagCounts.get(tg) || 0) + 1); hasCustomTag = true }
+    if (tg) {
+      tagCounts.set(tg, (tagCounts.get(tg) || 0) + 1)
+      hasCustomTag = true
+    }
   }
 
   const rows = []
-  rows.push(buildCatRow('type', 'category.typeLabel', [
-    ['all', 'common.all', total],
-    ['material', 'type.material', typeCounts.material],
-    ['model', 'type.model', typeCounts.model],
-    ['dir', 'type.folder', typeCounts.dir],
-    ['file', 'type.file', typeCounts.file],
-  ], f.type))
+  rows.push(
+    buildCatRow(
+      'type',
+      'category.typeLabel',
+      [
+        ['all', 'common.all', total],
+        ['material', 'type.material', typeCounts.material],
+        ['model', 'type.model', typeCounts.model],
+        ['dir', 'type.folder', typeCounts.dir],
+        ['file', 'type.file', typeCounts.file]
+      ],
+      f.type
+    )
+  )
   if (contentCounts.block || contentCounts.item) {
-    rows.push(buildCatRow('content', 'category.contentLabel', [
-      ['all', 'common.all', total],
-      ['block', 'category.block', contentCounts.block],
-      ['item', 'category.item', contentCounts.item],
-      ['other', 'category.other', contentCounts.other],
-    ], f.content))
+    rows.push(
+      buildCatRow(
+        'content',
+        'category.contentLabel',
+        [
+          ['all', 'common.all', total],
+          ['block', 'category.block', contentCounts.block],
+          ['item', 'category.item', contentCounts.item],
+          ['other', 'category.other', contentCounts.other]
+        ],
+        f.content
+      )
+    )
   }
-  rows.push(buildCatRow('status', 'category.statusLabel', [
-    ['all', 'common.all', total],
-    ['have', 'status.haveShort', statusCounts.have],
-    ['diff', 'status.diffShort', statusCounts.diff],
-    ['partial', 'status.partialShort', statusCounts.partial],
-    ['miss', 'status.missShort', statusCounts.miss],
-    ['extra', 'status.extraShort', statusCounts.extra],
-  ], f.status))
+  rows.push(
+    buildCatRow(
+      'status',
+      'category.statusLabel',
+      [
+        ['all', 'common.all', total],
+        ['have', 'status.haveShort', statusCounts.have],
+        ['diff', 'status.diffShort', statusCounts.diff],
+        ['partial', 'status.partialShort', statusCounts.partial],
+        ['miss', 'status.missShort', statusCounts.miss],
+        ['extra', 'status.extraShort', statusCounts.extra]
+      ],
+      f.status
+    )
+  )
   if (folderCounts.size > 1) {
     const items = [['all', 'common.all', total]]
     const folders = [...folderCounts.keys()].sort((a, b) => a.localeCompare(b, 'zh'))
@@ -524,7 +1204,10 @@ function renderCategoryBar(baseSet) {
     let tagged = 0
     for (const v of tagCounts.values()) tagged += v
     const noneCount = total - tagged
-    const items = [['all', 'common.all', total], ['none', 'category.untagged', noneCount]]
+    const items = [
+      ['all', 'common.all', total],
+      ['none', 'category.untagged', noneCount]
+    ]
     const tags = [...tagCounts.keys()].sort((a, b) => a.localeCompare(b, 'zh'))
     for (const tg of tags) items.push([tg, null, tagCounts.get(tg), tg])
     rows.push(buildCatRow('tag', 'category.tagLabel', items, f.tag, true))
@@ -533,9 +1216,19 @@ function renderCategoryBar(baseSet) {
   bar.innerHTML = rows.join('')
   bar.querySelectorAll('.cat-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      const dim = btn.dataset.dim, val = btn.dataset.val
+      const dim = btn.dataset.dim,
+        val = btn.dataset.val
       if (state.categoryFilter[dim] === val) return
       state.categoryFilter[dim] = val
+      state.renderLimit = 200
+      saveOptions()
+      renderResult()
+    })
+  })
+  bar.querySelectorAll('.cat-select').forEach(sel => {
+    sel.addEventListener('change', () => {
+      const dim = sel.dataset.dim
+      state.categoryFilter[dim] = sel.value
       state.renderLimit = 200
       saveOptions()
       renderResult()
@@ -553,38 +1246,29 @@ export function renderResult() {
   filtered = applyCategoryFilter(filtered)
   sortResult(filtered)
 
-  const counts = state.counts || { have: 0, diff: 0, partial: 0, miss: 0, extra: 0, leftTex: 0, rightTex: 0, rightMatch: 0, pbrExtra: 0, leftModel: 0, rightModel: 0, modelMatch: 0 }
-  const total = counts.have + counts.diff + counts.partial + counts.miss + counts.extra
-  const leftGroups = counts.have + counts.diff + counts.partial + counts.miss
-  const cov = counts.leftTex > 0 ? counts.rightMatch / counts.leftTex * 100 : 0
-  const consist = leftGroups > 0 ? counts.have / leftGroups * 100 : 0
-  const missRate = leftGroups > 0 ? counts.miss / leftGroups * 100 : 0
-  const diffRate = leftGroups > 0 ? counts.diff / leftGroups * 100 : 0
-  const pbrRate = leftGroups > 0 ? counts.pbrExtra / leftGroups * 100 : 0
-  const modelRate = counts.leftModel > 0 ? counts.modelMatch / counts.leftModel * 100 : 0
-
-  const dash = $('statsDashboard')
-  if (dash) {
-    const card = (label, val, unit, pct, sub, cls) =>
-      `<div class="stat-card ${cls}"><div class="stat-card-label">${label}</div>` +
-      `<div class="stat-card-value">${val}<span class="stat-unit">${unit}</span></div>` +
-      `<div class="stat-card-bar"><div class="stat-card-fill" style="width:${Math.min(pct,100)}%"></div></div>` +
-      `<div class="stat-card-sub">${sub}</div></div>`
-    dash.innerHTML = total === 0 ? '' :
-      `<div class="stat-cards">` +
-      card(t('render.covTitle'), cov.toFixed(1), '%', cov, t('render.covSub', { match: counts.rightMatch, total: counts.leftTex }), 'stat-cov') +
-      card(t('render.consistTitle'), consist.toFixed(1), '%', consist, t('render.consistSub', { have: counts.have, total: leftGroups }), 'stat-consist') +
-      card(t('render.missTitle'), missRate.toFixed(1), '%', missRate, t('render.missSub', { n: counts.miss }), 'stat-miss') +
-      card(t('render.diffTitle'), diffRate.toFixed(1), '%', diffRate, t('render.diffSub', { n: counts.diff }), 'stat-diff') +
-      (counts.leftModel ? card(t('render.modelTitle'), modelRate.toFixed(1), '%', modelRate, t('render.modelSub', { match: counts.modelMatch, total: counts.leftModel }), 'stat-model') : '') +
-      (counts.pbrExtra ? card(t('render.pbrTitle'), counts.pbrExtra, '', pbrRate, t('render.pbrSub', { n: counts.pbrExtra }), 'stat-pbr') : '') +
-      `</div>`
+  const counts = state.counts || {
+    have: 0,
+    diff: 0,
+    partial: 0,
+    miss: 0,
+    extra: 0,
+    leftTex: 0,
+    rightTex: 0,
+    rightMatch: 0,
+    pbrExtra: 0,
+    leftModel: 0,
+    rightModel: 0,
+    modelMatch: 0
   }
+  const total = state.result.length
 
-  summaryEl.innerHTML = total === 0 ? '' : `
+  summaryEl.innerHTML =
+    total === 0
+      ? ''
+      : `
     <span class="s-item">${t('render.leftItem')} <span class="s-num">${state.leftEntries.length}</span></span>
     <span class="s-item">${t('render.rightItem')} <span class="s-num">${state.rightEntries.length}</span></span>
-    <span class="s-item">${t('render.groupItem')} <span class="s-num">${total}</span></span>
+
     <span class="s-item s-have">✓ <span class="s-num">${counts.have}</span></span>
     <span class="s-item s-diff">≈ <span class="s-num">${counts.diff}</span></span>
     <span class="s-item s-partial">◐ <span class="s-num">${counts.partial}</span></span>
@@ -592,13 +1276,15 @@ export function renderResult() {
     <span class="s-item">＋ <span class="s-num">${counts.extra}</span></span>
   `
 
-  renderChart()
-
   if (filtered.length === 0) {
-    const msg = !state.leftPath || !state.rightPath
-      ? t('render.dragHint')
-      : result.length === 0 ? t('render.bothEmpty')
-      : (onlyDiff ? t('render.allConsistent') : t('render.noData'))
+    const msg =
+      !state.leftPath || !state.rightPath
+        ? t('render.dragHint')
+        : result.length === 0
+          ? t('render.bothEmpty')
+          : onlyDiff
+            ? t('render.allConsistent')
+            : t('render.noData')
     resultBody.innerHTML = `<tr class="empty-row"><td colspan="8">${msg}</td></tr>`
     return
   }
@@ -616,7 +1302,8 @@ export function renderResult() {
       folderMap.get(f).push(g)
     }
     const folders = [...folderMap.keys()]
-    const _sKey = state.sortKey, _sDir = state.sortDir === 'asc' ? 1 : -1
+    const _sKey = state.sortKey,
+      _sDir = state.sortDir === 'asc' ? 1 : -1
     if (_sKey === 'name' || !_sKey) {
       folders.sort((a, b) => a.localeCompare(b, 'zh') * _sDir)
     } else {
@@ -626,17 +1313,36 @@ export function renderResult() {
         let v
         if (_sKey === 'status') {
           v = Infinity
-          for (const g of items) { const s = STATUS_ORDER[g.kind]; if (s < v) v = s }
+          for (const g of items) {
+            const s = STATUS_ORDER[g.kind]
+            if (s < v) v = s
+          }
         } else if (_sKey === 'size') {
           v = 0
-          for (const g of items) { const s = mainEntryOf(g)?.size || 0; if (s > v) v = s }
+          for (const g of items) {
+            const s = mainEntryOf(g)?.size || 0
+            if (s > v) v = s
+          }
         } else if (_sKey === 'mtime') {
           v = 0
-          for (const g of items) { const s = mainEntryOf(g)?.mtime || 0; if (s > v) v = s }
+          for (const g of items) {
+            const s = mainEntryOf(g)?.mtime || 0
+            if (s > v) v = s
+          }
         } else if (_sKey === 'left') {
-          v = 1; for (const g of items) if (hasAny(g.left)) { v = 0; break }
+          v = 1
+          for (const g of items)
+            if (hasAny(g.left)) {
+              v = 0
+              break
+            }
         } else if (_sKey === 'right') {
-          v = 1; for (const g of items) if (hasAny(g.right)) { v = 0; break }
+          v = 1
+          for (const g of items)
+            if (hasAny(g.right)) {
+              v = 0
+              break
+            }
         } else v = 0
         fk.set(f, v)
       }
@@ -647,7 +1353,10 @@ export function renderResult() {
       })
     }
     for (const f of folders) {
-      if (rendered >= limit) { truncated = true; break }
+      if (rendered >= limit) {
+        truncated = true
+        break
+      }
       const items = folderMap.get(f)
       const collapsed = state.collapsedFolders.has(f)
       const fc = { have: 0, diff: 0, partial: 0, miss: 0, extra: 0 }
@@ -677,18 +1386,33 @@ export function renderResult() {
         } else {
           let next = ftr.nextSibling
           while (next && !next.classList.contains('folder-group-row') && !next.classList.contains('show-more-row')) {
-            const rm = next; next = next.nextSibling; rm.remove()
+            const rm = next
+            next = next.nextSibling
+            rm.remove()
           }
           if (arrow) arrow.textContent = '▸'
         }
       })
       frag.appendChild(ftr)
       if (collapsed) continue
-      for (const g of items) { if (rendered >= limit) { truncated = true; break }; appendGroupRows(frag, g); rendered++ }
+      for (const g of items) {
+        if (rendered >= limit) {
+          truncated = true
+          break
+        }
+        appendGroupRows(frag, g)
+        rendered++
+      }
     }
-
   } else {
-    for (const g of filtered) { if (rendered >= limit) { truncated = true; break }; appendGroupRows(frag, g); rendered++ }
+    for (const g of filtered) {
+      if (rendered >= limit) {
+        truncated = true
+        break
+      }
+      appendGroupRows(frag, g)
+      rendered++
+    }
   }
 
   if (truncated) {
@@ -707,7 +1431,6 @@ export function renderResult() {
   _renderedCount = rendered
   observeThumbs(resultBody)
   observeModelThumbs(resultBody)
-
 }
 
 export function selectGroup(g, toggle = true) {
@@ -722,7 +1445,9 @@ export function selectGroup(g, toggle = true) {
       state.expandedKeys.delete(g.key)
       let next = curRow.nextSibling
       while (next && next.classList && next.classList.contains('sub-row')) {
-        const rm = next; next = next.nextSibling; rm.remove()
+        const rm = next
+        next = next.nextSibling
+        rm.remove()
       }
       if (arrow) arrow.textContent = '▸'
     } else {
@@ -737,14 +1462,15 @@ export function selectGroup(g, toggle = true) {
     if (state.expandedKeys.has(g.key)) state.expandedKeys.delete(g.key)
     else state.expandedKeys.add(g.key)
     renderResult()
-
   }
   renderSidebar()
 }
 
 function pvCell(entry, side) {
-  if (!entry) return `<div class="pv-cell"><span class="pv-tag">${side}</span><span class="pv-empty">${t('preview.noSide')}</span></div>`
-  if (entry.isDirectory || !isImageFile(entry.name)) return `<div class="pv-cell"><span class="pv-tag">${side}</span><span class="pv-empty">${t('preview.notImage')}</span></div>`
+  if (!entry)
+    return `<div class="pv-cell"><span class="pv-tag">${side}</span><span class="pv-empty">${t('preview.noSide')}</span></div>`
+  if (entry.isDirectory || !isImageFile(entry.name))
+    return `<div class="pv-cell"><span class="pv-tag">${side}</span><span class="pv-empty">${t('preview.notImage')}</span></div>`
   const url = fileUrl(entry.fullPath)
   return `<div class="pv-cell"><span class="pv-tag">${side}</span><img src="${url}" data-name="${entry.name}" data-path="${entry.fullPath}" alt="" /><span class="pv-size"></span></div>`
 }
@@ -774,13 +1500,19 @@ function bindEmptyCellActions(panel, g) {
       copyBtn.className = 'pv-empty-btn pv-empty-copy'
       copyBtn.textContent = t('preview.copyFromLeft')
       copyBtn.title = t('preview.copyFromLeftTitle')
-      copyBtn.addEventListener('click', (e) => { e.stopPropagation(); copySingleToRight(le.fullPath, dest) })
+      copyBtn.addEventListener('click', e => {
+        e.stopPropagation()
+        copySingleToRight(le.fullPath, dest)
+      })
       actions.appendChild(copyBtn)
       const addBtn = document.createElement('button')
       addBtn.className = 'pv-empty-btn pv-empty-add'
       addBtn.textContent = t('preview.addTex')
       addBtn.title = t('preview.addTexTitle')
-      addBtn.addEventListener('click', (e) => { e.stopPropagation(); addTextureToRight(dest) })
+      addBtn.addEventListener('click', e => {
+        e.stopPropagation()
+        addTextureToRight(dest)
+      })
       actions.appendChild(addBtn)
     }
     if (canBlank) {
@@ -788,7 +1520,10 @@ function bindEmptyCellActions(panel, g) {
       createBtn.className = 'pv-empty-btn pv-empty-create'
       createBtn.textContent = t('preview.createBlank')
       createBtn.title = role === 'normal' ? t('preview.createBlankNormalTitle') : t('preview.createBlankSpecularTitle')
-      createBtn.addEventListener('click', (e) => { e.stopPropagation(); createBlankTextureToRight(g, role) })
+      createBtn.addEventListener('click', e => {
+        e.stopPropagation()
+        createBlankTextureToRight(g, role)
+      })
       actions.appendChild(createBtn)
     }
     rightCell.appendChild(actions)
@@ -803,7 +1538,76 @@ async function fetchModelText(entry) {
     const res = await fetch(fileUrl(entry.fullPath))
     if (!res.ok) return ''
     return await res.text()
-  } catch { return '' }
+  } catch {
+    return ''
+  }
+}
+
+/* 原版贴图路径集合（official-packs 全量贴图，懒加载缓存）：用于判定模型贴图引用是否由原版提供，避免误报缺失 */
+let vanillaTexSet = null
+let vanillaTexLoading = null
+function getVanillaTexSet() {
+  if (vanillaTexSet) return Promise.resolve(vanillaTexSet)
+  if (vanillaTexLoading) return vanillaTexLoading
+  vanillaTexLoading = fetch('/api/mc-official/tex-index')
+    .then(r => (r.ok ? r.json() : null))
+    .then(d => {
+      vanillaTexSet = d && Array.isArray(d.paths) ? new Set(d.paths) : new Set()
+      vanillaTexLoading = null
+      return vanillaTexSet
+    })
+    .catch(() => {
+      vanillaTexSet = new Set()
+      vanillaTexLoading = null
+      return vanillaTexSet
+    })
+  return vanillaTexLoading
+}
+
+/* 沿 parent 继承链递归合并 textures（子覆盖父），供侧栏贴图引用检测使用，
+   与 mc-model-viewer resolveMcModelRaw 的 parent 解析对齐，避免漏报 potted_* 等继承贴图 */
+const MAX_PARENT_DEPTH = 8
+function parentModelRel(parent) {
+  if (typeof parent !== 'string' || !parent) return null
+  let ns = 'minecraft',
+    rest = parent
+  const ci = parent.indexOf(':')
+  if (ci >= 0) {
+    ns = parent.slice(0, ci)
+    rest = parent.slice(ci + 1)
+  }
+  if (!rest) return null
+  return `assets/${ns}/models/${rest}.json`
+}
+
+async function resolveModelTexturesDeep(text, fileRoot) {
+  const { obj } = parseModelText(text)
+  if (!obj || typeof obj !== 'object') return null
+  const merged = {}
+  let cur = obj
+  const seen = new Set()
+  for (let d = 0; d < MAX_PARENT_DEPTH && cur; d++) {
+    if (cur.textures && typeof cur.textures === 'object') {
+      for (const [k, v] of Object.entries(cur.textures)) {
+        if (!(k in merged)) merged[k] = v
+      }
+    }
+    const parent = typeof cur.parent === 'string' ? cur.parent : null
+    if (!parent || seen.has(parent)) break
+    seen.add(parent)
+    const rel = parentModelRel(parent)
+    if (!rel) break
+    let pText
+    try {
+      const res = await fetch(fileUrl(joinPath(fileRoot, rel)))
+      if (!res.ok) break
+      pText = await res.text()
+    } catch {
+      break
+    }
+    cur = parseModelText(pText).obj
+  }
+  return { textures: merged }
 }
 
 function modelSumLine(text) {
@@ -825,11 +1629,17 @@ function renderModelDiffGrid(grid, lt, rt, g) {
   const a = typeof lt === 'string' && lt ? parseModelText(lt).pretty.split('\n') : []
   const b = typeof rt === 'string' && rt ? parseModelText(rt).pretty.split('\n') : []
   const truncated = a.length > MD_MAX_LINES || b.length > MD_MAX_LINES
-  const as = a.slice(0, MD_MAX_LINES), bs = b.slice(0, MD_MAX_LINES)
-  const importBtn = (g && g.isModel && state.rightPath)
-    ? `<button class="md-head-btn" data-act="upload-model-right" title="${escAttr(t('detail.uploadModel'))}"><svg class="ico ico-sm"><use href="#i-plus"/></svg><span>${escHtml(t('detail.uploadModel'))}</span></button>`
+  const as = a.slice(0, MD_MAX_LINES),
+    bs = b.slice(0, MD_MAX_LINES)
+  const showCopy = g && g.isModel && state.rightPath && g.left && (g.left.file || g.left.dir)
+  const copyBtn = showCopy
+    ? `<button class="md-head-btn" data-act="copy-model-right" title="${escAttr(t('detail.copyModel'))}"><svg class="ico ico-sm"><use href="#i-clipboard"/></svg><span>${escHtml(t('detail.copyModel'))}</span></button>`
     : ''
-  let html = `<div class="md-cell md-head">${t('common.left')}</div><div class="md-cell md-head md-head-right"><span>${t('common.right')}</span>${importBtn}</div>`
+  const importBtn =
+    g && g.isModel && state.rightPath
+      ? `<button class="md-head-btn" data-act="upload-model-right" title="${escAttr(t('detail.uploadModel'))}"><svg class="ico ico-sm"><use href="#i-plus"/></svg><span>${escHtml(t('detail.uploadModel'))}</span></button>`
+      : ''
+  let html = `<div class="md-cell md-head">${t('common.left')}</div><div class="md-cell md-head md-head-right"><span>${t('common.right')}</span>${copyBtn}${importBtn}</div>`
   if (!as.length && !bs.length) {
     html += `<div class="md-cell md-empty">${t('render.noData')}</div><div class="md-cell md-empty"></div>`
   } else {
@@ -845,31 +1655,84 @@ function renderModelDiffGrid(grid, lt, rt, g) {
       for (let i = 0; i < rows; i++) html += mdRow(as[i] || '', bs[i] || '', 'md-same')
     }
   }
-  if (truncated) html += `<div class="md-cell md-trunc">${t('preview.modelTruncated', { n: MD_MAX_LINES })}</div><div class="md-cell md-trunc"></div>`
+  if (truncated)
+    html += `<div class="md-cell md-trunc">${t('preview.modelTruncated', { n: MD_MAX_LINES })}</div><div class="md-cell md-trunc"></div>`
   grid.innerHTML = html
   const importBtnEl = grid.querySelector('.md-head-right [data-act="upload-model-right"]')
-  if (importBtnEl) importBtnEl.addEventListener('click', (ev) => { ev.stopPropagation(); handleAction('upload-model-right', g) })
+  if (importBtnEl)
+    importBtnEl.addEventListener('click', ev => {
+      ev.stopPropagation()
+      handleAction('upload-model-right', g)
+    })
+  const copyBtnEl = grid.querySelector('.md-head-right [data-act="copy-model-right"]')
+  if (copyBtnEl)
+    copyBtnEl.addEventListener('click', ev => {
+      ev.stopPropagation()
+      handleAction('copy-model-right', g)
+    })
 }
 
 async function loadModelDiffView(g, panel) {
   const grid = panel.querySelector('.md-grid')
   const sumEl = panel.querySelector('.pv-model-sum')
   if (!grid || !sumEl) return
-  const le = g.left && g.left.file, re = g.right && g.right.file
+  const le = g.left && g.left.file,
+    re = g.right && g.right.file
   const [lt, rt] = await Promise.all([fetchModelText(le), fetchModelText(re)])
   if (state.selected !== g) return
+  const modelName = modelBaseNameOf(g) || '—'
   sumEl.innerHTML =
+    `<div class="pv-model-sum-row pv-model-name-row"><span class="pv-model-tag">${t('preview.modelName')}</span><span class="pv-model-name">${escHtml(modelName)}</span></div>` +
     `<div class="pv-model-sum-row"><span class="pv-model-tag">${t('common.left')}</span><span>${escHtml(modelSumLine(lt))}</span></div>` +
     `<div class="pv-model-sum-row"><span class="pv-model-tag">${t('common.right')}</span><span>${escHtml(modelSumLine(rt))}</span></div>`
   renderModelDiffGrid(grid, lt, rt, g)
+
+  const refEl = panel.querySelector('.pv-tex-refs')
+  if (refEl) {
+    const leftPaths = new Set(state.leftEntries.filter(e => !e.isDirectory).map(e => e.name))
+    const rightPaths = new Set(state.rightEntries.filter(e => !e.isDirectory).map(e => e.name))
+    const vanillaSet = await getVanillaTexSet()
+    if (state.selected !== g) return
+    const leftObj = await resolveModelTexturesDeep(lt, state.leftPath)
+    if (state.selected !== g) return
+    const rightObj = await resolveModelTexturesDeep(rt, state.rightPath)
+    if (state.selected !== g) return
+    const leftRefs = leftObj ? checkTexRefs(leftObj, leftPaths, vanillaSet) : []
+    const rightRefs = rightObj ? checkTexRefs(rightObj, rightPaths, vanillaSet) : []
+    const renderRefList = (refs, tag) => {
+      if (!refs.length) return ''
+      const items = refs
+        .map(r => {
+          const cls = r.exists ? 'tex-ref-ok' : r.vanilla ? 'tex-ref-vanilla' : 'tex-ref-miss'
+          const badge = r.vanilla ? `<span class="tex-ref-badge">${t('preview.texRefVanilla')}</span>` : ''
+          const ico = r.exists
+            ? `<svg class="ico ico-sm"><use href="#i-check"/></svg>`
+            : r.vanilla
+              ? ''
+              : `<svg class="ico ico-sm"><use href="#i-x"/></svg>`
+          return `<div class="tex-ref-item ${cls}">${ico}${badge}<span class="tex-ref-path">${escHtml(r.ref)}</span></div>`
+        })
+        .join('')
+      return `<div class="tex-ref-group"><span class="pv-model-tag">${tag}</span>${items}</div>`
+    }
+    const allRefs = renderRefList(leftRefs, t('common.left')) + renderRefList(rightRefs, t('common.right'))
+    refEl.innerHTML = allRefs
+    refEl.style.display = allRefs ? '' : 'none'
+  }
 }
 
-/* 3D 视口未激活时自动切到预览面板 3D tab（等价用户点击）；返回视口是否就绪 */
-function tryActivateCompareModelViewport() {
+/* 确保 3D 视口就绪。autoSwitch=true 时（用户主动操作）才切到预览面板 3D tab；
+   自动选中模型时不切 tab，保留用户当前的 2D/3D 选择，避免 2D 内容被切走。 */
+function tryActivateCompareModelViewport(autoSwitch = false) {
   if (isViewportVisible()) return true
-  const pvBtn = document.querySelector('.pv-tabs button[data-pv-tab="3d"]')
-  if (pvBtn) { pvBtn.click(); return true }
-  return false
+  if (autoSwitch) {
+    const pvBtn = document.querySelector('.pv-tabs button[data-pv-tab="3d"]')
+    if (pvBtn) {
+      pvBtn.click()
+      return true
+    }
+  }
+  return true
 }
 
 /* 选中模型行：左右模型并排送入 3D 视口对比展示；右侧缺失时回退用左侧模型。
@@ -877,13 +1740,19 @@ function tryActivateCompareModelViewport() {
 async function loadModelPreview(g) {
   if (state.selected !== g) return
   const mySeq = ++state.modelLoadSeq
-  const le = g.left && g.left.file, re = g.right && g.right.file
+  const le = g.left && g.left.file,
+    re = g.right && g.right.file
   const left = le && isModelEntry(le) ? { fileRoot: state.leftPath, rel: le.name } : null
   const right = re && isModelEntry(re) ? { fileRoot: state.rightPath, rel: re.name } : null
   if (!left && !right) return
   if (!tryActivateCompareModelViewport()) return
   try {
-    await viewMcModelPairInViewport({ left, right, rightRoot: state.rightPath, isStale: () => state.modelLoadSeq !== mySeq })
+    await viewMcModelPairInViewport({
+      left,
+      right,
+      rightRoot: state.rightPath,
+      isStale: () => state.modelLoadSeq !== mySeq
+    })
     if (state.selected !== g) clearCustomModel()
   } catch {}
 }
@@ -892,74 +1761,55 @@ async function loadModelPreview(g) {
    左=左模型+左贴图，右=右模型+右贴图（模型或贴图缺失均回退左侧），展示替换后模型的贴图渲染效果 */
 async function loadModelTexEffectPreview(g, leftTexUrl, rightTexUrl) {
   const mySeq = ++state.modelLoadSeq
-  const le = g.left && g.left.file, re = g.right && g.right.file
+  const le = g.left && g.left.file,
+    re = g.right && g.right.file
   const left = le && isModelEntry(le) ? { fileRoot: state.leftPath, rel: le.name } : null
   const right = re && isModelEntry(re) ? { fileRoot: state.rightPath, rel: re.name } : null
   if (!left && !right) return
-  if (!tryActivateCompareModelViewport()) return
-  try { await viewMcModelTexCompareInViewport({ left, right, rightRoot: state.rightPath, leftTexUrl, rightTexUrl, isStale: () => state.modelLoadSeq !== mySeq }) } catch {}
+  if (!tryActivateCompareModelViewport(true)) return
+  try {
+    await viewMcModelTexCompareInViewport({
+      left,
+      right,
+      rightRoot: state.rightPath,
+      leftTexUrl,
+      rightTexUrl,
+      isStale: () => state.modelLoadSeq !== mySeq
+    })
+  } catch {}
 }
 
-/* 列出左右模型各自引用的材质贴图（名称 + 缩略图），与 3D 预览 / JSON 差异同区展示。
-   贴图直接用 raw URL 加载（MC 贴图通常很小）；异步填充，不参与 renderSidebar 的 img 循环 */
-async function loadModelTexList(g) {
-  if (state.selected !== g) return
-  const le = g.left && g.left.file, re = g.right && g.right.file
-  const [lt, rt] = await Promise.all([
-    le && isModelEntry(le) ? resolveModelTexList({ fileRoot: state.leftPath, rel: le.name }).catch(() => null) : Promise.resolve(null),
-    re && isModelEntry(re) ? resolveModelTexList({ fileRoot: state.rightPath, rel: re.name }).catch(() => null) : Promise.resolve(null),
-  ])
-  if (state.selected !== g) return
-  const el = $('previewPanel').querySelector('.pv-model-texs')
-  if (!el) return
-  el.innerHTML = renderModelTexListHtml(lt, rt)
-  el.querySelectorAll('img').forEach(img => {
-    img.addEventListener('click', () => openPreview(img.src, img.dataset.name || ''))
-  })
-}
-
-function renderModelTexListHtml(lt, rt) {
-  const col = (list, side) => {
-    const tag = `<span class="pv-tex-tag pv-tex-tag-${side}">${side === 'left' ? t('common.left') : t('common.right')}</span>`
-    if (!list || !list.length) return `<div class="pv-tex-col">${tag}<span class="pv-empty">${t('preview.noSide')}</span></div>`
-    const items = list.map(tx =>
-      `<div class="pv-tex-item">` +
-      `<img class="thumb thumb-${side}" src="${escAttr(tx.url)}" data-name="${escAttr(tx.name)}" alt="" />` +
-      `<span class="pv-tex-name" title="${escAttr(tx.name)}">${escHtml(tx.name)}</span>` +
-      `</div>`
-    ).join('')
-    return `<div class="pv-tex-col">${tag}${items}</div>`
-  }
-  return col(lt, 'left') + col(rt, 'right')
-}
 
 export function renderSidebar() {
   const g = state.selected
   const panel = $('previewPanel')
-  const detail = $('detailPanel')
-  const action = $('actionPanel')
+
   const mat3dContainer = $('material3dContainer')
 
   if (mat3dContainer) initMaterial3D(mat3dContainer)
 
   if (!g) {
     panel.innerHTML = `<div class="pv-hint">${t('preview.hint')}</div>`
-    detail.innerHTML = `<div class="detail-hint">${t('preview.notSelected')}</div>`
-    action.innerHTML = ''
+
     updateMaterial3D(null)
     clearCustomModel()
+    setModelEmptyHint('')
     return
   }
 
   updateMaterial3D(g.isMaterial ? g : null)
-  if (!g.isModel) clearCustomModel()
+  if (!g.isModel) {
+    clearCustomModel()
+    setModelEmptyHint('')
+  }
 
   let html = ''
   const diffPairs = []
   if (g.isMaterial) {
     const hasMain = (g.left && g.left.main) || (g.right && g.right.main)
     for (const role of ROLES) {
-      const le = g.left && g.left[role], re = g.right && g.right[role]
+      const le = g.left && g.left[role],
+        re = g.right && g.right[role]
       if (!le && !re) {
         if ((role === 'normal' || role === 'specular') && hasMain && state.rightPath)
           html += `<div class="pv-row pv-row-empty" data-role="${role}"><span class="pv-role">${ROLE_LABEL[role]}</span>${pvCell(null, t('common.left'))}${pvCell(null, t('common.right'))}</div>`
@@ -972,13 +1822,22 @@ export function renderSidebar() {
   } else if (g.isDir) {
     html = `<div class="pv-hint">${t('preview.folder')}</div>`
   } else if (g.isModel) {
-    html = `<div class="pv-model">` +
+    const tab = state.modelPreviewTab === 'tex2d' ? 'tex2d' : 'model'
+    html =
+      `<div class="pv-model">` +
+      `<div class="pv-model-tabs">` +
+      `<button class="pv-model-tab${tab === 'model' ? ' on' : ''}" data-pv-mtab="model">${t('render.previewTabModel')}</button>` +
+      `<button class="pv-model-tab${tab === 'tex2d' ? ' on' : ''}" data-pv-mtab="tex2d">${t('render.previewTabTex2d')}</button>` +
+      `</div>` +
       `<div class="pv-model-sum">${t('toast.computing')}</div>` +
-      `<div class="pv-model-texs">${t('toast.computing')}</div>` +
+      `<div class="pv-model-preview"${tab === 'model' ? '' : ' style="display:none"'}></div>` +
+      `<div class="pv-model-texs mc-tex-wrap"${tab === 'tex2d' ? '' : ' style="display:none"'}>${t('toast.computing')}</div>` +
       `<div class="md-grid"><div class="md-cell md-load">${t('toast.computing')}</div><div class="md-cell md-load">${t('toast.computing')}</div></div>` +
+      `<div class="pv-tex-refs" style="display:none"></div>` +
       `</div>`
   } else {
-    const le = g.left && (g.left.file || g.left.dir), re = g.right && (g.right.file || g.right.dir)
+    const le = g.left && (g.left.file || g.left.dir),
+      re = g.right && (g.right.file || g.right.dir)
     html = `<div class="pv-row" data-role="file"><span class="pv-role">${t('preview.file')}</span>${pvCell(le, t('common.left'))}${pvCell(re, t('common.right'))}</div>`
     if (le && re && !le.isDirectory && !re.isDirectory && isImageFile(le.name) && isImageFile(re.name))
       diffPairs.push([le, re, t('preview.file')])
@@ -986,7 +1845,9 @@ export function renderSidebar() {
   if (diffPairs.length) {
     html += `<div class="pv-diff-btn-bar"><button class="btn btn-ghost btn-sm" id="pixelDiffBtn">${t('preview.pixelDiff')}</button></div>`
   }
-  panel.querySelectorAll('.pv-row').forEach(row => { if (row._splitCleanup) row._splitCleanup() })
+  panel.querySelectorAll('.pv-row').forEach(row => {
+    if (row._splitCleanup) row._splitCleanup()
+  })
   panel.innerHTML = html
   panel.querySelectorAll('img').forEach(img => {
     const cell = img.parentElement
@@ -997,302 +1858,72 @@ export function renderSidebar() {
       const sl = cell.querySelector('.pv-size')
       if (sl && img.naturalWidth) sl.textContent = `${img.naturalWidth}×${img.naturalHeight}`
     })
-    img.addEventListener('error', () => { cell.classList.remove('pv-loading'); cell.classList.add('pv-error') })
+    img.addEventListener('error', () => {
+      cell.classList.remove('pv-loading')
+      cell.classList.add('pv-error')
+    })
     const btn = document.createElement('button')
     btn.className = 'pv-replace-btn'
     btn.textContent = t('preview.replace')
     btn.title = t('preview.replaceTitle')
-    btn.addEventListener('click', (e) => { e.stopPropagation(); replaceWithExternalFile(img.dataset.path) })
+    btn.addEventListener('click', e => {
+      e.stopPropagation()
+      replaceWithExternalFile(img.dataset.path)
+    })
     cell.appendChild(btn)
     const delBtn = document.createElement('button')
     delBtn.className = 'pv-delete-btn'
     delBtn.textContent = t('preview.delete')
     delBtn.title = t('preview.deleteTitle')
-    delBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteTexture(img.dataset.path) })
+    delBtn.addEventListener('click', e => {
+      e.stopPropagation()
+      deleteTexture(img.dataset.path)
+    })
     cell.appendChild(delBtn)
   })
   bindEmptyCellActions(panel, g)
 
- 
   const diffBtn = $('pixelDiffBtn')
   if (diffBtn) diffBtn.addEventListener('click', () => showPixelDiff(diffPairs, panel))
-  if (g.isModel) { loadModelDiffView(g, panel); loadModelPreview(g); loadModelTexList(g) }
-
-  const dRow = (label, val) => `<div class="detail-row"><span class="detail-label">${label}</span><span>${val}</span></div>`
-  let dh = `<div class="detail-title" title="${g.key}">${g.key}</div>`
-  dh += dRow(t('common.status'), KIND_TEXT[g.kind])
-  if (g.isMaterial) {
-    dh += dRow(t('common.type'), t('type.material'))
-    dh += dRow(t('detail.texCount'), `${t('common.left')} ${leftRoles(g).length} / ${t('common.right')} ${rightRoles(g).length}`)
-    const m = mainEntryOf(g)
-    if (m) { dh += dRow(t('detail.mainSize'), formatSize(m.size)); dh += dRow(t('detail.mainMtime'), formatDate(m.mtime)) }
-  } else if (g.isDir) {
-    dh += dRow(t('common.type'), t('type.folder'))
-  } else if (g.isModel) {
-    dh += dRow(t('common.type'), t('type.model'))
-    const e = mainEntryOf(g)
-    if (e) { dh += dRow(t('common.size'), formatSize(e.size)); dh += dRow(t('detail.mtime'), formatDate(e.mtime)) }
-  } else {
-    dh += dRow(t('common.type'), t('type.file'))
-    const e = mainEntryOf(g)
-    if (e) { dh += dRow(t('common.size'), formatSize(e.size)); dh += dRow(t('detail.mtime'), formatDate(e.mtime)) }
+  if (g.isModel) {
+    loadModelDiffView(g, panel)
+    loadModelPreview(g)
+    const tab = state.modelPreviewTab === 'tex2d' ? 'tex2d' : 'model'
+    if (tab === 'model') {
+      const pv = panel.querySelector('.pv-model-preview')
+      if (pv) renderPreviewModel(pv, g)
+    } else {
+      loadModelTex2dPreview(panel.querySelector('.pv-model-texs'), g)
+    }
+    panel.querySelectorAll('[data-pv-mtab]').forEach(b =>
+      b.addEventListener('click', () => {
+        state.modelPreviewTab = b.dataset.pvMtab
+        renderSidebar()
+      })
+    )
   }
-  detail.innerHTML = dh
 
-  const target = mainEntryOf(g)
-  let btns = ''
-  if (g.left && target) btns += `<button class="btn btn-sm" data-act="open-left">${t('detail.openLeft')}</button><button class="btn btn-ghost btn-sm" data-act="loc-left">${t('detail.locLeft')}</button>`
-  if (g.right && target) btns += `<button class="btn btn-sm" data-act="open-right">${t('detail.openRight')}</button><button class="btn btn-ghost btn-sm" data-act="loc-right">${t('detail.locRight')}</button>`
-  if (g.left && hasAny(g.left) && state.rightPath) btns += `<button class="btn btn-accent btn-sm" data-act="copy-to-right">${t('detail.copyRight')}</button>`
-  if (g.right && hasAny(g.right) && state.leftPath) btns += `<button class="btn btn-accent btn-sm" data-act="copy-to-left">${t('detail.copyLeft')}</button>`
-  if (g.isModel && state.rightPath) btns += `<button class="btn btn-accent btn-sm" data-act="upload-model-right">${t('detail.uploadModel')}</button>`
-  btns += `<button class="btn btn-ghost btn-sm" data-act="copy">${t('detail.copyName')}</button>`
-  action.innerHTML = btns
-  action.querySelectorAll('button').forEach(b => {
-    b.addEventListener('click', () => handleAction(b.dataset.act, g))
-  })
   enhancePreview()
 }
 
 export function updateSortIndicators() {
   document.querySelectorAll('.result-table th[data-key]').forEach(th => {
     th.classList.remove('asc', 'desc')
-    if (th.dataset.key === state.sortKey) th.classList.add(state.sortDir)
+    if (th.dataset.key === state.sortKey) {
+      th.classList.add(state.sortDir)
+      th.setAttribute('aria-sort', state.sortDir === 'asc' ? 'ascending' : 'descending')
+    } else {
+      th.setAttribute('aria-sort', 'none')
+    }
   })
 }
 
 export function initViewTabs() {
-  const tabs = document.querySelectorAll('.view-tab')
-  const tableView = $('tableView')
-  const chartView = $('chartView')
-  const tableToolbar = $('tableToolbar')
-  const statsDashboard = $('statsDashboard')
-  tabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      tabs.forEach(t => t.classList.remove('active'))
-      tab.classList.add('active')
-      const view = tab.dataset.view
-      if (tableView) tableView.classList.toggle('active', view === 'table')
-      if (chartView) chartView.classList.toggle('active', view === 'chart')
-      if (tableToolbar) tableToolbar.style.display = view === 'table' ? '' : 'none'
-      if (statsDashboard) statsDashboard.style.display = view === 'table' ? '' : 'none'
-      if (view === 'chart') renderChart()
-    })
-  })
-  document.addEventListener('keydown', (e) => {
-    if ((e.metaKey || e.ctrlKey) && (e.key === '1' || e.key === '2' || e.key === '3')) {
-      if (e.key === '1') { if (tabs[0]) tabs[0].click() }
-      else if (e.key === '2') { document.dispatchEvent(new CustomEvent('workspace:focus-panel', { detail: { id: 'modelCategory' } })) }
-      else { if (tabs[1]) tabs[1].click() }
+
+  document.addEventListener('keydown', e => {
+    if ((e.metaKey || e.ctrlKey) && e.key === '2') {
+      document.dispatchEvent(new CustomEvent('workspace:focus-panel', { detail: { id: 'modelCategory' } }))
       e.preventDefault()
     }
   })
-}
-
-function donutChart(segments) {
-  const size = 180, r = 65, sw = 26
-  const C = 2 * Math.PI * r
-  const total = segments.reduce((s, seg) => s + seg.value, 0)
-  if (total === 0) return ''
-  let offset = 0
-  const circles = segments.filter(s => s.value > 0).map(seg => {
-    const len = (seg.value / total) * C
-    const dash = `${len} ${C - len}`
-    const circle = `<circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${seg.color}" stroke-width="${sw}" stroke-dasharray="${dash}" stroke-dashoffset="${-offset}" transform="rotate(-90 ${size/2} ${size/2})"/>`
-    offset += len
-    return circle
-  }).join('')
-  return `<svg viewBox="0 0 ${size} ${size}" class="chart-svg">` +
-    `<circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="var(--border)" stroke-width="${sw}"/>` +
-    circles +
-    `<text x="${size/2}" y="${size/2}" text-anchor="middle" dy="-2" class="chart-donut-num">${total}</text>` +
-    `<text x="${size/2}" y="${size/2}" text-anchor="middle" dy="16" class="chart-donut-label">${t('render.totalGroups')}</text></svg>`
-}
-
-function gaugeChart(pct, label, color) {
-  const size = 180, r = 65, sw = 26
-  const C = 2 * Math.PI * r
-  const len = (Math.min(pct, 100) / 100) * C
-  return `<svg viewBox="0 0 ${size} ${size}" class="chart-svg">` +
-    `<circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="var(--border)" stroke-width="${sw}"/>` +
-    `<circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${color}" stroke-width="${sw}" stroke-dasharray="${len} ${C - len}" stroke-linecap="round" transform="rotate(-90 ${size/2} ${size/2})"/>` +
-    `<text x="${size/2}" y="${size/2}" text-anchor="middle" dy="-2" class="chart-donut-num">${pct.toFixed(1)}%</text>` +
-    `<text x="${size/2}" y="${size/2}" text-anchor="middle" dy="16" class="chart-donut-label">${label}</text></svg>`
-}
-
-function barChart(items) {
-  const max = Math.max(...items.map(i => i.value), 1)
-  return items.map(item => {
-    const pct = (item.value / max) * 100
-    return `<div class="bar-row"><span class="bar-label">${item.label}</span>` +
-      `<div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${item.color}"></div></div>` +
-      `<span class="bar-val">${item.value}</span></div>`
-  }).join('')
-}
-
-function renderChart() {
-  const el = $('chartContent')
-  if (!el) return
-  const c = state.counts || { have: 0, diff: 0, partial: 0, miss: 0, extra: 0, leftTex: 0, rightTex: 0, rightMatch: 0, pbrExtra: 0 }
-  const total = c.have + c.diff + c.partial + c.miss + c.extra
-  const leftGroups = c.have + c.diff + c.partial + c.miss
-  if (total === 0) {
-    el.innerHTML = `<div class="chart-empty"><svg class="ico"><use href="#i-pie"/></svg><p>${t('render.chartEmpty')}</p></div>`
-    return
-  }
-  const cov = c.leftTex > 0 ? c.rightMatch / c.leftTex * 100 : 0
-  const consist = leftGroups > 0 ? c.have / leftGroups * 100 : 0
-  const missRate = leftGroups > 0 ? c.miss / leftGroups * 100 : 0
-  const diffRate = leftGroups > 0 ? c.diff / leftGroups * 100 : 0
-  const extraRate = total > 0 ? c.extra / total * 100 : 0
-
-  const sh = t('status.haveShort'), sd = t('status.diffShort'), sp = t('status.partialShort'), sm = t('status.missShort'), se = t('status.extraShort')
-
-  const donut = donutChart([
-    { value: c.have, color: 'var(--accent)', label: sh },
-    { value: c.diff, color: 'var(--warn)', label: sd },
-    { value: c.partial, color: 'var(--partial)', label: sp },
-    { value: c.miss, color: 'var(--danger)', label: sm },
-    { value: c.extra, color: 'var(--text-dim)', label: se },
-  ])
-
-  const legend = [
-    { label: sh, value: c.have, color: 'var(--accent)' },
-    { label: sd, value: c.diff, color: 'var(--warn)' },
-    { label: sp, value: c.partial, color: 'var(--partial)' },
-    { label: sm, value: c.miss, color: 'var(--danger)' },
-    { label: se, value: c.extra, color: 'var(--text-dim)' },
-  ].map(l => `<div class="legend-item"><span class="legend-dot" style="background:${l.color}"></span>${l.label} <b>${l.value}</b></div>`).join('')
-
-  const bars = barChart([
-    { label: sh, value: c.have, color: 'var(--accent)' },
-    { label: sd, value: c.diff, color: 'var(--warn)' },
-    { label: t('status.partialFull'), value: c.partial, color: 'var(--partial)' },
-    { label: sm, value: c.miss, color: 'var(--danger)' },
-    { label: se, value: c.extra, color: 'var(--text-dim)' },
-  ])
-
-  const texBars = barChart([
-    { label: t('render.leftTex'), value: c.leftTex, color: 'var(--primary)' },
-    { label: t('render.rightTex'), value: c.rightTex, color: 'var(--accent)' },
-    { label: t('render.matchTex'), value: c.rightMatch, color: 'var(--accent)' },
-    { label: t('render.pbrTitle'), value: c.pbrExtra, color: 'var(--partial)' },
-    ...(c.leftModel ? [
-      { label: t('render.leftModel'), value: c.leftModel, color: 'var(--primary)' },
-      { label: t('render.rightModel'), value: c.rightModel, color: 'var(--accent)' },
-      { label: t('render.matchModel'), value: c.modelMatch, color: 'var(--accent)' },
-    ] : []),
-  ])
-
-  const rateCards = [
-    { label: t('render.covTitle'), val: cov, sub: t('render.covSub', { match: c.rightMatch, total: c.leftTex }), color: 'var(--primary)' },
-    { label: t('render.consistTitle'), val: consist, sub: t('render.consistSub', { have: c.have, total: leftGroups }), color: 'var(--accent)' },
-    { label: t('render.missTitle'), val: missRate, sub: t('render.missSub', { n: c.miss }), color: 'var(--danger)' },
-    { label: t('render.diffTitle'), val: diffRate, sub: t('render.diffSub', { n: c.diff }), color: 'var(--warn)' },
-    { label: t('render.redundancyTitle'), val: extraRate, sub: t('render.extraSub', { n: c.extra }), color: 'var(--text-dim)' },
-  ].map(r => `<div class="rate-card" style="--rc:${r.color}"><div class="rate-label">${r.label}</div>` +
-    `<div class="rate-val">${r.val.toFixed(1)}<span class="rate-unit">%</span></div>` +
-    `<div class="rate-bar"><div class="rate-fill" style="width:${Math.min(r.val,100)}%"></div></div>` +
-    `<div class="rate-sub">${r.sub}</div></div>`).join('')
-
-  const funnelData = [
-    { label: t('render.leftTotalGroups'), value: leftGroups, color: 'var(--primary)' },
-    { label: t('render.rightExist'), value: leftGroups - c.miss, color: 'var(--accent)' },
-    { label: t('render.consistPartial'), value: c.have + c.partial, color: 'var(--partial)' },
-    { label: t('render.fullConsist'), value: c.have, color: 'var(--accent)' },
-  ]
-  const funnelMax = funnelData[0].value || 1
-  const funnel = funnelData.map((f, i) => {
-    const pct = (f.value / funnelMax) * 100
-    const rate = i > 0 && funnelData[i - 1].value > 0 ? (f.value / funnelData[i - 1].value * 100).toFixed(0) : '100'
-    return `<div class="funnel-row" style="width:${Math.max(pct, 8)}%;background:${f.color}">` +
-      `<span class="funnel-label">${f.label}</span>` +
-      `<span class="funnel-value">${f.value}</span>` +
-      `<span class="funnel-rate">${rate}%</span></div>`
-  }).join('')
-
-  const stackColors = { have: 'var(--accent)', diff: 'var(--warn)', partial: 'var(--partial)', miss: 'var(--danger)', extra: 'var(--text-dim)' }
-  const stackLabels = { have: sh, diff: sd, partial: sp, miss: sm, extra: se }
-  const folderMap = new Map()
-  for (const g of state.result) {
-    const f = folderOf(g)
-    if (!folderMap.has(f)) folderMap.set(f, { have: 0, diff: 0, partial: 0, miss: 0, extra: 0, total: 0 })
-    const fs = folderMap.get(f)
-    fs[g.kind]++
-    fs.total++
-  }
-  const topFolders = [...folderMap.entries()].sort((a, b) => b[1].total - a[1].total).slice(0, 12)
-  const folderBars = topFolders.map(([folder, fs]) => {
-    const segs = ['have', 'diff', 'partial', 'miss', 'extra'].map(k =>
-      fs[k] > 0 ? `<div class="stack-seg" style="flex:${fs[k]};background:${stackColors[k]}" title="${stackLabels[k]}: ${fs[k]}"></div>` : ''
-    ).join('')
-    return `<div class="stack-row"><span class="stack-label" title="${folder}">${folder}</span>` +
-      `<div class="stack-track">${segs}</div><span class="stack-val">${fs.total}</span></div>`
-  }).join('')
-
-  const heatFolders = topFolders.slice(0, 10)
-  const heatMax = Math.max(...heatFolders.flatMap(([, fs]) => [fs.have, fs.diff, fs.partial, fs.miss, fs.extra]), 1)
-  const heatHeader = `<div class="heat-row heat-head"><span class="heat-label">${t('render.heatFolder')}</span>` +
-    [sh, sd, sp, sm, se].map(l => `<div class="heat-cell">${l}</div>`).join('') + `</div>`
-  const heatRows = heatFolders.map(([folder, fs]) => {
-    const cells = ['have', 'diff', 'partial', 'miss', 'extra'].map(k => {
-      const v = fs[k]
-      const intensity = v / heatMax
-      const bgAlpha = v > 0 ? 0.12 + intensity * 0.88 : 0
-      return `<div class="heat-cell" title="${stackLabels[k]}: ${v}">` +
-        (v > 0 ? `<div class="heat-bg" style="opacity:${bgAlpha};background:${stackColors[k]}"></div><span>${v}</span>` : '') +
-        `</div>`
-    }).join('')
-    return `<div class="heat-row"><span class="heat-label" title="${folder}">${folder}</span>${cells}</div>`
-  }).join('')
-
-  const typeMap = new Map()
-  for (const g of state.result) {
-    const e = mainEntryOf(g)
-    if (e && e.name) {
-      const dot = e.name.lastIndexOf('.')
-      const ext = dot >= 0 ? e.name.slice(dot + 1).toLowerCase() : 'other'
-      typeMap.set(ext, (typeMap.get(ext) || 0) + 1)
-    }
-  }
-  const typeColors = ['var(--primary)', 'var(--accent)', 'var(--warn)', 'var(--partial)', 'var(--danger)', 'var(--extra)', 'var(--text-dim)']
-  const typeSegs = [...typeMap.entries()].sort((a, b) => b[1] - a[1]).map(([ext, count], i) =>
-    ({ value: count, color: typeColors[i % typeColors.length], label: ext })
-  )
-  const typeDonut = donutChart(typeSegs)
-  const typeLegend = typeSegs.map(s =>
-    `<div class="legend-item"><span class="legend-dot" style="background:${s.color}"></span>.${s.label} <b>${s.value}</b></div>`
-  ).join('')
-
-  const sizeBuckets = [
-    { label: '<1KB', min: 0, max: 1024, count: 0 },
-    { label: '1-10KB', min: 1024, max: 10240, count: 0 },
-    { label: '10-100KB', min: 10240, max: 102400, count: 0 },
-    { label: '100KB-1MB', min: 102400, max: 1048576, count: 0 },
-    { label: '1-10MB', min: 1048576, max: 10485760, count: 0 },
-    { label: '>10MB', min: 10485760, max: Infinity, count: 0 },
-  ]
-  for (const g of state.result) {
-    const e = mainEntryOf(g)
-    if (e && e.size != null) {
-      for (const b of sizeBuckets) { if (e.size >= b.min && e.size < b.max) { b.count++; break } }
-    }
-  }
-  const sizeBars = barChart(sizeBuckets.map(b =>
-    ({ label: b.label, value: b.count, color: 'var(--primary)' })
-  ))
-
-  el.innerHTML = `<div class="chart-grid">` +
-    `<div class="chart-card"><div class="chart-card-title">${t('render.chartStatusDist')}</div><div class="chart-donut-wrap">${donut}</div><div class="chart-legend">${legend}</div></div>` +
-    `<div class="chart-card"><div class="chart-card-title">${t('render.chartCovGauge')}</div><div class="chart-donut-wrap">${gaugeChart(cov, t('render.covTitle'), 'var(--primary)')}</div></div>` +
-    `<div class="chart-card chart-wide"><div class="chart-card-title">${t('render.chartCategoryCount')}</div><div class="chart-bars">${bars}</div></div>` +
-    `<div class="chart-card chart-wide"><div class="chart-card-title">${t('render.chartTexCompare')}</div><div class="chart-bars">${texBars}</div></div>` +
-    `<div class="chart-card chart-full"><div class="chart-card-title">${t('render.chartMetrics')}</div><div class="rate-cards">${rateCards}</div></div>` +
-    `<div class="chart-card"><div class="chart-card-title">${t('render.chartTypeDist')}</div><div class="chart-donut-wrap">${typeDonut}</div><div class="chart-legend">${typeLegend}</div></div>` +
-    `<div class="chart-card"><div class="chart-card-title">${t('render.chartSizeDist')}</div><div class="chart-bars">${sizeBars}</div></div>` +
-    `<div class="chart-card chart-full"><div class="chart-card-title">${t('render.chartFunnel')}</div><div class="chart-funnel">${funnel}</div></div>` +
-    `<div class="chart-card chart-full"><div class="chart-card-title">${t('render.chartFolderDist')}</div><div class="chart-stacks">${folderBars}</div></div>` +
-    `<div class="chart-card chart-full"><div class="chart-card-title">${t('render.chartHeatmap')}</div><div class="chart-heat">${heatHeader}${heatRows}</div></div>` +
-    `</div>`
-
 }

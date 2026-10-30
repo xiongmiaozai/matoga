@@ -11,8 +11,8 @@ const crypto = require('crypto')
 const HASH_CACHE = new Map()
 const HASH_CACHE_MAX = 2000
 
-function hashCacheKey(p, stat) {
-  return p + '|' + Math.round(stat.mtimeMs) + '|' + stat.size
+function hashCacheKey(p, stat, canonical) {
+  return p + '|' + Math.round(stat.mtimeMs) + '|' + stat.size + (canonical ? '|c' : '')
 }
 
 function evictHashCache() {
@@ -21,12 +21,35 @@ function evictHashCache() {
   HASH_CACHE.delete(firstKey)
 }
 
-async function hashFile(p) {
+function canonicalizeJson(obj) {
+  if (Array.isArray(obj)) return obj.map(canonicalizeJson)
+  if (obj && typeof obj === 'object') {
+    const sorted = {}
+    for (const k of Object.keys(obj).sort()) sorted[k] = canonicalizeJson(obj[k])
+    return sorted
+  }
+  return obj
+}
+
+async function hashFile(p, canonical) {
   let stat
   try { stat = await fs.promises.stat(p) } catch { return null }
-  const key = hashCacheKey(p, stat)
+  const key = hashCacheKey(p, stat, canonical)
   const cached = HASH_CACHE.get(key)
   if (cached !== undefined) return cached
+  if (canonical) {
+    try {
+      const raw = await fs.promises.readFile(p, 'utf8')
+      const obj = JSON.parse(raw)
+      const canonicalStr = JSON.stringify(canonicalizeJson(obj))
+      const h = crypto.createHash('md5').update(canonicalStr).digest('hex')
+      evictHashCache()
+      HASH_CACHE.set(key, h)
+      return h
+    } catch {
+      // JSON 解析失败,回退到普通哈希
+    }
+  }
   return new Promise((resolve) => {
     const hash = crypto.createHash('md5')
     const stream = fs.createReadStream(p)
@@ -85,6 +108,9 @@ function createFolder(p) {
       .catch(err => ({ success: false, error: err.message })))
 }
 
+/* 感知哈希：与前端 web/src/perceptual-hash.js 保持同步 */
+const POPCOUNT = [0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4]
+
 function _downsampleToGray(rgba, width, height, dstW, dstH) {
   const gray = new Uint8Array(dstW * dstH)
   for (let y = 0; y < dstH; y++) {
@@ -100,43 +126,40 @@ function _downsampleToGray(rgba, width, height, dstW, dstH) {
   return gray
 }
 
-function _bitsToHex(bits) {
-  let hex = ''
-  for (let i = 0; i < bits.length; i += 4) hex += parseInt(bits.slice(i, i + 4), 2).toString(16)
-  return hex
-}
-
 function computeAHash(rgba, width, height) {
   const size = 8
   const gray = _downsampleToGray(rgba, width, height, size, size)
   let sum = 0
   for (let i = 0; i < gray.length; i++) sum += gray[i]
   const avg = sum / gray.length
-  let bits = ''
-  for (let i = 0; i < gray.length; i++) bits += gray[i] > avg ? '1' : '0'
-  return _bitsToHex(bits)
+  let hex = '', nibble = 0
+  for (let i = 0; i < gray.length; i++) {
+    nibble = (nibble << 1) | (gray[i] > avg ? 1 : 0)
+    if ((i & 3) === 3) { hex += nibble.toString(16); nibble = 0 }
+  }
+  return hex
 }
 
 function computeDHash(rgba, width, height) {
   const dw = 9, dh = 8
   const gray = _downsampleToGray(rgba, width, height, dw, dh)
-  let bits = ''
+  let hex = '', nibble = 0, bit = 0
   for (let y = 0; y < dh; y++) {
     for (let x = 0; x < dw - 1; x++) {
-      bits += gray[y * dw + x + 1] > gray[y * dw + x] ? '1' : '0'
+      nibble = (nibble << 1) | (gray[y * dw + x + 1] > gray[y * dw + x] ? 1 : 0)
+      if (++bit === 4) { hex += nibble.toString(16); nibble = 0; bit = 0 }
     }
   }
-  return _bitsToHex(bits)
+  return hex
 }
 
 function hammingDistance(h1, h2) {
   if (typeof h1 !== 'string' || typeof h2 !== 'string' || h1.length !== h2.length) return -1
   let dist = 0
   for (let i = 0; i < h1.length; i++) {
-    let x = parseInt(h1[i], 16) ^ parseInt(h2[i], 16)
-    while (x) { dist += x & 1; x >>= 1 }
+    dist += POPCOUNT[parseInt(h1[i], 16) ^ parseInt(h2[i], 16)]
   }
   return dist
 }
 
-module.exports = { hashFile, invalidateHash, hashCacheStats, copyFile, backupFile, deleteFile, createFolder, computeAHash, computeDHash, hammingDistance }
+module.exports = { hashFile, invalidateHash, hashCacheStats, copyFile, backupFile, deleteFile, createFolder, computeAHash, computeDHash, hammingDistance, canonicalizeJson }

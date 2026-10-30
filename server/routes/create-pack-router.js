@@ -14,9 +14,10 @@
 
 const path = require('path')
 const express = require('express')
-const { ok, wrap } = require('../middleware/errors')
-const { guardWrite } = require('../middleware/validate')
+const { ok, fail, wrap } = require('../middleware/errors')
+const { guardRead, guardWrite } = require('../middleware/validate')
 const mcmeta = require('../services/mcmeta-service')
+const packBuilder = require('../services/pack-builder-service')
 
 function createPackRouter(rootOf, { versionMap = false } = {}) {
   const router = express.Router()
@@ -55,6 +56,36 @@ function createPackRouter(rootOf, { versionMap = false } = {}) {
     const { buf, mime } = await mcmeta.readPackFile(rootOf(), req.params.name, req.query.path, { anyExt: req.query.any === '1' })
     res.setHeader('Content-Type', mime)
     res.setHeader('Cache-Control', 'private, max-age=3600')
+    res.end(buf)
+  }))
+
+  router.post('/export-batch', wrap(async (req, res) => {
+    const root = rootOf()
+    const b = req.body || {}
+    const names = Array.isArray(b.names) ? b.names : []
+    if (!names.length) return fail(res, 'ERR_INVALID_PARAM', 'no packs selected')
+    for (const n of names) guardRead(path.join(root, String(n)))
+    const opts = { skipPackPng: !!b.skipPackPng, noCompress: !!b.noCompress }
+    const { buf, zipName } = await packBuilder.archivePacks(root, names, opts)
+    res.setHeader('Content-Type', 'application/zip')
+    res.setHeader('Content-Disposition', 'attachment; filename="' + encodeURIComponent(zipName) + '"')
+    res.end(buf)
+  }))
+
+  router.delete('/:name', wrap(async (req, res) => {
+    const root = rootOf()
+    guardWrite(path.join(root, String(req.params.name)))
+    ok(res, await mcmeta.deletePack(root, req.params.name))
+  }))
+
+  router.post('/:name/export', wrap(async (req, res) => {
+    const root = rootOf()
+    guardRead(path.join(root, String(req.params.name)))
+    const b = req.body || {}
+    const opts = { skipPackPng: !!b.skipPackPng, noCompress: !!b.noCompress }
+    const { buf, zipName } = await packBuilder.archivePack(root, req.params.name, opts)
+    res.setHeader('Content-Type', 'application/zip')
+    res.setHeader('Content-Disposition', 'attachment; filename="' + encodeURIComponent(zipName) + '"')
     res.end(buf)
   }))
 

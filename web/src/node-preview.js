@@ -7,7 +7,7 @@
 
 import { getNodeDetail } from './node-canvas.js'
 import { t, onLocaleChange } from './i18n.js'
-import { createFloatingWindow } from './floating-window.js'
+
 
 let _initialized = false
 let _activeId = null      // 当前展示的节点 id
@@ -455,33 +455,14 @@ export function initNodePreview(){
   if (_initialized) return
   _initialized = true
 
-  const vw = (typeof window !== 'undefined' && window.innerWidth) || 1280
-  const vh = (typeof window !== 'undefined' && window.innerHeight) || 800
-  const fw = createFloatingWindow({
-    id: 'nodePreview',
-    title: t('panel.nodePreview'),
-    icon: 'i-eye',
-    x: 20,
-    y: Math.max(72, vh - 556),
-    w: Math.min(360, vw - 40),
-    h: Math.min(480, vh - 180),
-  })
-
-  let view = document.getElementById('nodePreviewView')
-  if (!view){
-    view = document.createElement('div')
-    view.id = 'nodePreviewView'
-    view.className = 'np-view'
-  }
-  fw.body.appendChild(view)
-
+  const view = document.getElementById('nodePreviewView')
+  if (!view) return
   view.addEventListener('click', (e) => { onStageClick(e); onAssetAction(e) })
 
   // 资产详情（资产库点击卡片，原「资产详情」窗口并入此处展示）
   document.addEventListener('nodepreview:show-asset', (e) => {
     _asset = e.detail || null
     _mode = 'asset'
-    fw.open()   // 窗口曾被关闭时自动弹出并置顶，避免详情渲染进隐藏窗口
     render()
   })
   document.addEventListener('nodepreview:hide-asset', () => {
@@ -512,7 +493,6 @@ export function initNodePreview(){
   })
 
   onLocaleChange(() => {
-    fw.setTitle(t('panel.nodePreview'))
     render()
   })
   render()

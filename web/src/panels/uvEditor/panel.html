@@ -1,18 +1,18 @@
 <!-- UV 编辑器面板（工作区可拼装窗口）：独立 UV 工作区，支持离线打开模型编辑并保存 -->
-<div class="panel" id="uvEditorPanelWrap" data-panel="uvEditor">
+<div class="panel" id="uvEditorPanelWrap" data-panel="uvEditor" role="region" aria-label="UV 编辑器">
   <div class="panel-head">
     <div class="panel-title"><svg class="ico ico-sm"><use href="#i-grid"/></svg> <span data-i18n="panel.uvEditor">UV 编辑器</span></div>
     <div class="panel-tools">
-      <button class="panel-tool" data-panel-action="float" data-i18n-title="preview.float" title="浮动"><svg class="ico ico-sm"><use href="#i-external"/></svg></button>
-      <button class="panel-tool panel-close" data-panel-action="close" data-i18n-title="common.close" title="关闭"><svg class="ico ico-sm"><use href="#i-x"/></svg></button>
+      <button class="panel-tool" data-panel-action="float" data-i18n-title="preview.float" title="浮动" aria-label="浮动窗口"><svg class="ico ico-sm"><use href="#i-external"/></svg></button>
+      <button class="panel-tool panel-close" data-panel-action="close" data-i18n-title="common.close" title="关闭" aria-label="关闭面板"><svg class="ico ico-sm"><use href="#i-x"/></svg></button>
     </div>
   </div>
   <div class="panel-toolbar">
-    <select id="uvModelSel" class="uv-model-sel" data-i18n-title="uv.panelSourceTitle" title="选择要编辑的模型"></select>
-    <button class="panel-tool" id="uvModelRefreshBtn" data-i18n-title="uv.panelRefresh" title="刷新模型列表"><svg class="ico ico-sm"><use href="#i-refresh"/></svg></button>
-    <span class="uv-panel-hint" id="uvPanelHint"></span>
+    <select id="uvModelSel" class="uv-model-sel" data-i18n-title="uv.panelSourceTitle" title="选择要编辑的模型" aria-label="选择模型源"></select>
+    <button class="panel-tool" id="uvModelRefreshBtn" data-i18n-title="uv.panelRefresh" title="刷新模型列表" aria-label="刷新模型列表"><svg class="ico ico-sm"><use href="#i-refresh"/></svg></button>
+    <span class="uv-panel-hint" id="uvPanelHint" aria-live="polite"></span>
     <div class="uv-panel-spacer"></div>
-    <button class="panel-tool uv-save-btn" id="uvSaveBtn" data-i18n-title="uv.panelSaveTitle" title="保存修改到模型库" disabled><svg class="ico ico-sm"><use href="#i-check"/></svg><span data-i18n="uv.panelSave">保存</span></button>
+    <button class="panel-tool uv-save-btn" id="uvSaveBtn" data-i18n-title="uv.panelSaveTitle" title="保存修改到模型库" disabled aria-label="保存修改"><svg class="ico ico-sm"><use href="#i-check"/></svg><span data-i18n="uv.panelSave">保存</span></button>
   </div>
   <div class="panel-body" style="padding:0">
     <div id="uvEditorHost" class="uv-panel-host"></div>

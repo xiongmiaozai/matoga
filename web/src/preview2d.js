@@ -7,9 +7,11 @@
 import { $ } from './core.js'
 import { t } from './i18n.js'
 import { sampleTintForTexture, getMcBiomes, getCurrentBiome, setCurrentBiome, rerenderLastMcModel } from './mc-model-viewer.js'
-import { refreshMaterial3DTint } from './material3d.js'
+import { refreshMaterial3DTint, setChannelView } from './material3d.js'
 
 let channel = 'all'
+
+export function getChannel() { return channel }
 let zoom = 100
 let split = false
 let filter2d = 'nearest'
@@ -36,13 +38,8 @@ function applyChannel(img) {
     const d = ctx.getImageData(0, 0, c.width, c.height).data
     const ci = { r: 0, g: 1, b: 2, a: 3 }[channel]
     for (let i = 0; i < d.length; i += 4) {
-      let v
-      if (channel === 'a') v = d[i + 3]
-      else v = d[i + ci]
-      d[i] = (channel === 'r' || channel === 'a') ? v : 0
-      d[i + 1] = (channel === 'g' || channel === 'a') ? v : 0
-      d[i + 2] = (channel === 'b' || channel === 'a') ? v : 0
-      d[i + 3] = 255
+      const v = d[i + ci]
+      d[i] = v; d[i + 1] = v; d[i + 2] = v; d[i + 3] = 255
     }
     ctx.putImageData(new ImageData(d, c.width, c.height), 0, 0)
     img.src = c.toDataURL()
@@ -175,6 +172,7 @@ export function initPreview2D() {
       b.classList.add('active')
       channel = b.dataset.ch
       enhancePreview()
+      setChannelView(channel)
     })
   })
   const z = $('pvZoom')

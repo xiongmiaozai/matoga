@@ -1,0 +1,11 @@
+{
+  "id": "nodePreview",
+  "title": "节点预览",
+  "icon": "i-eye",
+  "html": "panel.html",
+  "css": "panel.css",
+  "js": "panel.js",
+  "mount": "body",
+  "order": 10,
+  "dynamic": true
+}

@@ -176,7 +176,7 @@ test('texUrlToRef: 智能引用转换（dataURL / file / 同包标准引用 / �
   const packUrl = '/api/mc-packs/vanilla/raw?path=' + encodeURIComponent('assets/minecraft/textures/block/stone.png')
   assert.equal(m.texUrlToRef(packUrl, { api: '/api/mc-packs', packName: 'vanilla' }), 'minecraft:block/stone', '同包 → 标准 MC 引用')
   assert.equal(m.texUrlToRef(packUrl, { api: '/api/mc-packs', packName: 'other' }), packUrl, '跨包 → 保留站内 URL')
-  assert.equal(m.texUrlToRef(packUrl), packUrl, '无上下文 → 保留站内 URL')
+  assert.equal(m.texUrlToRef(packUrl), 'minecraft:block/stone', '无上下文 → 标准 MC 引用')
   assert.equal(m.texUrlToRef('http://192.168.1.5:3000/tok' + packUrl, { api: '/api/mc-packs', packName: 'vanilla' }), 'minecraft:block/stone', 'LAN 包装剥离后仍识别')
 })
 

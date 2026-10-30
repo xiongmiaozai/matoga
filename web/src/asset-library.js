@@ -22,8 +22,19 @@
 
 import { state, IMG_EXTS, showToast } from './core.js'
 import { fileUrl, formatSize, formatDate, escAttr, apiUrl, setTexDragData, contentKindOfPath } from './utils.js'
-import { addNodeAt, addTextureAt, loadPreset, saveNodeProject, loadNodeProject, serializeGraphData, loadCanvasPresetGraph } from './node-canvas.js'
+import { naturalCompare } from './natural-sort.js'
+import {
+  addNodeAt,
+  addTextureAt,
+  loadPreset,
+  saveNodeProject,
+  loadNodeProject,
+  serializeGraphData,
+  loadCanvasPresetGraph
+} from './node-canvas.js'
 import { t, onLocaleChange } from './i18n.js'
+import { loadZhNames, zhOfItem, zhOfTexPath, zhOfTexName, pinyinOfItem, enCandidatesOfZh } from './zh-names.js'
+import { assetSearchMatch } from './asset-search.js'
 import { uiPrompt, uiConfirm } from './ui-dialog.js'
 import { viewMcModelInViewport, viewImportedModelInViewport, isViewportVisible } from './mc-model-viewer.js'
 import { activateMaterial3DHost } from './material3d.js'
@@ -31,18 +42,19 @@ import { ensureModelThumb, observeModelThumbs } from './model-thumb.js'
 
 import { splitGroupsByPrefix } from './model-prefix.js'
 import { openCreateModelDialog, previewCustomModel } from './create-model-dialog.js'
+import { openCreatePackDialog } from './create-pack-dialog.js'
 
 const PRESETS = [
-  { id: 'metal',     color: '#c8c8d0' },
-  { id: 'plastic',   color: '#e0e0e0' },
-  { id: 'glass',     color: '#e0eef5' },
-  { id: 'fabric',    color: '#b39880' },
-  { id: 'emissive',  color: '#fff3c0' },
+  { id: 'metal', color: '#c8c8d0' },
+  { id: 'plastic', color: '#e0e0e0' },
+  { id: 'glass', color: '#e0eef5' },
+  { id: 'fabric', color: '#b39880' },
+  { id: 'emissive', color: '#fff3c0' }
 ]
 
 const ALL_TYPES = ['tex', 'model', 'hdri', 'mc', 'official', 'preset', 'project', 'craft']
-/* 分区级分类（.asset-lib-section 的 data-cat）：选中「全部」时展示的常规分区 */
-const SECTION_CATS = ['tex', 'model', 'hdri', 'mc', 'official', 'preset', 'project']
+/* 分区渲染顺序（rebuild 遵循此顺序，不含 fav/recent 快捷分区） */
+const SECTION_CATS = ['project', 'preset', 'tex', 'model', 'hdri', 'mc', 'official']
 /* 快捷视图分区：内容为其它分区的副本，仅在选中对应标签时展示（搜索时也不重复展示） */
 const QUICK_CATS = new Set(['fav', 'recent'])
 const MAX_RECENT = 50
@@ -67,25 +79,35 @@ function packApiFor(type) {
 }
 
 const ROLE_PATTERNS_STRONG = [
-  { role: 'normal',    re: /(?:_|-|^)(normal|nrm|nor|nmap|normalmap|tangent)(?=\.|_|-|$)/i },
-  { role: 'specular',  re: /(?:_|-|^)(specular|spec|spc|smap|specmap|roughness|rough|metalness|metal|metallic|reflect|f0)(?=\.|_|-|$)/i },
-  { role: 'height',    re: /(?:_|-|^)(height|hmap|heightmap|displacement|disp|bump|depth)(?=\.|_|-|$)/i },
-  { role: 'emissive',  re: /(?:_|-|^)(emissive|emis|emit|glow|illum|light)(?=\.|_|-|$)/i },
-  { role: 'ao',        re: /(?:_|-|^)(ao|occlusion|sss|subsurface)(?=\.|_|-|$)/i },
-  { role: 'opacity',   re: /(?:_|-|^)(opacity|alpha|mask|transparency)(?=\.|_|-|$)/i },
-  { role: 'main',      re: /(?:_|-|^)(diffuse|diff|albedo|base|color|col|main|texture|tex)(?=\.|_|-|$)/i },
+  { role: 'normal', re: /(?:_|-|^)(normal|nrm|nor|nmap|normalmap|tangent)(?=\.|_|-|$)/i },
+  {
+    role: 'specular',
+    re: /(?:_|-|^)(specular|spec|spc|smap|specmap|roughness|rough|metalness|metal|metallic|reflect|f0)(?=\.|_|-|$)/i
+  },
+  { role: 'height', re: /(?:_|-|^)(height|hmap|heightmap|displacement|disp|bump|depth)(?=\.|_|-|$)/i },
+  { role: 'emissive', re: /(?:_|-|^)(emissive|emis|emit|glow|illum|light)(?=\.|_|-|$)/i },
+  { role: 'ao', re: /(?:_|-|^)(ao|occlusion|sss|subsurface)(?=\.|_|-|$)/i },
+  { role: 'opacity', re: /(?:_|-|^)(opacity|alpha|mask|transparency)(?=\.|_|-|$)/i },
+  { role: 'main', re: /(?:_|-|^)(diffuse|diff|albedo|base|color|col|main|texture|tex)(?=\.|_|-|$)/i }
 ]
 
 const ROLE_PATTERNS_WEAK = [
-  { role: 'normal',    re: /(?:_|-)n(?=\.|_|-|$)/i },
-  { role: 'specular',  re: /(?:_|-)s(?=\.|_|-|$)/i },
-  { role: 'height',    re: /(?:_|-)h(?=\.|_|-|$)/i },
-  { role: 'emissive',  re: /(?:_|-)e(?=\.|_|-|$)/i },
-  { role: 'main',      re: /(?:_|-)(?:d|c)(?=\.|_|-|$)/i },
+  { role: 'normal', re: /(?:_|-)n(?=\.|_|-|$)/i },
+  { role: 'specular', re: /(?:_|-)s(?=\.|_|-|$)/i },
+  { role: 'height', re: /(?:_|-)h(?=\.|_|-|$)/i },
+  { role: 'emissive', re: /(?:_|-)e(?=\.|_|-|$)/i },
+  { role: 'main', re: /(?:_|-)(?:d|c)(?=\.|_|-|$)/i }
 ]
 
 const TYPE_LABEL_KEYS = {
-  tex: 'asset.catTex', model: 'asset.catModel', hdri: 'asset.catHdri', mc: 'asset.catMc', official: 'asset.catOfficial', preset: 'asset.catPreset', project: 'asset.catProject', craft: 'asset.catCraft',
+  tex: 'asset.catTex',
+  model: 'asset.catModel',
+  hdri: 'asset.catHdri',
+  mc: 'asset.catMc',
+  official: 'asset.catOfficial',
+  preset: 'asset.catPreset',
+  project: 'asset.catProject',
+  craft: 'asset.catCraft'
 }
 
 function detectTypeFromPath(p) {
@@ -132,11 +154,11 @@ let mcEntries = null
 let officialEntries = null
 let hdriEntries = null
 let projectEntries = null
-let canvasPresets = null      /* 自定义画布预设（config.canvasCustomPresets），null = 未加载 */
+let canvasPresets = null /* 自定义画布预设（config.canvasCustomPresets），null = 未加载 */
 let texPacks = null
-let modelPacks = null         /* /api/asset/model 聚合结果（包内 .json 模型），null = 未加载 */
-let importedModels = null     /* 用户导入模型（/api/imported-models），null = 未加载 */
-let customModels = null       /* 自定义模型（/api/custom-models），null = 未加载 */
+let modelPacks = null /* /api/asset/model 聚合结果（包内 .json 模型），null = 未加载 */
+let importedModels = null /* 用户导入模型（/api/imported-models），null = 未加载 */
+let customModels = null /* 自定义模型（/api/custom-models），null = 未加载 */
 /* 各模型类的专属本地目录（用于「打开本地位置」）：imported=导入模型，custom=自定义模型 */
 let modelDirs = { imported: '', custom: '' }
 let lastTexSig = ''
@@ -149,7 +171,7 @@ let serverSynced = false
 let ctxMenu = null
 let pollTimer = null
 let detailCurrent = null
-let browse = null       // { item, pack, dir }：总资产库面板内的包内容浏览状态
+let browse = null // { item, pack, dir }：总资产库面板内的包内容浏览状态
 let browseSeq = 0
 
 const BROWSE_CLICK_DELAY = 240
@@ -159,13 +181,30 @@ function presetName(id) {
 }
 
 function roleText(role) {
-  const keys = { preset: 'asset.rolePreset', main: 'asset.roleMain', normal: 'asset.roleNormal', specular: 'asset.roleSpecular', height: 'asset.roleHeight', emissive: 'asset.roleEmissive', ao: 'asset.roleAo', opacity: 'asset.roleOpacity', project: 'asset.roleProject', model: 'asset.roleModel' }
+  const keys = {
+    preset: 'asset.rolePreset',
+    main: 'asset.roleMain',
+    normal: 'asset.roleNormal',
+    specular: 'asset.roleSpecular',
+    height: 'asset.roleHeight',
+    emissive: 'asset.roleEmissive',
+    ao: 'asset.roleAo',
+    opacity: 'asset.roleOpacity',
+    project: 'asset.roleProject',
+    model: 'asset.roleModel'
+  }
   return keys[role] ? t(keys[role]) : role
 }
 
-function isImg(e) { return e && !e.isDirectory && IMG_EXTS.has((e.name.split('.').pop() || '').toLowerCase()) }
-function thumbUrl(p) { return fileUrl(p) }
-function hdriThumbUrl(p) { return '/api/hdri/thumb?path=' + encodeURIComponent(p) }
+function isImg(e) {
+  return e && !e.isDirectory && IMG_EXTS.has((e.name.split('.').pop() || '').toLowerCase())
+}
+function thumbUrl(p) {
+  return fileUrl(p)
+}
+function hdriThumbUrl(p) {
+  return '/api/hdri/thumb?path=' + encodeURIComponent(p)
+}
 
 /* zip 包内贴图的虚拟路径：pack:<source>:<packName>/<包内相对路径>（无磁盘绝对路径，
    thumb / 添加到画布走对应包媒体 raw 接口） */
@@ -224,9 +263,15 @@ function userModelFilePath(dir, m) {
 function tryActivateModelViewport() {
   if (isViewportVisible()) return true
   const pvBtn = document.querySelector('.pv-tabs button[data-pv-tab="3d"]')
-  if (pvBtn) { pvBtn.click(); return true }
+  if (pvBtn) {
+    pvBtn.click()
+    return true
+  }
   const host = document.getElementById('material3dStandaloneHost')
-  if (host) { activateMaterial3DHost(host); return true }
+  if (host) {
+    activateMaterial3DHost(host)
+    return true
+  }
   return false
 }
 
@@ -267,25 +312,33 @@ function el(tag, cls, html) {
 
 function shade(hex, amt) {
   const n = parseInt(hex.slice(1), 16)
-  let r = (n >> 16) + amt, g = ((n >> 8) & 0xff) + amt, b = (n & 0xff) + amt
-  r = Math.max(0, Math.min(255, r)); g = Math.max(0, Math.min(255, g)); b = Math.max(0, Math.min(255, b))
+  let r = (n >> 16) + amt,
+    g = ((n >> 8) & 0xff) + amt,
+    b = (n & 0xff) + amt
+  r = Math.max(0, Math.min(255, r))
+  g = Math.max(0, Math.min(255, g))
+  b = Math.max(0, Math.min(255, b))
   return '#' + ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')
 }
 
 function loadList(key) {
-  try { return JSON.parse(localStorage.getItem(key)) || [] } catch { return [] }
+  try {
+    return JSON.parse(localStorage.getItem(key)) || []
+  } catch {
+    return []
+  }
 }
 function saveList(key, arr) {
-  try { localStorage.setItem(key, JSON.stringify(arr)) } catch {}
+  try {
+    localStorage.setItem(key, JSON.stringify(arr))
+  } catch {}
 }
-
-
 
 async function assetApiCall(method, path, body) {
   const res = await fetch(apiUrl(path), {
     method,
     headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: body !== undefined ? JSON.stringify(body) : undefined
   })
   const j = await res.json()
   if (!j || !j.ok) throw new Error((j && j.msg) || 'bad response')
@@ -322,24 +375,29 @@ function persistRecent() {
 
 function sortItems(items) {
   const arr = items.slice()
+  const byName = (a, b) => naturalCompare(a.name, b.name)
   arr.sort((a, b) => {
     let cmp
     if (sortKey === 'mtime') cmp = (a.mtime || 0) - (b.mtime || 0)
-    else cmp = String(a.name).localeCompare(String(b.name), 'zh')
+    else if (sortKey === 'fav') cmp = (isFav(a) ? 1 : 0) - (isFav(b) ? 1 : 0)
+    else cmp = byName(a, b)
+    if (cmp === 0 && sortKey !== 'name') cmp = byName(a, b)
     return sortDir === 'asc' ? cmp : -cmp
   })
   return arr
 }
 
 function itemFromStored(s) {
-  let onAdd, onBrowse, name = s.name
+  let onAdd,
+    onBrowse,
+    name = s.name
   let modelThumb = null
   if (s.type === 'preset') {
     const id = s.key.slice(8)
     if (id.startsWith('cp:')) {
-      const cp = (canvasPresets || []).find(p => ('cp:' + p.id) === id)
+      const cp = (canvasPresets || []).find(p => 'cp:' + p.id === id)
       onAdd = cp ? () => loadCanvasPresetGraph(cp.graph) : () => showToast(t('asset.canvasPresetMissing'))
-      name = cp ? cp.name : (s.name || name)
+      name = cp ? cp.name : s.name || name
     } else {
       onAdd = () => loadPreset(id)
       name = presetName(id)
@@ -350,21 +408,36 @@ function itemFromStored(s) {
   } else if (s.type === 'hdri') {
     onAdd = () => addNodeAt('hdr')
   } else if (s.type === 'official') {
-    onAdd = () => { if (s.path) window.api.showInFolder(s.path) }
+    onAdd = () => {
+      if (s.path) window.api.showInFolder(s.path)
+    }
     onBrowse = () => openPackBrowser({ key: s.key, name: s.name, type: 'official', path: s.path, badge: s.badge })
   } else if (s.type === 'mc') {
-    onAdd = () => { if (s.path) window.api.showInFolder(s.path) }
+    onAdd = () => {
+      if (s.path) window.api.showInFolder(s.path)
+    }
     onBrowse = () => openPackBrowser({ key: s.key, name: s.name, type: 'mc', path: s.path, badge: s.badge })
   } else if (s.type === 'craft') {
-    onAdd = () => { if (s.path) window.api.showInFolder(s.path) }
+    onAdd = () => {
+      if (s.path) window.api.showInFolder(s.path)
+    }
     onBrowse = () => openPackBrowser({ key: s.key, name: s.name, type: 'craft', path: s.path, badge: s.badge })
   } else if (s.type === 'model') {
     const pm = parsePackModelPath(s.path)
     if (pm) {
       onAdd = () => viewMcModelAsset(pm.source, pm.packName, pm.rel, s.name)
-      modelThumb = { kind: 'mc', api: packApiFor(pm.source), packName: pm.packName, rel: pm.rel, path: s.path, mtime: s.mtime || 0 }
+      modelThumb = {
+        kind: 'mc',
+        api: packApiFor(pm.source),
+        packName: pm.packName,
+        rel: pm.rel,
+        path: s.path,
+        mtime: s.mtime || 0
+      }
     } else {
-      onAdd = () => { if (s.path) window.api.showInFolder(s.path) }
+      onAdd = () => {
+        if (s.path) window.api.showInFolder(s.path)
+      }
     }
   } else {
     const pp = parsePackTexPath(s.path)
@@ -375,18 +448,44 @@ function itemFromStored(s) {
       onAdd = () => addTextureAt(s.path, s.name)
     }
   }
-  return { key: s.key, name, thumb: s.thumb, type: s.type, path: s.path, craftPath: s.craftPath, locatePath: s.locatePath, mtime: s.mtime || 0, role: s.role, color: s.color, badge: s.badge, modelThumb, onAdd, onBrowse }
+  return {
+    key: s.key,
+    name,
+    thumb: s.thumb,
+    type: s.type,
+    path: s.path,
+    craftPath: s.craftPath,
+    locatePath: s.locatePath,
+    mtime: s.mtime || 0,
+    role: s.role,
+    color: s.color,
+    badge: s.badge,
+    modelThumb,
+    onAdd,
+    onBrowse
+  }
 }
 
 function storeFromItem(it) {
-  return { key: it.key, name: it.name, thumb: it.thumb, type: it.type, path: it.path, mtime: it.mtime || 0, role: it.role, color: it.color, badge: it.badge }
+  const isModelThumb = it.type === 'model' && it.thumb && it.thumb.startsWith('/api/asset/model-thumb')
+  return {
+    key: it.key,
+    name: it.name,
+    thumb: isModelThumb ? null : it.thumb,
+    type: it.type,
+    path: it.path,
+    mtime: it.mtime || 0,
+    role: it.role,
+    color: it.color,
+    badge: it.badge
+  }
 }
 
 /* 虚拟路径（pack:/packmodel:）经包列表解析出真实文件路径：<包根>/<包名>/<包内相对路径> */
 function virtualToRealPath(p) {
   const pp = parsePackTexPath(p) || parsePackModelPath(p)
   if (!pp) return null
-  const entries = pp.source === 'mc' ? mcEntries : (pp.source === 'official' ? officialEntries : null)
+  const entries = pp.source === 'mc' ? mcEntries : pp.source === 'official' ? officialEntries : null
   const pack = (entries || []).find(e => e && e.name === pp.packName && e.fullPath)
   return pack ? pack.fullPath.replace(/[\\/]+$/, '') + '/' + pp.rel : null
 }
@@ -404,7 +503,9 @@ function resolveLocatePath(item) {
   return virtualToRealPath(p)
 }
 
-function isFav(item) { return favorites.some(f => f.key === item.key) }
+function isFav(item) {
+  return favorites.some(f => f.key === item.key)
+}
 
 function toggleFav(item) {
   if (!isValidAssetKey(item.key)) return
@@ -429,7 +530,6 @@ function pushRecent(item) {
   if (categoryFilter === 'recent') rebuild()
 }
 
-
 function makeCard(item) {
   const card = el('div', 'asset-card')
   card.draggable = true
@@ -437,13 +537,19 @@ function makeCard(item) {
   card.dataset.type = item.type
   card.dataset.key = item.key
   card.dataset.kind = contentKindOfPath(item.path) || ''
+  const zh = zhOfItem(item)
+  if (zh) card.dataset.zhName = zh
+  const py = pinyinOfItem(item)
+  if (py) card.dataset.pinyin = py
 
   const th = el('div', 'ac-thumb')
-  if (item.thumb) {
+  const isModelThumbUrl = item.modelThumb && item.thumb && item.thumb.startsWith('/api/asset/model-thumb')
+  const effectiveThumb = isModelThumbUrl ? null : item.thumb
+  if (effectiveThumb) {
     const img = el('img')
     img.loading = 'lazy'
     img.alt = ''
-    img.src = item.thumb
+    img.src = effectiveThumb
     img.addEventListener('error', () => {
       th.innerHTML = ''
       th.appendChild(el('span', 'ac-icon', '<svg class="ico"><use href="#i-image"/></svg>'))
@@ -451,51 +557,86 @@ function makeCard(item) {
     th.appendChild(img)
   } else if (item.color && !item.icon) {
     th.style.background = `linear-gradient(135deg, ${item.color}, ${shade(item.color, -30)})`
-    if (item.modelThumb) { th.classList.add('ac-thumb-3d'); th._modelThumbItem = item }
+    if (item.modelThumb) {
+      th.classList.add('ac-thumb-3d')
+      th._modelThumbItem = item
+    }
   } else {
     if (item.color) th.style.background = `linear-gradient(135deg, ${item.color}, ${shade(item.color, -30)})`
     th.appendChild(el('span', 'ac-icon', `<svg class="ico"><use href="#${item.icon || 'i-image'}"/></svg>`))
-    if (item.modelThumb) { th.classList.add('ac-thumb-3d'); th._modelThumbItem = item }
+    if (item.modelThumb) {
+      th.classList.add('ac-thumb-3d')
+      th._modelThumbItem = item
+    }
   }
   card.appendChild(th)
   card.appendChild(el('div', 'ac-name', item.name))
   if (item.role) card.appendChild(el('div', 'ac-role ' + item.role, roleText(item.role)))
   else if (item.badge) card.appendChild(el('div', 'ac-role official', item.badge))
 
-  const star = el('button', 'ac-star', isFav(item) ? '★' : '☆')
+  const star = el('button', 'ac-star' + (isFav(item) ? ' on' : ''), isFav(item) ? '★' : '☆')
   star.title = isFav(item) ? t('asset.favOff') : t('asset.favOn')
-  star.addEventListener('click', (e) => { e.stopPropagation(); toggleFav(item) })
+  star.addEventListener('click', e => {
+    e.stopPropagation()
+    toggleFav(item)
+  })
   card.appendChild(star)
 
-  const add = () => { pushRecent(item); item.onAdd() }
+  if (item.type === 'mc' && item.pack) {
+    const ex = el('button', 'ac-star', '⬇')
+    ex.title = '导出为 zip'
+    ex.style.cssText =
+      'position:absolute;top:4px;right:28px;font-size:13px;background:none;border:none;' +
+      'color:var(--text,#e8e8e8);cursor:pointer;opacity:.7;padding:0 2px;'
+    ex.addEventListener('click', e => {
+      e.stopPropagation()
+      exportMcPackZip(item)
+    })
+    card.appendChild(ex)
+  }
+
+  const add = () => {
+    pushRecent(item)
+    item.onAdd()
+  }
   /* 可浏览（文件夹型）资产：单击延迟触发详情，双击直接进入包内容浏览 */
   let clickTimer = null
   card.addEventListener('click', () => {
     if (item.onBrowse) {
       if (clickTimer) clearTimeout(clickTimer)
-      clickTimer = setTimeout(() => { clickTimer = null; openDetail(item) }, BROWSE_CLICK_DELAY)
+      clickTimer = setTimeout(() => {
+        clickTimer = null
+        openDetail(item)
+      }, BROWSE_CLICK_DELAY)
     } else {
       openDetail(item)
     }
   })
-  card.addEventListener('dblclick', (e) => {
+  card.addEventListener('dblclick', e => {
     if (!item.onBrowse) return
     e.preventDefault()
-    if (clickTimer) { clearTimeout(clickTimer); clickTimer = null }
+    if (clickTimer) {
+      clearTimeout(clickTimer)
+      clickTimer = null
+    }
     item.onBrowse()
   })
-  card.addEventListener('dragstart', (e) => {
+  card.addEventListener('dragstart', e => {
     e.dataTransfer.setData('text/plain', item.name)
     /* 贴图卡片：附带可加载的 raw URL，供 UV 编辑器等接收方拖放直接使用 */
-    if (item.type === 'tex' && item.thumb) setTexDragData(e.dataTransfer, { name: item.name, url: item.thumb, path: item.path })
+    if (item.type === 'tex' && item.thumb)
+      setTexDragData(e.dataTransfer, { name: item.name, url: item.thumb, path: item.path })
     e.dataTransfer.effectAllowed = 'copy'
     card.classList.add('dragging')
   })
-  card.addEventListener('dragend', (e) => {
+  card.addEventListener('dragend', e => {
     card.classList.remove('dragging')
     if (droppedOnCanvas(e)) add()
   })
-  card.addEventListener('contextmenu', (e) => { e.preventDefault(); showCtxMenu(e, item) })
+  card.addEventListener('contextmenu', e => {
+    e.preventDefault()
+    showCtxMenu(e, item)
+  })
   return card
 }
 
@@ -503,40 +644,72 @@ function droppedOnCanvas(e) {
   const c = document.getElementById('canvas-wrap')
   if (!c) return false
   const r = c.getBoundingClientRect()
-  if (!(r.width > 0 && r.height > 0 &&
-    e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom)) return false
+  if (!(
+    r.width > 0 &&
+    r.height > 0 &&
+    e.clientX >= r.left &&
+    e.clientX <= r.right &&
+    e.clientY >= r.top &&
+    e.clientY <= r.bottom
+  ))
+    return false
   /* 已投放到 UV 编辑器画布（浮窗可能覆盖节点画布上方）→ 不再视为添加到节点画布 */
   for (const uv of document.querySelectorAll('.uvv-canvas-wrap')) {
     const u = uv.getBoundingClientRect()
-    if (u.width > 0 && u.height > 0 &&
-      e.clientX >= u.left && e.clientX <= u.right && e.clientY >= u.top && e.clientY <= u.bottom) return false
+    if (
+      u.width > 0 &&
+      u.height > 0 &&
+      e.clientX >= u.left &&
+      e.clientX <= u.right &&
+      e.clientY >= u.top &&
+      e.clientY <= u.bottom
+    )
+      return false
   }
   return true
 }
 
 function loadCollapsed() {
-  try { return new Set(JSON.parse(localStorage.getItem('matoga:assetCollapsed')) || []) } catch { return new Set() }
+  try {
+    return new Set(JSON.parse(localStorage.getItem('matoga:assetCollapsed')) || [])
+  } catch {
+    return new Set()
+  }
 }
 function saveCollapsed(set) {
-  try { localStorage.setItem('matoga:assetCollapsed', JSON.stringify([...set])) } catch {}
+  try {
+    localStorage.setItem('matoga:assetCollapsed', JSON.stringify([...set]))
+  } catch {}
 }
 let collapsedSet = loadCollapsed()
 
 /* 贴图子分组（文件夹/包类别）的折叠状态 */
 function loadTexCollapsed() {
-  try { return new Set(JSON.parse(localStorage.getItem('matoga:assetTexCollapsed')) || []) } catch { return new Set() }
+  try {
+    return new Set(JSON.parse(localStorage.getItem('matoga:assetTexCollapsed')) || [])
+  } catch {
+    return new Set()
+  }
 }
 function saveTexCollapsed(set) {
-  try { localStorage.setItem('matoga:assetTexCollapsed', JSON.stringify([...set])) } catch {}
+  try {
+    localStorage.setItem('matoga:assetTexCollapsed', JSON.stringify([...set]))
+  } catch {}
 }
 let texCollapsedSet = loadTexCollapsed()
 
 /* 模型子分组（导入 / 自定义 / 包类别）的折叠状态 */
 function loadModelCollapsed() {
-  try { return new Set(JSON.parse(localStorage.getItem('matoga:assetModelCollapsed')) || []) } catch { return new Set() }
+  try {
+    return new Set(JSON.parse(localStorage.getItem('matoga:assetModelCollapsed')) || [])
+  } catch {
+    return new Set()
+  }
 }
 function saveModelCollapsed(set) {
-  try { localStorage.setItem('matoga:assetModelCollapsed', JSON.stringify([...set])) } catch {}
+  try {
+    localStorage.setItem('matoga:assetModelCollapsed', JSON.stringify([...set]))
+  } catch {}
 }
 let modelCollapsedSet = loadModelCollapsed()
 
@@ -546,12 +719,20 @@ function buildSection(catKey, title, items, errMsg, loading) {
   const sec = el('div', 'asset-lib-section')
   sec.dataset.cat = catKey
   if (collapsedSet.has(catKey)) sec.classList.add('collapsed')
-  const head = el('div', 'asset-lib-section-head',
-    `<span class="caret">▾</span><span>${title}</span><span class="cnt">${count}</span>`)
+  const head = el(
+    'div',
+    'asset-lib-section-head',
+    `<span class="caret">▾</span><span>${title}</span><span class="cnt">${count}</span>`
+  )
   head.addEventListener('click', () => {
     sec.classList.toggle('collapsed')
-    if (sec.classList.contains('collapsed')) { collapsedSet.add(catKey); saveCollapsed(collapsedSet) }
-    else { collapsedSet.delete(catKey); saveCollapsed(collapsedSet) }
+    if (sec.classList.contains('collapsed')) {
+      collapsedSet.add(catKey)
+      saveCollapsed(collapsedSet)
+    } else {
+      collapsedSet.delete(catKey)
+      saveCollapsed(collapsedSet)
+    }
   })
   sec.appendChild(head)
   const grid = el('div', 'asset-lib-grid')
@@ -569,28 +750,48 @@ function buildSection(catKey, title, items, errMsg, loading) {
   return sec
 }
 
-const CANVAS_PRESET_MAX_BYTES = 8 * 1024 * 1024  /* 后端 body 上限 12MB，留余量 */
+const CANVAS_PRESET_MAX_BYTES = 8 * 1024 * 1024 /* 后端 body 上限 12MB，留余量 */
 
 async function loadCanvasPresets() {
   try {
     const cfg = await window.api.getConfig()
-    canvasPresets = (cfg && Array.isArray(cfg.canvasCustomPresets)) ? cfg.canvasCustomPresets : []
-  } catch { canvasPresets = [] }
+    canvasPresets = cfg && Array.isArray(cfg.canvasCustomPresets) ? cfg.canvasCustomPresets : []
+  } catch {
+    canvasPresets = []
+  }
 }
 
 async function saveCanvasPresetAs() {
   let graph = null
-  try { graph = serializeGraphData() } catch { graph = null }
-  if (!graph || !Array.isArray(graph.nodes) || !graph.nodes.length) { showToast(t('asset.canvasPresetEmpty')); return }
+  try {
+    graph = serializeGraphData()
+  } catch {
+    graph = null
+  }
+  if (!graph || !Array.isArray(graph.nodes) || !graph.nodes.length) {
+    showToast(t('asset.canvasPresetEmpty'))
+    return
+  }
   const name = await uiPrompt({ title: t('asset.canvasPresetSaveTitle'), label: t('asset.canvasPresetNamePrompt') })
   if (name === null) return
   const n = name.trim()
-  if (!n) { showToast(t('asset.canvasPresetNameEmpty')); return }
+  if (!n) {
+    showToast(t('asset.canvasPresetNameEmpty'))
+    return
+  }
   try {
     const cfg = await window.api.getConfig()
-    const presets = (cfg && Array.isArray(cfg.canvasCustomPresets)) ? cfg.canvasCustomPresets : []
-    presets.push({ id: 'cp' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name: n, graph, createdAt: Date.now() })
-    if (JSON.stringify(presets).length > CANVAS_PRESET_MAX_BYTES) { showToast(t('asset.canvasPresetTooLarge')); return }
+    const presets = cfg && Array.isArray(cfg.canvasCustomPresets) ? cfg.canvasCustomPresets : []
+    presets.push({
+      id: 'cp' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      name: n,
+      graph,
+      createdAt: Date.now()
+    })
+    if (JSON.stringify(presets).length > CANVAS_PRESET_MAX_BYTES) {
+      showToast(t('asset.canvasPresetTooLarge'))
+      return
+    }
     await window.api.setConfig({ canvasCustomPresets: presets })
     canvasPresets = presets
     showToast(t('asset.canvasPresetSaved'))
@@ -602,10 +803,19 @@ async function saveCanvasPresetAs() {
 
 async function deleteCanvasPreset(item) {
   if (!item.canvasPresetId) return
-  if (!await uiConfirm({ title: t('asset.presetSection'), message: t('asset.canvasPresetDeleteConfirm', { name: item.name }), danger: true })) return
+  if (
+    !(await uiConfirm({
+      title: t('asset.presetSection'),
+      message: t('asset.canvasPresetDeleteConfirm', { name: item.name }),
+      danger: true
+    }))
+  )
+    return
   try {
     const cfg = await window.api.getConfig()
-    const presets = ((cfg && Array.isArray(cfg.canvasCustomPresets)) ? cfg.canvasCustomPresets : []).filter(p => p.id !== item.canvasPresetId)
+    const presets = (cfg && Array.isArray(cfg.canvasCustomPresets) ? cfg.canvasCustomPresets : []).filter(
+      p => p.id !== item.canvasPresetId
+    )
     await window.api.setConfig({ canvasCustomPresets: presets })
     canvasPresets = presets
     favorites = favorites.filter(f => f.key !== item.key)
@@ -621,34 +831,57 @@ async function deleteCanvasPreset(item) {
 
 function buildPresetSection() {
   const items = PRESETS.map(p => ({
-    key: 'preset:' + p.id, name: presetName(p.id), color: p.color, type: 'preset', path: null, mtime: 0, role: 'preset',
-    onAdd: () => loadPreset(p.id),
+    key: 'preset:' + p.id,
+    name: presetName(p.id),
+    color: p.color,
+    type: 'preset',
+    path: null,
+    mtime: 0,
+    role: 'preset',
+    onAdd: () => loadPreset(p.id)
   }))
   for (const p of canvasPresets || []) {
     if (!p || !p.id || !p.graph) continue
     items.push({
-      key: 'preset:cp:' + p.id, name: p.name, color: '#8ab4f8', type: 'preset', path: null,
-      mtime: p.createdAt || 0, role: 'preset', canvasPresetId: p.id,
-      onAdd: () => loadCanvasPresetGraph(p.graph),
+      key: 'preset:cp:' + p.id,
+      name: p.name,
+      color: '#8ab4f8',
+      type: 'preset',
+      path: null,
+      mtime: p.createdAt || 0,
+      role: 'preset',
+      canvasPresetId: p.id,
+      onAdd: () => loadCanvasPresetGraph(p.graph)
     })
   }
   const sorted = sortItems(items)
   const sec = el('div', 'asset-lib-section')
   sec.dataset.cat = 'preset'
   if (collapsedSet.has('preset')) sec.classList.add('collapsed')
-  const head = el('div', 'asset-lib-section-head',
-    `<span class="caret">▾</span><span>${t('asset.presetSection')}</span><span class="cnt">${sorted.length}</span>`)
+  const head = el(
+    'div',
+    'asset-lib-section-head',
+    `<span class="caret">▾</span><span>${t('asset.presetSection')}</span><span class="cnt">${sorted.length}</span>`
+  )
   head.addEventListener('click', () => {
     sec.classList.toggle('collapsed')
-    if (sec.classList.contains('collapsed')) { collapsedSet.add('preset'); saveCollapsed(collapsedSet) }
-    else { collapsedSet.delete('preset'); saveCollapsed(collapsedSet) }
+    if (sec.classList.contains('collapsed')) {
+      collapsedSet.add('preset')
+      saveCollapsed(collapsedSet)
+    } else {
+      collapsedSet.delete('preset')
+      saveCollapsed(collapsedSet)
+    }
   })
   sec.appendChild(head)
 
   const actions = el('div', 'asset-lib-sec-actions')
   const saveBtn = el('button', 'asset-lib-sec-btn', t('asset.canvasPresetSave'))
   saveBtn.title = t('asset.canvasPresetSaveTitle')
-  saveBtn.addEventListener('click', (e) => { e.stopPropagation(); saveCanvasPresetAs() })
+  saveBtn.addEventListener('click', e => {
+    e.stopPropagation()
+    saveCanvasPresetAs()
+  })
   actions.appendChild(saveBtn)
   sec.appendChild(actions)
 
@@ -667,7 +900,11 @@ function collectTexGroups() {
   const seen = new Set()
   const addGroup = (key, label) => {
     let g = byKey.get(key)
-    if (!g) { g = { key, label, items: [] }; byKey.set(key, g); groups.push(g) }
+    if (!g) {
+      g = { key, label, items: [] }
+      byKey.set(key, g)
+      groups.push(g)
+    }
     return g
   }
 
@@ -684,12 +921,17 @@ function collectTexGroups() {
       if (root && e.fullPath && e.fullPath.startsWith(root + '/')) rel = e.fullPath.slice(root.length + 1)
       const si = rel.lastIndexOf('/')
       const dirRel = si >= 0 ? rel.slice(0, si) : ''
-      const gk = 'dir:' + (root ? root + '/' + dirRel : (dirRel || 'root'))
-      const label = root ? (dirRel ? rootName + ' · ' + dirRel : rootName) : (dirRel || t('asset.texRootDir'))
+      const gk = 'dir:' + (root ? root + '/' + dirRel : dirRel || 'root')
+      const label = root ? (dirRel ? rootName + ' · ' + dirRel : rootName) : dirRel || t('asset.texRootDir')
       addGroup(gk, label).items.push({
-        key: 'tex:' + e.fullPath, name: e.name, thumb: thumbUrl(e.fullPath),
-        type: 'tex', path: e.fullPath, mtime: e.mtime || 0, role: classifyByRole(e.name),
-        onAdd: () => addTextureAt(e.fullPath, e.name),
+        key: 'tex:' + e.fullPath,
+        name: e.name,
+        thumb: thumbUrl(e.fullPath),
+        type: 'tex',
+        path: e.fullPath,
+        mtime: e.mtime || 0,
+        role: classifyByRole(e.name),
+        onAdd: () => addTextureAt(e.fullPath, e.name)
       })
     }
   }
@@ -709,16 +951,26 @@ function collectTexGroups() {
           if (seen.has(fp)) continue
           seen.add(fp)
           grp.items.push({
-            key: 'tex:' + fp, name: f.name, thumb: thumbUrl(fp),
-            type: 'tex', path: fp, mtime: f.mtime || 0, role: classifyByRole(f.name),
-            onAdd: () => addTextureAt(fp, f.name),
+            key: 'tex:' + fp,
+            name: f.name,
+            thumb: thumbUrl(fp),
+            type: 'tex',
+            path: fp,
+            mtime: f.mtime || 0,
+            role: classifyByRole(f.name),
+            onAdd: () => addTextureAt(fp, f.name)
           })
         } else {
           const packPath = 'pack:' + p.source + ':' + p.name + '/' + f.path
           grp.items.push({
-            key: 'tex:' + packPath, name: f.name, thumb: packTexThumbUrl(p.source, p.name, f.path),
-            type: 'tex', path: packPath, mtime: 0, role: classifyByRole(f.name),
-            onAdd: () => addPackTextureToCanvas({ type: p.source }, { name: p.name }, { path: f.path, name: f.name }),
+            key: 'tex:' + packPath,
+            name: f.name,
+            thumb: packTexThumbUrl(p.source, p.name, f.path),
+            type: 'tex',
+            path: packPath,
+            mtime: 0,
+            role: classifyByRole(f.name),
+            onAdd: () => addPackTextureToCanvas({ type: p.source }, { name: p.name }, { path: f.path, name: f.name })
           })
         }
       }
@@ -734,20 +986,31 @@ function buildAssetGroup(g, collapsedSet, saveFn) {
   const grp = el('div', 'asset-lib-group')
   grp.dataset.group = g.key
   if (collapsedSet.has(g.key)) grp.classList.add('collapsed')
-  const head = el('div', 'asset-lib-group-head',
-    `<span class="caret">▾</span><span class="gl" title="${escAttr(g.label)}">${escAttr(g.label)}</span><span class="cnt">${g.items.length}</span>`)
+  const head = el(
+    'div',
+    'asset-lib-group-head',
+    `<span class="caret">▾</span><span class="gl" title="${escAttr(g.label)}">${escAttr(g.label)}</span><span class="cnt">${g.items.length}</span>`
+  )
   if (typeof g.openDir === 'function') {
     const locBtn = el('button', 'asset-lib-group-btn')
     locBtn.type = 'button'
     locBtn.title = t('asset.openLocalDir')
     locBtn.innerHTML = '<svg class="ico ico-sm"><use href="#i-folder"/></svg>'
-    locBtn.addEventListener('click', (e) => { e.stopPropagation(); g.openDir() })
+    locBtn.addEventListener('click', e => {
+      e.stopPropagation()
+      g.openDir()
+    })
     head.appendChild(locBtn)
   }
   head.addEventListener('click', () => {
     grp.classList.toggle('collapsed')
-    if (grp.classList.contains('collapsed')) { collapsedSet.add(g.key); saveFn(collapsedSet) }
-    else { collapsedSet.delete(g.key); saveFn(collapsedSet) }
+    if (grp.classList.contains('collapsed')) {
+      collapsedSet.add(g.key)
+      saveFn(collapsedSet)
+    } else {
+      collapsedSet.delete(g.key)
+      saveFn(collapsedSet)
+    }
   })
   grp.appendChild(head)
 
@@ -782,12 +1045,20 @@ function buildTexSection() {
   const sec = el('div', 'asset-lib-section')
   sec.dataset.cat = 'tex'
   if (collapsedSet.has('tex')) sec.classList.add('collapsed')
-  const head = el('div', 'asset-lib-section-head',
-    `<span class="caret">▾</span><span>${t('asset.texSection')}</span><span class="cnt">${total}</span>`)
+  const head = el(
+    'div',
+    'asset-lib-section-head',
+    `<span class="caret">▾</span><span>${t('asset.texSection')}</span><span class="cnt">${total}</span>`
+  )
   head.addEventListener('click', () => {
     sec.classList.toggle('collapsed')
-    if (sec.classList.contains('collapsed')) { collapsedSet.add('tex'); saveCollapsed(collapsedSet) }
-    else { collapsedSet.delete('tex'); saveCollapsed(collapsedSet) }
+    if (sec.classList.contains('collapsed')) {
+      collapsedSet.add('tex')
+      saveCollapsed(collapsedSet)
+    } else {
+      collapsedSet.delete('tex')
+      saveCollapsed(collapsedSet)
+    }
   })
   sec.appendChild(head)
 
@@ -807,7 +1078,8 @@ function buildTexSection() {
 
   const wrap = el('div', 'asset-lib-groups')
   for (const g of groups) wrap.appendChild(buildTexGroup(g))
-  if (loadErrors.tex) wrap.appendChild(el('div', 'asset-lib-hint error', t('asset.loadFailed', { msg: loadErrors.tex })))
+  if (loadErrors.tex)
+    wrap.appendChild(el('div', 'asset-lib-hint error', t('asset.loadFailed', { msg: loadErrors.tex })))
   sec.appendChild(wrap)
   return sec
 }
@@ -817,8 +1089,13 @@ function buildTexSection() {
 /* 在系统文件管理器中打开某类模型的专属本地目录（imported / custom） */
 function openModelDir(kind) {
   const dir = modelDirs[kind]
-  if (!dir) { showToast(t('asset.openLocalDirUnavailable')); return }
-  window.api.openPath(dir).then((err) => { if (err) showToast(t('asset.openLocalDirUnavailable')) })
+  if (!dir) {
+    showToast(t('asset.openLocalDirUnavailable'))
+    return
+  }
+  window.api.openPath(dir).then(err => {
+    if (err) showToast(t('asset.openLocalDirUnavailable'))
+  })
 }
 
 function collectModelGroups() {
@@ -826,7 +1103,11 @@ function collectModelGroups() {
   const byKey = new Map()
   const addGroup = (key, label) => {
     let g = byKey.get(key)
-    if (!g) { g = { key, label, items: [] }; byKey.set(key, g); groups.push(g) }
+    if (!g) {
+      g = { key, label, items: [] }
+      byKey.set(key, g)
+      groups.push(g)
+    }
     return g
   }
 
@@ -836,14 +1117,20 @@ function collectModelGroups() {
   for (const m of importedModels || []) {
     if (!m || !m.id) continue
     imGroup.items.push({
-      key: 'model:im:' + m.id, name: m.name || m.id, thumb: null, icon: 'i-cube',
-      color: '#e8993c', type: 'model', path: 'im:' + m.id, mtime: m.mtime || 0,
-      role: 'model', badge: m.model_format || m.format || m.ext || null,
+      key: 'model:im:' + m.id,
+      name: m.name || m.id,
+      thumb: null,
+      icon: 'i-cube',
+      color: '#e8993c',
+      type: 'model',
+      path: 'im:' + m.id,
+      mtime: m.mtime || 0,
+      role: 'model',
+      badge: m.model_format || m.format || m.ext || null,
       modelThumb: { kind: 'im', id: m.id, path: 'im:' + m.id, mtime: m.mtime || 0 },
       modelFile: userModelFilePath(modelDirs.imported, m),
       modelDelete: { api: IMPORT_API, id: m.id },
-      onAdd: () => viewImportedModelAsset(m.id, m.name || m.id),
-
+      onAdd: () => viewImportedModelAsset(m.id, m.name || m.id)
     })
   }
 
@@ -853,15 +1140,21 @@ function collectModelGroups() {
   for (const m of customModels || []) {
     if (!m || !m.id) continue
     cmGroup.items.push({
-      key: 'model:cm:' + m.id, name: m.name || m.id, thumb: null, icon: 'i-cube',
-      color: '#5fd0a0', type: 'model', path: 'cm:' + m.id, mtime: m.mtime || 0,
-      role: 'model', badge: m.template || null,
+      key: 'model:cm:' + m.id,
+      name: m.name || m.id,
+      thumb: null,
+      icon: 'i-cube',
+      color: '#5fd0a0',
+      type: 'model',
+      path: 'cm:' + m.id,
+      mtime: m.mtime || 0,
+      role: 'model',
+      badge: m.template || null,
       modelFile: userModelFilePath(modelDirs.custom, m),
       modelDelete: { api: CUSTOM_API, id: m.id },
-      onAdd: () => previewCustomModel(m.id, m.name || m.id),
+      onAdd: () => previewCustomModel(m.id, m.name || m.id)
     })
   }
-
 
   /* MC 材质包 + 官方包（/api/asset/model）：每包按 models/ 第一级类别分组 */
   for (const p of modelPacks || []) {
@@ -874,19 +1167,34 @@ function collectModelGroups() {
         if (!f.name || !MODEL_JSON_RE.test(f.name)) continue
         const modelPath = 'packmodel:' + p.source + ':' + p.name + '/' + f.path
         grp.items.push({
-          key: 'model:' + modelPath, name: f.name, thumb: null, icon: 'i-cube',
-          color: '#6f9ff0', type: 'model', path: modelPath, mtime: f.mtime || 0,
-          role: 'model', badge: g.key || null,
-          modelThumb: { kind: 'mc', api: packApiFor(p.source), packName: p.name, rel: f.path, path: modelPath, mtime: f.mtime || 0 },
-          onAdd: () => viewMcModelAsset(p.source, p.name, f.path, f.name),
-
+          key: 'model:' + modelPath,
+          name: f.name,
+          thumb: null,
+          icon: 'i-cube',
+          color: '#6f9ff0',
+          type: 'model',
+          path: modelPath,
+          mtime: f.mtime || 0,
+          role: 'model',
+          badge: g.key || null,
+          modelThumb: {
+            kind: 'mc',
+            api: packApiFor(p.source),
+            packName: p.name,
+            rel: f.path,
+            path: modelPath,
+            mtime: f.mtime || 0
+          },
+          onAdd: () => viewMcModelAsset(p.source, p.name, f.path, f.name)
         })
       }
     }
   }
 
   const pinOrder = ['im', 'cm']
-  const pinned = groups.filter(g => pinOrder.includes(g.key)).sort((a, b) => pinOrder.indexOf(a.key) - pinOrder.indexOf(b.key))
+  const pinned = groups
+    .filter(g => pinOrder.includes(g.key))
+    .sort((a, b) => pinOrder.indexOf(a.key) - pinOrder.indexOf(b.key))
   const rest = groups.filter(g => !pinOrder.includes(g.key)).sort((a, b) => a.label.localeCompare(b.label, 'zh'))
   /* 每组内按名称前缀进一步细分（区分 oak/stone 等不同系列；全部同桶时保持原组） */
   const out = []
@@ -897,19 +1205,114 @@ function collectModelGroups() {
   return out
 }
 
+/* MC 贴图引用 → 资产相对路径："minecraft:block/stone" → assets/minecraft/textures/block/stone.png
+   与 mc-model-viewer.textureAssetPath 同语义（前端独立实现避免循环依赖） */
+function texRefToAssetPath(ref) {
+  if (typeof ref !== 'string' || !ref) return null
+  if (/^(data:|file:|https?:\/\/|\/)/i.test(ref)) return null
+  let ns = 'minecraft',
+    rest = ref
+  const ci = ref.indexOf(':')
+  if (ci >= 0) {
+    ns = ref.slice(0, ci)
+    rest = ref.slice(ci + 1)
+  }
+  if (!rest) return null
+  const hasExt = /\.(png|jpe?g|webp|gif|bmp|tiff?|avif)$/i.test(rest)
+  return `assets/${ns}/textures/${hasExt ? rest : rest + '.png'}`
+}
+
+/* 从模型 JSON 收集所有贴图引用需要的资产路径（含 #别名解析） */
+function collectModelTexturePaths(json) {
+  if (!json || typeof json !== 'object') return []
+  const textures = json.textures && typeof json.textures === 'object' ? json.textures : {}
+  const seen = new Set()
+  const out = []
+  const resolve = ref => {
+    if (typeof ref !== 'string' || !ref) return
+    if (ref.startsWith('#')) {
+      resolve(textures[ref.slice(1)])
+      return
+    }
+    const p = texRefToAssetPath(ref)
+    if (p && !seen.has(p)) {
+      seen.add(p)
+      out.push(p)
+    }
+  }
+  for (const k in textures) resolve(textures[k])
+  return out
+}
+
+/* 按文件名匹配贴图到资产路径：文件名去扩展名 === 资产路径末段去扩展名 */
+function matchTexturesToPaths(files, neededPaths) {
+  const map = {}
+  const byBasename = {}
+  for (const f of files) {
+    const name = f.name.replace(/\.[^.]+$/, '')
+    if (!byBasename[name]) byBasename[name] = f
+  }
+  for (const p of neededPaths) {
+    const base = p
+      .split('/')
+      .pop()
+      .replace(/\.[^.]+$/, '')
+    const f = byBasename[base]
+    if (f) map[p] = f
+  }
+  return map
+}
+
+async function fileToDataUrl(f) {
+  const buf = await f.arrayBuffer()
+  const bytes = new Uint8Array(buf)
+  let bin = ''
+  const chunk = 0x8000
+  for (let i = 0; i < bytes.length; i += chunk) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk))
+  return 'data:' + (f.type || 'image/png') + ';base64,' + btoa(bin)
+}
+
 async function uploadModelToLibrary() {
   const input = document.createElement('input')
   input.type = 'file'
-  input.accept = '.json,.bbmodel'
+  input.multiple = true
+  input.accept = '.json,.bbmodel,.png,.jpg,.jpeg,.webp,.gif,.bmp,.tiff,.tif,.avif'
   input.onchange = async () => {
-    const f = input.files && input.files[0]
-    if (!f) return
+    const files = input.files ? Array.from(input.files) : []
+    if (!files.length) return
+    const modelFiles = files.filter(f => /\.(json|bbmodel)$/i.test(f.name))
+    const texFiles = files.filter(f => !/\.(json|bbmodel)$/i.test(f.name))
+    if (!modelFiles.length) {
+      showToast(t('asset.toastModelUploadFail', { msg: t('asset.toastNoModelFile') }))
+      return
+    }
     try {
-      const text = await f.text()
-      const name = f.name.replace(/\.(json|bbmodel)$/i, '')
-      const ext = /\.bbmodel$/i.test(f.name) ? 'bbmodel' : 'json'
-      await assetApiCall('POST', IMPORT_API, { name, data: text, ext })
-      showToast(t('asset.toastModelImported', { name }))
+      let totalTex = 0
+      for (const f of modelFiles) {
+        const text = await f.text()
+        const name = f.name.replace(/\.(json|bbmodel)$/i, '')
+        const ext = /\.bbmodel$/i.test(f.name) ? 'bbmodel' : 'json'
+        let textures = null
+        if (texFiles.length && ext === 'json') {
+          let json = null
+          try {
+            json = JSON.parse(text)
+          } catch {}
+          const needed = collectModelTexturePaths(json)
+          if (needed.length) {
+            const matched = matchTexturesToPaths(texFiles, needed)
+            const keys = Object.keys(matched)
+            if (keys.length) {
+              textures = {}
+              for (const p of keys) textures[p] = await fileToDataUrl(matched[p])
+            }
+          }
+        }
+        const r = await assetApiCall('POST', IMPORT_API, { name, data: text, ext, textures })
+        totalTex += (r && r.texCount) || 0
+        showToast(t('asset.toastModelImported', { name }))
+      }
+      if (totalTex) showToast(t('asset.toastTexturesImported', { count: totalTex }))
       await refreshAssetLibrary()
     } catch (e) {
       showToast(t('asset.toastModelUploadFail', { msg: e.message || '' }))
@@ -922,7 +1325,14 @@ async function uploadModelToLibrary() {
 async function deleteUserModel(item) {
   const d = item.modelDelete
   if (!d || !d.id) return
-  if (!await uiConfirm({ title: t('asset.modelSection'), message: t('asset.modelDeleteConfirm', { name: item.name }), danger: true })) return
+  if (
+    !(await uiConfirm({
+      title: t('asset.modelSection'),
+      message: t('asset.modelDeleteConfirm', { name: item.name }),
+      danger: true
+    }))
+  )
+    return
   try {
     await assetApiCall('DELETE', d.api + '/' + encodeURIComponent(d.id))
     favorites = favorites.filter(f => f.key !== item.key)
@@ -945,24 +1355,38 @@ function buildModelSection() {
   const sec = el('div', 'asset-lib-section')
   sec.dataset.cat = 'model'
   if (collapsedSet.has('model')) sec.classList.add('collapsed')
-  const head = el('div', 'asset-lib-section-head',
-    `<span class="caret">▾</span><span>${t('asset.modelSection')}</span><span class="cnt">${total}</span>`)
+  const head = el(
+    'div',
+    'asset-lib-section-head',
+    `<span class="caret">▾</span><span>${t('asset.modelSection')}</span><span class="cnt">${total}</span>`
+  )
   const uploadBtn = el('button', 'asset-lib-section-btn')
   uploadBtn.type = 'button'
   uploadBtn.title = t('asset.uploadModelTitle')
   uploadBtn.innerHTML = `<svg class="ico ico-sm"><use href="#i-plus"/></svg><span>${t('asset.uploadModel')}</span>`
-  uploadBtn.addEventListener('click', (e) => { e.stopPropagation(); uploadModelToLibrary() })
+  uploadBtn.addEventListener('click', e => {
+    e.stopPropagation()
+    uploadModelToLibrary()
+  })
   head.appendChild(uploadBtn)
   const newBtn = el('button', 'asset-lib-section-btn')
   newBtn.type = 'button'
   newBtn.title = t('asset.newModelTitle')
   newBtn.innerHTML = `<svg class="ico ico-sm"><use href="#i-cube"/></svg><span>${t('asset.newModel')}</span>`
-  newBtn.addEventListener('click', (e) => { e.stopPropagation(); openCreateModelDialog({ onCreated: () => refreshAssetLibrary() }) })
+  newBtn.addEventListener('click', e => {
+    e.stopPropagation()
+    openCreateModelDialog({ onCreated: () => refreshAssetLibrary() })
+  })
   head.appendChild(newBtn)
   head.addEventListener('click', () => {
     sec.classList.toggle('collapsed')
-    if (sec.classList.contains('collapsed')) { collapsedSet.add('model'); saveCollapsed(collapsedSet) }
-    else { collapsedSet.delete('model'); saveCollapsed(collapsedSet) }
+    if (sec.classList.contains('collapsed')) {
+      collapsedSet.add('model')
+      saveCollapsed(collapsedSet)
+    } else {
+      collapsedSet.delete('model')
+      saveCollapsed(collapsedSet)
+    }
   })
   sec.appendChild(head)
 
@@ -982,7 +1406,8 @@ function buildModelSection() {
 
   const wrap = el('div', 'asset-lib-groups')
   for (const g of groups) wrap.appendChild(buildAssetGroup(g, modelCollapsedSet, saveModelCollapsed))
-  if (loadErrors.model) wrap.appendChild(el('div', 'asset-lib-hint error', t('asset.loadFailed', { msg: loadErrors.model })))
+  if (loadErrors.model)
+    wrap.appendChild(el('div', 'asset-lib-hint error', t('asset.loadFailed', { msg: loadErrors.model })))
   observeModelThumbs(wrap)
   sec.appendChild(wrap)
   return sec
@@ -990,9 +1415,14 @@ function buildModelSection() {
 
 function buildHdriSection() {
   const items = (hdriEntries || []).map(e => ({
-    key: 'hdri:' + e.fullPath, name: e.name, thumb: hdriThumbUrl(e.fullPath),
-    type: 'hdri', path: e.fullPath, mtime: e.mtime || 0, role: 'preset',
-    onAdd: () => addNodeAt('hdr'),
+    key: 'hdri:' + e.fullPath,
+    name: e.name,
+    thumb: hdriThumbUrl(e.fullPath),
+    type: 'hdri',
+    path: e.fullPath,
+    mtime: e.mtime || 0,
+    role: 'preset',
+    onAdd: () => addNodeAt('hdr')
   }))
   return buildSection('hdri', t('asset.hdriSection'), items, loadErrors.hdri, hdriEntries === null)
 }
@@ -1001,11 +1431,17 @@ function buildMcSection() {
   /* mc-packs 下每个资源包是一个「包媒体」：整包卡片储存，双击打开浏览包内贴图 */
   const items = (mcEntries || []).map(p => {
     const it = {
-      key: 'mc:' + p.fullPath, name: p.name,
+      key: 'mc:' + p.fullPath,
+      name: p.name,
       thumb: p.firstTexture ? mcRawUrl(p.name, p.firstTexture) : null,
-      type: 'mc', path: p.fullPath, mtime: p.mtime || 0,
-      badge: officialBadge(p), pack: p,
-      onAdd: () => { if (p.fullPath) window.api.showInFolder(p.fullPath) },
+      type: 'mc',
+      path: p.fullPath,
+      mtime: p.mtime || 0,
+      badge: officialBadge(p),
+      pack: p,
+      onAdd: () => {
+        if (p.fullPath) window.api.showInFolder(p.fullPath)
+      }
     }
     it.onBrowse = () => openPackBrowser(it)
     return it
@@ -1014,13 +1450,46 @@ function buildMcSection() {
   const sec = el('div', 'asset-lib-section')
   sec.dataset.cat = 'mc'
   if (collapsedSet.has('mc')) sec.classList.add('collapsed')
-  const head = el('div', 'asset-lib-section-head',
-    `<span class="caret">▾</span><span>${t('asset.mcSection')}</span><span class="cnt">${sorted.length}</span>`)
+  const head = el(
+    'div',
+    'asset-lib-section-head',
+    `<span class="caret">▾</span><span>${t('asset.mcSection')}</span><span class="cnt">${sorted.length}</span>`
+  )
   head.addEventListener('click', () => {
     sec.classList.toggle('collapsed')
-    if (sec.classList.contains('collapsed')) { collapsedSet.add('mc'); saveCollapsed(collapsedSet) }
-    else { collapsedSet.delete('mc'); saveCollapsed(collapsedSet) }
+    if (sec.classList.contains('collapsed')) {
+      collapsedSet.add('mc')
+      saveCollapsed(collapsedSet)
+    } else {
+      collapsedSet.delete('mc')
+      saveCollapsed(collapsedSet)
+    }
   })
+  const createBtn = el('button', 'asset-lib-section-action', '+ 创建')
+  createBtn.title = '创建材质包'
+  createBtn.style.cssText =
+    'margin-left:auto;background:none;border:1px solid var(--border,#333);' +
+    'border-radius:5px;padding:1px 8px;font-size:11px;cursor:pointer;color:var(--text,#e8e8e8);'
+  createBtn.addEventListener('click', async ev => {
+    ev.stopPropagation()
+    await openCreatePackDialog({
+      onCreated: async () => {
+        await loadMc()
+        rebuild()
+      }
+    })
+  })
+  head.appendChild(createBtn)
+  const batchBtn = el('button', 'asset-lib-section-action', '⬇ 批量导出')
+  batchBtn.title = '批量导出为 zip'
+  batchBtn.style.cssText =
+    'margin-left:6px;background:none;border:1px solid var(--border,#333);' +
+    'border-radius:5px;padding:1px 8px;font-size:11px;cursor:pointer;color:var(--text,#e8e8e8);'
+  batchBtn.addEventListener('click', async ev => {
+    ev.stopPropagation()
+    await exportMcPacksBatch()
+  })
+  head.appendChild(batchBtn)
   sec.appendChild(head)
 
   const grid = el('div', 'asset-lib-grid')
@@ -1079,7 +1548,11 @@ function officialBadge(p) {
 
 function officialSuggestName(p) {
   const range = (p && p.formatRange) || ''
-  if (range) return range.replace(/\s*–\s*/g, '-').replace(/\s+-\s+/g, '-').trim()
+  if (range)
+    return range
+      .replace(/\s*–\s*/g, '-')
+      .replace(/\s+-\s+/g, '-')
+      .trim()
   if (p && p.format != null) return 'pack_format-' + p.format
   return (p && p.name) || ''
 }
@@ -1087,11 +1560,17 @@ function officialSuggestName(p) {
 function buildOfficialSection() {
   const items = (officialEntries || []).map(p => {
     const it = {
-      key: 'official:' + p.fullPath, name: p.name,
+      key: 'official:' + p.fullPath,
+      name: p.name,
       thumb: p.firstTexture ? officialRawUrl(p.name, p.firstTexture) : null,
-      type: 'official', path: p.fullPath, mtime: p.mtime || 0,
-      badge: officialBadge(p), pack: p,
-      onAdd: () => { if (p.fullPath) window.api.showInFolder(p.fullPath) },
+      type: 'official',
+      path: p.fullPath,
+      mtime: p.mtime || 0,
+      badge: officialBadge(p),
+      pack: p,
+      onAdd: () => {
+        if (p.fullPath) window.api.showInFolder(p.fullPath)
+      }
     }
     it.onBrowse = () => openPackBrowser(it)
     return it
@@ -1100,12 +1579,20 @@ function buildOfficialSection() {
   const sec = el('div', 'asset-lib-section')
   sec.dataset.cat = 'official'
   if (collapsedSet.has('official')) sec.classList.add('collapsed')
-  const head = el('div', 'asset-lib-section-head',
-    `<span class="caret">▾</span><span>${t('asset.officialSection')}</span><span class="cnt">${sorted.length}</span>`)
+  const head = el(
+    'div',
+    'asset-lib-section-head',
+    `<span class="caret">▾</span><span>${t('asset.officialSection')}</span><span class="cnt">${sorted.length}</span>`
+  )
   head.addEventListener('click', () => {
     sec.classList.toggle('collapsed')
-    if (sec.classList.contains('collapsed')) { collapsedSet.add('official'); saveCollapsed(collapsedSet) }
-    else { collapsedSet.delete('official'); saveCollapsed(collapsedSet) }
+    if (sec.classList.contains('collapsed')) {
+      collapsedSet.add('official')
+      saveCollapsed(collapsedSet)
+    } else {
+      collapsedSet.delete('official')
+      saveCollapsed(collapsedSet)
+    }
   })
   sec.appendChild(head)
 
@@ -1142,8 +1629,12 @@ async function refreshOfficialQuiet() {
 
 async function renameOfficialAsset(item, byVersion) {
   const p = item.pack || {}
-  const def = byVersion ? (officialSuggestName(p) || item.name) : item.name
-  const name = await uiPrompt({ title: t('asset.officialRenamePrompt'), label: t('asset.officialNamePrompt'), value: def })
+  const def = byVersion ? officialSuggestName(p) || item.name : item.name
+  const name = await uiPrompt({
+    title: t('asset.officialRenamePrompt'),
+    label: t('asset.officialNamePrompt'),
+    value: def
+  })
   if (name === null) return
   const n = name.trim()
   if (!n || n === item.name) return
@@ -1152,9 +1643,23 @@ async function renameOfficialAsset(item, byVersion) {
   try {
     const data = await assetApiCall('PUT', MC_OFFICIAL_API + '/rename', { from: item.name, to: n })
     const newKey = 'official:' + (data && data.to ? data.to : oldPath)
-    const newBadge = byVersion ? (officialSuggestName(p) || item.badge) : item.badge
-    favorites.forEach(f => { if (f.key === oldKey) { f.key = newKey; f.name = n; f.path = data && data.to || f.path; f.badge = newBadge } })
-    recent.forEach(r => { if (r.key === oldKey) { r.key = newKey; r.name = n; r.path = data && data.to || r.path; r.badge = newBadge } })
+    const newBadge = byVersion ? officialSuggestName(p) || item.badge : item.badge
+    favorites.forEach(f => {
+      if (f.key === oldKey) {
+        f.key = newKey
+        f.name = n
+        f.path = (data && data.to) || f.path
+        f.badge = newBadge
+      }
+    })
+    recent.forEach(r => {
+      if (r.key === oldKey) {
+        r.key = newKey
+        r.name = n
+        r.path = (data && data.to) || r.path
+        r.badge = newBadge
+      }
+    })
     persistFavorites()
     persistRecent()
     showToast(t('asset.toastOfficialRenamed'))
@@ -1183,15 +1688,19 @@ function pbLoadView() {
   try {
     const v = localStorage.getItem('matoga:pbView')
     return v === 'grid' || v === 'list' ? v : 'list'
-  } catch { return 'list' }
+  } catch {
+    return 'list'
+  }
 }
 
 function pbSaveView(v) {
-  try { localStorage.setItem('matoga:pbView', v) } catch {}
+  try {
+    localStorage.setItem('matoga:pbView', v)
+  } catch {}
 }
 
 function openPackBrowser(item) {
-  const list = item.type === 'mc' ? mcEntries : (item.type === 'official' ? officialEntries : null)
+  const list = item.type === 'mc' ? mcEntries : item.type === 'official' ? officialEntries : null
   const pack = item.pack || (list || []).find(p => p.fullPath === item.path) || null
   browse = { item, pack, dir: null, view: pbLoadView(), filter: '', data: null, api: packApiFor(item.type) }
   renderBrowse()
@@ -1245,7 +1754,9 @@ function buildBrowseHead(item, pack, kind) {
   logoImg.alt = ''
   logoImg.loading = 'lazy'
   logoImg.src = packEntryRawUrl(item.name, 'pack.png')
-  logoImg.addEventListener('error', () => { logo.innerHTML = '<svg class="ico"><use href="#i-box"/></svg>' })
+  logoImg.addEventListener('error', () => {
+    logo.innerHTML = '<svg class="ico"><use href="#i-box"/></svg>'
+  })
   logo.appendChild(logoImg)
   logo.title = item.name
   head.appendChild(logo)
@@ -1256,7 +1767,7 @@ function buildBrowseHead(item, pack, kind) {
     title.appendChild(el('span', 'pb-badge', item.badge || officialBadge(pack)))
   }
   head.appendChild(title)
-  head.appendChild(el('span', 'pb-kind', kind === 'zip' ? 'ZIP' : (kind === 'dir' ? t('asset.officialKindDir') : '')))
+  head.appendChild(el('span', 'pb-kind', kind === 'zip' ? 'ZIP' : kind === 'dir' ? t('asset.officialKindDir') : ''))
 
   const meta = el('div', 'pb-meta')
   if (pack) {
@@ -1315,8 +1826,11 @@ function buildBrowseToolbar() {
 
   const seg = el('div', 'pb-viewseg')
   const mkViewBtn = (mode, icon, titleKey) => {
-    const b = el('button', 'pb-vbtn' + (browse && browse.view === mode ? ' active' : ''),
-      `<svg class="ico"><use href="#i-${icon}"/></svg>`)
+    const b = el(
+      'button',
+      'pb-vbtn' + (browse && browse.view === mode ? ' active' : ''),
+      `<svg class="ico"><use href="#i-${icon}"/></svg>`
+    )
     b.title = t(titleKey)
     b.dataset.view = mode
     b.addEventListener('click', () => {
@@ -1351,7 +1865,10 @@ function buildBrowseFolderCard(d) {
   f.appendChild(el('span', 'pb-farrow', '<svg class="ico"><use href="#i-chevron-right"/></svg>'))
   const dir = browseEntryPath(d.name)
   f.title = dir
-  f.addEventListener('dblclick', (e) => { e.preventDefault(); browseTo(dir) })
+  f.addEventListener('dblclick', e => {
+    e.preventDefault()
+    browseTo(dir)
+  })
   f.addEventListener('click', () => {
     document.querySelectorAll('.pack-browser .pb-folder.sel').forEach(x => x.classList.remove('sel'))
     document.querySelectorAll('.pack-browser .pb-file.sel').forEach(x => x.classList.remove('sel'))
@@ -1373,7 +1890,9 @@ function buildBrowseFileRow(item, pack, file, grid) {
     img.loading = 'lazy'
     img.alt = ''
     img.src = packEntryRawUrl(item.name, rel)
-    img.addEventListener('error', () => { th.innerHTML = '<svg class="ico"><use href="#i-file"/></svg>' })
+    img.addEventListener('error', () => {
+      th.innerHTML = '<svg class="ico"><use href="#i-file"/></svg>'
+    })
     th.appendChild(img)
   } else if (isModelFile) {
     th.classList.add('model')
@@ -1390,7 +1909,7 @@ function buildBrowseFileRow(item, pack, file, grid) {
   if (addable) {
     const add = el('button', 'pf-add', '<svg class="ico"><use href="#i-plus"/></svg>')
     add.title = addHint
-    add.addEventListener('click', (e) => {
+    add.addEventListener('click', e => {
       e.stopPropagation()
       if (isModelFile) {
         pushRecent(item)
@@ -1409,7 +1928,7 @@ function buildBrowseFileRow(item, pack, file, grid) {
     row.classList.add('sel')
     setBrowseStatus(row.title)
   })
-  row.addEventListener('dblclick', (e) => {
+  row.addEventListener('dblclick', e => {
     e.preventDefault()
     if (isModelFile && isAddableAssetPath(rel)) {
       pushRecent(item)
@@ -1447,10 +1966,15 @@ function fillBrowseView(item, pack, data) {
   const kindEl = document.querySelector('.pack-browser .pb-kind')
   if (kindEl) kindEl.textContent = data.kind === 'zip' ? 'ZIP' : t('asset.officialKindDir')
 
-  const term = browse && browse.filter ? browse.filter.trim().toLowerCase() : ''
-  const match = (name) => !term || String(name).toLowerCase().includes(term)
+  const term = browse && browse.filter ? browse.filter.trim() : ''
+  const enCands = term ? enCandidatesOfZh(term) : []
+  const match = (name, zh, pinyin) =>
+    assetSearchMatch(String(name).toLowerCase(), (zh || '').toLowerCase(), (pinyin || '').toLowerCase(), enCands, term)
   const dirs = (data.dirs || []).filter(d => match(d.name))
-  const files = (data.files || []).filter(f => match(f.name))
+  const files = (data.files || []).filter(f => {
+    const item = { path: f.path, name: f.name }
+    return match(f.name, zhOfItem(item), pinyinOfItem(item))
+  })
   const total = dirs.length + files.length
   const unfiltered = (data.dirs || []).length + (data.files || []).length
 
@@ -1545,7 +2069,10 @@ async function saveProjectAs() {
   const name = await uiPrompt({ title: t('asset.projectSaveTitle'), label: t('asset.projectNamePrompt') })
   if (name === null) return
   const n = name.trim()
-  if (!n) { showToast(t('asset.projectNameEmpty')); return }
+  if (!n) {
+    showToast(t('asset.projectNameEmpty'))
+    return
+  }
   try {
     await saveNodeProject(n)
     showToast(t('asset.toastProjectSaved'))
@@ -1556,7 +2083,10 @@ async function saveProjectAs() {
 }
 
 async function updateProjectWithCanvas(p) {
-  if (!await uiConfirm({ title: t('asset.projectSection'), message: t('asset.projectUpdateConfirm', { name: p.name }) })) return
+  if (
+    !(await uiConfirm({ title: t('asset.projectSection'), message: t('asset.projectUpdateConfirm', { name: p.name }) }))
+  )
+    return
   try {
     await saveNodeProject(p.name, p.id)
     showToast(t('asset.toastProjectSaved'))
@@ -1567,7 +2097,14 @@ async function updateProjectWithCanvas(p) {
 }
 
 async function deleteProjectAsset(p) {
-  if (!await uiConfirm({ title: t('asset.projectSection'), message: t('asset.projectDeleteConfirm', { name: p.name }), danger: true })) return
+  if (
+    !(await uiConfirm({
+      title: t('asset.projectSection'),
+      message: t('asset.projectDeleteConfirm', { name: p.name }),
+      danger: true
+    }))
+  )
+    return
   try {
     await assetApiCall('DELETE', PROJECTS_API + '/' + encodeURIComponent(p.id))
     showToast(t('asset.toastProjectDeleted'))
@@ -1575,7 +2112,9 @@ async function deleteProjectAsset(p) {
     recent = recent.filter(r => r.key !== 'project:' + p.id)
     persistFavorites()
     persistRecent()
-    try { await assetApiCall('DELETE', '/api/craft-pack/items/' + encodeURIComponent('project:' + p.id)) } catch {}
+    try {
+      await assetApiCall('DELETE', '/api/craft-pack/items/' + encodeURIComponent('project:' + p.id))
+    } catch {}
 
     refreshProjectsQuiet()
   } catch (e) {
@@ -1584,14 +2123,22 @@ async function deleteProjectAsset(p) {
 }
 
 async function renameProjectAsset(p) {
-  const name = await uiPrompt({ title: t('asset.projectRenamePrompt'), label: t('asset.projectNamePrompt'), value: p.name })
+  const name = await uiPrompt({
+    title: t('asset.projectRenamePrompt'),
+    label: t('asset.projectNamePrompt'),
+    value: p.name
+  })
   if (name === null) return
   const n = name.trim()
   if (!n || n === p.name) return
   try {
     await assetApiCall('PUT', PROJECTS_API + '/' + encodeURIComponent(p.id) + '/rename', { name: n })
-    favorites.forEach(f => { if (f.key === 'project:' + p.id) f.name = n })
-    recent.forEach(r => { if (r.key === 'project:' + p.id) r.name = n })
+    favorites.forEach(f => {
+      if (f.key === 'project:' + p.id) f.name = n
+    })
+    recent.forEach(r => {
+      if (r.key === 'project:' + p.id) r.name = n
+    })
     persistFavorites()
     persistRecent()
     showToast(t('asset.toastProjectRenamed'))
@@ -1603,28 +2150,46 @@ async function renameProjectAsset(p) {
 
 function buildProjectSection() {
   const items = (projectEntries || []).map(p => ({
-    key: 'project:' + p.id, name: p.name, thumb: projectThumbUrl(p.id),
-    type: 'project', path: p.dir || null, mtime: p.updatedAt || 0, role: 'project',
-    id: p.id, nodeCount: p.nodeCount || 0, textureCount: p.textureCount || 0,
-    onAdd: () => loadNodeProject(p.id).catch(e => showToast(t('asset.toastProjectLoadFail') + ': ' + e.message)),
+    key: 'project:' + p.id,
+    name: p.name,
+    thumb: projectThumbUrl(p.id),
+    type: 'project',
+    path: p.dir || null,
+    mtime: p.updatedAt || 0,
+    role: 'project',
+    id: p.id,
+    nodeCount: p.nodeCount || 0,
+    textureCount: p.textureCount || 0,
+    onAdd: () => loadNodeProject(p.id).catch(e => showToast(t('asset.toastProjectLoadFail') + ': ' + e.message))
   }))
   const sorted = sortItems(items)
   const sec = el('div', 'asset-lib-section')
   sec.dataset.cat = 'project'
   if (collapsedSet.has('project')) sec.classList.add('collapsed')
-  const head = el('div', 'asset-lib-section-head',
-    `<span class="caret">▾</span><span>${t('asset.projectSection')}</span><span class="cnt">${sorted.length}</span>`)
+  const head = el(
+    'div',
+    'asset-lib-section-head',
+    `<span class="caret">▾</span><span>${t('asset.projectSection')}</span><span class="cnt">${sorted.length}</span>`
+  )
   head.addEventListener('click', () => {
     sec.classList.toggle('collapsed')
-    if (sec.classList.contains('collapsed')) { collapsedSet.add('project'); saveCollapsed(collapsedSet) }
-    else { collapsedSet.delete('project'); saveCollapsed(collapsedSet) }
+    if (sec.classList.contains('collapsed')) {
+      collapsedSet.add('project')
+      saveCollapsed(collapsedSet)
+    } else {
+      collapsedSet.delete('project')
+      saveCollapsed(collapsedSet)
+    }
   })
   sec.appendChild(head)
 
   const actions = el('div', 'asset-lib-sec-actions')
   const saveBtn = el('button', 'asset-lib-sec-btn', t('asset.projectSave'))
   saveBtn.title = t('asset.projectSaveTitle')
-  saveBtn.addEventListener('click', (e) => { e.stopPropagation(); saveProjectAs() })
+  saveBtn.addEventListener('click', e => {
+    e.stopPropagation()
+    saveProjectAs()
+  })
   actions.appendChild(saveBtn)
   sec.appendChild(actions)
 
@@ -1668,7 +2233,7 @@ function rebuild() {
     buildModelSection(),
     buildHdriSection(),
     buildMcSection(),
-    buildOfficialSection(),
+    buildOfficialSection()
   ].filter(Boolean)
   for (const s of sections) body.appendChild(s)
   body.scrollTop = scrollTop
@@ -1680,14 +2245,18 @@ function applyFilter() {
   const body = document.getElementById('assetLibraryBody')
   if (!body) return
   if (browse) return
-  const term = searchTerm.toLowerCase()
+  const term = searchTerm.trim()
   const searching = !!term
+  const termLower = term.toLowerCase()
+  const enCands = searching ? enCandidatesOfZh(term) : []
   const kind = contentKindFilter
 
   /* 卡片：命中名称（搜索词）且符合方块/物品过滤才显示 */
   body.querySelectorAll('.asset-card').forEach(card => {
     const name = (card.dataset.name || '').toLowerCase()
-    const nameOk = !searching || name.includes(term)
+    const zh = (card.dataset.zhName || '').toLowerCase()
+    const py = (card.dataset.pinyin || '').toLowerCase()
+    const nameOk = !searching || assetSearchMatch(name, zh, py, enCands, termLower)
     const kindOk = kind === 'all' || card.dataset.kind === kind
     card.classList.toggle('is-hidden', !nameOk || !kindOk)
   })
@@ -1705,7 +2274,9 @@ function applyFilter() {
     const cat = sec.dataset.cat
     const catOk = searching
       ? !QUICK_CATS.has(cat)
-      : (categoryFilter === 'all' ? SECTION_CATS.includes(cat) : cat === categoryFilter)
+      : categoryFilter === 'all'
+        ? SECTION_CATS.includes(cat)
+        : cat === categoryFilter
     const hit = !!sec.querySelector('.asset-card:not(.is-hidden)')
     const hint = !!sec.querySelector('.asset-lib-hint')
     sec.classList.toggle('is-hidden', !catOk || (!hit && !hint))
@@ -1717,10 +2288,14 @@ function applyFilter() {
   const hasVisibleHint = !!body.querySelector('.asset-lib-section:not(.is-hidden) .asset-lib-hint')
   let empty = body.querySelector('.asset-lib-empty')
   if (visible === 0 && !hasVisibleHint) {
-    if (!empty) { empty = el('div', 'asset-lib-empty'); body.appendChild(empty) }
+    if (!empty) {
+      empty = el('div', 'asset-lib-empty')
+      body.appendChild(empty)
+    }
     let msg
     if (term) msg = t('asset.emptyFiltered')
-    else if (contentKindFilter !== 'all') msg = t('asset.emptyKind', { kind: t(contentKindFilter === 'block' ? 'asset.kindBlock' : 'asset.kindItem') })
+    else if (contentKindFilter !== 'all')
+      msg = t('asset.emptyKind', { kind: t(contentKindFilter === 'block' ? 'asset.kindBlock' : 'asset.kindItem') })
     else if (categoryFilter !== 'all') msg = t('asset.emptyCategory', { cat: categoryLabel(categoryFilter) })
     else msg = t('asset.empty')
     empty.textContent = msg
@@ -1733,6 +2308,185 @@ function applyFilter() {
 function updateStat(n) {
   const stat = document.querySelector('.asset-lib-stat')
   if (stat) stat.textContent = t('asset.statTotal', { n })
+}
+
+async function deleteMcPack(item) {
+  const name = item.pack && item.pack.name
+  if (!name) return
+  if (!(await uiConfirm({ title: 'MC 资源包', message: '确定删除「' + name + '」？此操作不可撤销。', danger: true })))
+    return
+  try {
+    await assetApiCall('DELETE', MC_PACKS_API + '/' + encodeURIComponent(name))
+    favorites = favorites.filter(f => f.key !== item.key)
+    recent = recent.filter(r => r.key !== item.key)
+    persistFavorites()
+    persistRecent()
+    showToast('已删除：' + name)
+    if (detailCurrent === item) hideDetail()
+    await loadMc()
+    rebuild()
+  } catch (e) {
+    showToast('删除失败：' + (e.message || e))
+  }
+}
+
+async function doDownloadZip(url, body, loadingMsg, successPrefix) {
+  try {
+    showToast(loadingMsg)
+    const res = await fetch(apiUrl(url), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+    if (!res.ok) throw new Error('HTTP ' + res.status)
+    const blob = await res.blob()
+    const cd = res.headers.get('Content-Disposition') || ''
+    let fileName = 'export.zip'
+    const m = cd.match(/filename="?([^"]+)"?/)
+    if (m) {
+      try {
+        fileName = decodeURIComponent(m[1])
+      } catch {}
+    }
+    const u = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = u
+    a.download = fileName
+    a.click()
+    URL.revokeObjectURL(u)
+    showToast(successPrefix + fileName)
+  } catch (e) {
+    showToast('导出失败：' + (e.message || e))
+  }
+}
+
+function openExportDialog({ packs, isBatch }) {
+  return new Promise(resolve => {
+    const bd = document.createElement('div')
+    bd.style.cssText =
+      'position:fixed;inset:0;z-index:92001;background:rgba(0,0,0,.5);' +
+      'display:flex;align-items:center;justify-content:center;font-family:inherit;'
+    const c = document.createElement('div')
+    c.style.cssText =
+      'width:min(480px,calc(100vw - 48px));border-radius:10px;' +
+      'background:var(--bg2,#1c1f26);color:var(--text,#e8e8e8);border:1px solid var(--border,#333);' +
+      'box-shadow:0 12px 40px rgba(0,0,0,.5);padding:16px 18px;box-sizing:border-box;'
+    const h = document.createElement('div')
+    h.style.cssText = 'font-size:13px;font-weight:600;margin-bottom:10px;'
+    h.textContent = isBatch ? '批量导出为 zip' : '导出为 zip'
+    c.appendChild(h)
+
+    const selected = new Set(packs.map(p => p.name))
+    if (isBatch) {
+      const hint = document.createElement('div')
+      hint.style.cssText = 'font-size:11px;opacity:.6;margin-bottom:8px;'
+      hint.textContent = '勾选要导出的资源包（' + packs.length + ' 个）'
+      c.appendChild(hint)
+      const list = document.createElement('div')
+      list.style.cssText =
+        'max-height:200px;overflow:auto;margin-bottom:10px;border:1px solid var(--border,#333);' +
+        'border-radius:6px;padding:6px;background:var(--bg,#12141a);'
+      for (const p of packs) {
+        const row = document.createElement('label')
+        row.style.cssText = 'display:flex;align-items:center;gap:6px;padding:3px 0;font-size:11px;cursor:pointer;'
+        const cb = document.createElement('input')
+        cb.type = 'checkbox'
+        cb.checked = true
+        cb.addEventListener('change', () => {
+          cb.checked ? selected.add(p.name) : selected.delete(p.name)
+        })
+        row.appendChild(cb)
+        row.appendChild(document.createTextNode(p.name))
+        list.appendChild(row)
+      }
+      c.appendChild(list)
+    }
+
+    const pngLabel = document.createElement('label')
+    pngLabel.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:6px;cursor:pointer;'
+    const pngCb = document.createElement('input')
+    pngCb.type = 'checkbox'
+    pngCb.checked = true
+    pngLabel.appendChild(pngCb)
+    pngLabel.appendChild(document.createTextNode('包含 pack.png 缩略图'))
+    c.appendChild(pngLabel)
+
+    const cmpLabel = document.createElement('label')
+    cmpLabel.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:12px;cursor:pointer;'
+    const cmpCb = document.createElement('input')
+    cmpCb.type = 'checkbox'
+    cmpCb.checked = true
+    cmpLabel.appendChild(cmpCb)
+    cmpLabel.appendChild(document.createTextNode('压缩文件（deflate，取消则为 store 直存）'))
+    c.appendChild(cmpLabel)
+
+    const btnRow = document.createElement('div')
+    btnRow.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;'
+    const cancelBtn = document.createElement('button')
+    cancelBtn.textContent = '取消'
+    cancelBtn.style.cssText =
+      'padding:6px 18px;border-radius:6px;font-size:12px;cursor:pointer;' +
+      'border:1px solid var(--border,#333);background:var(--bg,#12141a);color:var(--text,#e8e8e8);'
+    const exportBtn = document.createElement('button')
+    exportBtn.textContent = '导出'
+    exportBtn.style.cssText =
+      'padding:6px 18px;border-radius:6px;font-size:12px;cursor:pointer;' +
+      'border:1px solid var(--primary,#2b6cff);background:var(--primary,#2b6cff);color:#fff;'
+    btnRow.appendChild(cancelBtn)
+    btnRow.appendChild(exportBtn)
+    c.appendChild(btnRow)
+    bd.appendChild(c)
+
+    let done = false
+    function finish(v) {
+      if (done) return
+      done = true
+      bd.remove()
+      resolve(v)
+    }
+    cancelBtn.addEventListener('click', () => finish(null))
+    bd.addEventListener('pointerdown', e => {
+      if (e.target === bd) finish(null)
+    })
+    exportBtn.addEventListener('click', () => {
+      const names = isBatch ? [...selected] : [packs[0].name]
+      if (!names.length) {
+        showToast('请至少选择一个资源包')
+        return
+      }
+      finish({ names, skipPackPng: !pngCb.checked, noCompress: !cmpCb.checked })
+    })
+    document.body.appendChild(bd)
+  })
+}
+
+async function exportMcPackZip(item) {
+  const name = item.pack && item.pack.name
+  if (!name) return
+  const r = await openExportDialog({ packs: [{ name }], isBatch: false })
+  if (!r) return
+  await doDownloadZip(
+    MC_PACKS_API + '/' + encodeURIComponent(name) + '/export',
+    { skipPackPng: r.skipPackPng, noCompress: r.noCompress },
+    '正在导出「' + name + '」…',
+    '已导出：'
+  )
+}
+
+async function exportMcPacksBatch() {
+  const packs = (mcEntries || []).filter(p => p && p.name).map(p => ({ name: p.name }))
+  if (!packs.length) {
+    showToast('没有可导出的资源包')
+    return
+  }
+  const r = await openExportDialog({ packs, isBatch: true })
+  if (!r) return
+  await doDownloadZip(
+    MC_PACKS_API + '/export-batch',
+    { names: r.names, skipPackPng: r.skipPackPng, noCompress: r.noCompress },
+    '正在导出 ' + r.names.length + ' 个资源包…',
+    '已导出（' + r.names.length + ' 个包）：'
+  )
 }
 
 function showCtxMenu(e, item) {
@@ -1749,12 +2503,24 @@ function showCtxMenu(e, item) {
   opts.push({ label: isFav(item) ? t('asset.ctxUnfav') : t('asset.ctxFav'), fn: () => toggleFav(item) })
 
   if (item.type === 'model') {
-    opts.push({ label: t('asset.detailViewViewport'), fn: () => { pushRecent(item); item.onAdd && item.onAdd() } })
+    opts.push({
+      label: t('asset.detailViewViewport'),
+      fn: () => {
+        pushRecent(item)
+        item.onAdd && item.onAdd()
+      }
+    })
     if (item.modelDelete) {
       opts.push({ label: t('asset.ctxDeleteModel'), fn: () => deleteUserModel(item) })
     }
   } else {
-    opts.push({ label: t('asset.ctxSendCanvas'), fn: () => { pushRecent(item); item.onAdd() } })
+    opts.push({
+      label: t('asset.ctxSendCanvas'),
+      fn: () => {
+        pushRecent(item)
+        item.onAdd()
+      }
+    })
   }
   if (item.type === 'project') {
     opts.push({ label: t('asset.ctxUpdateProject'), fn: () => updateProjectWithCanvas(item) })
@@ -1770,9 +2536,16 @@ function showCtxMenu(e, item) {
       opts.push({ label: t('asset.ctxRenameByVersion'), fn: () => renameOfficialAsset(item, true) })
     }
   }
+  if (item.type === 'mc' && item.pack) {
+    opts.push({ label: '导出为 zip', fn: () => exportMcPackZip(item) })
+    opts.push({ label: '删除', fn: () => deleteMcPack(item) })
+  }
   for (const it of opts) {
     const mi = el('div', 'asset-ctx-item', it.label)
-    mi.addEventListener('click', () => { hideCtxMenu(); it.fn() })
+    mi.addEventListener('click', () => {
+      hideCtxMenu()
+      it.fn()
+    })
     ctxMenu.appendChild(mi)
   }
   document.body.appendChild(ctxMenu)
@@ -1781,12 +2554,19 @@ function showCtxMenu(e, item) {
 }
 
 function hideCtxMenu() {
-  if (ctxMenu) { ctxMenu.remove(); ctxMenu = null }
+  if (ctxMenu) {
+    ctxMenu.remove()
+    ctxMenu = null
+  }
 }
 
 async function copyText(s) {
-  try { await navigator.clipboard.writeText(s); showToast(t('asset.toastCopied')) }
-  catch { showToast(t('asset.toastCopyFail')) }
+  try {
+    await navigator.clipboard.writeText(s)
+    showToast(t('asset.toastCopied'))
+  } catch {
+    showToast(t('asset.toastCopyFail'))
+  }
 }
 
 async function loadHdri() {
@@ -1811,10 +2591,10 @@ async function loadMc() {
   }
 }
 
-
 /* 总资产库贴图聚合：MC 材质包 + 官方包全部贴图（按包/类别分组） */
 async function loadTexPacks() {
   try {
+    await loadZhNames()
     const data = await assetApiCall('GET', '/api/asset/tex')
     texPacks = (data && data.packs) || []
     loadErrors.tex = null
@@ -1827,6 +2607,7 @@ async function loadTexPacks() {
 /* 总资产库模型聚合：包内 .json 模型（/api/asset/model）+ 导入模型 + 自定义模型 */
 async function loadModelAssets() {
   try {
+    await loadZhNames()
     const data = await assetApiCall('GET', '/api/asset/model')
     modelPacks = (data && data.packs) || []
     loadErrors.model = null
@@ -1849,22 +2630,34 @@ async function loadModelAssets() {
   try {
     const loc = await assetApiCall('GET', IMPORT_API + '/location')
     modelDirs.imported = (loc && loc.dir) || ''
-  } catch { modelDirs.imported = '' }
+  } catch {
+    modelDirs.imported = ''
+  }
   try {
     const loc = await assetApiCall('GET', '/api/custom-models/location')
     modelDirs.custom = (loc && loc.dir) || ''
-  } catch { modelDirs.custom = '' }
+  } catch {
+    modelDirs.custom = ''
+  }
 }
 
 export async function refreshAssetLibrary() {
-  await Promise.all([loadHdri(), loadMc(), loadOfficial(), loadProjects(), loadTexPacks(), loadModelAssets(), loadCanvasPresets()])
+  await Promise.all([
+    loadHdri(),
+    loadMc(),
+    loadOfficial(),
+    loadProjects(),
+    loadTexPacks(),
+    loadModelAssets(),
+    loadCanvasPresets()
+  ])
   rebuild()
 }
 
 function sigEntries() {
   let s = 0
-  for (const e of state.leftEntries || []) s += (e.mtime || 0)
-  for (const e of state.rightEntries || []) s += (e.mtime || 0)
+  for (const e of state.leftEntries || []) s += e.mtime || 0
+  for (const e of state.rightEntries || []) s += e.mtime || 0
   return (state.leftEntries?.length || 0) + ':' + (state.rightEntries?.length || 0) + ':' + s
 }
 
@@ -1872,7 +2665,10 @@ function startPoll() {
   if (pollTimer) return
   pollTimer = setInterval(() => {
     const sig = sigEntries()
-    if (sig !== lastTexSig) { lastTexSig = sig; rebuild() }
+    if (sig !== lastTexSig) {
+      lastTexSig = sig
+      rebuild()
+    }
   }, 1500)
 }
 
@@ -1881,57 +2677,154 @@ function buildToolbar() {
   if (!bar) return
   bar.innerHTML = ''
 
-  const cats = [['all', t('asset.catAll')], ['project', t('asset.catProject')], ['tex', t('asset.catTex')], ['model', t('asset.catModel')], ['hdri', t('asset.catHdri')], ['mc', t('asset.catMc')], ['official', t('asset.catOfficial')], ['preset', t('asset.catPreset')], ['fav', t('asset.catFav')], ['recent', t('asset.catRecent')]]
-  const catGroup = el('div', 'asset-lib-tags')
-  for (const [v, label] of cats) {
-    const btn = el('button', 'asset-lib-tag' + (categoryFilter === v ? ' active' : ''), label)
+  const quickCats = [
+    ['fav', 'i-star', t('asset.catFav')],
+    ['recent', 'i-clock', t('asset.catRecent')]
+  ]
+  const fullCats = [
+    ['all', 'i-folder', t('asset.catAll')],
+    ['project', 'i-layers', t('asset.catProject')],
+    ['preset', 'i-sliders', t('asset.catPreset')],
+    ['tex', 'i-image', t('asset.catTex')],
+    ['model', 'i-cube', t('asset.catModel')],
+    ['hdri', 'i-palette', t('asset.catHdri')],
+    ['mc', 'i-box', t('asset.catMc')],
+    ['official', 'i-box', t('asset.catOfficial')]
+  ]
+  const catLabel = v => [...quickCats, ...fullCats].find(c => c[0] === v)?.[2] || v
+
+  const sortLabel = v => sortOptions.find(s => s[0] === v)?.[2] || v
+  const sortOptions = [
+    ['name', 'i-arrow-down', t('asset.sortName')],
+    ['mtime', 'i-clock', t('asset.sortMtime')],
+
+    ['fav', 'i-star', t('asset.sortFav')]
+  ]
+
+  const quickGroup = el('div', 'asset-lib-tags')
+  for (const [v, icon, label] of quickCats) {
+    const btn = el('button', 'asset-lib-tag icon-only' + (categoryFilter === v ? ' active' : ''))
+    btn.innerHTML = `<svg class="ico ico-sm"><use href="#${icon}"/></svg>`
+    btn.title = label
     btn.dataset.cat = v
     btn.addEventListener('click', () => {
       categoryFilter = v
-      catGroup.querySelectorAll('.asset-lib-tag').forEach(b => b.classList.toggle('active', b.dataset.cat === v))
+      syncFilterChip()
       rebuild()
     })
-    catGroup.appendChild(btn)
+    quickGroup.appendChild(btn)
   }
-  bar.appendChild(catGroup)
+  bar.appendChild(quickGroup)
 
-  const right = el('div', 'asset-lib-toolbar-right')
-  /* 方块/物品切换：与分类标签正交，单选 toggle（再次点击取消） */
-  const kindGroup = el('div', 'asset-lib-tags asset-lib-kind')
-  for (const [v, label] of [['block', t('asset.kindBlock')], ['item', t('asset.kindItem')]]) {
-    const btn = el('button', 'asset-lib-tag' + (contentKindFilter === v ? ' active' : ''), label)
+  const filterChip = el(
+    'button',
+    'asset-lib-chip' + (categoryFilter !== 'all' || contentKindFilter !== 'all' ? ' active' : '')
+  )
+  filterChip.innerHTML = `<svg class="ico ico-sm"><use href="#i-filter"/></svg><span class="chip-label">${catLabel(categoryFilter)}</span><svg class="ico ico-sm chip-caret"><use href="#i-chevron-down"/></svg>`
+  filterChip.title = t('asset.filterTitle')
+  filterChip.setAttribute('aria-haspopup', 'true')
+  filterChip.setAttribute('aria-expanded', 'false')
+
+  const popover = el('div', 'asset-lib-popover')
+  popover.setAttribute('role', 'menu')
+  const popCats = el('div', 'asset-lib-pop-cats')
+  for (const [v, icon, label] of fullCats) {
+    const btn = el('button', 'asset-lib-pop-tag' + (categoryFilter === v ? ' active' : ''))
+    btn.innerHTML = `<svg class="ico ico-sm"><use href="#${icon}"/></svg><span>${label}</span>`
+    btn.dataset.cat = v
+    btn.addEventListener('click', () => {
+      categoryFilter = v
+      popCats.querySelectorAll('.asset-lib-pop-tag').forEach(b => b.classList.toggle('active', b.dataset.cat === v))
+      syncFilterChip()
+      rebuild()
+    })
+    popCats.appendChild(btn)
+  }
+  popover.appendChild(popCats)
+
+  popover.appendChild(el('div', 'asset-lib-pop-sep'))
+
+  const kindGroup = el('div', 'asset-lib-pop-kind')
+  for (const [v, icon, label] of [
+    ['block', 'i-box', t('asset.kindBlock')],
+    ['item', 'i-cube', t('asset.kindItem')]
+  ]) {
+    const btn = el('button', 'asset-lib-pop-tag' + (contentKindFilter === v ? ' active' : ''))
+    btn.innerHTML = `<svg class="ico ico-sm"><use href="#${icon}"/></svg><span>${label}</span>`
     btn.dataset.kind = v
     btn.title = t('asset.kindFilterTitle')
     btn.addEventListener('click', () => {
       contentKindFilter = contentKindFilter === v ? 'all' : v
-      kindGroup.querySelectorAll('.asset-lib-tag').forEach(b => b.classList.toggle('active', b.dataset.kind === contentKindFilter))
+      kindGroup
+        .querySelectorAll('.asset-lib-pop-tag')
+        .forEach(b => b.classList.toggle('active', b.dataset.kind === contentKindFilter))
+      syncFilterChip()
       applyFilter()
     })
     kindGroup.appendChild(btn)
   }
-  right.appendChild(kindGroup)
-  const sort = el('select', 'asset-lib-sel')
-  for (const [v, label] of [['name', t('asset.sortName')], ['mtime', t('asset.sortMtime')]]) {
-    const o = el('option'); o.value = v; o.textContent = label; sort.appendChild(o)
+  popover.appendChild(kindGroup)
+
+  popover.appendChild(el('div', 'asset-lib-pop-sep'))
+
+  const sortGroup = el('div', 'asset-lib-pop-sort')
+  const sortTags = el('div', 'asset-lib-pop-sort-tags')
+  for (const [v, icon, label] of sortOptions) {
+    const btn = el('button', 'asset-lib-pop-tag' + (sortKey === v ? ' active' : ''))
+    btn.innerHTML = `<svg class="ico ico-sm"><use href="#${icon}"/></svg><span>${label}</span>`
+    btn.dataset.sort = v
+    btn.addEventListener('click', () => {
+      sortKey = v
+      sortTags.querySelectorAll('.asset-lib-pop-tag').forEach(b => b.classList.toggle('active', b.dataset.sort === v))
+      syncFilterChip()
+      rebuild()
+    })
+    sortTags.appendChild(btn)
   }
-  sort.value = sortKey
-  sort.addEventListener('change', () => { sortKey = sort.value; rebuild() })
-  const sortWrap = el('div', 'asset-lib-sel-wrap')
-  sortWrap.appendChild(sort)
-  right.appendChild(sortWrap)
-
-  const btnGroup = el('div', 'asset-lib-btn-group')
-
-  const dirBtn = el('button', 'asset-lib-btn' + (sortDir === 'desc' ? ' desc' : ''))
+  sortGroup.appendChild(sortTags)
+  const dirBtn = el('button', 'asset-lib-pop-dir' + (sortDir === 'desc' ? ' desc' : ''))
   dirBtn.title = t('asset.sortDirTitle')
   dirBtn.innerHTML = '<svg class="ico ico-sm"><use href="#i-arrow-up"/></svg>'
   dirBtn.addEventListener('click', () => {
     sortDir = sortDir === 'asc' ? 'desc' : 'asc'
     dirBtn.classList.toggle('desc', sortDir === 'desc')
+    syncFilterChip()
     rebuild()
   })
-  btnGroup.appendChild(dirBtn)
+  sortGroup.appendChild(dirBtn)
+  popover.appendChild(sortGroup)
 
+  const chipWrap = el('div', 'asset-lib-chip-wrap')
+  chipWrap.appendChild(filterChip)
+  chipWrap.appendChild(popover)
+  bar.appendChild(chipWrap)
+
+  const togglePopover = open => {
+    const isOpen = open === undefined ? !popover.classList.contains('open') : open
+    popover.classList.toggle('open', isOpen)
+    filterChip.classList.toggle('open', isOpen)
+    filterChip.setAttribute('aria-expanded', String(isOpen))
+    if (isOpen) {
+      requestAnimationFrame(() => document.addEventListener('mousedown', onOutside, { once: true }))
+    }
+  }
+  const onOutside = e => {
+    if (!chipWrap.contains(e.target)) togglePopover(false)
+  }
+  filterChip.addEventListener('click', e => {
+    e.stopPropagation()
+    togglePopover()
+  })
+
+  function syncFilterChip() {
+    const lbl = filterChip.querySelector('.chip-label')
+    if (lbl) lbl.textContent = catLabel(categoryFilter)
+    const hasActive = categoryFilter !== 'all' || contentKindFilter !== 'all' || sortKey !== 'name' || sortDir !== 'asc'
+    filterChip.classList.toggle('active', hasActive)
+  }
+
+  const right = el('div', 'asset-lib-toolbar-right')
+  const btnGroup = el('div', 'asset-lib-btn-group')
   const viewBtn = el('button', 'asset-lib-btn')
   viewBtn.title = t('asset.viewToggleTitle')
   viewBtn.innerHTML = '<svg class="ico ico-sm"><use href="#i-' + (viewMode === 'grid' ? 'grid' : 'list') + '"/></svg>'
@@ -1941,13 +2834,10 @@ function buildToolbar() {
     rebuild()
   })
   btnGroup.appendChild(viewBtn)
+  btnGroup.appendChild(el('span', 'asset-lib-stat', ''))
   right.appendChild(btnGroup)
 
-  right.appendChild(el('div', 'asset-lib-stat', ''))
   bar.appendChild(right)
-  requestAnimationFrame(() => {
-    catGroup.classList.toggle('has-overflow', catGroup.scrollWidth > catGroup.clientWidth + 1)
-  })
 }
 
 function detailRow(label, value) {
@@ -1964,9 +2854,12 @@ function modelMetaRows(j) {
   if (!j || typeof j !== 'object') return []
   const rows = []
   if (typeof j.parent === 'string' && j.parent) rows.push([t('asset.detailModelParent'), j.parent])
-  const texRefs = (j.textures && typeof j.textures === 'object') ? Object.entries(j.textures) : []
+  const texRefs = j.textures && typeof j.textures === 'object' ? Object.entries(j.textures) : []
   if (texRefs.length) {
-    const shown = texRefs.slice(0, 8).map(([k, v]) => k + ': ' + v).join(' · ')
+    const shown = texRefs
+      .slice(0, 8)
+      .map(([k, v]) => k + ': ' + v)
+      .join(' · ')
     rows.push([t('asset.detailModelTexRefs'), shown + (texRefs.length > 8 ? ' …' : '')])
   }
   if (Array.isArray(j.elements)) rows.push([t('asset.detailModelElements'), String(j.elements.length)])
@@ -2008,21 +2901,35 @@ function openDetail(item) {
 
 async function showModelDetail(item) {
   if (!Array.isArray(item._metaRows)) {
-    try { item._metaRows = await fetchModelMetaRows(item) }
-    catch { item._metaRows = [] }
+    try {
+      item._metaRows = await fetchModelMetaRows(item)
+    } catch {
+      item._metaRows = []
+    }
   }
   showDetail(item, item._metaRows)
   /* 详情大图：懒加载 3D 缩略图，就绪后刷新详情面板（stage 直接显示渲染结果） */
   if (item.modelThumb && !item.thumb) {
     ensureModelThumb(item)
-      .then(url => { if (url && detailCurrent === item) showDetail(item, item._metaRows) })
+      .then(url => {
+        if (url && detailCurrent === item) showDetail(item, item._metaRows)
+      })
       .catch(() => {})
   }
 }
 
 function showDetail(item, extraMetaRows) {
   // 原「资产详情」抽屉窗口已移除：详情在「节点预览」浮动窗中展示
-  const typeKeys = { tex: 'asset.typeTex', model: 'asset.typeModel', hdri: 'asset.typeHdri', mc: 'asset.typeMc', official: 'asset.typeOfficial', preset: 'asset.typePreset', project: 'asset.typeProject', craft: 'asset.catCraft' }
+  const typeKeys = {
+    tex: 'asset.typeTex',
+    model: 'asset.typeModel',
+    hdri: 'asset.typeHdri',
+    mc: 'asset.typeMc',
+    official: 'asset.typeOfficial',
+    preset: 'asset.typePreset',
+    project: 'asset.typeProject',
+    craft: 'asset.catCraft'
+  }
   const virtual = isVirtualAssetPath(item)
   const locatePath = resolveLocatePath(item)
   const payload = {
@@ -2030,7 +2937,7 @@ function showDetail(item, extraMetaRows) {
     name: item.name,
     type: item.type,
     typeLabel: t(typeKeys[item.type] || item.type),
-    roleLabel: item.role ? roleText(item.role) : (item.badge || null),
+    roleLabel: item.role ? roleText(item.role) : item.badge || null,
     color: item.color || null,
     color2: item.color ? shade(item.color, -30) : null,
     thumb: item.thumb || null,
@@ -2039,23 +2946,31 @@ function showDetail(item, extraMetaRows) {
     textureCount: item.textureCount ?? null,
     mtimeLabel: item.mtime ? formatDate(item.mtime) : '—',
     fav: isFav(item),
-    onAdd: () => { pushRecent(item); item.onAdd() },
-    onFav: () => { toggleFav(item) },
+    onAdd: () => {
+      pushRecent(item)
+      item.onAdd()
+    },
+    onFav: () => {
+      toggleFav(item)
+    },
     /* 定位：优先 craftPath/locatePath，虚拟路径经包列表解析回退 */
     onLocate: locatePath ? () => window.api.showInFolder(locatePath) : null,
     onCopyPath: locatePath ? () => copyText(locatePath) : null,
     onCopyName: () => copyText(item.name),
-    fetchInfo: (item.path && item.type !== 'preset' && !virtual)
-      ? (cb) => {
-          assetApiCall('GET', '/api/asset/info?path=' + encodeURIComponent(item.path))
-            .then(info => {
-              cb(info && info.exists
-                ? { sizeLabel: formatSize(info.size), mtimeLabel: info.mtime ? formatDate(info.mtime) : null }
-                : { exists: false })
-            })
-            .catch(() => cb(null))
-        }
-      : null,
+    fetchInfo:
+      item.path && item.type !== 'preset' && !virtual
+        ? cb => {
+            assetApiCall('GET', '/api/asset/info?path=' + encodeURIComponent(item.path))
+              .then(info => {
+                cb(
+                  info && info.exists
+                    ? { sizeLabel: formatSize(info.size), mtimeLabel: info.mtime ? formatDate(info.mtime) : null }
+                    : { exists: false }
+                )
+              })
+              .catch(() => cb(null))
+          }
+        : null
   }
   if (Array.isArray(extraMetaRows) && extraMetaRows.length) {
     payload.metaRows = extraMetaRows
@@ -2069,11 +2984,11 @@ function showDetail(item, extraMetaRows) {
     payload.metaRows = [
       [t('asset.detailMcVersion'), p.formatRange || (p.format != null ? 'pack_format ' + p.format : '—')],
       [t('asset.detailPackFormat'), p.formatLabel || (p.format != null ? String(p.format) : '—')],
-      [t('asset.detailPackKind'), p.kind === 'zip' ? 'ZIP' : (p.kind === 'dir' ? t('asset.officialKindDir') : '—')],
+      [t('asset.detailPackKind'), p.kind === 'zip' ? 'ZIP' : p.kind === 'dir' ? t('asset.officialKindDir') : '—'],
       [t('asset.detailDescription'), p.description || '—'],
-      (p.namespaces && p.namespaces.length) ? [t('asset.detailNamespaces'), p.namespaces.join(', ')] : null,
+      p.namespaces && p.namespaces.length ? [t('asset.detailNamespaces'), p.namespaces.join(', ')] : null,
       [t('asset.detailPackTexCount'), String(p.textureCount ?? 0)],
-      p.valid ? null : [t('asset.detailAnalyze'), p.error || '—'],
+      p.valid ? null : [t('asset.detailAnalyze'), p.error || '—']
     ].filter(Boolean)
     if (item.type === 'official') payload.onRename = () => renameOfficialAsset(item, false)
     const texApi = packApiFor(item.type)
@@ -2086,7 +3001,9 @@ function showDetail(item, extraMetaRows) {
       assetApiCall('GET', texApi + '/' + encodeURIComponent(p.name) + '/textures' + (qs ? '?' + qs : ''))
         .then(d => {
           const files = (d && d.files) || []
-          files.forEach(f => { f.rawUrl = packRawUrl(texApi, p.name, f.path) })
+          files.forEach(f => {
+            f.rawUrl = packRawUrl(texApi, p.name, f.path)
+          })
           cb({
             dir: (d && d.dir) || null,
             parent: (d && d.parent) || null,
@@ -2096,12 +3013,15 @@ function showDetail(item, extraMetaRows) {
             files,
             filesTotal: (d && d.filesTotal) || 0,
             total: (d && d.total) || 0,
-            offset: (d && d.offset) || 0,
+            offset: (d && d.offset) || 0
           })
         })
         .catch(e => cb({ error: e.message }))
     }
-    payload.onTextureAdd = (tex) => { pushRecent(item); addPackTextureToCanvas(item, p, tex) }
+    payload.onTextureAdd = tex => {
+      pushRecent(item)
+      addPackTextureToCanvas(item, p, tex)
+    }
   }
   document.dispatchEvent(new CustomEvent('nodepreview:show-asset', { detail: payload }))
   detailCurrent = item
@@ -2122,24 +3042,42 @@ export function initAssetLibrary() {
   if (_initialized) return
   _initialized = true
   const search = document.getElementById('assetLibSearch')
-  if (search) search.addEventListener('input', () => { searchTerm = search.value; applyFilter() })
+  if (search)
+    search.addEventListener('input', () => {
+      searchTerm = search.value
+      applyFilter()
+    })
   buildToolbar()
   const refreshBtn = document.getElementById('assetLibRefresh')
-  if (refreshBtn) refreshBtn.addEventListener('click', () => { if (browse) renderBrowse(); else refreshAssetLibrary() })
-  document.addEventListener('custom-model:created', () => { refreshAssetLibrary() })
+  if (refreshBtn)
+    refreshBtn.addEventListener('click', () => {
+      if (browse) renderBrowse()
+      else refreshAssetLibrary()
+    })
+  document.addEventListener('custom-model:created', () => {
+    refreshAssetLibrary()
+  })
   document.addEventListener('click', hideCtxMenu)
-  document.addEventListener('contextmenu', (e) => { if (!e.target.closest('.asset-card')) hideCtxMenu() })
-  document.addEventListener('keydown', (e) => {
+  document.addEventListener('contextmenu', e => {
+    if (!e.target.closest('.asset-card')) hideCtxMenu()
+  })
+  document.addEventListener('keydown', e => {
     if (!browse || e.key !== 'Backspace') return
     const ae = document.activeElement
-    if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT' || ae.isContentEditable)) return
+    if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT' || ae.isContentEditable))
+      return
     e.preventDefault()
     browseUp()
   })
-  document.addEventListener('nodeproject:saved', () => { refreshProjectsQuiet() })
+  document.addEventListener('nodeproject:saved', () => {
+    refreshProjectsQuiet()
+  })
   onLocaleChange(() => {
     buildToolbar()
-    if (browse) { renderBrowse(); return }
+    if (browse) {
+      renderBrowse()
+      return
+    }
     rebuild()
     if (detailCurrent) openDetail(detailCurrent)
   })

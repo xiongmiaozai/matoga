@@ -104,7 +104,7 @@ body.node-mode #nodeView{ display:flex; }
   cursor:pointer; font-size:13px; border-radius:var(--r-xs);
   transition:all .12s var(--ease);
 }
-.nc-toolbar .zoom-pill button:hover{ color:var(--primary); background:rgba(124,189,86,.1) }
+.nc-toolbar .zoom-pill button:hover{ color:var(--primary); background:var(--primary-soft) }
 .nc-toolbar .zoom-pill span{ min-width:36px; text-align:center; font-variant-numeric:tabular-nums }
 
 /* ── 当前项目指示器 ── */
@@ -499,7 +499,7 @@ body.node-mode #nodeView{ display:flex; }
 .port.incompat{ opacity:.25; filter:grayscale(.7) }
 .sel-box{
   position:absolute; border:1px solid var(--primary); border-radius:var(--r-xs);
-  background:rgba(124,189,86,.1); pointer-events:none; z-index:9999;
+  background:var(--primary-soft); pointer-events:none; z-index:9999;
   box-shadow:0 0 0 1px rgba(124,189,86,.3);
 }
 .port-label{
@@ -762,7 +762,7 @@ body.node-mode #nodeView{ display:flex; }
 }
 .import-card:hover{ border-color:var(--primary); transform:translateY(-1px) }
 .import-card.selected{
-  border-color:var(--primary); background:rgba(124,189,86,.1);
+  border-color:var(--primary); background:var(--primary-soft);
   box-shadow:0 0 0 1px var(--primary), var(--shadow-sm);
 }
 .import-card .thumb{
@@ -828,19 +828,36 @@ body.node-mode #nodeView{ display:flex; }
 /* ════════════════════════════════════════════════════════════
    资产库列表
    ════════════════════════════════════════════════════════════ */
+.asset-lib-topbar{
+  display:flex; align-items:center; gap:6px; padding:5px 8px;
+  border-bottom:1px solid var(--border-soft);
+}
+.asset-lib-search{
+  display:flex; align-items:center; gap:6px; flex:1; min-width:0;
+}
+.asset-lib-search .ico{ color:var(--text-muted); flex:none }
+.asset-lib-search input{
+  flex:1; min-width:0; padding:4px 8px;
+  border:1px solid var(--border-soft); border-radius:var(--r-sm);
+  background:var(--panel-2); color:var(--text); font-size:12px; outline:none;
+  transition:border-color .15s var(--ease);
+}
+.asset-lib-search input:focus-visible{ border-color:var(--primary) }
+.asset-lib-search input::placeholder{ color:var(--text-dim) }
 .asset-lib-list{ flex:1; overflow-y:auto; padding:4px 0 }
 .asset-lib-section{ margin-bottom:4px }
 .asset-lib-section-head{
-  display:flex; align-items:center; gap:6px; padding:9px 12px 5px;
-  font-size:10px; text-transform:uppercase; letter-spacing:1.2px;
-  color:var(--text-dim); font-weight:600; cursor:pointer; user-select:none;
+  display:flex; align-items:center; gap:6px; padding:10px 12px 6px;
+  font-size:12px;
+  color:var(--text-muted); font-weight:600; cursor:pointer; user-select:none;
 }
 .asset-lib-section-head .caret{ transition:transform .2s var(--ease-out); display:inline-block }
+.asset-lib-section-head:focus-visible{ outline:2px solid var(--primary); outline-offset:-1px }
 .asset-lib-section.collapsed:not(.search-open) .caret{ transform:rotate(-90deg) }
 .asset-lib-section.collapsed:not(.search-open) .asset-lib-grid{ display:none }
 .asset-lib-section.collapsed:not(.search-open) .asset-lib-sec-actions{ display:none }
 .asset-lib-section-head .cnt{
-  font-size:10px; color:var(--text-dim); background:rgba(0,0,0,.3);
+  font-size:10px; color:var(--text-dim); background:var(--panel-3);
   padding:1px 7px; border:1px solid var(--border-soft); border-radius:10px; margin-left:auto;
 }
 .asset-lib-section-btn{
@@ -854,36 +871,43 @@ body.node-mode #nodeView{ display:flex; }
 .asset-lib-section-btn:hover{ border-color:var(--primary); color:var(--primary); }
 .asset-lib-section-btn .ico{ width:12px; height:12px; }
 .asset-lib-grid{
-  display:grid; grid-template-columns:repeat(auto-fill,minmax(72px,1fr));
-  gap:6px; padding:4px 10px 10px;
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(80px,1fr));
+  gap:6px; padding:4px 8px 8px;
 }
 .asset-card{
-  background:rgba(0,0,0,.25); border:1px solid var(--border-soft); border-radius:var(--r-sm);
+  background:var(--panel-2); border:1px solid var(--border-soft); border-radius:var(--r-sm);
   padding:4px; cursor:grab; transition:all .15s var(--ease);
   display:flex; flex-direction:column; gap:3px; overflow:hidden;
+  backdrop-filter:blur(8px);
 }
-.asset-card:hover{ border-color:var(--primary); box-shadow:0 0 0 1px var(--primary), var(--shadow-xs); transform:translateY(-1px) }
+.asset-card:hover{ border-color:var(--primary); box-shadow:0 0 0 1px var(--primary), var(--shadow-xs); transform:translateY(-2px) }
+.asset-card:focus-visible{ outline:2px solid var(--primary); outline-offset:1px }
 .asset-card:active{ cursor:grabbing }
 .asset-card.dragging{ opacity:.5 }
 .asset-card.is-hidden{ display:none }
 .asset-lib-group.is-hidden,.asset-lib-section.is-hidden,.asset-lib-empty.is-hidden{ display:none }
 .asset-card .ac-thumb{
-  width:100%; aspect-ratio:1; background:rgba(0,0,0,.3); border-radius:var(--r-xs);
+  width:100%; aspect-ratio:1; background:var(--panel-3); border-radius:var(--r-sm);
   display:flex; align-items:center; justify-content:center; overflow:hidden;
   image-rendering:pixelated;
 }
 .asset-card .ac-thumb img{ width:100%; height:100%; object-fit:cover; display:block }
 /* 模型 3D 离屏渲染缩略图：抗锯齿插值（区别于像素风贴图缩略图） */
 .asset-card .ac-thumb.ac-thumb-3d img{ image-rendering:auto }
-.asset-card .ac-icon{ color:var(--text-muted); width:22px; height:22px }
+.asset-card .ac-icon{ color:var(--text-muted); width:26px; height:26px }
 .asset-card .ac-name{
-  font-size:9px; color:var(--text-muted); white-space:nowrap;
-  overflow:hidden; text-overflow:ellipsis; line-height:1.3;
+  font-size:10px; color:var(--text); white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis; line-height:1.3; font-weight:500;
 }
-.asset-card .ac-role{ font-size:8px; padding:0 4px; border-radius:2px; font-weight:600; align-self:flex-start }
+.asset-card .ac-role{ font-size:9px; padding:0 4px; border-radius:2px; font-weight:600; align-self:flex-start; line-height:1.4; opacity:0; transition:opacity .15s var(--ease) }
+.asset-card:hover .ac-role{ opacity:1 }
 .asset-card .ac-role.main{ background:rgba(124,189,86,.18); color:var(--primary) }
 .asset-card .ac-role.normal{ background:rgba(91,206,250,.18); color:var(--accent) }
 .asset-card .ac-role.specular{ background:#3a2a1a; color:var(--warn) }
+.asset-card .ac-role.height{ background:rgba(168,85,247,.16); color:#c084fc }
+.asset-card .ac-role.emissive{ background:rgba(245,158,11,.16); color:var(--warn) }
+.asset-card .ac-role.ao{ background:rgba(107,114,128,.18); color:var(--text-muted) }
+.asset-card .ac-role.opacity{ background:rgba(59,130,246,.16); color:var(--primary) }
 .asset-card .ac-role.preset{ background:rgba(91,206,250,.18); color:var(--accent) }
 .asset-card .ac-role.project{ background:#2b2f4a; color:#8fa8ff }
 .asset-card .ac-role.model{ background:#2a2a4d; color:#a892ff }
@@ -891,7 +915,7 @@ body.node-mode #nodeView{ display:flex; }
 .asset-lib-sec-actions{ display:flex; gap:6px; padding:0 10px 6px }
 .asset-lib-sec-btn{
   font-size:10px; padding:3px 9px; border-radius:var(--r-xs); cursor:pointer;
-  border:1px solid var(--border); background:rgba(0,0,0,.2); color:var(--text-muted);
+  border:1px solid var(--border); background:var(--panel-2); color:var(--text-muted);
   transition:all .15s var(--ease);
 }
 .asset-lib-sec-btn:hover{ border-color:var(--primary); color:var(--primary) }
@@ -904,30 +928,31 @@ body.node-mode #nodeView{ display:flex; }
 .craft-pack-list-title{ font-size:10px; font-weight:600; color:var(--text-dim) }
 .craft-pack-row{
   display:flex; align-items:center; gap:8px; padding:4px 8px;
-  border:1px solid var(--border-soft); border-radius:var(--r-sm); background:rgba(0,0,0,.2);
+  border:1px solid var(--border-soft); border-radius:var(--r-sm); background:var(--panel-2);
   font-size:11px;
 }
 .craft-pack-name{ font-weight:600; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 .craft-pack-meta{ font-size:10px; color:var(--text-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-left:auto }
 .craft-pack-row .asset-lib-sec-btn{ flex:none }
 /* 当前制作项目行（持续累积，非导出快照）：以主色描边与导出快照区分 */
-.craft-current-row{ border-color:var(--accent, #4f8cff); background:rgba(79,140,255,.08) }
+.craft-current-row{ border-color:var(--accent); background:var(--accent-soft) }
 
 /* 资产库贴图子分组 */
 .asset-lib-groups{ display:flex; flex-direction:column; gap:4px; padding:2px 10px 8px }
 .asset-lib-groups .asset-lib-hint{ grid-column:auto }
-.asset-lib-group{ border:1px solid var(--border-soft); border-radius:var(--r-sm); background:rgba(0,0,0,.2); overflow:hidden }
+.asset-lib-group{ border:1px solid var(--border-soft); border-radius:var(--r-sm); background:var(--panel-2); overflow:hidden }
 .asset-lib-group-head{
   display:flex; align-items:center; gap:6px; padding:5px 9px;
   font-size:10px; color:var(--text-dim); font-weight:600; cursor:pointer; user-select:none;
 }
 .asset-lib-group-head:hover{ color:var(--text) }
+.asset-lib-group-head:focus-visible{ outline:2px solid var(--primary); outline-offset:-1px }
 .asset-lib-group-head .caret{ transition:transform .2s var(--ease-out); display:inline-block }
 .asset-lib-group.collapsed:not(.search-open) .caret{ transform:rotate(-90deg) }
 .asset-lib-group.collapsed:not(.search-open) .asset-lib-grid{ display:none }
 .asset-lib-group-head .gl{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 .asset-lib-group-head .cnt{
-  font-size:10px; color:var(--text-dim); background:rgba(0,0,0,.3);
+  font-size:10px; color:var(--text-dim); background:var(--panel-3);
   padding:1px 7px; border:1px solid var(--border-soft); border-radius:10px; margin-left:auto; flex:none;
 }
 /* 分组头「打开本地位置」按钮（导入模型 / 自定义模型专属目录） */
@@ -941,7 +966,7 @@ body.node-mode #nodeView{ display:flex; }
 .asset-lib-group .asset-lib-grid{ padding:6px }
 .asset-lib-more{
   grid-column:1/-1; font-size:10px; padding:4px 9px; border-radius:var(--r-xs); cursor:pointer;
-  border:1px dashed var(--border-soft); background:rgba(0,0,0,.2); color:var(--text-muted);
+  border:1px dashed var(--border-soft); background:var(--panel-2); color:var(--text-muted);
   transition:all .15s var(--ease);
 }
 .asset-lib-more:hover{ border-color:var(--primary); color:var(--primary) }
@@ -949,51 +974,83 @@ body.node-mode #nodeView{ display:flex; }
 
 /* 资产库工具栏 */
 .asset-lib-toolbar{
-  display:flex; flex-direction:column; gap:7px;
-  padding:9px 10px 10px; border-bottom:1px solid var(--border-soft); flex:none;
+  display:flex; align-items:center; gap:6px; flex:none;
 }
 .asset-lib-tags{
-  display:flex; align-items:center; flex:1; min-width:0;
-  background:rgba(0,0,0,.2); border:1px solid var(--border-soft);
-  border-radius:var(--r-sm); padding:2px;
-  overflow-x:auto; scrollbar-width:none;
+  display:flex; align-items:center; gap:2px; flex:none;
 }
 .asset-lib-tags.has-overflow{
   -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 12px,#000 calc(100% - 12px),transparent 100%);
   mask-image:linear-gradient(90deg,transparent 0,#000 12px,#000 calc(100% - 12px),transparent 100%);
 }
 .asset-lib-tags::-webkit-scrollbar{ display:none }
-/* 方块/物品切换按钮组（工具栏右侧行，不参与分类标签行的横向滚动） */
-.asset-lib-kind{ flex:none; }
 .asset-lib-tag{
-  height:22px; padding:0 10px; background:transparent; border:none;
-  border-radius:var(--r-xs); color:var(--text-muted); font-size:11px; font-weight:500;
+  display:inline-flex; align-items:center; gap:3px;
+  height:24px; padding:0 8px; background:transparent; border:none;
+  border-radius:var(--r-sm); color:var(--text-muted); font-size:11px; font-weight:500;
   cursor:pointer; white-space:nowrap; flex:none; line-height:1;
   transition:background .15s var(--ease), color .15s var(--ease), box-shadow .15s var(--ease);
 }
-.asset-lib-tag:hover{ color:var(--primary); background:rgba(124,189,86,.1) }
+.asset-lib-tag .ico{ width:12px; height:12px; flex:none }
+.asset-lib-tag.icon-only{ padding:0; width:24px; justify-content:center }
+.asset-lib-tag.icon-only .ico{ width:13px; height:13px }
+.asset-lib-tag-sep{ width:1px; height:18px; background:var(--border-soft); flex:none; margin:0 2px }
+.asset-lib-tag:hover{ color:var(--primary); background:var(--primary-soft) }
 .asset-lib-tag.active{
-  background:var(--primary); color:#fff; box-shadow:0 1px 3px rgba(124,189,86,.35);
+  background:var(--primary); color:#fff; box-shadow:0 1px 3px var(--primary-glow);
 }
-.asset-lib-toolbar-right{ display:flex; align-items:center; gap:6px; flex:none }
-.asset-lib-sel-wrap{ position:relative; flex:none; display:flex }
-.asset-lib-sel-wrap::after{
-  content:""; position:absolute; right:9px; top:50%; width:5px; height:5px;
-  border-right:1.5px solid var(--text-muted); border-bottom:1.5px solid var(--text-muted);
-  transform:translateY(-70%) rotate(45deg); pointer-events:none;
-  transition:border-color .15s var(--ease);
+.asset-lib-chip-wrap{ position:relative; flex:none; display:flex; align-items:center }
+.asset-lib-chip{
+  display:inline-flex; align-items:center; gap:4px;
+  height:26px; padding:0 6px 0 8px; background:var(--panel-2);
+  border:1px solid var(--border-soft); border-radius:var(--r-sm);
+  color:var(--text); font-size:11px; font-weight:500; cursor:pointer; white-space:nowrap; flex:none; line-height:1;
+  transition:border-color .15s var(--ease), color .15s var(--ease), background .15s var(--ease);
 }
-.asset-lib-sel-wrap:hover::after{ border-color:var(--primary) }
-.asset-lib-sel{
-  height:26px; padding:0 24px 0 9px; appearance:none; -webkit-appearance:none;
-  background:rgba(0,0,0,.2); border:1px solid var(--border-soft);
-  border-radius:var(--r-sm); color:var(--text); font-size:11px; outline:none; flex:none;
-  cursor:pointer; transition:border-color .15s var(--ease), color .15s var(--ease);
+.asset-lib-chip .ico{ width:12px; height:12px; flex:none }
+.asset-lib-chip .chip-caret{ transition:transform .18s var(--ease); opacity:.6 }
+.asset-lib-chip:hover{ border-color:var(--primary); color:var(--primary) }
+.asset-lib-chip.active{ border-color:var(--primary); color:var(--primary) }
+.asset-lib-chip.open .chip-caret{ transform:rotate(180deg) }
+.asset-lib-popover{
+  position:absolute; top:calc(100% + 4px); left:0; z-index:50;
+  min-width:180px; padding:6px; background:var(--panel-3);
+  border:1px solid var(--border); border-radius:var(--r-md);
+  box-shadow:0 8px 24px rgba(0,0,0,.4); display:none;
 }
-.asset-lib-sel:hover, .asset-lib-sel:focus-visible{ border-color:var(--primary); color:var(--primary) }
+.asset-lib-popover.open{ display:block }
+.asset-lib-pop-cats{ display:grid; grid-template-columns:1fr 1fr; gap:2px }
+.asset-lib-pop-sep{ height:1px; background:var(--border-soft); margin:5px 0 }
+.asset-lib-pop-kind{ display:flex; gap:4px }
+.asset-lib-pop-sort{ display:flex; align-items:center; gap:4px }
+.asset-lib-pop-sort-tags{ display:flex; flex-wrap:wrap; gap:4px; flex:1 }
+.asset-lib-pop-dir{
+  height:26px; width:26px; padding:0; background:transparent;
+  border:1px solid var(--border-soft); border-radius:var(--r-sm);
+  color:var(--text-muted); cursor:pointer; flex:none;
+  display:flex; align-items:center; justify-content:center;
+  transition:color .15s var(--ease), background .15s var(--ease);
+}
+.asset-lib-pop-dir:hover{ color:var(--primary); background:var(--primary-soft) }
+.asset-lib-pop-dir .ico{ transition:transform .22s var(--ease) }
+.asset-lib-pop-dir.desc .ico{ transform:rotate(180deg) }
+.asset-lib-pop-tag{
+  display:inline-flex; align-items:center; gap:5px;
+  height:26px; padding:0 8px; background:transparent; border:1px solid transparent;
+  border-radius:var(--r-sm); color:var(--text-muted); font-size:11px; font-weight:500;
+  cursor:pointer; white-space:nowrap; line-height:1; justify-content:flex-start;
+  transition:background .15s var(--ease), color .15s var(--ease), border-color .15s var(--ease);
+}
+.asset-lib-pop-tag .ico{ width:13px; height:13px; flex:none }
+.asset-lib-pop-tag:hover{ color:var(--primary); background:var(--primary-soft) }
+.asset-lib-pop-tag.active{
+  background:var(--primary); color:#fff; border-color:var(--primary);
+}
+.asset-lib-toolbar-right{ display:flex; align-items:center; gap:6px; flex:none; margin-left:auto }
+
 .asset-lib-btn-group{
   display:flex; align-items:center; flex:none;
-  background:rgba(0,0,0,.2); border:1px solid var(--border-soft); border-radius:var(--r-sm);
+  background:var(--panel-2); border:1px solid var(--border-soft); border-radius:var(--r-sm);
   transition:border-color .15s var(--ease);
 }
 .asset-lib-btn-group:hover{ border-color:var(--primary) }
@@ -1004,14 +1061,13 @@ body.node-mode #nodeView{ display:flex; }
   transition:color .15s var(--ease), background .15s var(--ease);
 }
 .asset-lib-btn + .asset-lib-btn{ border-left:1px solid var(--border-soft) }
-.asset-lib-btn:hover{ color:var(--primary); background:rgba(124,189,86,.1) }
+.asset-lib-btn:hover{ color:var(--primary); background:var(--primary-soft) }
 .asset-lib-btn .ico{ transition:transform .22s var(--ease) }
 .asset-lib-btn.desc .ico{ transform:rotate(180deg) }
 .asset-lib-stat{
   font-size:10px; color:var(--text-muted); white-space:nowrap; flex:none;
   font-variant-numeric:tabular-nums; letter-spacing:.2px;
-  margin-left:auto; padding:3px 9px;
-  background:rgba(0,0,0,.2); border:1px solid var(--border-soft); border-radius:10px;
+  padding:0 8px; border-left:1px solid var(--border-soft); line-height:24px;
 }
 
 .asset-lib-hint{ padding:8px 10px; font-size:11px; color:var(--text-muted); grid-column:1/-1 }
@@ -1020,17 +1076,19 @@ body.node-mode #nodeView{ display:flex; }
 /* 资产卡片星标 */
 .asset-card{ position:relative }
 .asset-card .ac-star{
-  position:absolute; top:2px; right:2px; width:16px; height:16px; padding:0;
-  background:transparent; border:0; cursor:pointer; font-size:11px; line-height:16px;
-  color:var(--text-dim); opacity:0; transition:opacity .1s;
+  position:absolute; top:3px; right:3px; width:18px; height:18px; padding:0;
+  background:rgba(0,0,0,.3); border:0; border-radius:50%; cursor:pointer; font-size:12px; line-height:18px;
+  color:var(--text-dim); opacity:.4; transition:all .15s var(--ease);
+  display:flex; align-items:center; justify-content:center;
 }
-.asset-card:hover .ac-star{ opacity:.7 }
-.asset-card .ac-star:hover{ opacity:1; color:var(--warn) }
+.asset-card:hover .ac-star{ opacity:.8 }
+.asset-card .ac-star:hover{ opacity:1; color:var(--warn); background:rgba(245,158,11,.2) }
+.asset-card .ac-star.on{ color:var(--warn); opacity:1 }
 
 /* 资产库列表视图 */
 .asset-lib-grid.list-view{ display:flex; flex-direction:column; gap:2px; padding:2px 6px 6px }
 .asset-lib-grid.list-view .asset-card{ flex-direction:row; align-items:center; gap:8px; padding:4px 6px }
-.asset-lib-grid.list-view .ac-thumb{ width:28px; height:28px; aspect-ratio:auto; flex:none }
+.asset-lib-grid.list-view .ac-thumb{ width:32px; height:32px; aspect-ratio:auto; flex:none }
 .asset-lib-grid.list-view .ac-name{ flex:1; font-size:11px }
 .asset-lib-grid.list-view .ac-role{ flex:none }
 
@@ -1130,7 +1188,7 @@ body.node-mode #nodeView{ display:flex; }
   transition:background .1s; min-width:0; position:relative;
 }
 .pb-file:hover{ background:rgba(255,255,255,.04) }
-.pb-file.sel{ background:rgba(124,189,86,.1); box-shadow:inset 0 0 0 1px var(--primary) }
+.pb-file.sel{ background:var(--primary-soft); box-shadow:inset 0 0 0 1px var(--primary) }
 .pb-file .pf-thumb{
   width:20px; height:20px; flex:none; background:rgba(0,0,0,.3); border-radius:2px;
   display:flex; align-items:center; justify-content:center; overflow:hidden; image-rendering:pixelated;

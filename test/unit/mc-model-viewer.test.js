@@ -240,3 +240,20 @@ test('buildModelGroup: faces 无 uv 时应用默认 UV（蛋糕整模型）', ()
   const uv2 = g2.children[0].geometry.attributes.uv
   assert.equal(uv2.getX(2 * 4), 0); assert.equal(uv2.getY(2 * 4), 1)
 })
+test('isPartsEmptyModel: 空方块（air 类）判定', () => {
+  const { isPartsEmptyModel } = globalThis.__mcm
+  assert.equal(typeof isPartsEmptyModel, 'function')
+  /* 文件不存在/非法 → parts 空 → 非空模型（属加载失败语义） */
+  assert.equal(isPartsEmptyModel([]), false)
+  assert.equal(isPartsEmptyModel(null), false)
+  /* air：单 part 无 elements 无 textures → 空模型 */
+  assert.equal(isPartsEmptyModel([{ elements: [], textures: {} }]), true)
+  assert.equal(isPartsEmptyModel([{ elements: [], textures: null }]), true)
+  /* 有 elements → 非空 */
+  assert.equal(isPartsEmptyModel([{ elements: [{ from: [0, 0, 0], to: [16, 16, 16] }], textures: {} }]), false)
+  /* 有 textures（item sprite layer0）→ 非空（可回退 sprite 展示） */
+  assert.equal(isPartsEmptyModel([{ elements: [], textures: { layer0: 'minecraft:item/stick' } }]), false)
+  /* composite 多 part：全部空才算空模型 */
+  assert.equal(isPartsEmptyModel([{ elements: [], textures: {} }, { elements: [], textures: {} }]), true)
+  assert.equal(isPartsEmptyModel([{ elements: [], textures: {} }, { elements: [], textures: { layer0: 'x' } }]), false)
+})

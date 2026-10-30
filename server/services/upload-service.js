@@ -54,11 +54,11 @@ function safeRel(rel) {
   return n
 }
 
-function putFile(uploadId, rel, buffer) {
+async function putFile(uploadId, rel, buffer) {
   const s = sessionOf(uploadId)
   const dest = path.join(s.rootPath, safeRel(rel))
-  fs.mkdirSync(path.dirname(dest), { recursive: true })
-  fs.writeFileSync(dest, buffer)
+  await fs.promises.mkdir(path.dirname(dest), { recursive: true })
+  await fs.promises.writeFile(dest, buffer)
   return { written: true }
 }
 

@@ -21,16 +21,16 @@
  */
 
 import * as THREE from 'three'
-import { showCustomModel, showCustomModelPair, hasVisibleViewport, applyPbrMapsToModelMaterial } from './material3d.js'
-
-/* fileUrl / joinPath 内联（与 utils.js 同实现）：避免 import utils.js 触发 core.js 的
-   DOM 依赖，保持本模块在 node 单测（NR_M3D_STUB）环境下可加载 */
-function fileUrl(p) { return '/api/file/raw?path=' + encodeURIComponent(p) }
-function joinPath(base, rel) {
-  const b = base.replace(/\\/g, '/').replace(/\/+$/, '')
-  const r = rel.replace(/\\/g, '/').replace(/^\/+/, '')
-  return b + '/' + r
-}
+import {
+  showCustomModel,
+  showCustomModelPair,
+  hasVisibleViewport,
+  applyPbrMapsToModelMaterial,
+  setModelEmptyHint,
+  makeMaterial
+} from './material3d.js'
+import { t as _t } from './i18n.js'
+import { fileUrl, apiUrl, joinPath } from './url-utils.js'
 
 const MAX_PARENT_DEPTH = 8
 const MAX_ELEMENTS = 4096
@@ -46,7 +46,8 @@ PLACEHOLDER_MAT.userData.shared = true
 const FACE_KEYS = ['east', 'west', 'up', 'down', 'south', 'north']
 const MAT_INDEX = { east: 0, west: 1, up: 2, down: 3, south: 4, north: 5 }
 
-const texCache = new Map()   /* key → Promise<Texture|null> */
+const texCache = new Map() /* key → Promise<Texture|null> */
+const modelJsonCache = new Map() /* url → Promise<json>（parent 链公共基类不重复 fetch） */
 
 /* ── 生物群系染色（tintindex / tints）──────────────────────
    MC 草方块/草丛/叶子等面标记 tintindex，渲染时用 colormap（grass.png /
@@ -67,14 +68,18 @@ const BIOMES = [
   { id: 'snowy', temperature: 0.0, downfall: 0.5 },
   { id: 'mushroom', temperature: 0.9, downfall: 1.0 },
   { id: 'beach', temperature: 0.5, downfall: 0.4 },
-  { id: 'badlands', temperature: 2.0, downfall: 0.0 },
+  { id: 'badlands', temperature: 2.0, downfall: 0.0 }
 ]
 let currentBiome = BIOMES[0]
-const colormapCache = new Map()   /* key → Promise<ImageData|null> */
+const colormapCache = new Map() /* key → Promise<ImageData|null> */
 
-function clamp01(v) { return v < 0 ? 0 : v > 1 ? 1 : v }
+function clamp01(v) {
+  return v < 0 ? 0 : v > 1 ? 1 : v
+}
 
-function colormapRel(type) { return `assets/minecraft/textures/colormap/${type}.png` }
+function colormapRel(type) {
+  return `assets/minecraft/textures/colormap/${type}.png`
+}
 
 function loadColormapData(api, packName, type, fileRoot) {
   const ck = texCacheKey(api, packName, colormapRel(type), fileRoot)
@@ -87,13 +92,22 @@ function loadColormapData(api, packName, type, fileRoot) {
         const blob = await res.blob()
         if (typeof createImageBitmap !== 'function') return null
         const bmp = await createImageBitmap(blob)
-        const w = bmp.width, h = bmp.height
-        const ctx = typeof OffscreenCanvas !== 'undefined'
-          ? new OffscreenCanvas(w, h).getContext('2d')
-          : (() => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c.getContext('2d') })()
+        const w = bmp.width,
+          h = bmp.height
+        const ctx =
+          typeof OffscreenCanvas !== 'undefined'
+            ? new OffscreenCanvas(w, h).getContext('2d')
+            : (() => {
+                const c = document.createElement('canvas')
+                c.width = w
+                c.height = h
+                return c.getContext('2d')
+              })()
         ctx.drawImage(bmp, 0, 0)
         return ctx.getImageData(0, 0, w, h)
-      } catch { return null }
+      } catch {
+        return null
+      }
     })()
     colormapCache.set(ck, p)
   }
@@ -102,8 +116,11 @@ function loadColormapData(api, packName, type, fileRoot) {
 
 function sampleColormap(img, temp, downfall) {
   if (!img) return null
-  const W = img.width, H = img.height, d = img.data
-  const ct = clamp01(temp), cd = clamp01(downfall)
+  const W = img.width,
+    H = img.height,
+    d = img.data
+  const ct = clamp01(temp),
+    cd = clamp01(downfall)
   const adjD = cd * ct
   const x = Math.min(W - 1, Math.max(0, Math.floor((1 - ct) * (W - 1))))
   const y = Math.min(H - 1, Math.max(0, Math.floor((1 - adjD) * (H - 1))))
@@ -118,14 +135,14 @@ async function resolveTintColor(tintIndex, tints, biome, texPath, api, packName,
   let type = tint && typeof tint.type === 'string' ? tint.type.replace(/^[^:]*:/, '') : ''
   if (!type) {
     const tn = (texPath || '').toLowerCase()
-    type = (tn.includes('leaves') || tn.includes('vine') || tn.includes('lily')) ? 'foliage' : 'grass'
+    type = tn.includes('leaves') || tn.includes('vine') || tn.includes('lily') ? 'foliage' : 'grass'
   }
   const temp = tint && Number.isFinite(+tint.temperature) ? +tint.temperature : biome.temperature
   const down = tint && Number.isFinite(+tint.downfall) ? +tint.downfall : biome.downfall
   if (type === 'constant') {
-    const v = tint && Number.isFinite(+tint.value) ? (+tint.value | 0) : 0xffffff
+    const v = tint && Number.isFinite(+tint.value) ? +tint.value | 0 : 0xffffff
     const rgb = v & 0xffffff
-    return new THREE.Color((rgb >> 16 & 0xff) / 255, (rgb >> 8 & 0xff) / 255, (rgb & 0xff) / 255)
+    return new THREE.Color(((rgb >> 16) & 0xff) / 255, ((rgb >> 8) & 0xff) / 255, (rgb & 0xff) / 255)
   }
   const cmType = type === 'foliage' ? 'foliage' : 'grass'
   let img = await loadColormapData(api, packName, cmType, fileRoot)
@@ -133,8 +150,12 @@ async function resolveTintColor(tintIndex, tints, biome, texPath, api, packName,
   return sampleColormap(img, temp, down)
 }
 
-export function getMcBiomes() { return BIOMES }
-export function getCurrentBiome() { return currentBiome }
+export function getMcBiomes() {
+  return BIOMES
+}
+export function getCurrentBiome() {
+  return currentBiome
+}
 export function setCurrentBiome(id) {
   const b = BIOMES.find(x => x.id === id)
   if (b) currentBiome = b
@@ -148,14 +169,19 @@ const CONSTANT_TINTS = {
   water_still: [0x3f, 0x76, 0xe4],
   water_flow: [0x3f, 0x76, 0xe4],
   lava_still: [0xfe, 0xa1, 0x00],
-  lava_flow: [0xfe, 0xa1, 0x00],
+  lava_flow: [0xfe, 0xa1, 0x00]
 }
 function infer2dTintType(base) {
   if (CONSTANT_TINTS[base]) return 'constant'
   if (/^(vine|lily_pad|leaf_litter)$/.test(base)) return 'foliage'
   if (/^bamboo_/.test(base)) return 'grass'
   if (/_leaves$/.test(base)) return 'foliage'
-  if (/^(grass_block_top|grass_block_side_overlay|short_grass|fern|tall_grass_top|tall_grass_bottom|large_fern_top|large_fern_bottom|sugar_cane|bush|wildflowers|pink_petals|pumpkin_stem|melon_stem|attached_pumpkin_stem|attached_melon_stem|short_dry_grass|tall_dry_grass|seagrass|tall_seagrass_top|tall_seagrass_bottom)$/.test(base)) return 'grass'
+  if (
+    /^(grass_block_top|grass_block_side_overlay|short_grass|fern|tall_grass_top|tall_grass_bottom|large_fern_top|large_fern_bottom|sugar_cane|bush|wildflowers|pink_petals|pumpkin_stem|melon_stem|attached_pumpkin_stem|attached_melon_stem|short_dry_grass|tall_dry_grass|seagrass|tall_seagrass_top|tall_seagrass_bottom)$/.test(
+      base
+    )
+  )
+    return 'grass'
   return null
 }
 
@@ -165,7 +191,11 @@ function infer2dTintType(base) {
 export async function sampleTintForTexture(texFullPath) {
   if (!texFullPath) return null
   const norm = String(texFullPath).replace(/\\/g, '/')
-  const base = norm.split('/').pop().replace(/\.[^.]+$/, '').toLowerCase()
+  const base = norm
+    .split('/')
+    .pop()
+    .replace(/\.[^.]+$/, '')
+    .toLowerCase()
   const type = infer2dTintType(base)
   if (!type) return null
   if (type === 'constant') {
@@ -183,11 +213,9 @@ export async function sampleTintForTexture(texFullPath) {
 
 /* 最近一次成功展示的模型 UV 布局（uv-view 浮窗数据源） */
 let lastLayout = null
-let lastRenderFn = null   /* 供生物群系切换后重渲染（单模型/对比） */
+let lastLayoutPair = null /* 左右对比布局 { left, right }，仅 pair 路径设置；单模型为 null */
+let lastRenderFn = null /* 供生物群系切换后重渲染（单模型/对比） */
 
-function apiUrl(p) {
-  return (typeof window !== 'undefined' && window.matogaCore && window.matogaCore.url) ? window.matogaCore.url(p) : p
-}
 
 /* 资源 raw URL 构造：包模式走 /api/pack/<name>/raw?path=<rel>（any=1 放行 .mcmeta 等扩展）；
     文件根模式（对比结果等任意文件夹）走 /api/file/raw?path=<join(root,rel)>（file 接口直接读任意路径，无需 any）；
@@ -228,9 +256,13 @@ async function fetchOkData(path) {
 /* parent 引用 → 包内模型路径："minecraft:block/cube" / "block/cube" → assets/minecraft/models/block/cube.json */
 export function parentModelPath(parent) {
   if (typeof parent !== 'string' || !parent) return null
-  let ns = 'minecraft', rest = parent
+  let ns = 'minecraft',
+    rest = parent
   const ci = parent.indexOf(':')
-  if (ci >= 0) { ns = parent.slice(0, ci); rest = parent.slice(ci + 1) }
+  if (ci >= 0) {
+    ns = parent.slice(0, ci)
+    rest = parent.slice(ci + 1)
+  }
   if (!rest) return null
   return `assets/${ns}/models/${rest}.json`
 }
@@ -250,9 +282,13 @@ function isSpecialTexPath(p) {
 
 export function textureAssetPath(ref) {
   if (typeof ref !== 'string' || !ref) return null
-  let ns = 'minecraft', rest = ref
+  let ns = 'minecraft',
+    rest = ref
   const ci = ref.indexOf(':')
-  if (ci >= 0) { ns = ref.slice(0, ci); rest = ref.slice(ci + 1) }
+  if (ci >= 0) {
+    ns = ref.slice(0, ci)
+    rest = ref.slice(ci + 1)
+  }
   if (!rest) return null
   return `assets/${ns}/textures/${TEX_REF_EXT_RE.test(rest) ? rest : rest + '.png'}`
 }
@@ -267,7 +303,7 @@ export function texPathForRef(ref) {
 /* 包内贴图路径 → 标准 MC 引用（assets/<ns>/textures/<rest>.png → <ns>:<rest>） */
 function packRelToMcRef(rel) {
   const m = String(rel).match(/^assets\/([^/]+)\/textures\/(.+)\.(png|jpe?g|webp|gif|bmp)$/i)
-  return m ? (m[1] + ':' + m[2]) : null
+  return m ? m[1] + ':' + m[2] : null
 }
 
 /* 替换贴图 URL → 模型贴图引用（智能引用）：
@@ -286,14 +322,15 @@ export function texUrlToRef(url, ctx) {
     if (ai < 0) return url
     path = url.slice(ai)
   }
-  if (!path.startsWith('/api/')) return path   /* 相对/未知形式原样 */
+  if (!path.startsWith('/api/')) return path /* 相对/未知形式原样 */
   const fm = path.match(/^\/api\/file\/raw\?path=([^&]+)/)
   if (fm) return 'file:' + decodeURIComponent(fm[1])
   const bm = path.match(/^\/api\/(mc-packs|mc-official)\/([^/]+)\/raw\?path=([^&]+)/)
   if (bm) {
     const std = packRelToMcRef(decodeURIComponent(bm[3]))
     if (std && ctx && ctx.api === '/api/' + bm[1] && ctx.packName === decodeURIComponent(bm[2])) return std
-    return path   /* 跨包：保留站内 URL 引用（重新打开可直接加载） */
+    if (std && !ctx) return std
+    return path /* 跨包：保留站内 URL 引用（重新打开可直接加载） */
   }
   return path
 }
@@ -301,21 +338,30 @@ export function texUrlToRef(url, ctx) {
 /* 模型 textures 表贴图引用写回：解析命中 oldTexPath 的键改写为 newRef。
     直接持有该路径的键（含 #互引链命中）统一改写到新值；oldTexPath = '' 匹配被移除的空键 */
 export function writeMcTexRef(textures, oldTexPath, newRef) {
-  if (!textures || typeof textures !== 'object' || typeof oldTexPath !== 'string' || typeof newRef !== 'string') return 0
+  if (!textures || typeof textures !== 'object' || typeof oldTexPath !== 'string' || typeof newRef !== 'string')
+    return 0
   let n = 0
   for (const k in textures) {
     const val = textures[k]
     if (typeof val !== 'string') continue
     if (oldTexPath === '') {
-      if (val === '') { textures[k] = newRef; n++ }
+      if (val === '') {
+        textures[k] = newRef
+        n++
+      }
       continue
     }
     if (!val) continue
-    const hit = isSpecialTexPath(val)
-      ? val === oldTexPath
-      : (val === oldTexPath || textureAssetPath(val) === oldTexPath)
-    if (hit) { textures[k] = newRef; n++; continue }
-    if (val.startsWith('#') && resolveTextureRef(textures, '#' + k) === oldTexPath) { textures[k] = newRef; n++ }
+    const hit = isSpecialTexPath(val) ? val === oldTexPath : val === oldTexPath || textureAssetPath(val) === oldTexPath
+    if (hit) {
+      textures[k] = newRef
+      n++
+      continue
+    }
+    if (val.startsWith('#') && resolveTextureRef(textures, '#' + k) === oldTexPath) {
+      textures[k] = newRef
+      n++
+    }
   }
   return n
 }
@@ -324,10 +370,16 @@ export function writeMcTexRef(textures, oldTexPath, newRef) {
    textures 表内仅有 top/bottom 等非标键，或反向命名）。仅补原本解析失败
    （灰色占位 / UV 面跳过）的场景，已定义键不受影响；防环 guard 贯穿回退链 */
 const TEX_REF_FALLBACK = {
-  north: ['side', 'all'], south: ['side', 'all'], east: ['side', 'all'], west: ['side', 'all'],
-  side: ['all'], all: ['side'],
-  up: ['top', 'all'], top: ['up', 'all'],
-  down: ['bottom', 'all'], bottom: ['down', 'all'],
+  north: ['side', 'all'],
+  south: ['side', 'all'],
+  east: ['side', 'all'],
+  west: ['side', 'all'],
+  side: ['all'],
+  all: ['side'],
+  up: ['top', 'all'],
+  top: ['up', 'all'],
+  down: ['bottom', 'all'],
+  bottom: ['down', 'all']
 }
 
 /* 解析 "#side" 引用链（textures 表内互引，防环）到最终贴图路径 */
@@ -338,9 +390,10 @@ export function resolveTextureRef(textures, ref, seen) {
   guard.add(ref)
   if (ref.startsWith('#')) {
     const key = ref.slice(1)
-    const val = (textures && typeof textures === 'object') ? textures[key] : undefined
+    const val = textures && typeof textures === 'object' ? textures[key] : undefined
     if (typeof val === 'string' && val) return resolveTextureRef(textures, val, guard)
-    if (val && typeof val === 'object' && typeof val.sprite === 'string' && val.sprite) return resolveTextureRef(textures, val.sprite, guard)
+    if (val && typeof val === 'object' && typeof val.sprite === 'string' && val.sprite)
+      return resolveTextureRef(textures, val.sprite, guard)
     for (const alt of TEX_REF_FALLBACK[key] || []) {
       const hit = resolveTextureRef(textures, '#' + alt, guard)
       if (hit) return hit
@@ -373,27 +426,33 @@ export function expandTextureAliases(textures) {
     未收录的衍生基类（cube_column 等）断链时仍按原行为跳过。 */
 const BUILTIN_PARENT_MODELS = {
   'assets/minecraft/models/block/cube.json': {
-    elements: [{
-      from: [0, 0, 0], to: [16, 16, 16],
-      faces: {
-        down: { texture: '#down' }, up: { texture: '#up' },
-        north: { texture: '#north' }, south: { texture: '#south' },
-        west: { texture: '#west' }, east: { texture: '#east' },
-      },
-    }],
+    elements: [
+      {
+        from: [0, 0, 0],
+        to: [16, 16, 16],
+        faces: {
+          down: { texture: '#down' },
+          up: { texture: '#up' },
+          north: { texture: '#north' },
+          south: { texture: '#south' },
+          west: { texture: '#west' },
+          east: { texture: '#east' }
+        }
+      }
+    ]
   },
   'assets/minecraft/models/block/cube_all.json': {
     parent: 'minecraft:block/cube',
-    textures: { all: '#all' },
+    textures: { all: '#all' }
   },
   'assets/minecraft/models/block/cube_bottom_top.json': {
     parent: 'minecraft:block/cube',
-    textures: { down: '#end', up: '#end', side: '#side' },
+    textures: { down: '#end', up: '#end', side: '#side' }
   },
   'assets/minecraft/models/block/block.json': {},
   'assets/minecraft/models/item/generated.json': {},
   'assets/minecraft/models/item/handheld.json': { parent: 'minecraft:item/generated' },
-  'assets/minecraft/models/item/template_shulker_box.json': {},
+  'assets/minecraft/models/item/template_shulker_box.json': {}
 }
 
 /* fetch 模型 JSON 并沿 parent 链合并：elements 取最近定义层，textures 子覆盖父。
@@ -405,16 +464,20 @@ const BUILTIN_PARENT_MODELS = {
 async function resolveMcModelRaw(api, packName, rel, depth = 0, fileRoot) {
   const url = rawUrl(api, packName, rel, fileRoot, true)
   let model
-  try {
-    model = await fetchJson(url)
-  } catch (e) {
-    const builtin = BUILTIN_PARENT_MODELS[rel]
-    if (!builtin) throw e
-    model = builtin
+  if (modelJsonCache.has(url)) {
+    model = await modelJsonCache.get(url)
+  } else {
+    const p = fetchJson(url).catch(e => {
+      const builtin = BUILTIN_PARENT_MODELS[rel]
+      if (!builtin) { modelJsonCache.delete(url); throw e }
+      return builtin
+    })
+    modelJsonCache.set(url, p)
+    model = await p
   }
   if (!model || typeof model !== 'object') throw new Error('invalid model json')
   let elements = Array.isArray(model.elements) ? model.elements : null
-  const textures = (model.textures && typeof model.textures === 'object') ? model.textures : {}
+  const textures = model.textures && typeof model.textures === 'object' ? model.textures : {}
   if (model.parent && depth < MAX_PARENT_DEPTH) {
     const parentRel = parentModelPath(model.parent)
     if (parentRel) {
@@ -449,7 +512,11 @@ export function resolveItemDefRefs(node, out = [], depth = 0) {
   switch (type) {
     case 'model':
       if (typeof node.model === 'string' && node.model) {
-        out.push({ model: node.model, transformation: node.transformation || null, tints: Array.isArray(node.tints) ? node.tints : null })
+        out.push({
+          model: node.model,
+          transformation: node.transformation || null,
+          tints: Array.isArray(node.tints) ? node.tints : null
+        })
       }
       break
     case 'condition':
@@ -465,11 +532,21 @@ export function resolveItemDefRefs(node, out = [], depth = 0) {
       }
       break
     case 'special':
+      /* shulker_box 内嵌渲染器：构造虚拟 cube 使用实体贴图（entity/shulker/<texture>），
+         替换 base（base 仅含 particle 纯色贴图，非真实外观） */
+      if (node.model && typeof node.model === 'object') {
+        const innerType = typeof node.model.type === 'string' ? node.model.type.replace(/^[^:]*:/, '') : ''
+        if (innerType === 'shulker_box' && typeof node.model.texture === 'string' && node.model.texture) {
+          out.push({ shulkerBox: node.model.texture, transformation: node.transformation || null })
+          break
+        }
+      }
       if (typeof node.base === 'string' && node.base) {
         out.push({ model: node.base, transformation: node.transformation || null })
       }
       break
-    default: break
+    default:
+      break
   }
   return out
 }
@@ -502,22 +579,42 @@ export async function borrowTemplateTextures(api, packName, rel, fileRoot) {
   let entries
   try {
     entries = await fetchOkData(`${api}/${encodeURIComponent(packName)}/entries?dir=${encodeURIComponent(dir)}`)
-  } catch { return null }
-  const files = (entries && Array.isArray(entries.files)) ? entries.files : []
-  const candidates = files.map(f => f && f.name).filter(n =>
-    typeof n === 'string' && n.endsWith('.json') && n !== selfName && !n.startsWith('template_'))
+  } catch {
+    return null
+  }
+  const files = entries && Array.isArray(entries.files) ? entries.files : []
+  const candidates = files
+    .map(f => f && f.name)
+    .filter(n => typeof n === 'string' && n.endsWith('.json') && n !== selfName && !n.startsWith('template_'))
   for (const name of candidates.slice(0, 60)) {
     const childRel = dir + '/' + name
     let child
-    try { child = await fetchJson(rawUrl(api, packName, childRel, fileRoot, true)) } catch { continue }
+    try {
+      child = await fetchJson(rawUrl(api, packName, childRel, fileRoot, true))
+    } catch {
+      continue
+    }
     if (!child || typeof child !== 'object' || typeof child.parent !== 'string') continue
     const cp = child.parent
     const cpNoNs = cp.includes(':') ? cp.slice(cp.indexOf(':') + 1) : cp
     if (cp !== withNs && cp !== noNs && cpNoNs !== withNs && cpNoNs !== noNs) continue
-    const ct = (child.textures && typeof child.textures === 'object') ? child.textures : null
+    const ct = child.textures && typeof child.textures === 'object' ? child.textures : null
     if (ct && Object.keys(ct).length) return ct
   }
   return null
+}
+
+/* shulker_box 内嵌渲染器贴图引用 → 实体贴图引用：
+   minecraft:shulker_yellow → minecraft:entity/shulker/shulker_yellow */
+function shulkerBoxEntityTexRef(ref) {
+  let ns = 'minecraft',
+    rest = ref
+  const ci = ref.indexOf(':')
+  if (ci >= 0) {
+    ns = ref.slice(0, ci)
+    rest = ref.slice(ci + 1)
+  }
+  return `${ns}:entity/shulker/${rest}`
 }
 
 /* 统一模型资产解析入口：rel 为 models/ 路径或 items/ 定义路径。
@@ -539,10 +636,35 @@ export async function resolveMcModelAsset(api, packName, rel, fileRoot) {
   }
   const url = rawUrl(api, packName, rel, fileRoot, true)
   let def = null
-  try { def = await fetchJson(url) } catch {}
+  try {
+    def = await fetchJson(url)
+  } catch {}
   const refs = resolveItemDefRefs(def && def.model).slice(0, MAX_ITEM_DEF_REFS)
   const parts = []
   for (const r of refs) {
+    if (r.shulkerBox) {
+      const entityRef = shulkerBoxEntityTexRef(r.shulkerBox)
+      parts.push({
+        elements: [
+          {
+            from: [0, 0, 0],
+            to: [16, 16, 16],
+            faces: {
+              down: { texture: '#all' },
+              up: { texture: '#all' },
+              north: { texture: '#all' },
+              south: { texture: '#all' },
+              west: { texture: '#all' },
+              east: { texture: '#all' }
+            }
+          }
+        ],
+        textures: { all: entityRef, particle: entityRef },
+        transform: r.transformation || null,
+        tints: null
+      })
+      continue
+    }
     const mp = parentModelPath(r.model)
     if (!mp) continue
     try {
@@ -551,6 +673,16 @@ export async function resolveMcModelAsset(api, packName, rel, fileRoot) {
     } catch {}
   }
   return { parts }
+}
+
+/* 判定 parts 是否为"空模型"：模型文件存在且合法，但所有 part 既无 elements 也无 textures
+   （如 air / structure_void / barrier 等空方块）。用于在视口叠加友好提示而非留白。
+   parts 为空数组（文件不存在/非法）不算空模型，返回 false */
+export function isPartsEmptyModel(parts) {
+  if (!Array.isArray(parts) || !parts.length) return false
+  return parts.every(
+    p => p && Array.isArray(p.elements) && !p.elements.length && (!p.textures || !Object.keys(p.textures).length)
+  )
 }
 
 /* item 定义 transformation（块单位）应用到子模型 Group：
@@ -563,7 +695,7 @@ export function applyItemTransformation(group, tr) {
   if (t && t.length >= 3 && t.every(n => Number.isFinite(+n))) {
     group.position.set(+t[0], +t[1], +t[2])
   }
-  const toQuat = (q) => {
+  const toQuat = q => {
     if (!Array.isArray(q) || q.length < 4 || !q.every(n => Number.isFinite(+n))) return null
     return new THREE.Quaternion(+q[0], +q[1], +q[2], +q[3]).normalize()
   }
@@ -581,8 +713,10 @@ export function applyItemTransformation(group, tr) {
     }
     if (+s[0] < 0 || +s[1] < 0 || +s[2] < 0) {
       group.traverse(o => {
-        const mats = Array.isArray(o.material) ? o.material : (o.material ? [o.material] : [])
-        for (const m of mats) { if (m && !(m.userData && m.userData.shared)) m.side = THREE.DoubleSide }
+        const mats = Array.isArray(o.material) ? o.material : o.material ? [o.material] : []
+        for (const m of mats) {
+          if (m && !(m.userData && m.userData.shared)) m.side = THREE.DoubleSide
+        }
       })
     }
   }
@@ -599,7 +733,7 @@ function parseVec3(v, fallback) {
 }
 
 function parseUv(uv) {
-  const a = Array.isArray(uv) ? uv : (typeof uv === 'string' ? uv.split(',').map(s => +s.trim()) : null)
+  const a = Array.isArray(uv) ? uv : typeof uv === 'string' ? uv.split(',').map(s => +s.trim()) : null
   if (a && a.length === 4 && a.every(n => Number.isFinite(n))) return a
   return null
 }
@@ -607,9 +741,9 @@ function parseUv(uv) {
 /* face.rotation（0/90/180/270，顺时针）：几何四角 [TL,TR,BL,BR] 的采样角随之轮转
    （贴图顺时针转 90° 后，原 BL 像素显示在几何 TL 位置：TL←BL, TR←TL, BL←BR, BR←TR） */
 const FACE_ROT_ORDER = {
-  90:  [2, 0, 3, 1],
+  90: [2, 0, 3, 1],
   180: [3, 2, 1, 0],
-  270: [1, 3, 0, 2],
+  270: [1, 3, 0, 2]
 }
 
 /* vanilla 默认 UV（face 无 uv 字段时按元素 from/to 尺寸计算，v 自顶向下）：
@@ -620,18 +754,35 @@ const FACE_ROT_ORDER = {
    uvScale≠16（bbmodel resolution）时按比例换算 */
 export function defaultFaceUv(key, from, to, uvScale = 16) {
   if (!Array.isArray(from) || !Array.isArray(to)) return null
-  const fx = +from[0], fy = +from[1], fz = +from[2]
-  const tx = +to[0], ty = +to[1], tz = +to[2]
+  const fx = +from[0],
+    fy = +from[1],
+    fz = +from[2]
+  const tx = +to[0],
+    ty = +to[1],
+    tz = +to[2]
   if (![fx, fy, fz, tx, ty, tz].every(Number.isFinite)) return null
   let uv
   switch (key) {
-    case 'up':    uv = [fx, fz, tx, tz]; break
-    case 'down':  uv = [fx, 16 - tz, tx, 16 - fz]; break
-    case 'north': uv = [16 - tx, 16 - ty, 16 - fx, 16 - fy]; break
-    case 'south': uv = [fx, 16 - ty, tx, 16 - fy]; break
-    case 'east':  uv = [16 - tz, 16 - ty, 16 - fz, 16 - fy]; break
-    case 'west':  uv = [fz, 16 - ty, tz, 16 - fy]; break
-    default: return null
+    case 'up':
+      uv = [fx, fz, tx, tz]
+      break
+    case 'down':
+      uv = [fx, 16 - tz, tx, 16 - fz]
+      break
+    case 'north':
+      uv = [16 - tx, 16 - ty, 16 - fx, 16 - fy]
+      break
+    case 'south':
+      uv = [fx, 16 - ty, tx, 16 - fy]
+      break
+    case 'east':
+      uv = [16 - tz, 16 - ty, 16 - fz, 16 - fy]
+      break
+    case 'west':
+      uv = [fz, 16 - ty, tz, 16 - fy]
+      break
+    default:
+      return null
   }
   if (uvScale && uvScale !== 16) {
     const s = uvScale / 16
@@ -652,10 +803,17 @@ function applyFaceUvs(geo, faces, uvScale, from, to) {
     const uv = parseUv(f.uv) || defaultFaceUv(key, from, to, uvScale)
     if (!uv) continue
     /* u1/u2 与 v1/v2 支持翻转（uv[2] < uv[0] 时为水平镜像采样） */
-    const u1 = uv[0] / uvScale, u2 = uv[2] / uvScale
-    const v1 = 1 - uv[1] / uvScale, v2 = 1 - uv[3] / uvScale
-    const corners = [[u1, v1], [u2, v1], [u1, v2], [u2, v2]]
-    const rot = Number.isFinite(+f.rotation) ? ((Math.round(+f.rotation / 90) * 90) % 360 + 360) % 360 : 0
+    const u1 = uv[0] / uvScale,
+      u2 = uv[2] / uvScale
+    const v1 = 1 - uv[1] / uvScale,
+      v2 = 1 - uv[3] / uvScale
+    const corners = [
+      [u1, v1],
+      [u2, v1],
+      [u1, v2],
+      [u2, v2]
+    ]
+    const rot = Number.isFinite(+f.rotation) ? (((Math.round(+f.rotation / 90) * 90) % 360) + 360) % 360 : 0
     const order = FACE_ROT_ORDER[rot] || [0, 1, 2, 3]
     const i = MAT_INDEX[key] * 4
     for (let k = 0; k < 4; k++) {
@@ -670,18 +828,22 @@ function applyFaceUvs(geo, faces, uvScale, from, to) {
 function applyElementTransform(mesh, el, center) {
   const c = [(center[0] - 8) / 16, (center[1] - 8) / 16, (center[2] - 8) / 16]
   const rot = el.rotation
-  if (!rot) { mesh.position.set(c[0], c[1], c[2]); return }
+  if (!rot) {
+    mesh.position.set(c[0], c[1], c[2])
+    return
+  }
   const origin = parseVec3(Array.isArray(rot) ? el.origin : rot.origin, [8, 8, 8]).map(v => (v - 8) / 16)
   if (Array.isArray(rot)) {
     mesh.rotation.set(
-      (+rot[0] || 0) * Math.PI / 180,
-      (+rot[1] || 0) * Math.PI / 180,
-      (+rot[2] || 0) * Math.PI / 180,
+      ((+rot[0] || 0) * Math.PI) / 180,
+      ((+rot[1] || 0) * Math.PI) / 180,
+      ((+rot[2] || 0) * Math.PI) / 180
     )
   } else if (rot.axis === 'x' || rot.axis === 'y' || rot.axis === 'z') {
-    mesh.rotation[rot.axis] = (+rot.angle || 0) * Math.PI / 180
+    mesh.rotation[rot.axis] = ((+rot.angle || 0) * Math.PI) / 180
   } else {
-    mesh.position.set(c[0], c[1], c[2]); return
+    mesh.position.set(c[0], c[1], c[2])
+    return
   }
   /* position = origin + R(center - origin) */
   const off = new THREE.Vector3(c[0] - origin[0], c[1] - origin[1], c[2] - origin[2])
@@ -691,7 +853,7 @@ function applyElementTransform(mesh, el, center) {
 
 /* faces "all" 简写展开（bbmodel / 社区模型）：复制到未定义的方向面（不改原对象） */
 function expandElementFaces(el) {
-  let faces = (el && el.faces && typeof el.faces === 'object') ? el.faces : {}
+  let faces = el && el.faces && typeof el.faces === 'object' ? el.faces : {}
   if (faces.all && typeof faces.all === 'object') {
     faces = { ...faces }
     for (const k of FACE_KEYS) if (!faces[k]) faces[k] = faces.all
@@ -709,7 +871,9 @@ export function buildModelGroup(elements, matFor, uvScale = 16) {
     if (!el || typeof el !== 'object') continue
     const from = parseVec3(el.from, [0, 0, 0])
     const to = parseVec3(el.to, [16, 16, 16])
-    const sx = Math.abs(to[0] - from[0]) || 0.01, sy = Math.abs(to[1] - from[1]) || 0.01, sz = Math.abs(to[2] - from[2]) || 0.01
+    const sx = Math.abs(to[0] - from[0]) || 0.01,
+      sy = Math.abs(to[1] - from[1]) || 0.01,
+      sz = Math.abs(to[2] - from[2]) || 0.01
     const geo = new THREE.BoxGeometry(sx / 16, sy / 16, sz / 16)
     const faces = expandElementFaces(el)
     applyFaceUvs(geo, faces, scale, from, to)
@@ -718,7 +882,8 @@ export function buildModelGroup(elements, matFor, uvScale = 16) {
       return m || HIDDEN_MAT
     })
     const mesh = new THREE.Mesh(geo, mats)
-    mesh.castShadow = true; mesh.receiveShadow = true
+    mesh.castShadow = true
+    mesh.receiveShadow = true
     /* 原始 element 引用（编辑联动：uv-view 编辑 UV 后按引用定位 mesh 重映射几何 UV） */
     mesh.userData.mcElement = el
     mesh.userData.uvScale = scale
@@ -737,8 +902,15 @@ function applyTexParams(tex) {
   return tex
 }
 
-function makeModelMaterial(tex) {
-  const m = new THREE.MeshPhysicalMaterial({ roughness: 0.9, metalness: 0.0, alphaTest: 0.5 })
+function makeModelMaterial(tex, withParallax = false) {
+  const m = withParallax
+    ? makeMaterial()
+    : new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0.0, alphaTest: 0.5 })
+  if (withParallax) {
+    m.roughness = 0.9
+    m.metalness = 0.0
+    m.alphaTest = 0.5
+  }
   if (tex) m.map = applyTexParams(tex)
   return m
 }
@@ -747,10 +919,60 @@ function loadTextureCached(key, url) {
   if (!texCache.has(key)) {
     const loader = new THREE.TextureLoader()
     /* 失败不缓存（下次可重试） */
-    const p = loader.loadAsync(url).catch(() => { texCache.delete(key); return null })
+    const p = loader.loadAsync(url).catch(() => {
+      texCache.delete(key)
+      return null
+    })
     texCache.set(key, p)
   }
   return texCache.get(key)
+}
+
+/* 官方材质包缓存（懒加载）：贴图加载失败时回退到 official-packs 加载 vanilla 贴图。
+   资源包常仅含自定义模型/贴图，引用的 vanilla 贴图不在包内 → 灰色占位；
+   回退到 official-packs 加载原版贴图，避免 shulker_box 等方块预览无贴图 */
+let officialPackCache = null
+let officialPackLoading = null
+function getOfficialPack() {
+  if (officialPackCache) return Promise.resolve(officialPackCache)
+  if (officialPackLoading) return officialPackLoading
+  officialPackLoading = fetchOkData('/api/mc-official/list')
+    .then(data => {
+      const packs = Array.isArray(data) ? data : (data && data.packs) || []
+      officialPackCache = packs.length && packs[0].name ? { api: '/api/mc-official', packName: packs[0].name } : null
+      officialPackLoading = null
+      return officialPackCache
+    })
+    .catch(() => {
+      officialPackCache = null
+      officialPackLoading = null
+      return null
+    })
+  return officialPackLoading
+}
+
+/* 贴图加载 + official-packs vanilla 回退：包内贴图缺失时尝试 official-packs 同路径贴图。
+   返回 { tex, anim } 或 null。仅对标准 MC 贴图路径生效（扩展引用 data:/file:/URL 不回退） */
+async function loadTexWithOfficialFallback(texPath, api, packName, fileRoot) {
+  const ck = texCacheKey(api, packName, texPath, fileRoot)
+  const url = rawUrl(api, packName, texPath, fileRoot, false)
+  const metaPromise = loadAnimMetaCached(ck + ':mcmeta', packMcmetaUrl(api, packName, texPath, fileRoot))
+  let tex = await loadTextureCached(ck, url)
+  if (tex) return { tex, metaPromise }
+  if (isSpecialTexPath(texPath)) return null
+  const official = await getOfficialPack()
+  if (!official) return null
+  const fbCk = texCacheKey(official.api, official.packName, texPath, undefined)
+  const fbUrl = rawUrl(official.api, official.packName, texPath, undefined, false)
+  const fbTex = await loadTextureCached(fbCk, fbUrl)
+  if (!fbTex) return null
+  return {
+    tex: fbTex,
+    metaPromise: loadAnimMetaCached(
+      fbCk + ':mcmeta',
+      packMcmetaUrl(official.api, official.packName, texPath, undefined)
+    )
+  }
 }
 
 /* ── 动画贴图（.png.mcmeta）──────────────────────
@@ -767,7 +989,7 @@ const TICKS_PER_SEC = 20
 
 /* mcmeta JSON → 动画定义（非法 / 单帧 → null）；timeline 为 [{ index, ticks }]（ticks ≥ 1 整数） */
 export function parseAnimMeta(meta, texW, texH) {
-  const anim = (meta && typeof meta === 'object') ? meta.animation : null
+  const anim = meta && typeof meta === 'object' ? meta.animation : null
   if (!anim || typeof anim !== 'object') return null
   const w = Number.isFinite(+texW) ? +texW : 0
   const h = Number.isFinite(+texH) ? +texH : 0
@@ -781,7 +1003,8 @@ export function parseAnimMeta(meta, texW, texH) {
   const timeline = []
   if (Array.isArray(anim.frames)) {
     for (const f of anim.frames) {
-      let index = -1, ticks = defaultTicks
+      let index = -1,
+        ticks = defaultTicks
       if (typeof f === 'number' && Number.isFinite(f)) index = Math.floor(f)
       else if (f && typeof f === 'object' && Number.isFinite(+f.index)) {
         index = Math.floor(+f.index)
@@ -801,7 +1024,7 @@ export function animFrameIndexAt(anim, tSec) {
   const tl = anim && anim.timeline
   if (!tl || !tl.length) return 0
   const totalSec = anim.totalSec
-  const t = totalSec > 0 ? (tSec % totalSec) : 0
+  const t = totalSec > 0 ? tSec % totalSec : 0
   const tick = Math.max(0, Math.floor(t * TICKS_PER_SEC))
   let acc = 0
   for (const f of tl) {
@@ -830,15 +1053,19 @@ export function applyTexAnimFrame(tex, anim, frameIndex) {
 }
 
 /* mcmeta 原始 JSON 缓存（404 / 解析失败 → null 一并缓存：非动画贴图不反复探测） */
-const animMetaCache = new Map()   /* key → Promise<object|null> */
+const animMetaCache = new Map() /* key → Promise<object|null> */
 
 function loadAnimMetaCached(key, url) {
-  if (!animMetaCache.has(key)) animMetaCache.set(key, fetchJson(url).catch(() => null))
+  if (!animMetaCache.has(key))
+    animMetaCache.set(
+      key,
+      fetchJson(url).catch(() => null)
+    )
   return animMetaCache.get(key)
 }
 
 /* 动画贴图注册表 + rAF 驱动循环（注册表空时停转；无 rAF 环境（node 单测）安全跳过） */
-const animatedTexs = new Map()   /* THREE.Texture → anim */
+const animatedTexs = new Map() /* THREE.Texture → anim */
 let animRAF = 0
 
 function scheduleAnimTick() {
@@ -846,7 +1073,8 @@ function scheduleAnimTick() {
   animRAF = requestAnimationFrame(() => {
     animRAF = 0
     if (!animatedTexs.size) return
-    const now = (typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : Date.now()
+    const now =
+      typeof performance !== 'undefined' && typeof performance.now === 'function' ? performance.now() : Date.now()
     for (const [tex, anim] of animatedTexs) applyTexAnimFrame(tex, anim, animFrameIndexAt(anim, now / 1000))
     scheduleAnimTick()
   })
@@ -857,7 +1085,7 @@ function texImageSize(tex) {
   if (!img) return null
   const w = +img.naturalWidth || +img.width || 0
   const h = +img.naturalHeight || +img.height || 0
-  return (w > 0 && h > 0) ? { w, h } : null
+  return w > 0 && h > 0 ? { w, h } : null
 }
 
 /* 收集 group 内动画贴图的 { tex, anim }（去重；离屏缩略图多帧渲染用：
@@ -867,7 +1095,7 @@ export function getModelTexAnims(group) {
   if (!group || typeof group.traverse !== 'function') return out
   group.traverse(o => {
     if (!o || !o.isMesh) return
-    const mats = Array.isArray(o.material) ? o.material : (o.material ? [o.material] : [])
+    const mats = Array.isArray(o.material) ? o.material : o.material ? [o.material] : []
     for (const m of mats) {
       if (!m || !m.map || !animatedTexs.has(m.map)) continue
       if (out.some(e => e.tex === m.map)) continue
@@ -882,16 +1110,24 @@ export function getModelTexAnims(group) {
 function attachPackTexture(tex, metaPromise) {
   if (!tex) return Promise.resolve(null)
   const size = texImageSize(tex)
-  if (!size) { applyTexParams(tex); return Promise.resolve(null) }
-  return metaPromise.then(meta => {
+  if (!size) {
     applyTexParams(tex)
-    const anim = parseAnimMeta(meta, size.w, size.h)
-    if (!anim) return null
-    applyTexAnimFrame(tex, anim, 0)
-    animatedTexs.set(tex, anim)
-    scheduleAnimTick()
-    return anim
-  }).catch(() => { applyTexParams(tex); return null })
+    return Promise.resolve(null)
+  }
+  return metaPromise
+    .then(meta => {
+      applyTexParams(tex)
+      const anim = parseAnimMeta(meta, size.w, size.h)
+      if (!anim) return null
+      applyTexAnimFrame(tex, anim, 0)
+      animatedTexs.set(tex, anim)
+      scheduleAnimTick()
+      return anim
+    })
+    .catch(() => {
+      applyTexParams(tex)
+      return null
+    })
 }
 
 /* 仅配置动画采样（不修改 filter/wrap，由调用方预先设置）；用于非包通道（如左右对比预览）
@@ -901,14 +1137,16 @@ export function attachTextureAnimOnly(tex, metaPromise) {
   if (!tex) return Promise.resolve(null)
   const size = texImageSize(tex)
   if (!size) return Promise.resolve(null)
-  return Promise.resolve(metaPromise).then(meta => {
-    const anim = parseAnimMeta(meta, size.w, size.h)
-    if (!anim) return null
-    applyTexAnimFrame(tex, anim, 0)
-    animatedTexs.set(tex, anim)
-    scheduleAnimTick()
-    return anim
-  }).catch(() => null)
+  return Promise.resolve(metaPromise)
+    .then(meta => {
+      const anim = parseAnimMeta(meta, size.w, size.h)
+      if (!anim) return null
+      applyTexAnimFrame(tex, anim, 0)
+      animatedTexs.set(tex, anim)
+      scheduleAnimTick()
+      return anim
+    })
+    .catch(() => null)
 }
 
 /* 从动画注册表移除贴图（贴图 dispose / 替换前调用，避免 rAF 操作已释放贴图） */
@@ -927,7 +1165,17 @@ function packMcmetaUrl(api, packName, texPath, fileRoot) {
     失败置 mat.userData.texFailed。
     userData.texReady：贴图加载流程 promise（终态必 resolve：成功设 map / 失败置 texFailed），
     离屏缩略图据此事件驱动等待（替代轮询 mat.map） */
-export function mcMatFor(textures, api, packName, fileRoot, fallbackRoot, overrideUrl, tints, biome) {
+export function mcMatFor(
+  textures,
+  api,
+  packName,
+  fileRoot,
+  fallbackRoot,
+  overrideUrl,
+  tints,
+  biome,
+  withParallax = false
+) {
   const effBiome = biome || currentBiome
   return (key, face) => {
     if (!face || typeof face !== 'object' || typeof face.texture !== 'string') return null
@@ -936,19 +1184,29 @@ export function mcMatFor(textures, api, packName, fileRoot, fallbackRoot, overri
     const ck = overrideUrl ? 'ov:' + overrideUrl : texCacheKey(api, packName, texPath, fileRoot)
     const url = overrideUrl || rawUrl(api, packName, texPath, fileRoot, false)
     const metaPromise = loadAnimMetaCached(ck + ':mcmeta', packMcmetaUrl(api, packName, texPath, fileRoot))
-    const mat = makeModelMaterial(null)
+    const mat = makeModelMaterial(null, withParallax)
     const tintIndex = Number.isInteger(face.tintindex) ? face.tintindex : -1
     if (tintIndex >= 0) {
-      resolveTintColor(tintIndex, tints, effBiome, texPath, api, packName, fileRoot, fallbackRoot).then(color => {
-        if (mat.userData.replaced || !color) return
-        mat.color = color; mat.needsUpdate = true
-      }).catch(() => {})
+      resolveTintColor(tintIndex, tints, effBiome, texPath, api, packName, fileRoot, fallbackRoot)
+        .then(color => {
+          if (mat.userData.replaced || !color) return
+          mat.color = color
+          mat.needsUpdate = true
+        })
+        .catch(() => {})
     }
     if (!overrideUrl && !isSpecialTexPath(texPath)) {
       const dot = texPath.lastIndexOf('.')
       if (dot >= 0) {
-        const base = texPath.slice(0, dot), ext = texPath.slice(dot)
-        applyPbrMapsToModelMaterial(mat, rawUrl(api, packName, base + '_n' + ext, fileRoot, false), rawUrl(api, packName, base + '_s' + ext, fileRoot, false))
+        const base = texPath.slice(0, dot),
+          ext = texPath.slice(dot)
+        applyPbrMapsToModelMaterial(
+          mat,
+          rawUrl(api, packName, base + '_n' + ext, fileRoot, false),
+          rawUrl(api, packName, base + '_s' + ext, fileRoot, false),
+          false,
+          withParallax ? rawUrl(api, packName, base + '_h' + ext, fileRoot, false) : null
+        )
       }
     }
     mat.userData.texReady = loadTextureCached(ck, url).then(async tex => {
@@ -956,18 +1214,45 @@ export function mcMatFor(textures, api, packName, fileRoot, fallbackRoot, overri
       if (tex) {
         await attachPackTexture(tex, metaPromise)
         if (mat.userData.replaced) return
-        mat.map = tex; mat.needsUpdate = true
+        mat.map = tex
+        mat.needsUpdate = true
         return
       }
       if (!overrideUrl && fallbackRoot) {
         const fbCk = texCacheKey(api, packName, texPath, fallbackRoot)
         const fbUrl = rawUrl(api, packName, texPath, fallbackRoot, false)
         const fbTex = await loadTextureCached(fbCk, fbUrl)
-        if (mat.userData.replaced || !fbTex) { if (!fbTex) mat.userData.texFailed = true; return }
-        await attachPackTexture(fbTex, loadAnimMetaCached(fbCk + ':mcmeta', packMcmetaUrl(api, packName, texPath, fallbackRoot)))
         if (mat.userData.replaced) return
-        mat.map = fbTex; mat.needsUpdate = true
-        return
+        if (fbTex) {
+          await attachPackTexture(
+            fbTex,
+            loadAnimMetaCached(fbCk + ':mcmeta', packMcmetaUrl(api, packName, texPath, fallbackRoot))
+          )
+          if (mat.userData.replaced) return
+          mat.map = fbTex
+          mat.needsUpdate = true
+          return
+        }
+      }
+      /* 跨 official-packs 回退：包内 + fallbackRoot 均无贴图时加载 vanilla 贴图 */
+      if (!overrideUrl && !isSpecialTexPath(texPath)) {
+        const official = await getOfficialPack()
+        if (official) {
+          const fbCk = texCacheKey(official.api, official.packName, texPath, undefined)
+          const fbUrl = rawUrl(official.api, official.packName, texPath, undefined, false)
+          const fbTex = await loadTextureCached(fbCk, fbUrl)
+          if (mat.userData.replaced) return
+          if (fbTex) {
+            await attachPackTexture(
+              fbTex,
+              loadAnimMetaCached(fbCk + ':mcmeta', packMcmetaUrl(official.api, official.packName, texPath, undefined))
+            )
+            if (mat.userData.replaced) return
+            mat.map = fbTex
+            mat.needsUpdate = true
+            return
+          }
+        }
       }
       mat.userData.texFailed = true
     })
@@ -984,24 +1269,63 @@ export function spriteTexKey(textures) {
   return null
 }
 
-/* item/generated 类模型（无 elements）：layer0 贴图竖直 sprite 平面 */
-export function buildItemSpriteGroup(textures, api, packName, fileRoot) {
+/* item/generated 类模型（无 elements）：layer0 贴图竖直 sprite 平面。
+   支持 fallbackRoot：贴图先从 fileRoot 加载，失败回退到 fallbackRoot，再回退 official */
+export function buildItemSpriteGroup(textures, api, packName, fileRoot, fallbackRoot, withParallax = false) {
   const texPath = resolveTextureRef(textures, spriteTexKey(textures))
   if (!texPath) return null
   const geo = new THREE.PlaneGeometry(1.2, 1.2)
-  const mat = makeModelMaterial(null)
+  const mat = makeModelMaterial(null, withParallax)
   mat.side = THREE.DoubleSide
   mat.transparent = true
   const ck = texCacheKey(api, packName, texPath, fileRoot)
   const url = rawUrl(api, packName, texPath, fileRoot, false)
   const metaPromise = loadAnimMetaCached(ck + ':mcmeta', packMcmetaUrl(api, packName, texPath, fileRoot))
-  mat.userData.texReady = loadTextureCached(ck, url).then(tex => {
+  mat.userData.texReady = loadTextureCached(ck, url).then(async tex => {
     if (mat.userData.replaced) return
-    if (!tex) { mat.userData.texFailed = true; return }
-    return attachPackTexture(tex, metaPromise).then(() => {
+    if (tex) {
+      await attachPackTexture(tex, metaPromise)
       if (mat.userData.replaced) return
-      mat.map = tex; mat.needsUpdate = true
-    })
+      mat.map = tex
+      mat.needsUpdate = true
+      return
+    }
+    if (fallbackRoot) {
+      const fbCk = texCacheKey(api, packName, texPath, fallbackRoot)
+      const fbUrl = rawUrl(api, packName, texPath, fallbackRoot, false)
+      const fbTex = await loadTextureCached(fbCk, fbUrl)
+      if (mat.userData.replaced) return
+      if (fbTex) {
+        await attachPackTexture(
+          fbTex,
+          loadAnimMetaCached(fbCk + ':mcmeta', packMcmetaUrl(api, packName, texPath, fallbackRoot))
+        )
+        if (mat.userData.replaced) return
+        mat.map = fbTex
+        mat.needsUpdate = true
+        return
+      }
+    }
+    if (!isSpecialTexPath(texPath)) {
+      const official = await getOfficialPack()
+      if (official) {
+        const fbCk = texCacheKey(official.api, official.packName, texPath, undefined)
+        const fbUrl = rawUrl(official.api, official.packName, texPath, undefined, false)
+        const fbTex = await loadTextureCached(fbCk, fbUrl)
+        if (mat.userData.replaced) return
+        if (fbTex) {
+          await attachPackTexture(
+            fbTex,
+            loadAnimMetaCached(fbCk + ':mcmeta', packMcmetaUrl(official.api, official.packName, texPath, undefined))
+          )
+          if (mat.userData.replaced) return
+          mat.map = fbTex
+          mat.needsUpdate = true
+          return
+        }
+      }
+    }
+    mat.userData.texFailed = true
   })
   const mesh = new THREE.Mesh(geo, mat)
   mesh.castShadow = true
@@ -1012,18 +1336,20 @@ export function buildItemSpriteGroup(textures, api, packName, fileRoot) {
 
 /* bbmodel 面材质：faces[key].texture 为 textures 数组索引，source 为 base64 dataURL。
     cachePrefix 区分不同模型（Blockbench 贴图 id 在各模型间会重复） */
-export function bbMatFor(bbTextures, cachePrefix) {
+export function bbMatFor(bbTextures, cachePrefix, withParallax = false) {
   const list = Array.isArray(bbTextures) ? bbTextures : []
   return (key, face) => {
     if (!face || typeof face !== 'object' || face.texture == null) return null
     const tex = list[+face.texture]
     if (!tex || typeof tex.source !== 'string' || !tex.source.startsWith('data:')) return PLACEHOLDER_MAT
-    const mat = makeModelMaterial(null)
-    const ck = cachePrefix + ':' + (tex.id != null ? String(tex.id) : (tex.name || tex.source.length))
+    const mat = makeModelMaterial(null, withParallax)
+    const ck = cachePrefix + ':' + (tex.id != null ? String(tex.id) : tex.name || tex.source.length)
     mat.userData.texReady = loadTextureCached(ck, tex.source).then(t => {
       if (mat.userData.replaced) return
-      if (t) { mat.map = applyTexParams(t); mat.needsUpdate = true }
-      else mat.userData.texFailed = true
+      if (t) {
+        mat.map = applyTexParams(t)
+        mat.needsUpdate = true
+      } else mat.userData.texFailed = true
     })
     return mat
   }
@@ -1037,7 +1363,7 @@ export function bbMatFor(bbTextures, cachePrefix) {
    }  uv 为贴图像素坐标（v 自顶向下），mirror = uv[2] < uv[0] 水平镜像采样 */
 
 function normFaceRotation(rot) {
-  return Number.isFinite(+rot) ? ((Math.round(+rot / 90) * 90) % 360 + 360) % 360 : 0
+  return Number.isFinite(+rot) ? (((Math.round(+rot / 90) * 90) % 360) + 360) % 360 : 0
 }
 
 function texDisplayName(texPath) {
@@ -1062,13 +1388,13 @@ export function buildMcLayout(elements, textures, api, packName, fileRoot) {
   const texList = []
   const texPaths = []
   const texIndex = new Map()
-  const texIndexOf = (texPath) => {
+  const texIndexOf = texPath => {
     if (!texIndex.has(texPath)) {
       texIndex.set(texPath, texList.length)
       texList.push({
         name: texDisplayName(texPath),
         url: rawUrl(api, packName, texPath, fileRoot, false),
-        mcmetaUrl: packMcmetaUrl(api, packName, texPath, fileRoot),
+        mcmetaUrl: packMcmetaUrl(api, packName, texPath, fileRoot)
       })
       texPaths.push(texPath)
     }
@@ -1097,18 +1423,22 @@ export function buildMcLayout(elements, textures, api, packName, fileRoot) {
 
 /* item/generated sprite 回退布局：layer0 整幅贴图单面（spriteEl 为合成 element 引用，供贴图替换联动） */
 export function buildSpriteLayout(textures, api, packName, spriteEl, fileRoot) {
-  textures = (textures && typeof textures === 'object') ? textures : {}
+  textures = textures && typeof textures === 'object' ? textures : {}
   const texPath = resolveTextureRef(textures, spriteTexKey(textures))
   if (!texPath) return null
   return {
-    type: 'mc', uvScale: 16, sprite: true,
-    textures: [{
-      name: texDisplayName(texPath),
-      url: rawUrl(api, packName, texPath, fileRoot, false),
-      mcmetaUrl: packMcmetaUrl(api, packName, texPath, fileRoot),
-    }],
+    type: 'mc',
+    uvScale: 16,
+    sprite: true,
+    textures: [
+      {
+        name: texDisplayName(texPath),
+        url: rawUrl(api, packName, texPath, fileRoot, false),
+        mcmetaUrl: packMcmetaUrl(api, packName, texPath, fileRoot)
+      }
+    ],
     texPaths: [texPath],
-    elements: [{ faces: { sprite: { tex: 0, uv: [0, 0, 16, 16], rotation: 0, mirror: false } }, el: spriteEl || null }],
+    elements: [{ faces: { sprite: { tex: 0, uv: [0, 0, 16, 16], rotation: 0, mirror: false } }, el: spriteEl || null }]
   }
 }
 
@@ -1116,13 +1446,13 @@ export function buildSpriteLayout(textures, api, packName, spriteEl, fileRoot) {
     texOrigin：原始 json.textures 下标 → 布局贴图索引（-1 无效项），供 UV 编辑器
     把替换后的内嵌贴图（dataURL）写回原始 bbmodel JSON 保存 */
 export function buildBbLayout(json) {
-  json = (json && typeof json === 'object') ? json : {}
+  json = json && typeof json === 'object' ? json : {}
   const uvScale = Number.isFinite(+json.resolution) && +json.resolution > 0 ? +json.resolution : 16
   const raw = Array.isArray(json.textures) ? json.textures : []
   const texList = []
   const texOrigin = raw.map(tex => {
     if (tex && typeof tex.source === 'string' && tex.source.startsWith('data:')) {
-      texList.push({ name: tex.name || ('texture ' + texList.length), url: tex.source })
+      texList.push({ name: tex.name || 'texture ' + texList.length, url: tex.source })
       return texList.length - 1
     }
     return -1
@@ -1153,15 +1483,17 @@ export function buildBbLayout(json) {
    编辑写回原始 element 后按引用从 activeElementMeshes 定位 mesh 重映射几何 UV；
    material3d 的渲染循环逐帧执行 → 变更下一帧即生效（实时预览）。 */
 
-const activeElementMeshes = new Map()   /* 原始 element → mesh（当前展示模型） */
-let activeExportModel = null            /* 导出信息：{ type:'mc', parts, filename } | { type:'bb', json, filename } */
+const activeElementMeshes = new Map() /* 原始 element → mesh（当前展示模型） */
+let activeExportModel = null /* 导出信息：{ type:'mc', parts, filename } | { type:'bb', json, filename } */
 
 /* 展示成功后绑定：收集 mesh.userData.mcElement → mesh 映射 + 导出信息（bindActiveModel 也可供测试注入）；
     exportModel.ctx = { api, packName } 模型包上下文（mc 包模式传入，替换贴图时用于
     判断能否把新贴图转成标准 MC 引用；im/bb 等无包上下文不传 → 一律扩展引用形式） */
-export function bindActiveModel(group, exportModel) {
-  activeElementMeshes.clear()
-  activeExportModel = exportModel || null
+export function bindActiveModel(group, exportModel, append = false) {
+  if (!append) {
+    activeElementMeshes.clear()
+    activeExportModel = exportModel || null
+  }
   if (!group || typeof group.traverse !== 'function') return
   group.traverse(o => {
     if (o && o.isMesh && o.userData && o.userData.mcElement) activeElementMeshes.set(o.userData.mcElement, o)
@@ -1176,7 +1508,7 @@ function ensureExplicitFace(el, faceKey) {
   if (f && typeof f === 'object') return f
   const expanded = expandElementFaces(el)
   const src = expanded[faceKey]
-  const tex = (src && typeof src === 'object' && typeof src.texture === 'string') ? src.texture : undefined
+  const tex = src && typeof src === 'object' && typeof src.texture === 'string' ? src.texture : undefined
   f = tex != null ? { texture: tex } : {}
   el.faces[faceKey] = f
   return f
@@ -1184,9 +1516,11 @@ function ensureExplicitFace(el, faceKey) {
 
 function remapMeshFaceUv(mesh, el) {
   applyFaceUvs(
-    mesh.geometry, el.faces,
+    mesh.geometry,
+    el.faces,
     mesh.userData.uvScale || 16,
-    parseVec3(el.from, [0, 0, 0]), parseVec3(el.to, [16, 16, 16]),
+    parseVec3(el.from, [0, 0, 0]),
+    parseVec3(el.to, [16, 16, 16])
   )
 }
 
@@ -1241,16 +1575,22 @@ function clearFaceTexture(mat) {
 export async function updateModelTexture(texIndex, texUrl, layout, extra) {
   const lay = layout || lastLayout
   if (!lay || !Array.isArray(lay.elements)) return false
-  if (typeof texUrl !== 'string' || !(texUrl.startsWith('data:') || /^https?:\/\//i.test(texUrl) || texUrl.startsWith('/'))) return false
+  if (
+    typeof texUrl !== 'string' ||
+    !(texUrl.startsWith('data:') || /^https?:\/\//i.test(texUrl) || texUrl.startsWith('/'))
+  )
+    return false
   let tex = null
   try {
     tex = await new THREE.TextureLoader().loadAsync(texUrl)
-  } catch { return false }
+  } catch {
+    return false
+  }
   if (!tex) return false
   applyTexParams(tex)
   let touched = 0
   for (const layEl of lay.elements) {
-    const mesh = (layEl && layEl.el) ? activeElementMeshes.get(layEl.el) : null
+    const mesh = layEl && layEl.el ? activeElementMeshes.get(layEl.el) : null
     if (!mesh) continue
     for (const key in layEl.faces) {
       const lf = layEl.faces[key]
@@ -1262,16 +1602,21 @@ export async function updateModelTexture(texIndex, texUrl, layout, extra) {
           mat = makeModelMaterial(null)
           mesh.material[mi] = mat
         }
-        if (swapFaceTexture(mat, tex)) { touched++; if (extra) applyPbrMapsToModelMaterial(mat, extra.normal, extra.specular, true) }
+        if (swapFaceTexture(mat, tex)) {
+          touched++
+          if (extra) applyPbrMapsToModelMaterial(mat, extra.normal, extra.specular, true, extra.height)
+        }
       } else if (mi == null && mesh.material && !Array.isArray(mesh.material)) {
-        if (swapFaceTexture(mesh.material, tex)) { touched++; if (extra) applyPbrMapsToModelMaterial(mesh.material, extra.normal, extra.specular, true) }
+        if (swapFaceTexture(mesh.material, tex)) {
+          touched++
+          if (extra) applyPbrMapsToModelMaterial(mesh.material, extra.normal, extra.specular, true, extra.height)
+        }
       }
     }
   }
   writeBackTexRef(texIndex, texUrl, lay)
   return touched > 0
 }
-
 
 /* 移除材质：清空 layout 中引用 texIndex 的所有面材质贴图（面变纯色；含 sprite 单材质面）。
      引用同步写回空值（重新打开模型 → 面灰色）；配套 PBR（法线/高光）一并清除 */
@@ -1280,7 +1625,7 @@ export function clearModelTexture(texIndex, layout) {
   if (!lay || !Array.isArray(lay.elements)) return false
   let touched = 0
   for (const layEl of lay.elements) {
-    const mesh = (layEl && layEl.el) ? activeElementMeshes.get(layEl.el) : null
+    const mesh = layEl && layEl.el ? activeElementMeshes.get(layEl.el) : null
     if (!mesh) continue
     for (const key in layEl.faces) {
       const lf = layEl.faces[key]
@@ -1292,9 +1637,15 @@ export function clearModelTexture(texIndex, layout) {
           mat = makeModelMaterial(null)
           mesh.material[mi] = mat
         }
-        if (clearFaceTexture(mat)) { touched++; applyPbrMapsToModelMaterial(mat, '', '', true) }
+        if (clearFaceTexture(mat)) {
+          touched++
+          applyPbrMapsToModelMaterial(mat, '', '', true, '')
+        }
       } else if (mi == null && mesh.material && !Array.isArray(mesh.material)) {
-        if (clearFaceTexture(mesh.material)) { touched++; applyPbrMapsToModelMaterial(mesh.material, '', '', true) }
+        if (clearFaceTexture(mesh.material)) {
+          touched++
+          applyPbrMapsToModelMaterial(mesh.material, '', '', true, '')
+        }
       }
     }
   }
@@ -1318,13 +1669,19 @@ function writeBackTexRef(texIndex, texUrl, lay) {
       } else if (src.startsWith('/')) {
         fetch(apiUrl(src))
           .then(r => (r.ok ? r.blob() : null))
-          .then(blob => (blob ? new Promise((resolve) => {
-            const rd = new FileReader()
-            rd.onload = () => resolve(String(rd.result))
-            rd.onerror = () => resolve(null)
-            rd.readAsDataURL(blob)
-          }) : null))
-          .then(dataUrl => { if (dataUrl) m.json.textures[rawIdx].source = dataUrl })
+          .then(blob =>
+            blob
+              ? new Promise(resolve => {
+                  const rd = new FileReader()
+                  rd.onload = () => resolve(String(rd.result))
+                  rd.onerror = () => resolve(null)
+                  rd.readAsDataURL(blob)
+                })
+              : null
+          )
+          .then(dataUrl => {
+            if (dataUrl) m.json.textures[rawIdx].source = dataUrl
+          })
           .catch(() => {})
       }
     }
@@ -1343,27 +1700,34 @@ function writeBackTexRef(texIndex, texUrl, lay) {
 }
 
 /* UV 视图 hover/选中 → 3D 视口对应面 emissive 高亮 */
-let highlightedFace = null   /* { element, faceKey, mat } */
+let highlightedFace = null /* { element, faceKey, mat } */
 
 export function highlightModelFace(element, faceKey, on) {
   if (highlightedFace) {
-    try { if (highlightedFace.mat.emissive) highlightedFace.mat.emissive.setHex(0x000000) } catch {}
+    try {
+      if (highlightedFace.mat.emissive) highlightedFace.mat.emissive.setHex(0x000000)
+    } catch {}
     highlightedFace = null
   }
   if (!on) return true
   const mesh = activeElementMeshes.get(element)
   if (!mesh) return false
   const mi = MAT_INDEX[faceKey]
-  const mat = (mi != null && Array.isArray(mesh.material))
-    ? mesh.material[mi]
-    : ((mi == null && mesh.material && !Array.isArray(mesh.material)) ? mesh.material : null)
+  const mat =
+    mi != null && Array.isArray(mesh.material)
+      ? mesh.material[mi]
+      : mi == null && mesh.material && !Array.isArray(mesh.material)
+        ? mesh.material
+        : null
   if (!mat || (mat.userData && mat.userData.shared)) return false
   try {
     if (!mat.emissive) return false
     mat.emissive.setHex(0x2e4a8f)
     highlightedFace = { element, faceKey, mat }
     return true
-  } catch { return false }
+  } catch {
+    return false
+  }
 }
 
 /* 导出当前模型 JSON（编辑直接写回原始 element 引用 → 序列化即包含 UV 修改；
@@ -1379,20 +1743,38 @@ export function exportActiveModelJson() {
   const elements = []
   for (const p of parts) {
     if (!p || typeof p !== 'object') continue
-    for (const k in (p.textures || {})) if (textures[k] == null) textures[k] = p.textures[k]
-    for (const el of (p.elements || [])) elements.push(el)
+    for (const k in p.textures || {}) if (textures[k] == null) textures[k] = p.textures[k]
+    for (const el of p.elements || []) elements.push(el)
   }
   if (!elements.length) return null
   return { filename: m.filename || 'model.json', json: { textures, elements } }
 }
 
+export function getActiveModelSource() {
+  const m = activeExportModel
+  if (!m || !m.source) return null
+  return m.source
+}
+
 /* 最近一次成功展示的模型布局（无模型 / 已被清除时为 null） */
-export function getLastModelLayout() { return lastLayout }
+export function getLastModelLayout() {
+  return lastLayout
+}
+
+/* 左右对比布局（pair 路径）：{ left, right }，单模型/无模型时为 null。
+    UV 编辑器据此渲染左右切换 tab，按 activeSide 取对应 layout */
+export function getLastModelLayoutPair() {
+  return lastLayoutPair
+}
 
 /* 模型成功展示后广播（uv-view 浮窗监听以自动刷新；无 DOM 环境安全跳过） */
 function notifyModelShown(layout) {
   try {
-    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof CustomEvent !== 'undefined') {
+    if (
+      typeof window !== 'undefined' &&
+      typeof window.dispatchEvent === 'function' &&
+      typeof CustomEvent !== 'undefined'
+    ) {
       window.dispatchEvent(new CustomEvent('mcmodel:shown', { detail: { layout } }))
     }
   } catch {}
@@ -1400,12 +1782,22 @@ function notifyModelShown(layout) {
 
 /* ── 对外入口 ─────────────────────────────────────── */
 
-
 /* 获取导入模型 JSON（data/imported-models，可能是 .bbmodel 或 MC .json；供缩略图/视口复用） */
 export async function fetchImportedModelJson(id) {
   const data = await fetchOkData('/api/imported-models/' + encodeURIComponent(id))
   const json = data && data.json
-  return (json && typeof json === 'object') ? json : null
+  return json && typeof json === 'object' ? json : null
+}
+
+/* 获取导入模型完整信息 { json, texRoot }：texRoot 为模型专属子目录绝对路径，
+   MC .json 贴图引用按命名空间解析后从该目录加载（导入贴图随模型一同落盘到 <id>/assets/...） */
+export async function fetchImportedModelFull(id) {
+  const data = await fetchOkData('/api/imported-models/' + encodeURIComponent(id))
+  const json = data && data.json
+  return {
+    json: json && typeof json === 'object' ? json : null,
+    texRoot: data && typeof data.texDir === 'string' ? data.texDir : null
+  }
 }
 
 /* MC 包内 .json 模型（models/ 路径或 items/ 物品定义）→ 3D 视口；返回 { shown, noElements } */
@@ -1419,7 +1811,11 @@ export async function viewMcModelInViewport({ api, packName, rel, fileRoot }) {
     let sub = null
     let partLayout = null
     if (part.elements.length) {
-      sub = buildModelGroup(part.elements, mcMatFor(part.textures, api, packName, fileRoot, undefined, undefined, part.tints), 16)
+      sub = buildModelGroup(
+        part.elements,
+        mcMatFor(part.textures, api, packName, fileRoot, undefined, undefined, part.tints),
+        16
+      )
       partLayout = buildMcLayout(part.elements, part.textures, api, packName, fileRoot)
     } else {
       /* sprite 合成 element（mesh 挂引用 → 贴图替换联动；UV 编辑不适用） */
@@ -1430,22 +1826,38 @@ export async function viewMcModelInViewport({ api, packName, rel, fileRoot }) {
       partLayout = buildSpriteLayout(part.textures, api, packName, spriteEl, fileRoot)
     }
     if (!sub || !sub.children.length) continue
-    if (part.transform) { applyItemTransformation(sub, part.transform); anyTransform = true }
+    if (part.transform) {
+      applyItemTransformation(sub, part.transform)
+      anyTransform = true
+    }
     if (!layout && partLayout) layout = partLayout
     subs.push(sub)
   }
-  if (!subs.length) return { shown: false, noElements }
+  if (!subs.length) {
+    if (isPartsEmptyModel(parts)) setModelEmptyHint(_t('m3d.modelEmpty'))
+    return { shown: false, noElements }
+  }
   /* 单部件无变换：直接展示（保持既有层级契约，children[0] 即 Mesh）；
      多部件/带变换：外层合并 Group——transformation 在内层子 Group 上，
      不被视口归一化（showCustomModel 重设 position/scale）覆盖 */
   let group
   if (subs.length === 1 && !anyTransform) group = subs[0]
-  else { group = new THREE.Group(); for (const s of subs) group.add(s) }
+  else {
+    group = new THREE.Group()
+    for (const s of subs) group.add(s)
+  }
   const shown = showCustomModel(group)
   if (shown) {
+    setModelEmptyHint('')
     lastLayout = layout
+    lastLayoutPair = null
     notifyModelShown(lastLayout)
-    bindActiveModel(group, { type: 'mc', parts, filename: rel.split('/').pop() || 'model.json', ctx: { api, packName } })
+    bindActiveModel(group, {
+      type: 'mc',
+      parts,
+      filename: rel.split('/').pop() || 'model.json',
+      ctx: { api, packName }
+    })
     lastRenderFn = () => viewMcModelInViewport({ api, packName, rel, fileRoot })
   }
   return { shown, noElements }
@@ -1457,10 +1869,9 @@ export async function rerenderLastMcModel() {
   return lastRenderFn()
 }
 
-
 async function buildMcGroupFromRel(fileRoot, rel, texRoot, overrideUrl) {
   const texSource = texRoot || fileRoot
-  const fbRoot = (texRoot && !overrideUrl) ? fileRoot : undefined
+  const fbRoot = texRoot && !overrideUrl ? fileRoot : undefined
   const { parts } = await resolveMcModelAsset(undefined, undefined, rel, fileRoot)
   let layout = null
   const subs = []
@@ -1469,7 +1880,11 @@ async function buildMcGroupFromRel(fileRoot, rel, texRoot, overrideUrl) {
     let sub = null
     let partLayout = null
     if (part.elements.length) {
-      sub = buildModelGroup(part.elements, mcMatFor(part.textures, undefined, undefined, texSource, fbRoot, overrideUrl, part.tints), 16)
+      sub = buildModelGroup(
+        part.elements,
+        mcMatFor(part.textures, undefined, undefined, texSource, fbRoot, overrideUrl, part.tints),
+        16
+      )
       partLayout = buildMcLayout(part.elements, part.textures, undefined, undefined, texSource)
     } else {
       const spriteEl = { faces: { sprite: { texture: spriteTexKey(part.textures) || undefined } } }
@@ -1478,15 +1893,29 @@ async function buildMcGroupFromRel(fileRoot, rel, texRoot, overrideUrl) {
       partLayout = buildSpriteLayout(part.textures, undefined, undefined, spriteEl, texSource)
     }
     if (!sub || !sub.children.length) continue
-    if (part.transform) { applyItemTransformation(sub, part.transform); anyTransform = true }
+    if (part.transform) {
+      applyItemTransformation(sub, part.transform)
+      anyTransform = true
+    }
     if (!layout && partLayout) layout = partLayout
     subs.push(sub)
   }
-  if (!subs.length) return null
+  if (!subs.length) {
+    return {
+      group: null,
+      layout: null,
+      parts,
+      filename: rel.split('/').pop() || 'model.json',
+      emptyModel: isPartsEmptyModel(parts)
+    }
+  }
   let group
   if (subs.length === 1 && !anyTransform) group = subs[0]
-  else { group = new THREE.Group(); for (const s of subs) group.add(s) }
-  return { group, layout, parts, filename: rel.split('/').pop() || 'model.json' }
+  else {
+    group = new THREE.Group()
+    for (const s of subs) group.add(s)
+  }
+  return { group, layout, parts, filename: rel.split('/').pop() || 'model.json', emptyModel: false }
 }
 
 export async function viewMcModelPairInViewport({ left, right, rightRoot, isStale }) {
@@ -1494,18 +1923,25 @@ export async function viewMcModelPairInViewport({ left, right, rightRoot, isStal
     left ? buildMcGroupFromRel(left.fileRoot, left.rel).catch(() => null) : Promise.resolve(null),
     right
       ? buildMcGroupFromRel(right.fileRoot, right.rel).catch(() => null)
-      : (left && rightRoot)
+      : left && rightRoot
         ? buildMcGroupFromRel(left.fileRoot, left.rel, rightRoot).catch(() => null)
-        : Promise.resolve(null),
+        : Promise.resolve(null)
   ])
   if (isStale && isStale()) return { shown: false }
-  if (!lr && !rr) return { shown: false }
-  const shown = showCustomModelPair(lr && lr.group, rr && rr.group)
+  const lrGroup = lr && lr.group
+  const rrGroup = rr && rr.group
+  if (!lrGroup && !rrGroup) {
+    if ((lr && lr.emptyModel) || (rr && rr.emptyModel)) setModelEmptyHint(_t('m3d.modelEmpty'))
+    return { shown: false }
+  }
+  const shown = showCustomModelPair(lrGroup, rrGroup)
   if (shown) {
+    setModelEmptyHint('')
     lastLayout = (lr && lr.layout) || (rr && rr.layout)
+    lastLayoutPair = { left: lr && lr.layout, right: rr && rr.layout }
     notifyModelShown(lastLayout)
     if (lr) bindActiveModel(lr.group, { type: 'mc', parts: lr.parts, filename: lr.filename })
-    else if (rr) bindActiveModel(rr.group, { type: 'mc', parts: rr.parts, filename: rr.filename })
+    if (rr) bindActiveModel(rr.group, { type: 'mc', parts: rr.parts, filename: rr.filename }, !lr)
     lastRenderFn = () => viewMcModelPairInViewport({ left, right, rightRoot })
   }
   return { shown }
@@ -1517,15 +1953,28 @@ export async function viewMcModelTexCompareInViewport({ left, right, rightRoot, 
   const rGeo = right || left
   const [lr, rr] = await Promise.all([
     left ? buildMcGroupFromRel(left.fileRoot, left.rel, null, leftTexUrl).catch(() => null) : Promise.resolve(null),
-    rGeo ? buildMcGroupFromRel(rGeo.fileRoot, rGeo.rel, rGeo === right ? rightRoot : rGeo.fileRoot, rightTexUrl).catch(() => null) : Promise.resolve(null),
+    rGeo
+      ? buildMcGroupFromRel(rGeo.fileRoot, rGeo.rel, rGeo === right ? rightRoot : rGeo.fileRoot, rightTexUrl).catch(
+          () => null
+        )
+      : Promise.resolve(null)
   ])
   if (isStale && isStale()) return { shown: false }
-  if (!lr && !rr) return { shown: false }
-  const shown = showCustomModelPair(lr && lr.group, rr && rr.group)
+  const lrGroup = lr && lr.group
+  const rrGroup = rr && rr.group
+  if (!lrGroup && !rrGroup) {
+    if ((lr && lr.emptyModel) || (rr && rr.emptyModel)) setModelEmptyHint(_t('m3d.modelEmpty'))
+    return { shown: false }
+  }
+  const shown = showCustomModelPair(lrGroup, rrGroup)
   if (shown) {
+    setModelEmptyHint('')
     lastLayout = (lr && lr.layout) || (rr && rr.layout)
+    lastLayoutPair = { left: lr && lr.layout, right: rr && rr.layout }
     notifyModelShown(lastLayout)
     if (lr) bindActiveModel(lr.group, { type: 'mc', parts: lr.parts, filename: lr.filename })
+    if (rr) bindActiveModel(rr.group, { type: 'mc', parts: rr.parts, filename: rr.filename }, !lr)
+    lastRenderFn = () => viewMcModelTexCompareInViewport({ left, right, rightRoot, leftTexUrl, rightTexUrl })
   }
   return { shown }
 }
@@ -1552,36 +2001,45 @@ export async function resolveModelTexList({ api, packName, rel, fileRoot }) {
   return [...seen].map(([name, url]) => ({ name, url }))
 }
 
-
 /* 导入模型（data/imported-models/<id>/model.*，.bbmodel 或 MC .json）→ 3D 视口；返回 { shown } */
 export async function viewImportedModelInViewport({ id }) {
-  const json = await fetchImportedModelJson(id)
+  const { json, texRoot } = await fetchImportedModelFull(id)
   if (!json || typeof json !== 'object') return { shown: false }
   const isBb = !!(json.meta && (json.meta.format === 'bbmodel' || json.meta.model_format))
   if (isBb) {
-    if (!Array.isArray(json.elements) || !json.elements.length) return { shown: false }
+    if (!Array.isArray(json.elements) || !json.elements.length) {
+      setModelEmptyHint(_t('m3d.modelEmpty'))
+      return { shown: false }
+    }
     const uvScale = Number.isFinite(+json.resolution) && +json.resolution > 0 ? +json.resolution : 16
     const group = buildModelGroup(json.elements, bbMatFor(json.textures, 'bbm:' + id), uvScale)
     if (!group.children.length) return { shown: false }
     const shown = showCustomModel(group)
     if (shown) {
+      setModelEmptyHint('')
       lastLayout = buildBbLayout(json)
+      lastLayoutPair = null
       notifyModelShown(lastLayout)
-      bindActiveModel(group, { type: 'bb', json, filename: (id || 'model') + '.bbmodel' })
+      bindActiveModel(group, { type: 'bb', json, source: { kind: 'im', id }, filename: (id || 'model') + '.bbmodel' })
     }
     return { shown }
   }
-  /* MC .json：自包含 elements（导入文件无包上下文，贴图引用按命名空间解析，缺失回退占位） */
-  if (!Array.isArray(json.elements) || !json.elements.length) return { shown: false }
-  const textures = (json.textures && typeof json.textures === 'object') ? json.textures : {}
-  const group = buildModelGroup(json.elements, mcMatFor(textures, undefined, undefined), 16)
+  /* MC .json：自包含 elements；texRoot 为模型专属目录，贴图从 <id>/assets/... 加载（缺失回退占位） */
+  if (!Array.isArray(json.elements) || !json.elements.length) {
+    setModelEmptyHint(_t('m3d.modelEmpty'))
+    return { shown: false }
+  }
+  const textures = json.textures && typeof json.textures === 'object' ? json.textures : {}
+  const group = buildModelGroup(json.elements, mcMatFor(textures, undefined, undefined, texRoot || undefined), 16)
   if (!group.children.length) return { shown: false }
   const shown = showCustomModel(group)
   if (shown) {
+    setModelEmptyHint('')
     const parts = [{ elements: json.elements, textures }]
-    lastLayout = buildMcLayout(json.elements, textures, undefined, undefined)
+    lastLayout = buildMcLayout(json.elements, textures, undefined, undefined, texRoot || undefined)
+    lastLayoutPair = null
     notifyModelShown(lastLayout)
-    bindActiveModel(group, { type: 'mc', parts, filename: (id || 'model') + '.json' })
+    bindActiveModel(group, { type: 'mc', parts, source: { kind: 'im', id }, filename: (id || 'model') + '.json' })
   }
   return { shown }
 }
@@ -1593,7 +2051,7 @@ export async function viewCustomModelInViewport({ id, api, packName }) {
   const model = await fetchOkData('/api/custom-models/' + encodeURIComponent(id) + '/raw')
   if (!model || typeof model !== 'object') return { shown: false }
   let elements = Array.isArray(model.elements) ? model.elements : null
-  let textures = (model.textures && typeof model.textures === 'object') ? model.textures : {}
+  let textures = model.textures && typeof model.textures === 'object' ? model.textures : {}
   if (model.parent) {
     const parentRel = parentModelPath(model.parent)
     if (parentRel) {
@@ -1618,14 +2076,27 @@ export async function viewCustomModelInViewport({ id, api, packName }) {
     if (group && group.children[0]) group.children[0].userData.mcElement = spriteEl
     layout = buildSpriteLayout(textures, api, packName, spriteEl)
   }
-  if (!group || !group.children.length) return { shown: false }
+  if (!group || !group.children.length) {
+    if (!elements || !elements.length) setModelEmptyHint(_t('m3d.modelEmpty'))
+    return { shown: false }
+  }
   const shown = showCustomModel(group)
   if (shown) {
+    setModelEmptyHint('')
     lastLayout = layout
+    lastLayoutPair = null
     notifyModelShown(layout)
-    bindActiveModel(group, { type: 'mc', parts: [{ elements: elements || [], textures, transform: null }], filename: (id || 'custom') + '.json', ctx: { api, packName } })
+    bindActiveModel(group, {
+      type: 'mc',
+      parts: [{ elements: elements || [], textures, transform: null }],
+      source: { kind: 'cm', id },
+      filename: (id || 'custom') + '.json',
+      ctx: { api, packName }
+    })
   }
   return { shown }
 }
 
-export function isViewportVisible() { return hasVisibleViewport() }
+export function isViewportVisible() {
+  return hasVisibleViewport()
+}

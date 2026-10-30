@@ -1,0 +1,11 @@
+{
+  "id": "nodeRel",
+  "title": "节点关系",
+  "icon": "i-tree",
+  "html": "panel.html",
+  "css": "panel.css",
+  "js": "panel.js",
+  "mount": "body",
+  "order": 9,
+  "dynamic": true
+}

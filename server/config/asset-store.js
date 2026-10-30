@@ -13,6 +13,7 @@ const path = require('path')
 const crypto = require('crypto')
 const { logger } = require('../middleware/logger')
 const { DATA_ROOT } = require('../paths')
+const { atomicWriteJson } = require('./atomic-write')
 
 const DATA_DIR = path.join(DATA_ROOT, 'data')
 const DIR = path.join(DATA_DIR, 'asset-library')
@@ -35,12 +36,6 @@ function readRaw(file) {
   }
 }
 
-function atomicWrite(file, data) {
-  fs.mkdirSync(path.dirname(file), { recursive: true })
-  const tmp = file + '.' + crypto.randomUUID() + '.tmp'
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2))
-  fs.renameSync(tmp, file)
-}
 
 function detectType(key) {
   if (typeof key !== 'string' || !key) return null
@@ -55,7 +50,7 @@ function isValidKey(key) {
 }
 
 function classifyByType(items) {
-  const groups = { tex: [], hdri: [], mc: [], official: [], model: [], preset: [], project: [] }
+  const groups = { tex: [], hdri: [], mc: [], official: [], model: [], preset: [], project: [], craft: [] }
   for (const it of items) {
     const s = sanitizeItem(it)
     if (!s) continue
@@ -107,8 +102,8 @@ function migrateLegacy() {
     const raw = JSON.parse(fs.readFileSync(LEGACY_FILE, 'utf8'))
     const fav = sanitizeList(raw.favorites, MAX_FAV)
     const rec = sanitizeList(raw.recent, MAX_RECENT)
-    if (fav.length) atomicWrite(FAV_FILE, { favorites: fav })
-    if (rec.length) atomicWrite(RECENT_FILE, { recent: rec })
+    if (fav.length) atomicWriteJson(FAV_FILE, { favorites: fav })
+    if (rec.length) atomicWriteJson(RECENT_FILE, { recent: rec })
     logger.info('asset', 'migrated legacy assets.json -> asset-library/')
   } catch (e) {
     logger.warn('asset', 'legacy migration skipped: ' + e.message)
@@ -139,7 +134,7 @@ function getByType(type) {
 function setFavorites(items) {
   const clean = sanitizeList(items, MAX_FAV)
   writeQueue = writeQueue.then(() => {
-    try { atomicWrite(FAV_FILE, { favorites: clean }) }
+    try { atomicWriteJson(FAV_FILE, { favorites: clean }) }
     catch (e) { logger.error('asset', 'setFavorites failed: ' + e.message) }
   })
   return writeQueue
@@ -148,7 +143,7 @@ function setFavorites(items) {
 function setRecent(items) {
   const clean = sanitizeList(items, MAX_RECENT)
   writeQueue = writeQueue.then(() => {
-    try { atomicWrite(RECENT_FILE, { recent: clean }) }
+    try { atomicWriteJson(RECENT_FILE, { recent: clean }) }
     catch (e) { logger.error('asset', 'setRecent failed: ' + e.message) }
   })
   return writeQueue

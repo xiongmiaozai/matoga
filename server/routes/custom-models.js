@@ -18,6 +18,7 @@ const express = require('express')
 const { ok, fail, wrap } = require('../middleware/errors')
 const svc = require('../services/custom-model-service')
 const modelThumb = require('../services/model-thumb-service')
+const syncPack = require('../services/sync-pack-service')
 
 const router = express.Router()
 
@@ -52,6 +53,19 @@ router.delete('/:id', wrap(async (req, res) => {
   const r = await svc.deleteModel(req.params.id)
   modelThumb.invalidate('cm:' + req.params.id)
   ok(res, r)
+}))
+
+router.post('/:id/sync-pack', wrap(async (req, res) => {
+  const { json } = await svc.loadModel(req.params.id)
+  if (!json || !json.model) return fail(res, 'ERR_NOT_FOUND', 'model json not found')
+  const b = req.body || {}
+  if (!b.packName) return fail(res, 'ERR_INVALID_PARAM', 'packName required')
+  const ns = json.namespace || 'minecraft'
+  const tpl = (svc.listTemplates().find(t => t.id === json.template) || {}).category || 'block'
+  const name = json.name || req.params.id
+  const relPath = b.relPath || `assets/${ns}/models/${tpl}/${name}.json`
+  const result = await syncPack.syncModelJson({ packName: b.packName, relPath, json: json.model })
+  ok(res, result)
 }))
 
 module.exports = router

@@ -1,12 +1,10 @@
-<main class="center" data-region="center">
+<main class="center" data-region="center" role="region" aria-label="贴图对比">
   <div class="center-head">
     <div class="center-title-bar">
       <span class="center-title"><svg class="ico ico-sm"><use href="#i-compare"/></svg> <span data-i18n="center.compareResult">贴图对比</span></span>
-
     </div>
-    <div id="statsDashboard" class="stats-dashboard"></div>
+
     <div id="tableToolbar" class="table-toolbar">
-      <div id="categoryBar" class="category-bar"></div>
       <div id="summary" class="summary"></div>
     </div>
   </div>
@@ -15,14 +13,14 @@
       <table id="resultTable" class="result-table">
         <thead>
           <tr>
-            <th class="col-status" data-key="status" data-i18n="common.status">状态</th>
+            <th class="col-status" data-key="status" data-i18n="common.status" aria-sort="none">状态</th>
             <th class="col-preview" data-i18n="center.colPreview">预览</th>
-            <th class="col-name" data-key="name" data-i18n="common.name">名称</th>
-            <th class="col-type" data-key="type" data-i18n="common.type">类型</th>
-            <th class="col-size" data-key="size" data-i18n="common.size">大小</th>
-            <th class="col-mtime" data-key="mtime" data-i18n="center.colMtime">修改时间</th>
-            <th class="col-left" data-key="left" data-i18n="center.colLeft">左</th>
-            <th class="col-right" data-key="right" data-i18n="center.colRight">右</th>
+            <th class="col-name" data-key="name" data-i18n="common.name" aria-sort="none">名称</th>
+            <th class="col-type" data-key="type" data-i18n="common.type" aria-sort="none">类型</th>
+            <th class="col-size" data-key="size" data-i18n="common.size" aria-sort="none">大小</th>
+            <th class="col-mtime" data-key="mtime" data-i18n="center.colMtime" aria-sort="none">修改时间</th>
+            <th class="col-left" data-key="left" data-i18n="center.colLeft" aria-sort="none">左</th>
+            <th class="col-right" data-key="right" data-i18n="center.colRight" aria-sort="none">右</th>
           </tr>
         </thead>
         <tbody id="resultBody">

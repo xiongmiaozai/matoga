@@ -30,7 +30,7 @@ router.put('/file', wrap(async (req, res) => {
     }
     chunks.push(chunk)
   }
-  ok(res, uploadService.putFile(uploadId, rel, Buffer.concat(chunks)))
+  ok(res, await uploadService.putFile(uploadId, rel, Buffer.concat(chunks)))
 }))
 
 router.post('/end', wrap(async (req, res) => {

@@ -16,6 +16,8 @@
 
 matoga 是一个基于 **Node.js + Express + Three.js** 的本地 Web 服务应用（B/S 架构），专为 **Minecraft 材质包开发**工作流设计。浏览器访问 `localhost:5273` 即可使用，无需安装前端框架，无需构建步骤。
 
+🌐 **官网**：<https://zhishioga.innovaage.cn/>
+
 **核心能力**：文件夹对比 → 差异识别 → 2D/3D 预览 → 节点材质编辑 → Blockbench 建模 → 资产库管理，全流程闭环。
 
 ---

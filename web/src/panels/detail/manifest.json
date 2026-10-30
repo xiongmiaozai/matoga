@@ -1,8 +1,0 @@
-{
-  "id": "detail",
-  "title": "详情",
-  "icon": "i-layers",
-  "html": "panel.html",
-  "mount": ".sidebar-right",
-  "order": 6
-}

@@ -470,16 +470,16 @@ img, canvas, .pv-cell img, .preview-img, .thumb {
 .summary .s-extra { background: var(--extra); color: #fff; }
 .summary .s-extra .s-num { color: #fff; }
 
-/* Stat cards */
-.stat-card {
+/* Metric cards */
+.metric-card {
   padding: 8px 12px;
   background: var(--panel-2);
   border: 2px solid #000;
   box-shadow: inset 2px 2px 0 0 rgba(0,0,0,.4), inset -1px -1px 0 0 var(--mc-border-light);
 }
-.stat-card:hover { transform: none; border-color: #000; box-shadow: inset 2px 2px 0 0 rgba(0,0,0,.4), inset -1px -1px 0 0 var(--mc-border-light), 0 0 0 1px var(--mc-grass); }
-.stat-card-bar, .rate-bar { height: 4px; background: var(--mc-darker); border: 1px solid #000; }
-.stat-card-fill, .rate-fill { border: none; }
+.metric-card:hover { transform: none; border-color: #000; box-shadow: inset 2px 2px 0 0 rgba(0,0,0,.4), inset -1px -1px 0 0 var(--mc-border-light), 0 0 0 1px var(--mc-grass); }
+.metric-bar { height: 4px; background: var(--mc-darker); border: 1px solid #000; }
+.metric-fill { border: none; }
 
 /* ═══════════════════════════════════════════════
    TABLE — MC grid style
@@ -669,62 +669,7 @@ tr.row-extra td:first-child { border-left-color: var(--extra); }
 .m3d-loading-bar { background: var(--mc-darker); border: 1px solid #000; }
 .m3d-loading-fill { background: var(--mc-grass); }
 
-/* 3D controls */
-.m3d-segment {
-  background: var(--mc-darker);
-  border: 2px solid #000;
-  padding: 2px;
-  box-shadow: inset 2px 2px 0 0 rgba(0,0,0,.5);
-}
-.m3d-segment button {
-  border: 1px solid transparent;
-  color: var(--text-muted);
-}
-.m3d-segment button:hover { color: #fff; background: var(--panel-3); }
-.m3d-segment button.active {
-  background: var(--mc-grass);
-  color: #fff;
-  text-shadow: 1px 1px 0 rgba(0,0,0,.4);
-  box-shadow: inset 1px 1px 0 0 var(--mc-border-light);
-}
-
-.m3d-action-btn {
-  border: 2px solid #000;
-  background: var(--mc-stone);
-  box-shadow: inset 1px 1px 0 0 var(--mc-border-light), inset -1px -1px 0 0 var(--mc-border-dark);
-}
-.m3d-action-btn:hover { background: var(--mc-grass); color: #fff; }
-
-.m3d-hud-bar { background: linear-gradient(to bottom, rgba(0,0,0,.7), rgba(0,0,0,.3) 60%, transparent); }
-.m3d-hud-bar .m3d-segment { background: rgba(0,0,0,.4); border-color: #000; }
-.m3d-hud-bar .m3d-segment button.active { background: var(--mc-grass); }
-
-.m3d-hud-btn {
-  border: 2px solid #000;
-  background: var(--panel-3);
-  box-shadow: inset 1px 1px 0 0 var(--mc-border-light);
-}
-.m3d-hud-btn:hover { background: var(--panel-bg); }
-.m3d-hud-btn.active { background: var(--mc-grass); }
-
-.m3d-params-overlay {
-  background: var(--panel-bg);
-  border: 2px solid #000;
-  box-shadow: 0 6px 0 0 rgba(0,0,0,.6), inset 2px 2px 0 0 rgba(0,0,0,.4);
-}
-
-.m3d-params-close {
-  border: 2px solid #000;
-  background: var(--danger);
-  box-shadow: inset 1px 1px 0 0 var(--mc-border-light);
-}
-.m3d-params-close:hover { background: var(--danger); }
-
-.m3d-tabs button { border: 1px solid transparent; }
-.m3d-tabs button:hover { background: rgba(255,255,255,.08); border-color: #000; }
-.m3d-tabs button.active { background: var(--mc-grass-dark); border-color: #000; }
-
-.m3d-env-subpane { background: rgba(0,0,0,.3); border: 1px solid #000; }
+/* 3D 视口区域统一现代毛玻璃风：不应用 MC 像素风覆盖，由 styles.css 定义 */
 
 /* HDR preset items */
 .hdri-preset-item {
@@ -733,14 +678,6 @@ tr.row-extra td:first-child { border-left-color: var(--extra); }
 }
 .hdri-preset-item:hover { border-color: var(--mc-grass); transform: none; }
 .hdri-preset-item.active { border-color: var(--mc-grass); box-shadow: inset 1px 1px 0 0 rgba(0,0,0,.4), 0 0 0 2px var(--mc-grass); }
-
-.m3d-presets button {
-  border: 2px solid #000;
-  background: var(--mc-stone-dark);
-  box-shadow: inset 1px 1px 0 0 var(--mc-border-light), inset -1px -1px 0 0 var(--mc-border-dark);
-}
-.m3d-presets button:hover { background: var(--panel-3); border-color: #000; }
-.m3d-presets button.active { background: var(--mc-grass); border-color: #000; }
 
 /* Color inputs */
 input[type="color"].m3d-color-input, #m3dSkyTint {
@@ -768,13 +705,12 @@ input[type="color"].m3d-color-input, #m3dSkyTint {
 .bar-row:hover .bar-fill { filter: brightness(1.2); }
 .bar-row:hover .bar-val { color: var(--mc-grass); }
 
-.rate-card {
+.metric-card {
   background: var(--panel-2);
   border: 2px solid #000;
   box-shadow: inset 2px 2px 0 0 rgba(0,0,0,.4), inset -1px -1px 0 0 var(--mc-border-light);
 }
 
-.funnel-row { border: 2px solid #000; box-shadow: inset 1px 1px 0 0 var(--mc-border-light); }
 
 .stack-track { background: var(--mc-darker); border: 1px solid #000; }
 
@@ -972,10 +908,10 @@ body::before {
 .legend-dot { border-radius: 0; border: 1px solid #000; }
 .pv-role, .pv-tag, .pv-size, .pv-diff-btn { border-radius: 0; }
 .pv-diff-result canvas { border: 2px solid #000; }
-.stat-card-fill, .rate-fill, .bar-fill { border-radius: 0; }
-.stat-card-bar, .rate-bar, .bar-track { border-radius: 0; }
+.metric-fill, .bar-fill { border-radius: 0; }
+.metric-bar, .bar-track { border-radius: 0; }
 .heat-cell, .heat-bg { border-radius: 0; }
-.funnel-row { border-radius: 0; }
+
 .stack-track { border-radius: 0; }
 .pv-split-container { border: 2px solid #000; }
 .pv-diff-result { border-radius: 0; }
