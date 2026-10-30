@@ -2601,7 +2601,9 @@ async function copyText(s) {
 async function loadHdri() {
   try {
     const data = await assetApiCall('GET', '/api/hdri/list')
-    hdriEntries = (data && data.entries) || []
+    /* /api/hdri/list 的 data 本身就是数组（{ok:true,data:[...]}）。
+       兼容旧的 {entries:[...]} 形状，避免 hdriEntries 为 undefined 后 .map 抛错。 */
+    hdriEntries = Array.isArray(data) ? data : ((data && data.entries) || [])
     loadErrors.hdri = null
   } catch (e) {
     loadErrors.hdri = e.message || '未知错误'
