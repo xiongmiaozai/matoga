@@ -10,6 +10,7 @@ import (
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -106,6 +107,55 @@ func (h *AssetHandler) Tex(w http.ResponseWriter, r *http.Request) error {
 func (h *AssetHandler) Model(w http.ResponseWriter, r *http.Request) error {
 	httpx.OK(w, map[string]any{"packs": h.collect(r, mcmeta.ListPackModelGroups)})
 	return nil
+}
+
+// ModelCross 处理 GET /api/asset/model-cross?packs=A,B&source=mc。
+//
+// 多包交叉对比：按模型路径聚合，标注每个包的存在性与大小差异。
+// source=official 时对比官方包目录，否则对比 MC 材质包目录。
+func (h *AssetHandler) ModelCross(w http.ResponseWriter, r *http.Request) error {
+	if h.Config == nil {
+		return httpx.Errorf(httpx.CodeInvalidParam, "config unavailable")
+	}
+	cfg := h.Config.Get()
+	key := "mcPacksPath"
+	if r.URL.Query().Get("source") == "official" {
+		key = "officialPacksPath"
+	}
+	root, _ := cfg[key].(string)
+	if root == "" {
+		httpx.Fail(w, httpx.CodeInvalidParam, "pack root not configured")
+		return nil
+	}
+
+	names := parsePackList(r.URL.Query().Get("packs"))
+	if len(names) == 0 {
+		httpx.Fail(w, httpx.CodeInvalidParam, "packs parameter required")
+		return nil
+	}
+
+	res, err := mcmeta.CrossCompareModels(root, names)
+	if err != nil {
+		httpx.Fail(w, httpx.CodeInvalidParam, err.Error())
+		return nil
+	}
+	httpx.OK(w, res)
+	return nil
+}
+
+// parsePackList 把 "A, B,C" 拆成去空白后的非空列表。
+func parsePackList(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if v := strings.TrimSpace(p); v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 // sourcedPack 在 PackGroups 上补 source 字段（mc / official）。

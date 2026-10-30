@@ -22,6 +22,9 @@ type ImportedModelHandler struct {
 	Store *store.ImportedModelStore
 	// Thumbs 用于删除模型时失效其缩略图缓存。
 	Thumbs *media.ModelThumb
+	// PackRoot 返回 sync-pack 的目标根目录（mcPacksPath）。
+	// 用函数而非字符串：用户在运行中修改路径后应立即生效。
+	PackRoot func() string
 }
 
 // Location 返回专属本地目录。

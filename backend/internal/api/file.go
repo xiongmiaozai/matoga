@@ -145,7 +145,50 @@ func (h *FileHandler) Thumb(w http.ResponseWriter, r *http.Request) error {
 		httpx.Fail(w, httpx.CodeFSNotFound, "thumbnail not generated yet")
 		return nil
 	}
+	w.Header().Set("Cache-Control", "public, max-age=3600")
 	http.ServeFile(w, r, h.Thumbs.PathFor(p))
+	return nil
+}
+
+// maxThumbBatch 是批量查询的路径数上限。与 Node 侧保持一致。
+const maxThumbBatch = 256
+
+// ThumbInfoBatch 处理 POST /api/file/thumb-info-batch。
+//
+// 请求体 {"paths": ["..."]}，逐个返回缩略图状态。
+// 单条失败不中断整体：该条返回 exists=false 并带 error 字段，
+// 因为前端用它批量渲染网格，一条坏路径不应让整批失败。
+func (h *FileHandler) ThumbInfoBatch(w http.ResponseWriter, r *http.Request) error {
+	var body struct {
+		Paths []string `json:"paths"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		return httpx.Errorf(httpx.CodeInvalidParam, "invalid json")
+	}
+	if body.Paths == nil {
+		httpx.Fail(w, httpx.CodeInvalidParam, "paths must be array")
+		return nil
+	}
+	if len(body.Paths) > maxThumbBatch {
+		httpx.Fail(w, httpx.CodeInvalidParam, "too many paths (max 256)")
+		return nil
+	}
+
+	out := make(map[string]any, len(body.Paths))
+	for _, raw := range body.Paths {
+		p, err := fsx.GuardRead(raw)
+		if err != nil {
+			out[raw] = map[string]any{"exists": false, "stale": true, "thumbUrl": nil, "error": err.Error()}
+			continue
+		}
+		info, err := h.Thumbs.Info(p)
+		if err != nil {
+			out[raw] = map[string]any{"exists": false, "stale": true, "thumbUrl": nil, "error": err.Error()}
+			continue
+		}
+		out[raw] = info
+	}
+	httpx.OK(w, out)
 	return nil
 }
 

@@ -50,24 +50,44 @@ func ResolvePaths() (Paths, error) {
 	}, nil
 }
 
-// resolveResRoot 返回资源根目录：优先用 execDir（若其下已有 web 目录），
-// 否则自 execDir 向上最多 6 级查找含 web/index.html 的目录。
+// resolveResRoot 返回资源根目录。
+//
+// 查找顺序：
+//  1. execDir 本身是资源根
+//  2. 当前工作目录向上（`go run ./cmd/matoga` 时二进制约在系统临时目录，
+//     而工作目录正是项目根；先查 cwd 能让开发态与打包态都正确）
+//  3. execDir 向上最多 6 级
+//
+// 全部未命中时退回 execDir。
 func resolveResRoot(execDir string) string {
 	if isResRoot(execDir) {
 		return execDir
 	}
-	dir := execDir
-	for i := 0; i < 6; i++ {
+	if wd, err := os.Getwd(); err == nil {
+		if dir := walkUpForResRoot(wd, 6); dir != "" {
+			return dir
+		}
+	}
+	if dir := walkUpForResRoot(execDir, 6); dir != "" {
+		return dir
+	}
+	return execDir
+}
+
+// walkUpForResRoot 从 start 起向上最多 depth 级查找资源根。
+func walkUpForResRoot(start string, depth int) string {
+	dir := start
+	for i := 0; i <= depth; i++ {
+		if isResRoot(dir) {
+			return dir
+		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
 			break
 		}
 		dir = parent
-		if isResRoot(dir) {
-			return dir
-		}
 	}
-	return execDir
+	return ""
 }
 
 // isResRoot 判断 dir 是否是资源根（存在 web 目录）。

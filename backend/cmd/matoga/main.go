@@ -23,9 +23,11 @@ import (
 	"github.com/xiongmiaozai/matoga/backend/internal/craftpack"
 	"github.com/xiongmiaozai/matoga/backend/internal/fsx"
 	"github.com/xiongmiaozai/matoga/backend/internal/httpx"
+	"github.com/xiongmiaozai/matoga/backend/internal/lang"
 	"github.com/xiongmiaozai/matoga/backend/internal/media"
 	"github.com/xiongmiaozai/matoga/backend/internal/platform"
 	"github.com/xiongmiaozai/matoga/backend/internal/store"
+	"github.com/xiongmiaozai/matoga/backend/internal/theme"
 	"github.com/xiongmiaozai/matoga/backend/internal/upload"
 )
 
@@ -86,6 +88,8 @@ func main() {
 		ImportedModels: store.NewImportedModelStore(filepath.Join(paths.DataRoot, "data")),
 		CustomModels:   store.NewCustomModelStore(paths.DataRoot),
 		CraftPack:      craftpack.New(paths.DataRoot, assetStore, cfg),
+		Lang:           lang.New(filepath.Join(paths.ResRoot, "server", "assets", "zh_cn.json")),
+		Themes:         theme.NewStore(filepath.Join(paths.DataRoot, "data", "themes")),
 		// 三个包路由的根目录：每次请求都读最新配置，支持运行时改路径。
 		CraftPacksRoot: func() string { return cfgPath(cfg, "craftPacksPath") },
 		McPacksRoot:    func() string { return cfgPath(cfg, "mcPacksPath") },

@@ -7,8 +7,10 @@ package api
 import (
 	"github.com/xiongmiaozai/matoga/backend/internal/craftpack"
 	"github.com/xiongmiaozai/matoga/backend/internal/httpx"
+	"github.com/xiongmiaozai/matoga/backend/internal/lang"
 	"github.com/xiongmiaozai/matoga/backend/internal/media"
 	"github.com/xiongmiaozai/matoga/backend/internal/store"
+	"github.com/xiongmiaozai/matoga/backend/internal/theme"
 	"github.com/xiongmiaozai/matoga/backend/internal/upload"
 )
 
@@ -27,6 +29,8 @@ type Services struct {
 	ImportedModels *store.ImportedModelStore
 	CustomModels   *store.CustomModelStore
 	CraftPack      *craftpack.Service
+	Lang           *lang.Service
+	Themes         *theme.Store
 	// CraftPacksRoot / McPacksRoot / McOfficialRoot 是三个包路由的根目录解析器。
 	// 走函数而不是字符串，是为了每次请求都读最新配置（用户可在运行时改路径）。
 	CraftPacksRoot func() string
@@ -68,6 +72,7 @@ func Mount(r *httpx.Router, s Services) {
 	fileGroup.Get("/raw", httpx.Wrap(fileHandler.Raw))
 	fileGroup.Get("/thumb", httpx.Wrap(fileHandler.Thumb))
 	fileGroup.Get("/thumb-info", httpx.Wrap(fileHandler.ThumbInfo))
+	fileGroup.Post("/thumb-info-batch", httpx.Wrap(fileHandler.ThumbInfoBatch))
 
 	// /api/hdri
 	hdriHandler := &HDRIHandler{Service: s.HDRI}
@@ -85,6 +90,7 @@ func Mount(r *httpx.Router, s Services) {
 	assetGroup.Get("/type/{type}", httpx.Wrap(assetHandler.ByType))
 	assetGroup.Get("/tex", httpx.Wrap(assetHandler.Tex))
 	assetGroup.Get("/model", httpx.Wrap(assetHandler.Model))
+	assetGroup.Get("/model-cross", httpx.Wrap(assetHandler.ModelCross))
 	assetGroup.Get("/model-thumb-info", httpx.Wrap(assetHandler.ModelThumbInfo))
 	assetGroup.Get("/model-thumb", httpx.Wrap(assetHandler.ModelThumb))
 	assetGroup.Post("/model-thumb", httpx.Wrap(assetHandler.SaveModelThumb))
@@ -136,7 +142,11 @@ func Mount(r *httpx.Router, s Services) {
 	npGroup.Get("/{id}/thumb", httpx.Wrap(npHandler.Thumb))
 
 	// /api/imported-models
-	imHandler := &ImportedModelHandler{Store: s.ImportedModels, Thumbs: s.ModelThumbs}
+	imHandler := &ImportedModelHandler{
+		Store:    s.ImportedModels,
+		Thumbs:   s.ModelThumbs,
+		PackRoot: s.McPacksRoot,
+	}
 	imGroup := r.APIGroup("/imported-models")
 	imGroup.Get("/location", httpx.Wrap(imHandler.Location))
 	imGroup.Get("/", httpx.Wrap(imHandler.List))
@@ -144,9 +154,17 @@ func Mount(r *httpx.Router, s Services) {
 	imGroup.Get("/{id}", httpx.Wrap(imHandler.Load))
 	imGroup.Put("/{id}", httpx.Wrap(imHandler.Update))
 	imGroup.Delete("/{id}", httpx.Wrap(imHandler.Delete))
+	imGroup.Get("/{id}/textures", httpx.Wrap(imHandler.ListTextures))
+	imGroup.Post("/{id}/textures", httpx.Wrap(imHandler.SaveTextures))
+	imGroup.Delete("/{id}/textures", httpx.Wrap(imHandler.DeleteTexture))
+	imGroup.Post("/{id}/sync-pack", httpx.Wrap(imHandler.SyncPack))
 
 	// /api/custom-models
-	cmHandler := &CustomModelHandler{Store: s.CustomModels, Thumbs: s.ModelThumbs}
+	cmHandler := &CustomModelHandler{
+		Store:    s.CustomModels,
+		Thumbs:   s.ModelThumbs,
+		PackRoot: s.McPacksRoot,
+	}
 	cmGroup := r.APIGroup("/custom-models")
 	cmGroup.Get("/templates", httpx.Wrap(cmHandler.Templates))
 	cmGroup.Get("/location", httpx.Wrap(cmHandler.Location))
@@ -156,6 +174,7 @@ func Mount(r *httpx.Router, s Services) {
 	cmGroup.Get("/{id}/raw", httpx.Wrap(cmHandler.Raw))
 	cmGroup.Put("/{id}", httpx.Wrap(cmHandler.Update))
 	cmGroup.Delete("/{id}", httpx.Wrap(cmHandler.Delete))
+	cmGroup.Post("/{id}/sync-pack", httpx.Wrap(cmHandler.SyncPack))
 
 	// /api/craft-pack
 	cpHandler := &CraftPackHandler{Svc: s.CraftPack}
@@ -175,6 +194,49 @@ func Mount(r *httpx.Router, s Services) {
 	mountPackGroup(r, "/craft-packs", s.CraftPacksRoot, false)
 	mountPackGroup(r, "/mc-packs", s.McPacksRoot, false)
 	mountPackGroup(r, "/mc-official", s.McOfficialRoot, true)
+
+	// /api/lang
+	if s.Lang != nil {
+		langHandler := &LangHandler{
+			Service:      s.Lang,
+			OfficialRoot: s.McOfficialRoot,
+			McPacksRoot:  s.McPacksRoot,
+		}
+		langGroup := r.APIGroup("/lang")
+		langGroup.Get("/zh", httpx.Wrap(langHandler.ZH))
+	}
+
+	// /api/cache
+	if s.Lang != nil {
+		cacheHandler := &CacheHandler{
+			Thumbs:      s.Thumbs,
+			ModelThumbs: s.ModelThumbs,
+			HDRI:        s.HDRI,
+			Lang:        s.Lang,
+		}
+		cacheGroup := r.APIGroup("/cache")
+		cacheGroup.Get("/stats", httpx.Wrap(cacheHandler.Stats))
+		cacheGroup.Post("/clear", httpx.Wrap(cacheHandler.Clear))
+		cacheGroup.Post("/clear-all", httpx.Wrap(cacheHandler.ClearAll))
+		cacheGroup.Post("/hdri-orphans", httpx.Wrap(cacheHandler.HDRIOrphans))
+	}
+
+	// /api/pack-builder
+	pbHandler := &PackBuilderHandler{DestRoot: s.McPacksRoot}
+	pbGroup := r.APIGroup("/pack-builder")
+	pbGroup.Get("/formats", httpx.Wrap(pbHandler.Formats))
+	pbGroup.Post("/build", httpx.Wrap(pbHandler.Build))
+
+	// /api/themes
+	if s.Themes != nil {
+		themeHandler := &ThemeHandler{Store: s.Themes}
+		themeGroup := r.APIGroup("/themes")
+		themeGroup.Get("/", httpx.Wrap(themeHandler.List))
+		themeGroup.Post("/import", httpx.Wrap(themeHandler.Import))
+		themeGroup.Get("/{id}", httpx.Wrap(themeHandler.Get))
+		themeGroup.Put("/{id}", httpx.Wrap(themeHandler.Put))
+		themeGroup.Delete("/{id}", httpx.Wrap(themeHandler.Delete))
+	}
 }
 
 // mountPackGroup 挂载一个包路由分组（5 个基础端点 + 可选 version-map）。
@@ -187,6 +249,8 @@ func mountPackGroup(r *httpx.Router, prefix string, root func() string, versionM
 	g.Get("/list", httpx.Wrap(h.List))
 	if versionMap {
 		g.Get("/version-map", httpx.Wrap(h.VersionMap))
+		// 静态路径必须注册在 /{name} 通配之前，否则会被通配吞掉。
+		g.Get("/tex-index", httpx.Wrap(h.TexIndex))
 	}
 	g.Put("/rename", httpx.Wrap(h.Rename))
 	g.Get("/{name}/textures", httpx.Wrap(h.Textures))

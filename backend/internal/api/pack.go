@@ -47,6 +47,16 @@ func (h *PackHandler) VersionMap(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+// TexIndex 扁平收集包根下全部贴图相对路径（去重），供前端校验模型贴图引用。
+func (h *PackHandler) TexIndex(w http.ResponseWriter, r *http.Request) error {
+	paths, err := mcmeta.ListAllTexPaths(h.Root())
+	if err != nil {
+		return httpx.Errorf(httpx.CodeFS, err.Error())
+	}
+	httpx.OK(w, map[string]any{"paths": paths})
+	return nil
+}
+
 // Rename 重命名资源包。
 func (h *PackHandler) Rename(w http.ResponseWriter, r *http.Request) error {
 	var body struct {

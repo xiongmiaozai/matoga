@@ -20,6 +20,9 @@ import (
 type CustomModelHandler struct {
 	Store  *store.CustomModelStore
 	Thumbs *media.ModelThumb
+	// PackRoot 返回 sync-pack 的目标根目录（mcPacksPath）。
+	// 用函数而非字符串：用户在运行中修改路径后应立即生效。
+	PackRoot func() string
 }
 
 // Templates 返回可用模板列表。
