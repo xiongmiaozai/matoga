@@ -1,0 +1,431 @@
+/* ════════════════════════════════════════════════════════════
+   资产库列表
+   ════════════════════════════════════════════════════════════ */
+.asset-lib-topbar{
+  display:flex; align-items:center; gap:6px; padding:5px 8px;
+  border-bottom:1px solid var(--border-soft);
+}
+.asset-lib-search{
+  display:flex; align-items:center; gap:6px; flex:1; min-width:0;
+}
+.asset-lib-search .ico{ color:var(--text-muted); flex:none }
+.asset-lib-search input{
+  flex:1; min-width:0; padding:4px 8px;
+  border:1px solid var(--border-soft); border-radius:var(--r-sm);
+  background:var(--panel-2); color:var(--text); font-size:12px; outline:none;
+  transition:border-color .15s var(--ease);
+}
+.asset-lib-search input:focus-visible{ border-color:var(--primary) }
+.asset-lib-search input::placeholder{ color:var(--text-dim) }
+.asset-lib-search-clear{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:24px; height:24px; border:none; border-radius:var(--r-sm);
+  background:transparent; color:var(--text-muted); cursor:pointer; flex:none;
+  transition:all .15s var(--ease);
+}
+.asset-lib-search-clear:hover{ color:var(--text); background:var(--panel-2) }
+.asset-lib-search-clear.is-hidden{ display:none }
+.asset-lib-search input:disabled ~ .asset-lib-search-clear{ display:none }
+.asset-lib-list{ flex:1; overflow-y:auto; padding:4px 0 }
+.asset-lib-section{ margin-bottom:4px }
+.asset-lib-section-head{
+  display:flex; align-items:center; gap:6px; padding:10px 12px 6px;
+  font-size:12px;
+  color:var(--text-muted); font-weight:600; cursor:pointer; user-select:none;
+}
+.asset-lib-section-head .caret{ transition:transform .2s var(--ease-out); display:inline-block }
+.asset-lib-section-head:focus-visible{ outline:2px solid var(--primary); outline-offset:-1px }
+.asset-lib-section.collapsed:not(.search-open) .caret{ transform:rotate(-90deg) }
+.asset-lib-section.collapsed:not(.search-open) .asset-lib-grid{ display:none }
+.asset-lib-section.collapsed:not(.search-open) .asset-lib-sec-actions{ display:none }
+.asset-lib-section-head .cnt{
+  font-size:10px; color:var(--text-dim); background:var(--panel-3);
+  padding:1px 7px; border:1px solid var(--border-soft); border-radius:10px; margin-left:auto;
+}
+.asset-lib-section-btn{
+  display:inline-flex; align-items:center; gap:3px;
+  padding:2px 8px; margin-left:6px;
+  border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--panel-bg); color:var(--text-muted);
+  font-size:10px; text-transform:none; letter-spacing:0; font-weight:500;
+  cursor:pointer; transition:all .15s var(--ease);
+}
+.asset-lib-section-btn:hover{ border-color:var(--primary); color:var(--primary); }
+.asset-lib-section-btn .ico{ width:12px; height:12px; }
+.asset-lib-grid{
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(80px,1fr));
+  gap:6px; padding:4px 8px 8px;
+}
+.asset-card{
+  background:var(--panel-2); border:1px solid var(--border-soft); border-radius:var(--r-sm);
+  padding:4px; cursor:grab; transition:all .15s var(--ease);
+  display:flex; flex-direction:column; gap:3px; overflow:hidden;
+  backdrop-filter:blur(8px);
+}
+.asset-card:hover{ border-color:var(--primary); box-shadow:0 0 0 1px var(--primary), var(--shadow-xs); transform:translateY(-2px) }
+.asset-card:focus-visible{ outline:2px solid var(--primary); outline-offset:1px }
+.asset-card:active{ cursor:grabbing }
+.asset-card.dragging{ opacity:.5 }
+.asset-card.is-hidden{ display:none }
+.asset-lib-group.is-hidden,.asset-lib-section.is-hidden,.asset-lib-empty.is-hidden{ display:none }
+.asset-card .ac-thumb{
+  width:100%; aspect-ratio:1; background:var(--panel-3); border-radius:var(--r-sm);
+  display:flex; align-items:center; justify-content:center; overflow:hidden;
+  image-rendering:pixelated;
+}
+.asset-card .ac-thumb img{ width:100%; height:100%; object-fit:cover; display:block }
+/* 模型 3D 离屏渲染缩略图：抗锯齿插值（区别于像素风贴图缩略图） */
+.asset-card .ac-thumb.ac-thumb-3d img{ image-rendering:auto }
+.asset-card .ac-icon{ color:var(--text-muted); width:26px; height:26px }
+.asset-card .ac-name{
+  font-size:10px; color:var(--text); white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis; line-height:1.3; font-weight:500;
+}
+.asset-card .ac-role{ font-size:9px; padding:0 4px; border-radius:2px; font-weight:600; align-self:flex-start; line-height:1.4; opacity:0; transition:opacity .15s var(--ease) }
+.asset-card:hover .ac-role{ opacity:1 }
+.asset-card .ac-role.main{ background:rgba(124,189,86,.18); color:var(--primary) }
+.asset-card .ac-role.normal{ background:rgba(91,206,250,.18); color:var(--accent) }
+.asset-card .ac-role.specular{ background:#3a2a1a; color:var(--warn) }
+.asset-card .ac-role.height{ background:rgba(168,85,247,.16); color:#c084fc }
+.asset-card .ac-role.emissive{ background:rgba(245,158,11,.16); color:var(--warn) }
+.asset-card .ac-role.ao{ background:rgba(107,114,128,.18); color:var(--text-muted) }
+.asset-card .ac-role.opacity{ background:rgba(59,130,246,.16); color:var(--primary) }
+.asset-card .ac-role.preset{ background:rgba(91,206,250,.18); color:var(--accent) }
+.asset-card .ac-role.project{ background:#2b2f4a; color:#8fa8ff }
+.asset-card .ac-role.model{ background:#2a2a4d; color:#a892ff }
+.asset-card .ac-role.official{ background:#1f3d2b; color:#7fd69a; letter-spacing:.2px }
+.asset-lib-sec-actions{ display:flex; gap:6px; padding:0 10px 6px }
+.asset-lib-sec-btn{
+  font-size:10px; padding:3px 9px; border-radius:var(--r-xs); cursor:pointer;
+  border:1px solid var(--border); background:var(--panel-2); color:var(--text-muted);
+  transition:all .15s var(--ease);
+}
+.asset-lib-sec-btn:hover{ border-color:var(--primary); color:var(--primary) }
+.asset-lib-empty{ padding:24px 12px; text-align:center; color:var(--text-dim); font-size:11px }
+.asset-lib-loading{ padding:24px 12px; text-align:center; color:var(--text-muted); font-size:11px }
+
+/* 制作包（我的开发包） */
+.craft-stat{ padding:0 10px 6px; font-size:10px; color:var(--text-dim) }
+.craft-pack-list{ display:flex; flex-direction:column; gap:4px; padding:2px 10px 8px }
+.craft-pack-list-title{ font-size:10px; font-weight:600; color:var(--text-dim) }
+.craft-pack-row{
+  display:flex; align-items:center; gap:8px; padding:4px 8px;
+  border:1px solid var(--border-soft); border-radius:var(--r-sm); background:var(--panel-2);
+  font-size:11px;
+}
+.craft-pack-name{ font-weight:600; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.craft-pack-meta{ font-size:10px; color:var(--text-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-left:auto }
+.craft-pack-row .asset-lib-sec-btn{ flex:none }
+/* 当前制作项目行（持续累积，非导出快照）：以主色描边与导出快照区分 */
+.craft-current-row{ border-color:var(--accent); background:var(--accent-soft) }
+
+/* 资产库贴图子分组 */
+.asset-lib-groups{ display:flex; flex-direction:column; gap:4px; padding:2px 10px 8px }
+.asset-lib-groups .asset-lib-hint{ grid-column:auto }
+.asset-lib-group{ border:1px solid var(--border-soft); border-radius:var(--r-sm); background:var(--panel-2); overflow:hidden }
+.asset-lib-group-head{
+  display:flex; align-items:center; gap:6px; padding:5px 9px;
+  font-size:10px; color:var(--text-dim); font-weight:600; cursor:pointer; user-select:none;
+}
+.asset-lib-group-head:hover{ color:var(--text) }
+.asset-lib-group-head:focus-visible{ outline:2px solid var(--primary); outline-offset:-1px }
+.asset-lib-group-head .caret{ transition:transform .2s var(--ease-out); display:inline-block }
+.asset-lib-group.collapsed:not(.search-open) .caret{ transform:rotate(-90deg) }
+.asset-lib-group.collapsed:not(.search-open) .asset-lib-grid{ display:none }
+.asset-lib-group-head .gl{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.asset-lib-group-head .cnt{
+  font-size:10px; color:var(--text-dim); background:var(--panel-3);
+  padding:1px 7px; border:1px solid var(--border-soft); border-radius:10px; margin-left:auto; flex:none;
+}
+/* 分组头「打开本地位置」按钮（导入模型 / 自定义模型专属目录） */
+.asset-lib-group-head .asset-lib-group-btn{
+  display:inline-flex; align-items:center; justify-content:center; flex:none;
+  width:18px; height:18px; padding:0; border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--panel-bg); color:var(--text-muted); cursor:pointer; transition:all .15s var(--ease);
+}
+.asset-lib-group-head .asset-lib-group-btn:hover{ border-color:var(--primary); color:var(--primary) }
+.asset-lib-group-head .asset-lib-group-btn .ico{ width:11px; height:11px }
+.asset-lib-group .asset-lib-grid{ padding:6px }
+.asset-lib-more{
+  grid-column:1/-1; font-size:10px; padding:4px 9px; border-radius:var(--r-xs); cursor:pointer;
+  border:1px dashed var(--border-soft); background:var(--panel-2); color:var(--text-muted);
+  transition:all .15s var(--ease);
+}
+.asset-lib-more:hover{ border-color:var(--primary); color:var(--primary) }
+.asset-lib-grid.list-view .asset-lib-more{ align-self:center; width:fit-content }
+
+/* 资产库工具栏 */
+.asset-lib-toolbar{
+  display:flex; align-items:center; gap:6px; flex:none;
+}
+.asset-lib-tags{
+  display:flex; align-items:center; gap:2px; flex:none;
+}
+.asset-lib-tags.has-overflow{
+  -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 12px,#000 calc(100% - 12px),transparent 100%);
+  mask-image:linear-gradient(90deg,transparent 0,#000 12px,#000 calc(100% - 12px),transparent 100%);
+}
+.asset-lib-tags::-webkit-scrollbar{ display:none }
+.asset-lib-tag{
+  display:inline-flex; align-items:center; gap:3px;
+  height:24px; padding:0 8px; background:transparent; border:none;
+  border-radius:var(--r-sm); color:var(--text-muted); font-size:11px; font-weight:500;
+  cursor:pointer; white-space:nowrap; flex:none; line-height:1;
+  transition:background .15s var(--ease), color .15s var(--ease), box-shadow .15s var(--ease);
+}
+.asset-lib-tag .ico{ width:12px; height:12px; flex:none }
+.asset-lib-tag.icon-only{ padding:0; width:24px; justify-content:center }
+.asset-lib-tag.icon-only .ico{ width:13px; height:13px }
+.asset-lib-tag-sep{ width:1px; height:18px; background:var(--border-soft); flex:none; margin:0 2px }
+.asset-lib-tag:hover{ color:var(--primary); background:var(--primary-soft) }
+.asset-lib-tag.active{
+  background:var(--primary); color:#fff; box-shadow:0 1px 3px var(--primary-glow);
+}
+.asset-lib-chip-wrap{ position:relative; flex:none; display:flex; align-items:center }
+.asset-lib-chip{
+  display:inline-flex; align-items:center; gap:4px;
+  height:26px; padding:0 6px 0 8px; background:var(--panel-2);
+  border:1px solid var(--border-soft); border-radius:var(--r-sm);
+  color:var(--text); font-size:11px; font-weight:500; cursor:pointer; white-space:nowrap; flex:none; line-height:1;
+  transition:border-color .15s var(--ease), color .15s var(--ease), background .15s var(--ease);
+}
+.asset-lib-chip .ico{ width:12px; height:12px; flex:none }
+.asset-lib-chip .chip-caret{ transition:transform .18s var(--ease); opacity:.6 }
+.asset-lib-chip:hover{ border-color:var(--primary); color:var(--primary) }
+.asset-lib-chip.active{ border-color:var(--primary); color:var(--primary) }
+.asset-lib-chip.open .chip-caret{ transform:rotate(180deg) }
+.asset-lib-popover{
+  position:fixed; z-index:10000;
+  min-width:180px; padding:6px; background:var(--panel-3);
+  border:1px solid var(--border); border-radius:var(--r-md);
+  box-shadow:0 8px 24px rgba(0,0,0,.4); display:none;
+}
+.asset-lib-popover.open{ display:block }
+.asset-lib-pop-cats{ display:grid; grid-template-columns:1fr 1fr; gap:2px }
+.asset-lib-pop-sep{ height:1px; background:var(--border-soft); margin:5px 0 }
+.asset-lib-pop-kind{ display:flex; gap:4px }
+.asset-lib-pop-sort{ display:flex; align-items:center; gap:4px }
+.asset-lib-pop-sort-tags{ display:flex; flex-wrap:wrap; gap:4px; flex:1 }
+.asset-lib-pop-dir{
+  height:26px; width:26px; padding:0; background:transparent;
+  border:1px solid var(--border-soft); border-radius:var(--r-sm);
+  color:var(--text-muted); cursor:pointer; flex:none;
+  display:flex; align-items:center; justify-content:center;
+  transition:color .15s var(--ease), background .15s var(--ease);
+}
+.asset-lib-pop-dir:hover{ color:var(--primary); background:var(--primary-soft) }
+.asset-lib-pop-dir .ico{ transition:transform .22s var(--ease) }
+.asset-lib-pop-dir.desc .ico{ transform:rotate(180deg) }
+.asset-lib-pop-tag{
+  display:inline-flex; align-items:center; gap:5px;
+  height:26px; padding:0 8px; background:transparent; border:1px solid transparent;
+  border-radius:var(--r-sm); color:var(--text-muted); font-size:11px; font-weight:500;
+  cursor:pointer; white-space:nowrap; line-height:1; justify-content:flex-start;
+  transition:background .15s var(--ease), color .15s var(--ease), border-color .15s var(--ease);
+}
+.asset-lib-pop-tag .ico{ width:13px; height:13px; flex:none }
+.asset-lib-pop-tag:hover{ color:var(--primary); background:var(--primary-soft) }
+.asset-lib-pop-tag.active{
+  background:var(--primary); color:#fff; border-color:var(--primary);
+}
+.asset-lib-toolbar-right{ display:flex; align-items:center; gap:6px; flex:none; margin-left:auto }
+
+.asset-lib-btn-group{
+  display:flex; align-items:center; flex:none;
+  background:var(--panel-2); border:1px solid var(--border-soft); border-radius:var(--r-sm);
+  transition:border-color .15s var(--ease);
+}
+.asset-lib-btn-group:hover{ border-color:var(--primary) }
+.asset-lib-btn{
+  height:24px; width:28px; padding:0; background:transparent; border:none;
+  color:var(--text-muted); font-size:13px; cursor:pointer; line-height:1; flex:none;
+  display:flex; align-items:center; justify-content:center;
+  transition:color .15s var(--ease), background .15s var(--ease);
+}
+.asset-lib-btn + .asset-lib-btn{ border-left:1px solid var(--border-soft) }
+.asset-lib-btn:hover{ color:var(--primary); background:var(--primary-soft) }
+.asset-lib-btn .ico{ transition:transform .22s var(--ease) }
+.asset-lib-btn.desc .ico{ transform:rotate(180deg) }
+.asset-lib-stat{
+  font-size:10px; color:var(--text-muted); white-space:nowrap; flex:none;
+  font-variant-numeric:tabular-nums; letter-spacing:.2px;
+  padding:0 8px; border-left:1px solid var(--border-soft); line-height:24px;
+}
+
+.asset-lib-hint{ padding:8px 10px; font-size:11px; color:var(--text-muted); grid-column:1/-1 }
+.asset-lib-hint.error{ color:var(--warn) }
+
+/* 资产卡片星标 */
+.asset-card{ position:relative }
+.asset-card .ac-star{
+  position:absolute; top:3px; right:3px; width:18px; height:18px; padding:0;
+  background:rgba(0,0,0,.3); border:0; border-radius:50%; cursor:pointer; font-size:12px; line-height:18px;
+  color:var(--text-dim); opacity:.4; transition:all .15s var(--ease);
+  display:flex; align-items:center; justify-content:center;
+}
+.asset-card:hover .ac-star{ opacity:.8 }
+.asset-card .ac-star:hover{ opacity:1; color:var(--warn); background:rgba(245,158,11,.2) }
+.asset-card .ac-star.on{ color:var(--warn); opacity:1 }
+
+/* 资产库列表视图 */
+.asset-lib-grid.list-view{ display:flex; flex-direction:column; gap:2px; padding:2px 6px 6px }
+.asset-lib-grid.list-view .asset-card{ flex-direction:row; align-items:center; gap:8px; padding:4px 6px }
+.asset-lib-grid.list-view .ac-thumb{ width:32px; height:32px; aspect-ratio:auto; flex:none }
+.asset-lib-grid.list-view .ac-name{ flex:1; font-size:11px }
+.asset-lib-grid.list-view .ac-role{ flex:none }
+
+/* 资产库：包内容浏览 */
+.pack-browser{ display:flex; flex-direction:column; flex:1; min-height:0 }
+.asset-lib-toolbar.pb-off{ opacity:.45; pointer-events:none }
+.pb-top{ display:flex; align-items:center; gap:8px; padding:9px 10px 7px; flex:none; flex-wrap:wrap }
+.pb-back{
+  width:24px; height:24px; padding:0; flex:none; display:flex; align-items:center; justify-content:center;
+  background:rgba(0,0,0,.25); border:1px solid var(--border-soft); border-radius:var(--r-sm);
+  color:var(--text-muted); cursor:pointer; transition:all .15s var(--ease);
+}
+.pb-back:hover{ border-color:var(--primary); color:var(--primary) }
+.pb-logo{
+  width:30px; height:30px; flex:none; border-radius:var(--r-sm); overflow:hidden;
+  background:rgba(0,0,0,.3); border:1px solid var(--border-soft);
+  display:flex; align-items:center; justify-content:center;
+}
+.pb-logo img{ width:100%; height:100%; object-fit:cover; display:block; image-rendering:pixelated }
+.pb-logo .ico{ width:16px; height:16px; color:var(--text-dim) }
+.pb-title{ display:flex; align-items:center; gap:6px; min-width:0; flex:1 }
+.pb-name{ font-size:12px; font-weight:600; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.pb-badge{ font-size:9px; padding:1px 6px; border-radius:2px; font-weight:600; background:#1f3d2b; color:#7fd69a; flex:none }
+.pb-kind{ font-size:10px; color:var(--text-dim); border:1px solid var(--border-soft); border-radius:10px; padding:1px 8px; flex:none; white-space:nowrap }
+.pb-kind:empty{ display:none }
+.pb-meta{ padding:0 10px 5px; flex:none; display:flex; flex-direction:column; gap:2px; min-width:0; width:100% }
+.pb-desc{ font-size:11px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.pb-stats{ font-size:10px; color:var(--text-dim); display:flex; gap:8px; flex-wrap:wrap }
+.pb-stats .s{
+  white-space:nowrap; padding:1px 7px; border-radius:10px;
+  background:rgba(0,0,0,.25); border:1px solid var(--border-soft);
+}
+.pb-stats .s b{ color:var(--text-muted); font-weight:600 }
+.pb-toolbar{
+  display:flex; align-items:center; gap:6px; padding:5px 9px;
+  border-bottom:1px solid var(--border-soft); flex:none; min-width:0;
+}
+.pb-up{
+  width:24px; height:24px; padding:0; flex:none; display:flex; align-items:center; justify-content:center;
+  background:rgba(0,0,0,.25); border:1px solid var(--border-soft); border-radius:var(--r-sm);
+  color:var(--text-muted); cursor:pointer; transition:all .15s var(--ease);
+}
+.pb-up:hover:not(:disabled){ border-color:var(--primary); color:var(--primary) }
+.pb-up:disabled{ opacity:.3; cursor:default }
+.pb-crumbs{ display:flex; align-items:center; flex-wrap:wrap; gap:2px; flex:1; min-width:0 }
+.pb-crumb{
+  height:20px; padding:0 7px; background:transparent; border:0; border-radius:var(--r-xs); cursor:pointer;
+  font-size:11px; color:var(--text-muted); max-width:140px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  transition:all .12s var(--ease);
+}
+.pb-crumb:hover{ color:var(--primary); background:rgba(124,189,86,.08) }
+.pb-crumb.cur{ color:var(--text); font-weight:600; cursor:default }
+.pb-crumb.cur:hover{ color:var(--text); background:transparent }
+.pb-sep{ color:var(--text-dim); font-size:10px; flex:none }
+.pb-tools{ display:flex; align-items:center; gap:6px; flex:none }
+.pb-filter-wrap{ position:relative; flex:none }
+.pb-filter-wrap .ico{
+  position:absolute; left:6px; top:50%; transform:translateY(-50%);
+  width:11px; height:11px; color:var(--text-dim); pointer-events:none;
+}
+.pb-filter{
+  height:24px; width:128px; padding:0 6px 0 23px; background:rgba(0,0,0,.25);
+  border:1px solid var(--border-soft); border-radius:12px; color:var(--text);
+  font-size:10px; outline:none; transition:width .15s var(--ease), border-color .12s var(--ease);
+}
+.pb-filter:focus{ border-color:var(--primary); width:156px }
+.pb-filter::placeholder{ color:var(--text-dim) }
+.pb-viewseg{
+  display:flex; flex:none; overflow:hidden; background:rgba(0,0,0,.25);
+  border:1px solid var(--border-soft); border-radius:var(--r-sm);
+}
+.pb-vbtn{
+  width:26px; height:22px; padding:0; display:flex; align-items:center; justify-content:center;
+  background:transparent; border:0; color:var(--text-dim); cursor:pointer; transition:all .12s var(--ease);
+}
+.pb-vbtn + .pb-vbtn{ border-left:1px solid var(--border-soft) }
+.pb-vbtn:hover{ color:var(--primary) }
+.pb-vbtn.active{ background:rgba(124,189,86,.14); color:var(--primary) }
+.pb-vbtn .ico{ width:13px; height:13px }
+.pb-list{ flex:1; overflow-y:auto; padding:7px 10px; min-height:0 }
+.pb-folders{ display:grid; grid-template-columns:repeat(auto-fill,minmax(104px,1fr)); gap:5px; margin-bottom:8px }
+.pb-folder{
+  display:flex; align-items:center; gap:6px; padding:6px 8px; background:rgba(0,0,0,.25);
+  border:1px solid var(--border-soft); border-radius:var(--r-sm); cursor:pointer; user-select:none;
+  transition:all .15s var(--ease); min-width:0;
+}
+.pb-folder:hover{ border-color:var(--primary) }
+.pb-folder.sel{ border-color:var(--primary); box-shadow:0 0 0 1px var(--primary) }
+.pb-folder .ico{ width:15px; height:15px; color:var(--warn); flex:none }
+.pb-folder .fn{ font-size:11px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.pb-farrow{ margin-left:auto; opacity:0; flex:none; transition:opacity .12s var(--ease) }
+.pb-folder:hover .pb-farrow{ opacity:.7 }
+.pb-farrow .ico{ width:12px; height:12px; color:var(--text-dim) }
+.pb-files{ display:flex; flex-direction:column; gap:1px }
+.pb-file{
+  display:flex; align-items:center; gap:8px; padding:4px 8px; border-radius:var(--r-xs); cursor:default; user-select:none;
+  transition:background .1s; min-width:0; position:relative;
+}
+.pb-file:hover{ background:rgba(255,255,255,.04) }
+.pb-file.sel{ background:var(--primary-soft); box-shadow:inset 0 0 0 1px var(--primary) }
+.pb-file .pf-thumb{
+  width:20px; height:20px; flex:none; background:rgba(0,0,0,.3); border-radius:2px;
+  display:flex; align-items:center; justify-content:center; overflow:hidden; image-rendering:pixelated;
+}
+.pb-file .pf-thumb img{ width:100%; height:100%; object-fit:cover; display:block }
+.pb-file .pf-thumb .ico{ width:13px; height:13px; color:var(--text-dim) }
+.pb-file .pf-thumb.model .ico{ color:#a892ff }
+.pb-file .fn{ font-size:11px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1 }
+.pb-file .fs{ font-size:10px; color:var(--text-dim); flex:none }
+.pf-add{
+  width:18px; height:18px; padding:0; margin-left:auto; flex:none;
+  display:flex; align-items:center; justify-content:center;
+  background:var(--primary); color:#fff; border:0; border-radius:var(--r-xs); cursor:pointer;
+  opacity:0; transition:opacity .12s var(--ease), background .12s var(--ease);
+}
+.pb-file:hover .pf-add{ opacity:1 }
+.pf-add:hover{ background:var(--primary-hover) }
+.pf-add .ico{ width:11px; height:11px }
+.pb-tex-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(84px,1fr)); gap:5px }
+.pb-file.card{
+  flex-direction:column; align-items:stretch; gap:3px; padding:5px;
+  background:rgba(0,0,0,.25); border:1px solid var(--border-soft); border-radius:var(--r-sm);
+  transition:all .15s var(--ease);
+}
+.pb-file.card:hover{ background:rgba(0,0,0,.25); border-color:var(--primary) }
+.pb-file.card.sel{ background:rgba(0,0,0,.25); border-color:var(--primary); box-shadow:0 0 0 1px var(--primary) }
+.pb-file.card .pf-thumb{ width:100%; height:auto; aspect-ratio:1/1; border-radius:var(--r-xs); background:rgba(0,0,0,.3) }
+.pb-file.card .pf-thumb img{ object-fit:contain }
+.pb-file.card .pf-thumb .ico{ width:22px; height:22px; color:var(--text-dim) }
+.pb-file.card .fn{
+  width:100%; flex:none; text-align:center; font-size:9px; line-height:1.3;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+}
+.pb-file.card .fs{ display:none }
+.pb-file.card .pf-add{
+  position:absolute; top:6px; right:6px; margin-left:0;
+  width:20px; height:20px; border-radius:var(--r-sm); box-shadow:0 1px 4px rgba(0,0,0,.2);
+}
+.pb-file.card .pf-add .ico{ width:12px; height:12px }
+.pb-empty{ padding:24px 12px; text-align:center; color:var(--text-dim); font-size:11px }
+.pb-loading{ padding:24px 12px; text-align:center; color:var(--text-muted); font-size:11px }
+.pb-status{
+  flex:none; padding:6px 10px; border-top:1px solid var(--border-soft);
+  font-size:10px; color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+
+/* 资产卡片右键菜单 */
+.asset-ctx-menu{
+  position:fixed; z-index:9999; min-width:140px;
+  background:rgba(44,44,50,.9); backdrop-filter:var(--blur);
+  border:1px solid var(--border-soft); border-radius:var(--r-sm); box-shadow:var(--shadow-md);
+  padding:5px 0; font-size:12px;
+}
+.asset-ctx-item{ padding:6px 12px; cursor:pointer; color:var(--text); border-radius:var(--r-xs); margin:0 4px; transition:all .1s var(--ease) }
+.asset-ctx-item:hover{ background:rgba(124,189,86,.14); color:var(--primary) }
+
+/* 拖拽到画布提示 */
+#nodeCanvasPanelWrap.drag-over .panel-body{ outline:2px dashed var(--primary); outline-offset:-4px }

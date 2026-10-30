@@ -1,0 +1,136 @@
+/* ── toast ─────────────────────────────────── */
+.toast{position:fixed; bottom:48px; left:50%; transform:translateX(-50%) translateY(20px);
+  z-index:300; background:var(--panel-2); border:1px solid var(--primary); color:var(--text);
+  padding:8px 16px; font-size:12px; opacity:0; pointer-events:none;
+  transition:all .25s var(--ease); box-shadow:0 4px 0 0 rgba(0,0,0,.5)}
+.toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+
+/* 滚动条 */
+::-webkit-scrollbar{width:8px; height:8px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border-soft); border:1px solid var(--bg)}
+::-webkit-scrollbar-thumb:hover{background:var(--border)}
+
+/* 像素角标 */
+.pixel{image-rendering:pixelated; -ms-interpolation-mode:nearest-neighbor}
+
+/* ── 右侧预览面板（3D/2D 联动）────────────── */
+.preview-pane{position:fixed; top:44px; right:0; bottom:28px; width:680px; z-index:80;
+  background:var(--panel); border-left:1px solid var(--border);
+  display:flex; flex-direction:column; transition:transform .2s var(--ease)}
+.preview-pane.hidden{transform:translateX(680px)}
+/* node-editor 不支持面板浮动：强制覆盖 styles.css 的 .panel.floating，
+   即使残留 .floating class 也不会脱离 .preview-pane 变成独立悬浮窗 */
+#previewPanelWrap.floating{
+  position:static !important; z-index:auto !important;
+  width:auto !important; height:auto !important;
+  resize:none !important; box-shadow:none !important;
+  border:0 !important; border-radius:0 !important;
+}
+/* 覆盖外链 styles.css 的 .panel 双重边框/阴影（.preview-pane 已有边框） */
+#previewPanelWrap{
+  border:none !important; box-shadow:none !important; border-radius:0 !important;
+  background:transparent !important;
+}
+.preview-pane .pp-head{height:32px; display:flex; align-items:center; gap:6px; padding:0 10px;
+  background:var(--panel-2); border-bottom:1px solid var(--border-soft)}
+.preview-pane .pp-tabs{display:flex; gap:2px}
+.preview-pane .pp-tab{height:22px; padding:0 10px; display:inline-flex; align-items:center;
+  background:var(--bg); border:1px solid var(--border-soft); color:var(--text-muted);
+  font-size:11px; transition:all .1s}
+.preview-pane .pp-tab.active{color:var(--primary); background:var(--primary-soft); border-color:var(--primary)}
+.preview-pane .pp-spacer{flex:1}
+.preview-pane .pp-icbtn{width:22px; height:22px; display:inline-flex; align-items:center; justify-content:center;
+  background:var(--bg); border:1px solid var(--border-soft); color:var(--text-muted); font-size:12px}
+.preview-pane .pp-icbtn:hover{color:var(--primary); border-color:var(--primary)}
+.preview-pane .pp-icbtn.active{color:var(--primary); border-color:var(--primary)}
+.pp-body{flex:1; position:relative; overflow:hidden; background:var(--mc-darker)}
+.pp-body .pp-content{position:absolute; inset:0; display:none}
+.pp-body .pp-content.active{display:block}
+#material3dContainer{width:100%; height:100%; position:relative; overflow:hidden}
+#material3dContainer canvas{width:100%!important; height:100%!important; display:block}
+#preview2dContainer{width:100%; height:100%; overflow:auto; padding:10px;
+  display:flex; flex-direction:column; gap:8px; background:var(--panel-2)}
+.pv2-card{background:var(--panel); border:1px solid var(--border-soft); padding:6px}
+.pv2-card .lbl{font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px}
+.pv2-card .imgwrap{width:100%; min-height:80px; background:var(--bg); display:flex; align-items:center; justify-content:center; image-rendering:pixelated}
+.pv2-card .imgwrap img{max-width:100%; max-height:220px; display:block}
+.pv2-card .empty{color:var(--text-dim); font-size:11px; padding:20px 0}
+.pv2-color-card{display:flex; align-items:center; gap:8px}
+.pv2-color-card .sw{width:40px; height:40px; border:1px solid var(--border-soft); image-rendering:pixelated}
+.pv2-color-card .hx{font-family:ui-monospace,monospace; font-size:11px; color:var(--text-muted)}
+.pp-foot{height:26px; display:flex; align-items:center; gap:8px; padding:0 10px;
+  background:var(--panel-2); border-top:1px solid var(--border-soft); font-size:10px; color:var(--text-dim)}
+.pp-foot .seg{display:inline-flex; align-items:center; gap:4px}
+.pp-foot .seg b{color:var(--text); font-variant-numeric:tabular-nums}
+.m3d-ctrl{position:absolute; top:8px; right:8px; z-index:5; display:flex; gap:4px; flex-wrap:wrap; justify-content:flex-end; max-width:180px}
+.m3d-ctrl select, .m3d-ctrl button{height:22px; background:var(--panel-3); border:1px solid var(--border);
+  color:var(--text); font-size:10px; padding:0 6px; backdrop-filter:blur(4px)}
+.m3d-ctrl select:hover, .m3d-ctrl button:hover{border-color:var(--primary); color:var(--primary)}
+.m3d-ctrl button.active{color:var(--primary); border-color:var(--primary)}
+.m3d-badge{position:absolute; top:8px; left:8px; z-index:5; padding:3px 8px;
+  background:var(--panel-3); border:1px solid var(--border-soft); color:var(--text-dim);
+  font-size:10px; backdrop-filter:blur(4px)}
+.m3d-badge.ok{color:var(--primary); border-color:var(--primary)}
+.m3d-badge.err{color:var(--danger); border-color:var(--danger)}
+/* 画布缩窄给预览腾位 */
+  .canvas-wrap.has-preview{right:680px}
+  .statusbar.has-preview{right:680px}
+}
+/* 导入对话框（带遮罩模态框） */
+.import-overlay{position:fixed;inset:0;z-index:1000;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);backdrop-filter:blur(2px)}
+.import-overlay.open{display:flex}
+.import-dlg{width:760px;max-width:92vw;max-height:82vh;background:var(--panel);border:1px solid var(--border);border-radius:8px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 12px 48px rgba(0,0,0,.6)}
+.import-dlg-head{height:42px;padding:0 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border-soft);font-weight:700;font-size:13px;user-select:none}
+.import-dlg-head .x{cursor:pointer;color:var(--text-muted);font-size:16px}
+.import-dlg-head .x:hover{color:var(--danger)}
+.import-dlg-body{flex:1;overflow:auto;padding:12px 16px}
+.import-side{margin-bottom:18px}
+.import-side h4{font-size:12px;color:var(--text-muted);margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.import-side h4 .tag{font-size:10px;padding:1px 6px;background:var(--bg);border:1px solid var(--border-soft);border-radius:3px;color:var(--text-dim);max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.import-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:8px}
+.import-card{background:var(--bg);border:1px solid var(--border-soft);border-radius:4px;padding:6px;cursor:pointer;transition:all .15s}
+.import-card:hover{border-color:var(--primary)}
+.import-card.selected{border-color:var(--primary);background:var(--primary-soft);box-shadow:0 0 0 1px var(--primary)}
+.import-card .thumb{width:100%;height:80px;background:var(--bg-2);display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:4px;image-rendering:pixelated;border-radius:3px}
+.import-card .thumb img{width:100%;height:100%;object-fit:cover}
+.import-card .nm{font-size:10px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.import-card .roles{font-size:9px;color:var(--text-dim);margin-top:3px;display:flex;gap:3px}
+.import-card .roles .r{padding:1px 4px;border-radius:2px;font-weight:600}
+.import-card .roles .r.main{background:var(--primary-soft);color:var(--primary)}
+.import-card .roles .r.normal{background:var(--accent-soft);color:var(--accent)}
+.import-card .roles .r.specular{background:#3a2a1a;color:var(--warn)}
+.import-dlg-foot{height:50px;padding:0 16px;display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--border-soft);gap:12px}
+.import-dlg-foot .info{font-size:11px;color:var(--text-muted);flex:1}
+.import-dlg-foot .btns{display:flex;gap:8px}
+.import-dlg-foot button{height:28px;padding:0 14px;border:1px solid var(--border);background:var(--panel-2);color:var(--text);border-radius:4px;cursor:pointer;font-size:12px}
+.import-dlg-foot button:hover{border-color:var(--primary);color:var(--primary)}
+.import-dlg-foot button.primary{background:var(--primary);border-color:var(--primary);color:#1a1a1e;font-weight:600}
+.import-dlg-foot button.primary:hover{background:var(--primary-hover);border-color:var(--primary-hover)}
+.import-dlg-toolbar{display:flex;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid var(--border-soft);background:var(--panel-2);flex-wrap:wrap}
+.import-search{flex:1;min-width:180px;height:28px;padding:0 10px;background:var(--bg);border:1px solid var(--border-soft);border-radius:4px;color:var(--text);font-size:12px}
+.import-search:focus{outline:none;border-color:var(--primary)}
+.import-seg{display:inline-flex;gap:2px}
+.import-seg button{height:24px;padding:0 8px;background:var(--bg);border:1px solid var(--border-soft);color:var(--text-muted);font-size:11px;cursor:pointer;border-radius:3px}
+.import-seg button:hover{color:var(--text);border-color:var(--border)}
+.import-seg button.active{color:var(--primary);background:var(--primary-soft);border-color:var(--primary)}
+.import-mini-btn{height:24px;padding:0 8px;background:var(--bg);border:1px solid var(--border-soft);color:var(--text-muted);font-size:11px;cursor:pointer;border-radius:3px}
+.import-mini-btn:hover{color:var(--primary);border-color:var(--primary)}
+.import-count{font-size:11px;color:var(--text-dim);margin-left:auto;white-space:nowrap}
+.import-side.collapsed .import-grid{display:none}
+.import-side h4{cursor:pointer;user-select:none}
+.import-side h4 .caret{display:inline-block;width:10px;color:var(--text-dim);transition:transform .15s}
+.import-side.collapsed h4 .caret{transform:rotate(-90deg)}
+.import-empty{padding:32px;text-align:center;color:var(--text-dim);font-size:12px}
+.import-loading{padding:32px;text-align:center;color:var(--text-muted);font-size:12px}
+
+/* ── embed 模式：被主页 iframe 嵌入时隐藏顶栏、左侧节点库、右侧预览 ── */
+body.embed .topbar{display:none}
+body.embed .library{display:none}
+body.embed .preview-pane{display:none}
+body.embed .canvas-wrap{top:0; left:0}
+body.embed .canvas-wrap.library-collapsed{left:0}
+body.embed .canvas-wrap.has-preview{right:0}
+body.embed .statusbar{left:0}
+body.embed .statusbar.library-collapsed{left:0}
+body.embed .statusbar.has-preview{right:0}

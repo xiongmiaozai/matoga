@@ -1,0 +1,114 @@
+/* ── 详情 / 操作 ── */
+.detail-panel {
+  padding: var(--space-md) var(--panel-pad);
+  font-size: var(--fs-md);
+  overflow-y: auto;
+}
+.detail-hint {
+  color: var(--text-muted);
+  text-align: center;
+  padding: var(--space-xl) 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.detail-hint .ico {
+  width: 28px;
+  height: 28px;
+  opacity: 0.4;
+}
+.detail-title {
+  font-weight: 600;
+  font-size: var(--fs-base);
+  margin-bottom: var(--space-sm);
+  padding-bottom: var(--space-sm);
+  border-bottom: 1px solid var(--border-soft);
+  word-break: break-all;
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+.detail-title .ico {
+  color: var(--primary);
+  flex-shrink: 0;
+}
+.detail-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: var(--space-xs) 0;
+  gap: var(--space-sm);
+}
+.detail-label {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.about-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0 12px;
+}
+.about-logo {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  color: var(--primary);
+}
+.about-brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.about-app-name {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 1.4px;
+  color: var(--text);
+}
+.about-version {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.about-link {
+  color: var(--primary);
+  text-decoration: none;
+}
+.about-link:hover {
+  text-decoration: underline;
+}
+.detail-row > :last-child {
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-weight: 500;
+}
+.action-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--toolbar-gap);
+  margin-top: var(--space-md);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--border-soft);
+}
+.action-panel:empty {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+.action-panel .btn {
+  width: 100%;
+  justify-content: flex-start;
+  gap: var(--space-xs);
+}
+.action-panel .btn .ico {
+  flex-shrink: 0;
+}

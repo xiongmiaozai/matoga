@@ -1,0 +1,24 @@
+/* 模型 3D 离屏渲染缩略图：抗锯齿插值（区别于像素风贴图缩略图） */
+.asset-card .ac-thumb.ac-thumb-3d img{ image-rendering:auto }
+.asset-card .ac-icon{ color:var(--text-muted); width:22px; height:22px }
+.asset-card .ac-name{
+  font-size:9px; color:var(--text-muted); white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis; line-height:1.3;
+}
+.asset-card .ac-role{ font-size:8px; padding:0 4px; border-radius:2px; font-weight:600; align-self:flex-start }
+.asset-card .ac-role.main{ background:rgba(124,189,86,.18); color:var(--primary) }
+.asset-card .ac-role.normal{ background:rgba(91,206,250,.18); color:var(--accent) }
+.asset-card .ac-role.specular{ background:#3a2a1a; color:var(--warn) }
+.asset-card .ac-role.preset{ background:rgba(91,206,250,.18); color:var(--accent) }
+.asset-card .ac-role.project{ background:#2b2f4a; color:#8fa8ff }
+.asset-card .ac-role.model{ background:#2a2a4d; color:#a892ff }
+.asset-card .ac-role.official{ background:#1f3d2b; color:#7fd69a; letter-spacing:.2px }
+.asset-lib-sec-actions{ display:flex; gap:6px; padding:0 10px 6px }
+.asset-lib-sec-btn{
+  font-size:10px; padding:3px 9px; border-radius:var(--r-xs); cursor:pointer;
+  border:1px solid var(--border); background:rgba(0,0,0,.2); color:var(--text-muted);
+  transition:all .15s var(--ease);
+}
+.asset-lib-sec-btn:hover{ border-color:var(--primary); color:var(--primary) }
+.asset-lib-empty{ padding:24px 12px; text-align:center; color:var(--text-dim); font-size:11px }
+.asset-lib-loading{ padding:24px 12px; text-align:center; color:var(--text-muted); font-size:11px }

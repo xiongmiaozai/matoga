@@ -1,0 +1,13 @@
+/* ── 底栏 ───────────────────────────────────── */
+.statusbar{position:fixed; bottom:0; left:var(--lib-w); right:0; height:28px; z-index:90;
+  display:flex; align-items:center; gap:16px; padding:0 12px;
+  background:var(--panel); border-top:1px solid var(--border);
+  font-size:11px; color:var(--text-muted); transition:left .2s var(--ease)}
+.statusbar.library-collapsed{left:0}
+.statusbar .seg{display:inline-flex; align-items:center; gap:6px}
+.statusbar .seg b{color:var(--text); font-variant-numeric:tabular-nums}
+.statusbar .seg .dot{width:6px; height:6px; background:var(--primary)}
+.statusbar .spacer{flex:1}
+.statusbar .hint{color:var(--text-dim); font-size:10px}
+.statusbar .hint .k{padding:1px 4px; background:var(--bg); border:1px solid var(--border-soft);
+  color:var(--text-muted); margin:0 1px}

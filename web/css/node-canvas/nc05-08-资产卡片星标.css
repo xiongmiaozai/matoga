@@ -1,0 +1,9 @@
+/* 资产卡片星标 */
+.asset-card{ position:relative }
+.asset-card .ac-star{
+  position:absolute; top:2px; right:2px; width:16px; height:16px; padding:0;
+  background:transparent; border:0; cursor:pointer; font-size:11px; line-height:16px;
+  color:var(--text-dim); opacity:0; transition:opacity .1s;
+}
+.asset-card:hover .ac-star{ opacity:.7 }
+.asset-card .ac-star:hover{ opacity:1; color:var(--warn) }

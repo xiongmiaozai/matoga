@@ -1,0 +1,181 @@
+@keyframes aw-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+/* ===== 克隆面板实例（多窗口） ===== */
+.gl-panel-clone {
+  position: relative;
+}
+.gl-panel-clone::before {
+  content: '镜像';
+  position: absolute;
+  top: 2px;
+  right: 6px;
+  z-index: 50;
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--primary-soft, rgba(124, 189, 86, 0.12));
+  color: var(--primary);
+  border: 1px solid var(--primary);
+  opacity: 0.7;
+  pointer-events: none;
+  letter-spacing: 0.5px;
+}
+/* ===== 自定义 prompt/confirm 对话框 ===== */
+.ws-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+}
+.ws-dialog {
+  width: 400px;
+  max-width: 92vw;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.6);
+  animation: aw-fade-in 0.12s ease-out;
+}
+.ws-dialog-msg {
+  padding: 20px 20px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.ws-dialog-input {
+  margin: 0 20px 16px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-2, var(--panel-bg));
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+}
+.ws-dialog-input:focus {
+  border-color: var(--primary);
+}
+.ws-dialog-btns {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border-soft);
+}
+.ws-dialog-btn {
+  padding: 6px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel-2, var(--panel-bg));
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.ws-dialog-btn:hover {
+  background: var(--row-hover);
+}
+.ws-dialog-btn.primary {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+.ws-dialog-btn.primary:hover {
+  filter: brightness(1.1);
+}
+/* ── GL 自适应响应式 ── */
+
+/* 紧凑屏 (≤1023px)：GL 标签头更紧凑 */
+@media (max-width: 1023px) {
+  .lm_header .lm_tab {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+  .lm_header .lm_controls .lm_tabdropdown {
+    display: none;
+  }
+  .lm_splitter {
+    width: 6px;
+  }
+}
+
+/* 小屏 (≤768px)：GL 行容器堆叠为列 */
+@media (max-width: 767px) {
+  .lm_row {
+    flex-direction: column;
+  }
+  .lm_row > .lm_splitter {
+    display: none;
+  }
+  .lm_row > .lm_item {
+    flex: 1 1 auto;
+    min-height: 100px;
+  }
+  .lm_header .lm_tab {
+    padding: 3px 6px;
+    font-size: 10px;
+  }
+  .lm_header {
+    height: 24px;
+  }
+  .lm_content {
+    min-height: 80px;
+  }
+}
+
+/* 极小屏 (≤479px)：GL 进一步紧凑 */
+@media (max-width: 479px) {
+  .lm_row > .lm_item {
+    min-height: 60px;
+  }
+  .lm_header .lm_tab {
+    padding: 2px 4px;
+    font-size: 9px;
+    max-width: 80px;
+  }
+  .lm_header .lm_tab .lm_title {
+    max-width: 60px;
+  }
+  .lm_header .lm_controls {
+    display: none;
+  }
+}
+
+/* 触摸设备：增大分割条和标签头交互区域 */
+@media (pointer: coarse) {
+  .lm_splitter {
+    width: 14px;
+  }
+  .lm_header .lm_tab {
+    padding: 6px 12px;
+  }
+  .lm_header {
+    height: 32px;
+  }
+}
+
+/* 超宽屏 (≥1920px)：GL 更宽舒的间距 */
+@media (min-width: 1920px) {
+  .lm_splitter {
+    width: 12px;
+  }
+  .lm_header .lm_tab {
+    padding: 6px 14px;
+    font-size: 13px;
+  }
+}

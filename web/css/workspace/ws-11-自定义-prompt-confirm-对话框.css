@@ -1,0 +1,35 @@
+/* ===== 自定义 prompt/confirm 对话框 ===== */
+.ws-dialog-overlay {
+  position: fixed; inset: 0; z-index: 1100;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,.5); backdrop-filter: blur(2px);
+}
+.ws-dialog {
+  width: 400px; max-width: 92vw;
+  background: var(--panel-bg); border: 1px solid var(--border);
+  border-radius: 8px; display: flex; flex-direction: column; overflow: hidden;
+  box-shadow: 0 12px 48px rgba(0,0,0,.6);
+  animation: aw-fade-in .12s ease-out;
+}
+.ws-dialog-msg {
+  padding: 20px 20px 12px; font-size: 13px; line-height: 1.5; color: var(--text);
+}
+.ws-dialog-input {
+  margin: 0 20px 16px; padding: 8px 10px;
+  border: 1px solid var(--border); border-radius: 6px;
+  background: var(--panel-2, var(--panel-bg)); color: var(--text);
+  font-size: 13px; outline: none;
+}
+.ws-dialog-input:focus { border-color: var(--primary); }
+.ws-dialog-btns {
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding: 12px 20px; border-top: 1px solid var(--border-soft);
+}
+.ws-dialog-btn {
+  padding: 6px 16px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--panel-2, var(--panel-bg)); color: var(--text);
+  font-size: 12px; cursor: pointer; transition: all .12s;
+}
+.ws-dialog-btn:hover { background: var(--row-hover); }
+.ws-dialog-btn.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+.ws-dialog-btn.primary:hover { filter: brightness(1.1); }

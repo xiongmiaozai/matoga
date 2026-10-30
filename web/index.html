@@ -1179,7 +1179,7 @@
     </div>
 
     <script src="/api/api-client.js"></script>
-    <script src="/api/folder-tree.js"></script>
+    <script type="module" src="/api/folder-tree.js"></script>
     <script type="module">
       // 提前注入面板 DOM：core.js 在模块加载时同步 getElementById 抓取面板内元素，
       // 必须在 import renderer.js（及其依赖 core.js）之前完成注入，否则引用为 null。

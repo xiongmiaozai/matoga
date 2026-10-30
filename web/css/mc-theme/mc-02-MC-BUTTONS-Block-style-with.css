@@ -1,0 +1,280 @@
+/* ═══════════════════════════════════════════════
+   MC BUTTONS — Block style with inset shadows
+   ═══════════════════════════════════════════════ */
+.btn, .icon-btn, .filter-btn, .view-tab, .m3d-segment button,
+.m3d-action-btn, .panel-tool, .ctx-item, .sub-replace-btn,
+.pv-replace-btn, .pv-delete-btn, .pv-diff-btn, .m3d-hud-btn,
+.m3d-presets button, .m3d-tabs button, .m3d-params-close,
+.hdri-preset-item, .pv-tabs button, .collapse-btn,
+#langBtn, #themeToggle, #settingsBtn, #swapBtn {
+  border-radius: 0 !important;
+}
+
+.btn {
+  border: 2px solid #000;
+  background: var(--mc-stone);
+  color: #fff;
+  padding: 8px 14px;
+  font-weight: 500;
+  text-shadow: 1px 1px 0 rgba(0,0,0,.4);
+  box-shadow: inset 2px 2px 0 0 var(--mc-border-light), inset -2px -2px 0 0 var(--mc-border-dark);
+  transition: all .08s steps(2);
+}
+.btn:hover:not(:disabled) {
+  background: var(--mc-grass);
+  border-color: #000;
+  color: #fff;
+  box-shadow: inset 2px 2px 0 0 rgba(255,255,255,.3), inset -2px -2px 0 0 rgba(0,0,0,.4);
+  animation: mc-shake .15s steps(2);
+}
+.btn:active:not(:disabled) {
+  box-shadow: inset -2px -2px 0 0 var(--mc-border-light), inset 2px 2px 0 0 var(--mc-border-dark);
+  transform: translateY(1px);
+}
+.btn:disabled { opacity: .4; }
+
+.btn-primary {
+  background: var(--mc-grass);
+  border-color: #000;
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--mc-grass-dark);
+  animation: mc-shake .15s steps(2);
+}
+
+.btn-accent {
+  background: var(--mc-diamond);
+  border-color: #000;
+  color: #000;
+  text-shadow: 1px 1px 0 rgba(255,255,255,.3);
+}
+.btn-accent:hover:not(:disabled) { background: var(--mc-diamond-dark); }
+
+.btn-danger {
+  background: var(--danger);
+  border-color: #000;
+}
+.btn-danger:hover:not(:disabled) { background: var(--danger); filter: none; }
+
+.btn-ghost {
+  background: transparent;
+  border-color: var(--border);
+  box-shadow: none;
+  color: var(--text);
+  text-shadow: none;
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--panel-2);
+  border-color: var(--mc-grass);
+  color: var(--mc-grass);
+}
+
+/* Icon buttons — MC slot style */
+.icon-btn {
+  width: 36px; height: 36px;
+  border: 2px solid #000;
+  background: var(--mc-stone);
+  color: #fff;
+  box-shadow: inset 2px 2px 0 0 var(--mc-border-light), inset -2px -2px 0 0 var(--mc-border-dark);
+  transition: all .08s steps(2);
+}
+.icon-btn:hover:not(:disabled) {
+  background: var(--panel-3);
+  border-color: #000;
+  color: var(--mc-grass);
+  animation: mc-shake .15s steps(2);
+}
+.icon-btn:active:not(:disabled) {
+  box-shadow: inset -2px -2px 0 0 var(--mc-border-light), inset 2px 2px 0 0 var(--mc-border-dark);
+}
+
+.icon-btn-accent {
+  background: var(--mc-diamond);
+  border-color: #000;
+}
+.icon-btn-accent:hover:not(:disabled) { background: var(--mc-diamond-dark); }
+
+/* Filter buttons — MC slot tabs */
+.filter-btn {
+  padding: 5px 14px;
+  border: 2px solid #000;
+  background: var(--mc-stone-dark);
+  color: var(--text-muted);
+  font-size: 12px;
+  box-shadow: inset 2px 2px 0 0 var(--mc-border-light), inset -2px -2px 0 0 var(--mc-border-dark);
+  transition: all .08s steps(2);
+}
+.filter-btn:hover {
+  background: var(--panel-3);
+  color: #fff;
+  border-color: #000;
+  animation: mc-shake .15s steps(2);
+}
+.filter-btn.active {
+  background: var(--mc-grass);
+  border-color: #000;
+  color: #fff;
+  text-shadow: 1px 1px 0 rgba(0,0,0,.4);
+}
+
+/* View tabs */
+.view-tab {
+  border: 2px solid #000;
+  background: var(--mc-stone-dark);
+  color: var(--text-dim);
+  box-shadow: inset 2px 2px 0 0 var(--mc-border-light), inset -2px -2px 0 0 var(--mc-border-dark);
+}
+.view-tab:hover { color: #fff; border-color: #000; }
+.view-tab.active {
+  background: var(--mc-diamond);
+  color: #000;
+  text-shadow: 1px 1px 0 rgba(255,255,255,.3);
+}
+.view-tab.active::after { display: none; }
+
+/* ═══════════════════════════════════════════════
+   CARDS — MC inventory slot style
+   ═══════════════════════════════════════════════ */
+/* 通用 MC 物品槽：黑色粗边框 + 双向内阴影（与 website.html .mc-slot 一致）*/
+.mc-slot {
+  border: 2px solid #000;
+  box-shadow: inset 2px 2px 0 0 var(--mc-border-dark), inset -1px -1px 0 0 var(--mc-border-light);
+  background: var(--panel-bg);
+}
+.mc-slot-hover { transition: box-shadow .08s steps(2); }
+.mc-slot-hover:hover {
+  box-shadow: inset 2px 2px 0 0 var(--mc-border-dark), inset -1px -1px 0 0 rgba(255,255,255,.25), 0 0 0 1px var(--mc-grass);
+}
+.folder-card, .panel-card {
+  background: var(--panel-bg);
+  border: 2px solid #000;
+  box-shadow: inset 2px 2px 0 0 rgba(0,0,0,.4), inset -1px -1px 0 0 var(--mc-border-light);
+  transition: all .08s steps(2);
+}
+.folder-card:hover, .panel-card:hover {
+  border-color: #000;
+  box-shadow: inset 2px 2px 0 0 rgba(0,0,0,.4), inset -1px -1px 0 0 rgba(255,255,255,.2), 0 0 0 1px var(--mc-grass);
+}
+.folder-card.drag-over {
+  border-color: var(--mc-grass);
+  box-shadow: inset 2px 2px 0 0 rgba(0,0,0,.4), inset -1px -1px 0 0 var(--mc-border-light), 0 0 0 3px var(--mc-grass);
+}
+
+/* Tags — MC dye color style */
+.tag {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border: 2px solid #000;
+  text-shadow: 1px 1px 0 rgba(0,0,0,.4);
+  box-shadow: inset 1px 1px 0 0 var(--mc-border-light);
+}
+.tag-left { background: var(--mc-grass-dark); color: #fff; }
+.tag-right { background: var(--mc-dirt); color: #fff; }
+
+/* Path box — MC sign style */
+.path-box {
+  margin: 0 12px 10px;
+  padding: 6px 10px;
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  color: var(--mc-diamond);
+  background: var(--mc-darker);
+  border: 2px solid #000;
+  box-shadow: inset 2px 2px 0 0 rgba(0,0,0,.6);
+}
+
+
+/* ═══════════════════════════════════════════════
+   SIDEBAR — MC panel style
+   ═══════════════════════════════════════════════ */
+.sidebar-left {
+  background: var(--mc-darker);
+  border-right: 3px solid #000;
+}
+.sidebar-left .sidebar-inner > .folder-card,
+.sidebar-left .sidebar-inner > .panel-card {
+  border: 2px solid #000;
+  border-bottom: 2px solid #000;
+}
+.sidebar-left .sidebar-inner > .folder-card:hover,
+.sidebar-left .sidebar-inner > .panel-card:hover {
+  background: var(--panel-bg);
+}
+
+.sidebar-right {
+  background: var(--mc-darker);
+  border-left: 3px solid #000;
+}
+.sidebar-right > .panel {
+  border: 2px solid #000;
+  box-shadow: inset 2px 2px 0 0 rgba(0,0,0,.4), inset -1px -1px 0 0 var(--mc-border-light);
+}
+.sidebar-right > .panel.floating {
+  box-shadow: 0 6px 0 0 rgba(0,0,0,.6), inset 2px 2px 0 0 rgba(0,0,0,.4);
+}
+
+/* Resizer */
+.resizer { width: 10px; background: var(--mc-darker); }
+.resizer::after {
+  width: 3px; height: 40px;
+  background: var(--mc-stone);
+  border: 1px solid #000;
+}
+.resizer:hover::after, .resizer.dragging::after {
+  background: var(--mc-grass);
+  height: 60px;
+}
+
+/* Collapse button */
+.collapse-btn {
+  border: 2px solid #000;
+  background: var(--mc-stone);
+  box-shadow: inset 1px 1px 0 0 var(--mc-border-light), inset -1px -1px 0 0 var(--mc-border-dark);
+}
+.collapse-btn:hover { background: var(--mc-grass); color: #fff; }
+
+/* ═══════════════════════════════════════════════
+   CENTER — Main content area
+   ═══════════════════════════════════════════════ */
+.center { background: var(--mc-dark); }
+
+.center-head {
+  padding: 12px 16px;
+  border-bottom: 3px solid #000;
+  background: var(--mc-darker);
+  box-shadow: 0 2px 0 0 rgba(0,0,0,.3);
+}
+
+/* Summary chips — MC item count style */
+.summary .s-item {
+  padding: 3px 8px;
+  border: 2px solid #000;
+  box-shadow: inset 1px 1px 0 0 var(--mc-border-light);
+  text-shadow: 1px 1px 0 rgba(0,0,0,.3);
+}
+.summary .s-have { background: var(--mc-grass-dark); color: #fff; }
+.summary .s-have .s-num { color: #fff; }
+.summary .s-miss { background: var(--danger); color: #fff; }
+.summary .s-miss .s-num { color: #fff; }
+.summary .s-diff { background: var(--warn); color: #000; }
+.summary .s-diff .s-num { color: #000; }
+.summary .s-partial { background: var(--partial); color: #000; }
+.summary .s-partial .s-num { color: #000; }
+.summary .s-cov { background: var(--mc-diamond-dark); color: #fff; }
+.summary .s-cov .s-num { color: #fff; }
+.summary .s-pbr { background: var(--partial); color: #000; }
+.summary .s-pbr .s-num { color: #000; }
+.summary .s-extra { background: var(--extra); color: #fff; }
+.summary .s-extra .s-num { color: #fff; }
+
+/* Stat cards */
+.stat-card {
+  padding: 8px 12px;
+  background: var(--panel-2);
+  border: 2px solid #000;
+  box-shadow: inset 2px 2px 0 0 rgba(0,0,0,.4), inset -1px -1px 0 0 var(--mc-border-light);
+}
+.stat-card:hover { transform: none; border-color: #000; box-shadow: inset 2px 2px 0 0 rgba(0,0,0,.4), inset -1px -1px 0 0 var(--mc-border-light), 0 0 0 1px var(--mc-grass); }
+.stat-card-bar, .rate-bar { height: 4px; background: var(--mc-darker); border: 1px solid #000; }
+.stat-card-fill, .rate-fill { border: none; }
