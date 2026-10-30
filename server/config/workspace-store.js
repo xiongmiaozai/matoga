@@ -6,8 +6,8 @@
 
 const fs = require('fs')
 const path = require('path')
-const crypto = require('crypto')
 const { logger } = require('../middleware/logger')
+const { atomicWriteJson } = require('./atomic-write')
 const { DATA_ROOT } = require('../paths')
 
 const DATA_DIR = path.join(DATA_ROOT, 'data')
@@ -54,18 +54,11 @@ function readIndex() {
 }
 
 function writeIndexAtomic(idx) {
-  fs.mkdirSync(DIR, { recursive: true })
-  const tmp = INDEX_FILE + '.' + crypto.randomUUID() + '.tmp'
-  fs.writeFileSync(tmp, JSON.stringify(idx, null, 2))
-  fs.renameSync(tmp, INDEX_FILE)
+  atomicWriteJson(INDEX_FILE, idx)
 }
 
 function writePresetFileAtomic(filename, payload) {
-  fs.mkdirSync(DIR, { recursive: true })
-  const fp = path.join(DIR, filename)
-  const tmp = fp + '.' + crypto.randomUUID() + '.tmp'
-  fs.writeFileSync(tmp, JSON.stringify(payload, null, 2))
-  fs.renameSync(tmp, fp)
+  atomicWriteJson(path.join(DIR, filename), payload)
 }
 
 function readPresetFile(filename) {

@@ -76,4 +76,32 @@ function sanitizeLayoutConfig(node, allowedIds) {
   return sanitizeWalk(node, toIdSet(allowedIds), new Set())
 }
 
-export { dedupeComponents, hasDuplicateComponents, sanitizeLayoutConfig }
+const LAYOUT_VERSION = 1
+const PANEL_ID_ALIASES = { leftSidebar: 'folderCard' }
+
+function migrateComponentIds(node) {
+  if (!node || typeof node !== 'object') return node
+  if (node.type === 'component') {
+    const key = componentKey(node.componentType)
+    if (key && Object.prototype.hasOwnProperty.call(PANEL_ID_ALIASES, key)) {
+      return { ...node, componentType: PANEL_ID_ALIASES[key] }
+    }
+    return node
+  }
+  if (Array.isArray(node.content)) {
+    return { ...node, content: node.content.map(migrateComponentIds) }
+  }
+  return node
+}
+
+function migrateLayoutConfig(cfg) {
+  if (!cfg || typeof cfg !== 'object') return cfg
+  const root = cfg.root || cfg
+  if (!root || typeof root !== 'object') return cfg
+  const migrated = migrateComponentIds(root)
+  const out = cfg.root ? { ...cfg, root: migrated } : { root: migrated }
+  out.__v = LAYOUT_VERSION
+  return out
+}
+
+export { dedupeComponents, hasDuplicateComponents, sanitizeLayoutConfig, migrateLayoutConfig, LAYOUT_VERSION }

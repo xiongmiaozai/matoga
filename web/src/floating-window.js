@@ -5,6 +5,8 @@
  * 几何位置经 localStorage 记忆。
  */
 
+import { responsive } from './responsive.js'
+
 let _zTop = 420
 const _windows = new Map()   // id -> win api
 
@@ -251,6 +253,22 @@ export function createFloatingWindow(opts){
   window.addEventListener('resize', () => {
     if(!api.isOpen()) return
     if(!geom.maximized) applyGeom()
+  })
+
+  /* ── 自适应：断点变化时调整浮动窗口 ── */
+  responsive.onChange((type, detail) => {
+    if (type !== 'breakpoint-change') return
+    const bp = responsive.breakpoint
+    if (bp === 'xs' || bp === 'sm') {
+      if (api.isOpen() && !geom.maximized) {
+        maximize()
+      }
+    } else if (detail.from === 'xs' || detail.from === 'sm') {
+      if (geom.maximized && geom.restore) {
+        restoreSize()
+      }
+    }
+    if (!geom.maximized) applyGeom()
   })
 
   document.body.appendChild(win)

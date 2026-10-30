@@ -12,12 +12,19 @@ const configStore = require('./config/config-store')
 const { trust } = require('./middleware/validate')
 const { WEB_ROOT } = require('./paths')
 
-
 const ROOT = path.join(__dirname, '..')
 
 function createApp() {
   const app = express()
   app.disable('x-powered-by')
+
+  app.use((req, res, next) => {
+    res.set('Access-Control-Allow-Origin', '*')
+    res.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+    res.set('Access-Control-Allow-Headers', 'Content-Type, X-Matoga-Token')
+    if (req.method === 'OPTIONS') return res.status(204).end()
+    next()
+  })
 
   app.use(express.json({ limit: '12mb' }))
 
@@ -33,8 +40,10 @@ function createApp() {
   api.use('/config', require('./routes/config'))
   api.use('/workspace', require('./routes/workspace'))
   api.use('/asset', require('./routes/asset'))
+  api.use('/lang', require('./routes/lang'))
   api.use('/craft-pack', require('./routes/craft-pack'))
   api.use('/craft-packs', require('./routes/craft-packs'))
+  api.use('/pack-builder', require('./routes/pack-builder'))
 
   api.use('/mc-official', require('./routes/mc-official'))
   api.use('/mc-packs', require('./routes/mc-packs'))
@@ -45,24 +54,39 @@ function createApp() {
 
   api.use('/imported-models', require('./routes/imported-models'))
   api.use('/custom-models', require('./routes/custom-models'))
+
+  api.use('/cache', require('./routes/cache'))
   api.use('/panels', require('./routes/panels'))
   api.use('/themes', require('./routes/themes'))
   app.use('/api', api)
 
-
   app.use('/vendor/three', express.static(path.join(ROOT, 'node_modules', 'three', 'build')))
-  app.use('/vendor/golden-layout', express.static(path.join(ROOT, 'node_modules', 'golden-layout', 'dist', 'esm'), { extensions: ['js'], setHeaders: (res) => res.set('Cache-Control', 'no-store') }))
-  app.use('/vendor/golden-layout-css', express.static(path.join(ROOT, 'node_modules', 'golden-layout', 'dist', 'css'), { setHeaders: (res) => res.set('Cache-Control', 'no-store') }))
-  // golden-layout 主题 CSS 里的图标是相对路径 ../../img/xxx.png，从
-  // /vendor/golden-layout-css/themes/ 解析后落到 /vendor/img/，需单独挂载，
-  // 否则面板工具栏的关闭/最大化/弹出图标全部 404。
-  app.use('/vendor/img', express.static(path.join(ROOT, 'node_modules', 'golden-layout', 'dist', 'img'), { setHeaders: (res) => res.set('Cache-Control', 'no-store') }))
+  app.use(
+    '/vendor/golden-layout',
+    express.static(path.join(ROOT, 'node_modules', 'golden-layout', 'dist', 'esm'), {
+      extensions: ['js'],
+      setHeaders: res => res.set('Cache-Control', 'no-store')
+    })
+  )
+  app.use(
+    '/vendor/golden-layout-css',
+    express.static(path.join(ROOT, 'node_modules', 'golden-layout', 'dist', 'css'), {
+      setHeaders: res => res.set('Cache-Control', 'no-store')
+    })
+  )
+  app.use(
+    '/vendor/img',
+    express.static(path.join(ROOT, 'node_modules', 'golden-layout', 'dist', 'img'), {
+      setHeaders: res => res.set('Cache-Control', 'no-store')
+    })
+  )
 
-
-  app.use(express.static(WEB_ROOT, {
-    index: 'index.html',
-    setHeaders: (res) => res.set('Cache-Control', 'no-store')
-  }))
+  app.use(
+    express.static(WEB_ROOT, {
+      index: 'index.html',
+      setHeaders: res => res.set('Cache-Control', 'no-cache, must-revalidate')
+    })
+  )
 
   app.use('/api', (req, res) => fail(res, 'ERR_INVALID_PARAM', 'unknown API endpoint'))
   app.use((req, res) => res.status(404).send('Not Found'))
@@ -89,8 +113,10 @@ function initTrustedRoots() {
   trust(cfg.craftPacksPath)
   const uploadService = require('./services/upload-service')
   trust(uploadService.UPLOAD_DIR)
+  const importedModelService = require('./services/imported-model-service')
+  trust(importedModelService.importedDir())
   const nodeProjectStore = require('./config/node-project-store')
-  trust(nodeProjectStore.DIR)
+  trust(nodeProjectStore.getDir())
 
   return { trustedRoots: [cfg.hdriPresetPath, cfg.mcPacksPath, cfg.officialPacksPath, cfg.craftPacksPath] }
 }

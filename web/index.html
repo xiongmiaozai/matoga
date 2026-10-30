@@ -4,265 +4,1240 @@
   SPDX-License-Identifier: MIT
 -->
 
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-  <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self'" />
-  <script type="importmap">
-    { "imports": { "three": "/vendor/three/three.module.js", "golden-layout": "/vendor/golden-layout/index.js" } }
-  </script>
-  <title>matoga</title>
-  <link rel="stylesheet" href="styles.css" />
-  <link rel="stylesheet" id="mcThemeLink" href="mc-theme.css" />
-  <link rel="stylesheet" href="/vendor/golden-layout-css/goldenlayout-base.css" />
-  <link rel="stylesheet" data-gl-theme href="/vendor/golden-layout-css/themes/goldenlayout-light-theme.css" />
-  <link rel="stylesheet" href="workspace.css" />
-  <link rel="stylesheet" href="node-canvas.css" />
-  <link rel="stylesheet" href="node-rel.css" />
-  <link rel="stylesheet" href="node-preview.css" />
-  <link rel="stylesheet" href="floating-window.css" />
-  <link rel="stylesheet" href="bb-launch.css" />
-</head>
-<body>
-  <!-- MC 边角装饰 — 独立 SVG, CC0 (github.com/minecraft-svg-icons) -->
-  <img src="assets/svg/corner-tl.svg" alt="" class="mc-corner tl" />
-  <img src="assets/svg/corner-tr.svg" alt="" class="mc-corner tr" />
-  <img src="assets/svg/corner-bl.svg" alt="" class="mc-corner bl" />
-  <img src="assets/svg/corner-br.svg" alt="" class="mc-corner br" />
-  <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
-    <symbol id="i-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="12" r="6"/><circle cx="15" cy="12" r="6"/></symbol>
-    <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></symbol>
-    <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></symbol>
-    <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></symbol>
-    <symbol id="i-image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></symbol>
-    <symbol id="i-cube" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96L12 12.01l8.73-5.05M12 22.08V12"/></symbol>
-    <symbol id="i-clipboard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></symbol>
-    <symbol id="i-camera" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></symbol>
-    <symbol id="i-maximize" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></symbol>
-    <symbol id="i-chevron-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></symbol>
-    <symbol id="i-chevron-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></symbol>
-    <symbol id="i-chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></symbol>
-    <symbol id="i-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
-    <symbol id="i-undo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-7.7"/></symbol>
-    <symbol id="i-swap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3l4 4-4 4M4 7h16M8 21l-4-4 4-4M20 17H4"/></symbol>
-    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></symbol>
-    <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></symbol>
-   <symbol id="i-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></symbol>
-    <symbol id="i-arrow-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></symbol>
-    <symbol id="i-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
-    <symbol id="i-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></symbol>
-    <symbol id="i-box" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v8a2 2 0 0 1-1 1.73l-7 4a2 2 0 0 1-2 0l-7-4A2 2 0 0 1 3 16V8a2 2 0 0 1 1-1.73l7-4a2 2 0 0 1 2 0l7 4A2 2 0 0 1 21 8z"/><path d="M3.3 7L12 12l8.7-5"/><path d="M12 22V12"/></symbol>
-    <symbol id="i-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></symbol>
-    <symbol id="i-palette" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="7.5" cy="10.5" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none"/><circle cx="16.5" cy="10.5" r="1" fill="currentColor" stroke="none"/><path d="M12 21a9 9 0 0 0 0-18"/></symbol>
-    <symbol id="i-compare" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M6 8v8a4 4 0 0 0 4 4h4M18 16V8a4 4 0 0 0-4-4h-4"/></symbol>
-    <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></symbol>
-    <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></symbol>
-    <symbol id="i-sliders" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></symbol>
-    <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></symbol>
-    <symbol id="i-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></symbol>
-    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></symbol>
-    <symbol id="i-minus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></symbol>
-    <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></symbol>
-    <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></symbol>
-    <symbol id="i-pie" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.21A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></symbol>
-    <symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor" stroke="none"/></symbol>
-    <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
-    <symbol id="i-depth" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20l6-8 4 5 3-4 7 7"/><path d="M2 20h20"/><circle cx="17" cy="6" r="2"/></symbol>
-    <symbol id="i-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none"/></symbol>
-    <symbol id="i-metal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12l3 6-9 12L3 9z"/><path d="M3 9h18M9 3l3 18M15 3l-3 18"/></symbol>
-    <symbol id="i-plastic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C8 8 6 11 6 14a6 6 0 0 0 12 0c0-3-2-6-6-12z"/></symbol>
-    <symbol id="i-glass" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2h8l-1 8a3 3 0 0 1-6 0z"/><path d="M12 13v8M8 21h8"/></symbol>
-    <symbol id="i-fabric" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h18v18H3z"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></symbol>
-    <symbol id="i-sphere" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="9" ry="3.5"/></symbol>
-    <symbol id="i-plane" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l9-9 9 9-9 4z"/></symbol>
-    <symbol id="i-torus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="9" ry="5"/><ellipse cx="12" cy="12" rx="4" ry="2"/></symbol>
-    <symbol id="i-cylinder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="7" ry="2.5"/><path d="M5 5v14M19 5v14"/><ellipse cx="12" cy="19" rx="7" ry="2.5"/></symbol>
-    <symbol id="i-capsule" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="7"/></symbol>
-    <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></symbol>
-    <symbol id="i-node" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8.5 6h7M7.2 8.2l3.6 7.6M16.8 8.2l-3.6 7.6"/></symbol>
-    <symbol id="i-tree" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="10" width="6" height="4" rx="1"/><rect x="16" y="3" width="6" height="4" rx="1"/><rect x="16" y="10" width="6" height="4" rx="1"/><rect x="16" y="17" width="6" height="4" rx="1"/><path d="M8 12h3M11 12V5h5M11 12h5M11 12v7h5"/></symbol>
-    <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></symbol>
-    <symbol id="i-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 0 0-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></symbol>
-    <symbol id="i-move" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/></symbol>
-  </svg>
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self'"
+    />
+    <script type="importmap">
+      { "imports": { "three": "/vendor/three/three.module.js", "golden-layout": "/vendor/golden-layout/index.js" } }
+    </script>
+    <title>matoga</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" id="mcThemeLink" href="mc-theme.css" />
+    <link rel="stylesheet" href="/vendor/golden-layout-css/goldenlayout-base.css" />
+    <link rel="stylesheet" data-gl-theme href="/vendor/golden-layout-css/themes/goldenlayout-light-theme.css" />
+    <link rel="stylesheet" href="workspace.css" />
+    <link rel="stylesheet" href="node-canvas.css" />
 
-  <header class="app-header">
-    <div class="title">
-      <img src="assets/matoga-logo-2x.png" alt="matoga" class="app-logo" />
-      <span class="ver" data-i18n="app.version">v3.1</span>
-    </div>
+    <link rel="stylesheet" href="floating-window.css" />
+    <style>
+      .bb-launch {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        height: 100%;
+        padding: 24px;
+        gap: 10px;
+        color: var(--text-muted);
+      }
+      .bb-launch-ico {
+        width: 56px;
+        height: 56px;
+        opacity: 0.85;
+        color: var(--primary);
+      }
+      .bb-launch-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--text);
+      }
+      .bb-launch-desc {
+        font-size: 12.5px;
+        line-height: 1.6;
+        max-width: 320px;
+      }
+      .bb-launch-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 6px;
+        padding: 9px 20px;
+        border: 0;
+        border-radius: 6px;
+        background: var(--primary);
+        color: var(--text);
+        font-size: 13.5px;
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+      .bb-launch-btn:hover {
+        background: var(--primary-hover);
+      }
+    </style>
+  </head>
+  <body>
+    <!-- MC 边角装饰 — 独立 SVG, CC0 (github.com/minecraft-svg-icons) -->
+    <img src="assets/svg/corner-tl.svg" alt="" class="mc-corner tl" />
+    <img src="assets/svg/corner-tr.svg" alt="" class="mc-corner tr" />
+    <img src="assets/svg/corner-bl.svg" alt="" class="mc-corner bl" />
+    <img src="assets/svg/corner-br.svg" alt="" class="mc-corner br" />
+    <svg xmlns="http://www.w3.org/2000/svg" style="display: none" aria-hidden="true">
+      <symbol
+        id="i-logo"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="9" cy="12" r="6" />
+        <circle cx="15" cy="12" r="6" />
+      </symbol>
+      <symbol
+        id="i-search"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="11" cy="11" r="7" />
+        <path d="M21 21l-4.3-4.3" />
+      </symbol>
+      <symbol
+        id="i-filter"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />
+      </symbol>
+      <symbol
+        id="i-moon"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+      </symbol>
+      <symbol
+        id="i-sun"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="5" />
+        <path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4" />
+      </symbol>
+      <symbol
+        id="i-image"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <circle cx="8.5" cy="8.5" r="1.5" />
+        <path d="M21 15l-5-5L5 21" />
+      </symbol>
+      <symbol
+        id="i-cube"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"
+        />
+        <path d="M3.27 6.96L12 12.01l8.73-5.05M12 22.08V12" />
+      </symbol>
+      <symbol
+        id="i-clipboard"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <rect x="8" y="2" width="8" height="4" rx="1" />
+        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+      </symbol>
+      <symbol
+        id="i-camera"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+        <circle cx="12" cy="13" r="4" />
+      </symbol>
+      <symbol
+        id="i-maximize"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3" />
+      </symbol>
+      <symbol
+        id="i-chevron-left"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M15 18l-6-6 6-6" />
+      </symbol>
+      <symbol
+        id="i-chevron-down"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M6 9l6 6 6-6" />
+      </symbol>
+      <symbol
+        id="i-chevron-right"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M9 18l6-6-6-6" />
+      </symbol>
+      <symbol
+        id="i-external"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+      </symbol>
+      <symbol
+        id="i-undo"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M3 7v6h6" />
+        <path d="M3 13a9 9 0 1 0 3-7.7" />
+      </symbol>
+      <symbol
+        id="i-swap"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M16 3l4 4-4 4M4 7h16M8 21l-4-4 4-4M20 17H4" />
+      </symbol>
+      <symbol
+        id="i-x"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M18 6L6 18M6 6l12 12" />
+      </symbol>
+      <symbol
+        id="i-folder"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+      </symbol>
+      <symbol
+        id="i-file"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <path d="M14 2v6h6" />
+      </symbol>
+      <symbol
+        id="i-arrow-up"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M12 19V5" />
+        <path d="M5 12l7-7 7 7" />
+      </symbol>
+      <symbol
+        id="i-grid"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <rect x="3" y="3" width="7" height="7" rx="1" />
+        <rect x="14" y="3" width="7" height="7" rx="1" />
+        <rect x="3" y="14" width="7" height="7" rx="1" />
+        <rect x="14" y="14" width="7" height="7" rx="1" />
+      </symbol>
+      <symbol
+        id="i-list"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M8 6h13" />
+        <path d="M8 12h13" />
+        <path d="M8 18h13" />
+        <path d="M3 6h.01" />
+        <path d="M3 12h.01" />
+        <path d="M3 18h.01" />
+      </symbol>
+      <symbol
+        id="i-box"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="M21 8v8a2 2 0 0 1-1 1.73l-7 4a2 2 0 0 1-2 0l-7-4A2 2 0 0 1 3 16V8a2 2 0 0 1 1-1.73l7-4a2 2 0 0 1 2 0l7 4A2 2 0 0 1 21 8z"
+        />
+        <path d="M3.3 7L12 12l8.7-5" />
+        <path d="M12 22V12" />
+      </symbol>
+      <symbol
+        id="i-layers"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+      </symbol>
+      <symbol
+        id="i-palette"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="9" />
+        <circle cx="7.5" cy="10.5" r="1" fill="currentColor" stroke="none" />
+        <circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none" />
+        <circle cx="16.5" cy="10.5" r="1" fill="currentColor" stroke="none" />
+        <path d="M12 21a9 9 0 0 0 0-18" />
+      </symbol>
+      <symbol
+        id="i-compare"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="6" cy="6" r="2" />
+        <circle cx="18" cy="18" r="2" />
+        <path d="M6 8v8a4 4 0 0 0 4 4h4M18 16V8a4 4 0 0 0-4-4h-4" />
+      </symbol>
+      <symbol
+        id="i-download"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+      </symbol>
+      <symbol
+        id="i-trash"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"
+        />
+      </symbol>
+      <symbol
+        id="i-sliders"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6" />
+      </symbol>
+      <symbol
+        id="i-globe"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20" />
+      </symbol>
+      <symbol
+        id="i-arrow-right"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M5 12h14M12 5l7 7-7 7" />
+      </symbol>
+      <symbol
+        id="i-check"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2.2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M20 6L9 17l-5-5" />
+      </symbol>
+      <symbol
+        id="i-minus"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2.2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="9" />
+        <path d="M8 12h8" />
+      </symbol>
+      <symbol
+        id="i-alert"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+        <path d="M12 9v4M12 17h.01" />
+      </symbol>
+      <symbol
+        id="i-plus"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2.2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 8v8M8 12h8" />
+      </symbol>
+      <symbol
+        id="i-pie"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M21.21 15.21A10 10 0 1 1 8 2.83" />
+        <path d="M22 12A10 10 0 0 0 12 2v10z" />
+      </symbol>
+      <symbol
+        id="i-play"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <polygon points="5 3 19 12 5 21 5 3" fill="currentColor" stroke="none" />
+      </symbol>
+      <symbol
+        id="i-settings"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="3" />
+        <path
+          d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+        />
+      </symbol>
+      <symbol
+        id="i-info"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <line x1="12" y1="11" x2="12" y2="17" />
+        <circle cx="12" cy="7.5" r="0.5" fill="currentColor" stroke="none" />
+      </symbol>
+      <symbol
+        id="i-depth"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M2 20l6-8 4 5 3-4 7 7" />
+        <path d="M2 20h20" />
+        <circle cx="17" cy="6" r="2" />
+      </symbol>
+      <symbol
+        id="i-opacity"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none" />
+      </symbol>
+      <symbol
+        id="i-metal"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M6 3h12l3 6-9 12L3 9z" />
+        <path d="M3 9h18M9 3l3 18M15 3l-3 18" />
+      </symbol>
+      <symbol
+        id="i-plastic"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M12 2C8 8 6 11 6 14a6 6 0 0 0 12 0c0-3-2-6-6-12z" />
+      </symbol>
+      <symbol
+        id="i-glass"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M8 2h8l-1 8a3 3 0 0 1-6 0z" />
+        <path d="M12 13v8M8 21h8" />
+      </symbol>
+      <symbol
+        id="i-fabric"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M3 3h18v18H3z" />
+        <path d="M3 9h18M3 15h18M9 3v18M15 3v18" />
+      </symbol>
+      <symbol
+        id="i-sphere"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="9" />
+        <ellipse cx="12" cy="12" rx="9" ry="3.5" />
+      </symbol>
+      <symbol
+        id="i-plane"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M3 17l9-9 9 9-9 4z" />
+      </symbol>
+      <symbol
+        id="i-torus"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <ellipse cx="12" cy="12" rx="9" ry="5" />
+        <ellipse cx="12" cy="12" rx="4" ry="2" />
+      </symbol>
+      <symbol
+        id="i-cylinder"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <ellipse cx="12" cy="5" rx="7" ry="2.5" />
+        <path d="M5 5v14M19 5v14" />
+        <ellipse cx="12" cy="19" rx="7" ry="2.5" />
+      </symbol>
+      <symbol
+        id="i-capsule"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <rect x="5" y="3" width="14" height="18" rx="7" />
+      </symbol>
+      <symbol
+        id="i-refresh"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M23 4v6h-6M1 20v-6h6" />
+        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+      </symbol>
+      <symbol
+        id="i-node"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="6" cy="6" r="2.5" />
+        <circle cx="18" cy="6" r="2.5" />
+        <circle cx="12" cy="18" r="2.5" />
+        <path d="M8.5 6h7M7.2 8.2l3.6 7.6M16.8 8.2l-3.6 7.6" />
+      </symbol>
+      <symbol
+        id="i-tree"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <rect x="2" y="10" width="6" height="4" rx="1" />
+        <rect x="16" y="3" width="6" height="4" rx="1" />
+        <rect x="16" y="10" width="6" height="4" rx="1" />
+        <rect x="16" y="17" width="6" height="4" rx="1" />
+        <path d="M8 12h3M11 12V5h5M11 12h5M11 12v7h5" />
+      </symbol>
+      <symbol
+        id="i-eye"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+        <circle cx="12" cy="12" r="3" />
+      </symbol>
+      <symbol
+        id="i-eye-off"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 0 0-4.24-4.24"
+        />
+        <line x1="1" y1="1" x2="23" y2="23" />
+      </symbol>
+      <symbol
+        id="i-move"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20" />
+      </symbol>
+      <symbol
+        id="i-star"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z" />
+      </symbol>
+      <symbol
+        id="i-clock"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <path d="M12 6v6l4 2" />
+      </symbol>
+      <symbol
+        id="i-refresh"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M21 2v6h-6" />
+        <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+        <path d="M3 22v-6h6" />
+        <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+      </symbol>
+    </svg>
 
-    <div class="header-actions">
+    <header class="app-header">
+      <!-- A 品牌区 -->
+      <div class="title"></div>
 
-
-      <button id="nodeRelBtn" class="icon-btn" data-i18n-title="header.nodeRelWin" title="节点关系窗口"><svg class="ico"><use href="#i-tree"/></svg></button>
-      <button id="nodePreviewBtn" class="icon-btn" data-i18n-title="header.nodePreviewWin" title="节点预览窗口"><svg class="ico"><use href="#i-eye"/></svg></button>
-      <button id="langBtn" class="icon-btn" data-i18n-title="header.language" title="语言"><img src="assets/mc-icons/globe.png" alt="" class="mc-ico" /></button>
-      <button id="themeToggle" class="icon-btn" data-i18n-title="header.theme" title="切换深色/浅色模式"><svg class="ico"><use href="#i-moon"/></svg></button>
-
-      <button id="settingsBtn" class="icon-btn" data-i18n-title="header.settings" title="设置"><svg class="ico"><use href="#i-settings"/></svg></button>
-
-    </div>
-  </header>
-
-  <div class="workspace" id="workspace">
-    <aside class="sidebar-left" id="sidebarLeft" data-region="left">
-      <button id="collapseLeftBtn" class="collapse-btn" data-i18n-title="sidebar.collapseLeft" title="折叠/展开左栏"><svg class="ico"><use href="#i-chevron-left"/></svg></button>
-
-      <div class="sidebar-inner">
-  <!-- 面板 DOM 已迁移至 web/src/panels/<id>/panel.html，由 panel-loader 动态注入 -->
-
-
-
-      </div>
-    </aside>
-
-
-    <div class="resizer" data-resize="left" data-i18n-title="sidebar.resizeLeft" title="拖拽调整左栏宽度"></div>
-
-
-    <div id="nodeView">
-      <div class="node-window-bar">
-        <span class="node-window-title">节点画布 · 程序化材质</span>
-        <button class="node-window-close" id="nodeWindowClose" title="关闭">✕</button>
-      </div>
-      <iframe class="node-window-frame" id="nodeFrame" src="node-editor.html" loading="lazy" title="节点画布"></iframe>
-    </div>
-
-    <div class="resizer" data-resize="right" data-i18n-title="sidebar.resizeRight" title="拖拽调整右栏宽度"></div>
-
-    <aside class="sidebar-right" id="sidebarRight" data-region="right">
-      <button id="collapseRightBtn" class="collapse-btn collapse-right-expand" data-i18n-title="sidebar.collapseRight" title="展开右栏"><svg class="ico"><use href="#i-chevron-left"/></svg></button>
-
-    </aside>
-  </div>
-
-  <!-- 节点画布面板（直接集成 node-canvas.js，非 iframe） -->
-
-  <!-- 节点库面板（node-canvas.js buildLibrary 渲染，支持拖拽到画布） -->
-
-  <!-- 总资产库面板 -->
-
-
-  <div id="settingsDrawer" class="settings-drawer">
-    <div class="settings-head">
-      <span class="settings-title" data-i18n="settings.title">设置</span>
-      <button id="settingsClose" class="icon-btn" data-i18n-title="common.close" title="关闭"><svg class="ico"><use href="#i-x"/></svg></button>
-    </div>
-    <div class="settings-body">
-      <div class="settings-section">
-        <div class="settings-section-title" data-i18n="settings.appearance">外观</div>
-        <div class="theme-select-row">
-          <span class="path-setting-label" data-i18n="theme.manager">主题</span>
-          <select id="themeSelect" class="input-select"></select>
+      <!-- B 菜单栏 -->
+      <nav class="header-menu" id="headerMenu">
+        <div class="menu-item" data-menu="help">
+          <span data-i18n="menu.help">帮助</span><svg class="menu-caret"><use href="#i-chevron-down" /></svg>
         </div>
-        <label class="opt"><input type="checkbox" id="settingThemeChk" /><span data-i18n="settings.darkMode">深色模式</span></label>
-      </div>
-      <div class="settings-section">
-        <div class="settings-section-title" data-i18n="settings.language">语言</div>
-        <div class="m3d-segment" id="langSeg">
-          <button class="active" data-lang="zh" data-i18n="lang.zh">中文</button>
-          <button data-lang="en" data-i18n="lang.en">English</button>
+        <div class="menu-item" data-action="openSettings">
+          <span data-i18n="menu.settings">设置</span>
         </div>
-      </div>
-      <div class="settings-section">
-        <div class="settings-section-title" data-i18n="settings.paths">路径</div>
-        <div class="path-setting">
-          <span class="path-setting-label" data-i18n="settings.hdriPreset">HDRI 预设</span>
-          <div class="path-setting-row">
-            <input type="text" id="hdriPresetPathInput" class="input-text" data-i18n-placeholder="common.path" placeholder="路径" />
-            <button id="hdriPresetPickBtn" class="btn btn-ghost btn-sm" data-i18n="settings.pick">选</button>
+      </nav>
 
-            <button id="hdriPresetOpenBtn" class="btn btn-ghost btn-sm" data-i18n="settings.open">开</button>
+      <!-- C 工作区切换（由 workspace.js 注入） -->
+      <div class="header-workspace" id="headerWorkspace"></div>
+
+      <!-- H 状态指示 -->
+      <div class="header-status" id="headerStatus">
+        <span class="status-dot" id="statusDot" data-i18n-title="header.statusOk" title="已连接"></span>
+      </div>
+
+      <!-- 菜单下拉浮层（由 header.js 注入内容） -->
+      <div class="menu-dropdown" id="menuDropdown" hidden></div>
+    </header>
+
+    <div class="workspace" id="workspace">
+      <aside class="sidebar-left" id="sidebarLeft" data-region="left">
+        <button id="collapseLeftBtn" class="collapse-btn" data-i18n-title="sidebar.collapseLeft" title="折叠/展开左栏">
+          <svg class="ico"><use href="#i-chevron-left" /></svg>
+        </button>
+
+        <div class="sidebar-inner">
+          <!-- 面板 DOM 已迁移至 web/src/panels/<id>/panel.html，由 panel-loader 动态注入 -->
+        </div>
+      </aside>
+
+      <div class="resizer" data-resize="left" data-i18n-title="sidebar.resizeLeft" title="拖拽调整左栏宽度"></div>
+
+      <div id="nodeView">
+        <div class="node-window-bar">
+          <span class="node-window-title">节点画布 · 程序化材质</span>
+          <button class="node-window-close" id="nodeWindowClose" title="关闭">✕</button>
+        </div>
+        <iframe
+          class="node-window-frame"
+          id="nodeFrame"
+          src="node-editor.html"
+          loading="lazy"
+          title="节点画布"
+        ></iframe>
+      </div>
+
+      <div class="resizer" data-resize="right" data-i18n-title="sidebar.resizeRight" title="拖拽调整右栏宽度"></div>
+
+      <aside class="sidebar-right" id="sidebarRight" data-region="right">
+        <button
+          id="collapseRightBtn"
+          class="collapse-btn collapse-right-expand"
+          data-i18n-title="sidebar.collapseRight"
+          title="展开右栏"
+        >
+          <svg class="ico"><use href="#i-chevron-left" /></svg>
+        </button>
+      </aside>
+    </div>
+
+    <!-- 节点画布面板（直接集成 node-canvas.js，非 iframe） -->
+
+    <!-- 节点库面板（node-canvas.js buildLibrary 渲染，支持拖拽到画布） -->
+
+    <!-- 总资产库面板 -->
+
+    <div id="settingsDrawer" class="settings-modal">
+      <div class="settings-modal-backdrop" data-settings-close></div>
+      <div class="settings-modal-dialog">
+        <aside class="settings-modal-sidebar">
+          <div class="settings-modal-brand">
+            <svg class="ico settings-modal-logo"><use href="#i-logo" /></svg>
+            <span class="settings-title" data-i18n="settings.title">设置</span>
           </div>
+          <nav class="settings-nav">
+            <button class="settings-nav-item active" data-settings-tab="appearance">
+              <svg class="ico ico-sm"><use href="#i-palette" /></svg>
+              <span data-i18n="settings.appearance">外观</span>
+            </button>
+            <button class="settings-nav-item" data-settings-tab="language">
+              <svg class="ico ico-sm"><use href="#i-globe" /></svg>
+              <span data-i18n="settings.language">语言</span>
+            </button>
+            <button class="settings-nav-item" data-settings-tab="paths">
+              <svg class="ico ico-sm"><use href="#i-folder" /></svg>
+              <span data-i18n="settings.paths">路径</span>
+            </button>
+            <button class="settings-nav-item" data-settings-tab="cache">
+              <svg class="ico ico-sm"><use href="#i-trash" /></svg>
+              <span data-i18n="settings.cache">缓存</span>
+            </button>
+            <button class="settings-nav-item" data-settings-tab="about">
+              <svg class="ico ico-sm"><use href="#i-info" /></svg>
+              <span data-i18n="settings.about">关于</span>
+            </button>
+          </nav>
+        </aside>
+        <main class="settings-modal-main">
+          <button id="settingsClose" class="settings-modal-close icon-btn" data-i18n-title="common.close" title="关闭">
+            <svg class="ico"><use href="#i-x" /></svg>
+          </button>
+
+          <section class="settings-tab-pane active" data-settings-pane="appearance">
+            <h2 class="settings-pane-title" data-i18n="settings.appearance">外观</h2>
+            <div class="settings-field">
+              <label class="settings-field-label" data-i18n="theme.manager">主题</label>
+              <select id="themeSelect" class="input-select"></select>
+            </div>
+            <label class="settings-switch">
+              <input type="checkbox" id="settingThemeChk" />
+              <span data-i18n="settings.darkMode">深色模式</span>
+            </label>
+          </section>
+
+          <section class="settings-tab-pane" data-settings-pane="language">
+            <h2 class="settings-pane-title" data-i18n="settings.language">语言</h2>
+            <div class="settings-field">
+              <label class="settings-field-label" data-i18n="settings.language">语言</label>
+              <div class="m3d-segment" id="langSeg">
+                <button class="active" data-lang="zh" data-i18n="lang.zh">中文</button>
+                <button data-lang="en" data-i18n="lang.en">English</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="settings-tab-pane" data-settings-pane="paths">
+            <h2 class="settings-pane-title" data-i18n="settings.paths">路径</h2>
+            <div class="path-setting">
+              <span class="path-setting-label" data-i18n="settings.hdriPreset">HDRI 预设</span>
+              <div class="path-setting-row">
+                <input
+                  type="text"
+                  id="hdriPresetPathInput"
+                  class="input-text"
+                  data-i18n-placeholder="common.path"
+                  placeholder="路径"
+                />
+                <button id="hdriPresetPickBtn" class="btn btn-ghost btn-sm" data-i18n="settings.pick">选</button>
+                <button id="hdriPresetOpenBtn" class="btn btn-ghost btn-sm" data-i18n="settings.open">开</button>
+              </div>
+            </div>
+            <div class="path-setting">
+              <span class="path-setting-label" data-i18n="settings.mcPacks">MC 材质包</span>
+              <div class="path-setting-row">
+                <input
+                  type="text"
+                  id="mcPacksPathInput"
+                  class="input-text"
+                  data-i18n-placeholder="common.path"
+                  placeholder="路径"
+                />
+                <button id="mcPacksPickBtn" class="btn btn-ghost btn-sm" data-i18n="settings.pick">选</button>
+                <button id="mcPacksOpenBtn" class="btn btn-ghost btn-sm" data-i18n="settings.open">开</button>
+              </div>
+            </div>
+            <div class="path-setting">
+              <span class="path-setting-label" data-i18n="settings.officialPacks">MC 官方材质包</span>
+              <div class="path-setting-row">
+                <input
+                  type="text"
+                  id="officialPacksPathInput"
+                  class="input-text"
+                  data-i18n-placeholder="common.path"
+                  placeholder="路径"
+                />
+                <button id="officialPacksPickBtn" class="btn btn-ghost btn-sm" data-i18n="settings.pick">选</button>
+                <button id="officialPacksOpenBtn" class="btn btn-ghost btn-sm" data-i18n="settings.open">开</button>
+              </div>
+            </div>
+            <div class="path-setting">
+              <span class="path-setting-label" data-i18n="settings.craftPacks">合成材质包</span>
+              <div class="path-setting-row">
+                <input
+                  type="text"
+                  id="craftPacksPathInput"
+                  class="input-text"
+                  data-i18n-placeholder="common.path"
+                  placeholder="路径"
+                />
+                <button id="craftPacksPickBtn" class="btn btn-ghost btn-sm" data-i18n="settings.pick">选</button>
+                <button id="craftPacksOpenBtn" class="btn btn-ghost btn-sm" data-i18n="settings.open">开</button>
+              </div>
+            </div>
+            <div class="path-setting">
+              <span class="path-setting-label" data-i18n="settings.importedModels">导入模型</span>
+              <div class="path-setting-row">
+                <input
+                  type="text"
+                  id="importedModelsPathInput"
+                  class="input-text"
+                  data-i18n-placeholder="common.path"
+                  placeholder="路径"
+                />
+                <button id="importedModelsPickBtn" class="btn btn-ghost btn-sm" data-i18n="settings.pick">选</button>
+                <button id="importedModelsOpenBtn" class="btn btn-ghost btn-sm" data-i18n="settings.open">开</button>
+              </div>
+            </div>
+            <div class="path-setting">
+              <span class="path-setting-label" data-i18n="settings.nodeProjects">节点工程</span>
+              <div class="path-setting-row">
+                <input
+                  type="text"
+                  id="nodeProjectsPathInput"
+                  class="input-text"
+                  data-i18n-placeholder="common.path"
+                  placeholder="路径"
+                />
+                <button id="nodeProjectsPickBtn" class="btn btn-ghost btn-sm" data-i18n="settings.pick">选</button>
+                <button id="nodeProjectsOpenBtn" class="btn btn-ghost btn-sm" data-i18n="settings.open">开</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="settings-tab-pane" data-settings-pane="cache">
+            <h2 class="settings-pane-title" data-i18n="settings.cacheTitle">缓存管理</h2>
+            <p class="cache-desc" data-i18n="settings.cacheDesc">
+              查看各缓存占用并按需清理。磁盘缓存清理后下次访问自动重生。
+            </p>
+            <div class="cache-toolbar">
+              <button id="cacheClearAllBtn" class="btn btn-ghost btn-sm" data-i18n="settings.cacheAll">
+                一键清理全部
+              </button>
+              <button id="cacheHdriOrphansBtn" class="btn btn-ghost btn-sm" data-i18n="settings.cacheHdriOrphans">
+                清理 HDRI 孤儿
+              </button>
+              <button id="cacheRefreshBtn" class="btn btn-ghost btn-sm" data-i18n="settings.cacheRefresh">刷新</button>
+            </div>
+            <div id="cacheList" class="cache-list"></div>
+
+            <h3 class="settings-pane-subtitle" data-i18n="settings.perfTitle">缩略图性能</h3>
+            <p class="cache-desc" data-i18n="settings.perfDesc">
+              调节模型缩略图生成的并发度与预取距离，改善滚动加载速度。改动即时生效并自动保存。
+            </p>
+            <div class="perf-settings">
+              <div class="perf-setting-row">
+                <span class="perf-setting-label" data-i18n="settings.perfRender">渲染并发数</span>
+                <input type="range" id="perfRenderRange" class="perf-range" min="1" max="16" step="1" value="6" />
+                <span id="perfRenderVal" class="perf-setting-val">6</span>
+              </div>
+              <div class="perf-setting-row">
+                <span class="perf-setting-label" data-i18n="settings.perfInflight">加载并发数</span>
+                <input type="range" id="perfInflightRange" class="perf-range" min="1" max="64" step="1" value="16" />
+                <span id="perfInflightVal" class="perf-setting-val">16</span>
+              </div>
+              <div class="perf-setting-row">
+                <span class="perf-setting-label" data-i18n="settings.perfMargin">预取距离(px)</span>
+                <input type="range" id="perfMarginRange" class="perf-range" min="0" max="2000" step="50" value="400" />
+                <span id="perfMarginVal" class="perf-setting-val">400</span>
+              </div>
+            </div>
+          </section>
+
+          <section class="settings-tab-pane" data-settings-pane="about">
+            <h2 class="settings-pane-title" data-i18n="settings.about">关于</h2>
+            <div class="about-brand">
+              <svg class="ico about-logo"><use href="#i-logo" /></svg>
+              <div class="about-brand-text">
+                <span class="about-app-name">MATOGA</span>
+                <span class="about-version" data-i18n="app.version">v3.1</span>
+              </div>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label" data-i18n="settings.desc">说明</span>
+              <span data-i18n="settings.descText">材质贴图对比工具</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label" data-i18n="settings.author">作者</span>
+              <span>芝世 (xiongmiaozai)</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label" data-i18n="settings.repo">仓库</span>
+              <a class="about-link" href="https://github.com/xiongmiaozai/matoga" target="_blank" rel="noopener"
+                >github.com/xiongmiaozai/matoga</a
+              >
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <div id="ctxMenu" class="ctx-menu" style="display: none">
+      <button class="ctx-item" data-act="open-left">
+        <svg class="ico ico-sm"><use href="#i-folder" /></svg> <span data-i18n="ctx.openLeft">打开左侧</span>
+      </button>
+      <button class="ctx-item" data-act="loc-left">
+        <svg class="ico ico-sm"><use href="#i-folder" /></svg> <span data-i18n="ctx.locLeft">定位左侧</span>
+      </button>
+      <div class="ctx-sep"></div>
+      <button class="ctx-item" data-act="open-right">
+        <svg class="ico ico-sm"><use href="#i-folder" /></svg> <span data-i18n="ctx.openRight">打开右侧</span>
+      </button>
+      <button class="ctx-item" data-act="loc-right">
+        <svg class="ico ico-sm"><use href="#i-folder" /></svg> <span data-i18n="ctx.locRight">定位右侧</span>
+      </button>
+      <div class="ctx-sep"></div>
+      <button class="ctx-item" data-act="copy-to-right">
+        <svg class="ico ico-sm"><use href="#i-compare" /></svg> <span data-i18n="ctx.copyRight">复制到右侧</span>
+      </button>
+      <button class="ctx-item" data-act="copy-to-left">
+        <svg class="ico ico-sm"><use href="#i-compare" /></svg> <span data-i18n="ctx.copyLeft">复制到左侧</span>
+      </button>
+      <div class="ctx-sep"></div>
+      <button class="ctx-item" data-act="copy-source">
+        <svg class="ico ico-sm"><use href="#i-clipboard" /></svg> <span data-i18n="ctx.copy">复制</span>
+      </button>
+      <button class="ctx-item" data-act="paste-source">
+        <svg class="ico ico-sm"><use href="#i-compare" /></svg> <span data-i18n="ctx.paste">粘贴</span>
+      </button>
+      <div class="ctx-sep"></div>
+      <button class="ctx-item" data-act="copy">
+        <svg class="ico ico-sm"><use href="#i-clipboard" /></svg> <span data-i18n="ctx.copyName">复制名称</span>
+      </button>
+      <div class="ctx-sep"></div>
+      <button class="ctx-item" data-act="hide">
+        <svg class="ico ico-sm"><use href="#i-eye-off" /></svg> <span data-i18n="ctx.hide">隐藏</span>
+      </button>
+      <button class="ctx-item" data-act="unhide">
+        <svg class="ico ico-sm"><use href="#i-eye" /></svg> <span data-i18n="ctx.unhide">取消隐藏</span>
+      </button>
+      <div class="ctx-sep"></div>
+      <button class="ctx-item" data-act="set-tag">
+        <svg class="ico ico-sm"><use href="#i-list" /></svg> <span data-i18n="ctx.setTag">设置分类标签</span>
+      </button>
+      <button class="ctx-item" data-act="clear-tag">
+        <svg class="ico ico-sm"><use href="#i-list" /></svg> <span data-i18n="ctx.clearTag">清除分类标签</span>
+      </button>
+    </div>
+
+    <div id="previewModal" class="preview-modal">
+      <div class="preview-modal-inner">
+        <button id="previewClose" class="preview-close" data-i18n-title="common.close" title="关闭">
+          <svg class="ico"><use href="#i-x" /></svg>
+        </button>
+        <img id="previewImg" class="preview-img" alt="" />
+        <div id="previewCaption" class="preview-caption"></div>
+      </div>
+    </div>
+
+    <div id="syncModal" class="sync-modal" style="display: none">
+      <div class="sync-modal-inner">
+        <div class="sync-title" id="syncTitle">批量复制</div>
+        <div class="sync-bar-wrap"><div class="sync-bar" id="syncBar" style="width: 0%"></div></div>
+        <div class="sync-info">
+          <span id="syncCount">0/0</span>
+          <span id="syncOkFail" style="opacity: 0.7"></span>
         </div>
-        <div class="path-setting">
-          <span class="path-setting-label" data-i18n="settings.mcPacks">MC 材质包</span>
-          <div class="path-setting-row">
-            <input type="text" id="mcPacksPathInput" class="input-text" data-i18n-placeholder="common.path" placeholder="路径" />
-            <button id="mcPacksPickBtn" class="btn btn-ghost btn-sm" data-i18n="settings.pick">选</button>
+        <div class="sync-name" id="syncName"></div>
+        <button class="btn btn-ghost" id="syncCancel">取消</button>
+      </div>
+    </div>
 
-            <button id="mcPacksOpenBtn" class="btn btn-ghost btn-sm" data-i18n="settings.open">开</button>
-          </div>
+    <div id="hdrPreviewModal" class="hdr-preview-modal">
+      <div class="hdr-preview-inner">
+        <button id="hdrPreviewClose" class="preview-close" data-i18n-title="common.close" title="关闭">
+          <svg class="ico"><use href="#i-x" /></svg>
+        </button>
+        <canvas id="hdrPreviewCanvas" class="hdr-preview-canvas"></canvas>
+        <div class="hdr-preview-controls">
+          <label class="m3d-slider"
+            ><span data-i18n="m3d.hdrPreviewExposure">预览曝光</span
+            ><input type="range" id="hdrPreviewExposure" min="-3" max="3" step="0.1" value="0" /><span
+              class="m3d-val"
+              id="hdrPreviewExposureVal"
+              >0.0</span
+            ></label
+          >
+          <div class="hdr-preview-info" id="hdrPreviewInfo"></div>
         </div>
-        <div class="path-setting">
-          <span class="path-setting-label" data-i18n="settings.officialPacks">MC 官方材质包</span>
-          <div class="path-setting-row">
-            <input type="text" id="officialPacksPathInput" class="input-text" data-i18n-placeholder="common.path" placeholder="路径" />
-            <button id="officialPacksPickBtn" class="btn btn-ghost btn-sm" data-i18n="settings.pick">选</button>
-            <button id="officialPacksOpenBtn" class="btn btn-ghost btn-sm" data-i18n="settings.open">开</button>
-          </div>
-        </div>
-      </div>
-      <div class="settings-section">
-        <div class="settings-section-title" data-i18n="settings.about">关于</div>
-        <div class="detail-row"><span class="detail-label" data-i18n="settings.version">版本</span><span data-i18n="app.version">v3.1</span></div>
-        <div class="detail-row"><span class="detail-label" data-i18n="app.title">matoga</span></div>
       </div>
     </div>
-  </div>
 
-  <div id="toast" class="toast"></div>
-
-  <div id="ctxMenu" class="ctx-menu" style="display:none">
-    <button class="ctx-item" data-act="open-left"><svg class="ico ico-sm"><use href="#i-folder"/></svg> <span data-i18n="ctx.openLeft">打开左侧</span></button>
-    <button class="ctx-item" data-act="loc-left"><svg class="ico ico-sm"><use href="#i-folder"/></svg> <span data-i18n="ctx.locLeft">定位左侧</span></button>
-    <div class="ctx-sep"></div>
-    <button class="ctx-item" data-act="open-right"><svg class="ico ico-sm"><use href="#i-folder"/></svg> <span data-i18n="ctx.openRight">打开右侧</span></button>
-    <button class="ctx-item" data-act="loc-right"><svg class="ico ico-sm"><use href="#i-folder"/></svg> <span data-i18n="ctx.locRight">定位右侧</span></button>
-    <div class="ctx-sep"></div>
-    <button class="ctx-item" data-act="copy-to-right"><svg class="ico ico-sm"><use href="#i-compare"/></svg> <span data-i18n="ctx.copyRight">复制到右侧</span></button>
-    <button class="ctx-item" data-act="copy-to-left"><svg class="ico ico-sm"><use href="#i-compare"/></svg> <span data-i18n="ctx.copyLeft">复制到左侧</span></button>
-    <div class="ctx-sep"></div>
-    <button class="ctx-item" data-act="copy-source"><svg class="ico ico-sm"><use href="#i-clipboard"/></svg> <span data-i18n="ctx.copy">复制</span></button>
-    <button class="ctx-item" data-act="paste-source"><svg class="ico ico-sm"><use href="#i-compare"/></svg> <span data-i18n="ctx.paste">粘贴</span></button>
-    <div class="ctx-sep"></div>
-    <button class="ctx-item" data-act="copy"><svg class="ico ico-sm"><use href="#i-clipboard"/></svg> <span data-i18n="ctx.copyName">复制名称</span></button>
-    <div class="ctx-sep"></div>
-    <button class="ctx-item" data-act="hide"><svg class="ico ico-sm"><use href="#i-eye-off"/></svg> <span data-i18n="ctx.hide">隐藏</span></button>
-    <button class="ctx-item" data-act="unhide"><svg class="ico ico-sm"><use href="#i-eye"/></svg> <span data-i18n="ctx.unhide">取消隐藏</span></button>
-    <div class="ctx-sep"></div>
-    <button class="ctx-item" data-act="set-tag"><svg class="ico ico-sm"><use href="#i-list"/></svg> <span data-i18n="ctx.setTag">设置分类标签</span></button>
-    <button class="ctx-item" data-act="clear-tag"><svg class="ico ico-sm"><use href="#i-list"/></svg> <span data-i18n="ctx.clearTag">清除分类标签</span></button>
-  </div>
-
-  <div id="previewModal" class="preview-modal">
-    <div class="preview-modal-inner">
-      <button id="previewClose" class="preview-close" data-i18n-title="common.close" title="关闭"><svg class="ico"><use href="#i-x"/></svg></button>
-      <img id="previewImg" class="preview-img" alt="" />
-      <div id="previewCaption" class="preview-caption"></div>
-    </div>
-  </div>
-
-
-  <div id="syncModal" class="sync-modal" style="display:none">
-    <div class="sync-modal-inner">
-      <div class="sync-title" id="syncTitle">批量复制</div>
-      <div class="sync-bar-wrap"><div class="sync-bar" id="syncBar" style="width:0%"></div></div>
-      <div class="sync-info">
-        <span id="syncCount">0/0</span>
-        <span id="syncOkFail" style="opacity:.7"></span>
-      </div>
-      <div class="sync-name" id="syncName"></div>
-      <button class="btn btn-ghost" id="syncCancel">取消</button>
-    </div>
-  </div>
-
-  <div id="hdrPreviewModal" class="hdr-preview-modal">
-    <div class="hdr-preview-inner">
-      <button id="hdrPreviewClose" class="preview-close" data-i18n-title="common.close" title="关闭"><svg class="ico"><use href="#i-x"/></svg></button>
-      <canvas id="hdrPreviewCanvas" class="hdr-preview-canvas"></canvas>
-      <div class="hdr-preview-controls">
-        <label class="m3d-slider"><span data-i18n="m3d.hdrPreviewExposure">预览曝光</span><input type="range" id="hdrPreviewExposure" min="-3" max="3" step="0.1" value="0" /><span class="m3d-val" id="hdrPreviewExposureVal">0.0</span></label>
-        <div class="hdr-preview-info" id="hdrPreviewInfo"></div>
-      </div>
-    </div>
-  </div>
-
-  <script src="/api/api-client.js"></script>
-  <script type="module" src="/api/folder-tree.js"></script>
-<script type="module" src="/boot-panels.js"></script>
-  <script type="module" src="/boot-node-panel.js"></script>
-</body>
+    <script src="/api/api-client.js"></script>
+    <script src="/api/folder-tree.js"></script>
+    <script type="module">
+      // 提前注入面板 DOM：core.js 在模块加载时同步 getElementById 抓取面板内元素，
+      // 必须在 import renderer.js（及其依赖 core.js）之前完成注入，否则引用为 null。
+      window.__panelsInjected = new Set()
+      try {
+        const r = await fetch('/api/panels')
+        const { panels } = await r.json()
+        for (const p of panels) {
+          if (!p.htmlUrl) continue
+          const hr = await fetch(p.htmlUrl)
+          const html = await hr.text()
+          const tpl = document.createElement('template')
+          tpl.innerHTML = html.trim()
+          const sel = p.mount
+          const mount =
+            !sel || sel === 'body'
+              ? document.body
+              : sel === 'head'
+                ? document.head
+                : document.querySelector(sel) || document.body
+          const useHost = !sel || sel === 'body' || sel === 'head'
+          if (useHost) {
+            const host = document.createElement('div')
+            host.className = 'panel-host'
+            host.dataset.panelId = p.id
+            host.appendChild(tpl.content.cloneNode(true))
+            mount.appendChild(host)
+          } else {
+            mount.appendChild(tpl.content.cloneNode(true))
+          }
+          window.__panelsInjected.add(p.id)
+        }
+      } catch (e) {
+        console.error('[pre-inject] failed', e)
+      }
+      await import('/renderer.js')
+    </script>
+    <script type="module">
+      const btn = document.getElementById('nodePanelBtn')
+      const closeBtn = document.getElementById('nodeWindowClose')
+      if (btn) {
+        btn.addEventListener('click', () => {
+          document.body.classList.add('node-mode')
+          btn.classList.add('active')
+        })
+      }
+      if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+          document.body.classList.remove('node-mode')
+          if (btn) btn.classList.remove('active')
+        })
+      }
+      document.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && document.body.classList.contains('node-mode')) {
+          document.body.classList.remove('node-mode')
+          if (btn) btn.classList.remove('active')
+        }
+      })
+    </script>
+  </body>
 </html>

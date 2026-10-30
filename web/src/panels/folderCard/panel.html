@@ -1,21 +1,96 @@
 <div class="folder-card" id="folderCard">
-  <div class="folder-card-head">
-    <div class="head-side head-side-left">
-      <span class="tag tag-left" data-i18n="sidebar.leftTag">左侧 · 基准</span>
+  <div class="fc-rows">
+    <div class="fc-row fc-row-left">
+      <span class="fc-dot fc-dot-left" data-i18n-title="sidebar.leftTag" title="左侧 · 基准">左</span>
+      <div id="leftPath" class="path-box path-box-flex" data-i18n="common.empty">未选择</div>
       <div class="side-actions">
         <button id="leftBtn" class="btn btn-primary btn-sm side-select-btn" data-i18n="common.select">选择</button>
-        <button id="leftPackBtn" class="btn btn-ghost btn-sm pack-btn" data-i18n-title="sidebar.quickPick" title="快速选包（MC 资产包 / 官方包 / 制作包）"><svg class="ico ico-sm"><use href="#i-box"/></svg><svg class="ico ico-sm pack-caret"><use href="#i-chevron-down"/></svg></button>
+        <button
+          id="leftPackBtn"
+          class="btn btn-ghost btn-sm pack-btn"
+          data-i18n-title="sidebar.quickPick"
+          title="快速选包"
+        >
+          <svg class="ico ico-sm"><use href="#i-box" /></svg
+          ><svg class="ico ico-sm pack-caret"><use href="#i-chevron-down" /></svg>
+        </button>
       </div>
     </div>
-    <div class="vs-divider" aria-hidden="true"><span class="vs-badge"><svg class="ico ico-xs"><use href="#i-compare"/></svg></span></div>
-    <div class="head-side head-side-right">
-      <span class="tag tag-right" data-i18n="sidebar.rightTag">右侧 · 对比</span>
+    <div class="fc-row fc-row-right">
+      <span class="fc-dot fc-dot-right" data-i18n-title="sidebar.rightTag" title="右侧 · 对比">右</span>
+      <div id="rightPath" class="path-box path-box-flex" data-i18n="common.empty">未选择</div>
       <div class="side-actions">
         <button id="rightBtn" class="btn btn-primary btn-sm side-select-btn" data-i18n="common.select">选择</button>
-        <button id="rightPackBtn" class="btn btn-ghost btn-sm pack-btn" data-i18n-title="sidebar.quickPick" title="快速选包（MC 资产包 / 官方包 / 制作包）"><svg class="ico ico-sm"><use href="#i-box"/></svg><svg class="ico ico-sm pack-caret"><use href="#i-chevron-down"/></svg></button>
+        <button
+          id="rightPackBtn"
+          class="btn btn-ghost btn-sm pack-btn"
+          data-i18n-title="sidebar.quickPick"
+          title="快速选包"
+        >
+          <svg class="ico ico-sm"><use href="#i-box" /></svg
+          ><svg class="ico ico-sm pack-caret"><use href="#i-chevron-down" /></svg>
+        </button>
       </div>
     </div>
   </div>
-  <div id="leftPath" class="path-box" data-i18n="common.empty">未选择</div>
-  <div id="rightPath" class="path-box" data-i18n="common.empty">未选择</div>
+
+  <div class="folder-card-section">
+    <div class="opt-row opt-row-compact">
+      <label class="opt"
+        ><input type="radio" name="viewMode" value="all" checked /><span data-i18n="common.all">全部</span></label
+      >
+      <label class="opt"
+        ><input type="radio" name="viewMode" value="byFolder" /><span data-i18n="sidebar.byFolder">分类</span></label
+      >
+      <label class="opt"
+        ><input type="checkbox" id="recursiveChk" /><span data-i18n="sidebar.recursive">递归</span></label
+      >
+      <label class="opt"
+        ><input type="checkbox" id="onlyMissingChk" /><span data-i18n="sidebar.onlyMissing">不一致</span></label
+      >
+      <label class="opt"
+        ><input type="checkbox" id="ignoreChk" checked /><span data-i18n="sidebar.ignoreSys">忽略</span></label
+      >
+      <label class="opt"><input type="checkbox" id="hashChk" /><span data-i18n="sidebar.hashCheck">哈希</span></label>
+    </div>
+    <details class="fc-ignore">
+      <summary data-i18n="sidebar.customIgnore">自定义忽略</summary>
+      <input
+        type="text"
+        id="ignoreInput"
+        class="input-text"
+        data-i18n-placeholder="sidebar.customIgnorePh"
+        placeholder="*.tmp,*.bak"
+      />
+    </details>
+
+    <div class="fc-actions">
+      <button id="compareBtn2" class="btn btn-accent fc-compare-btn" disabled data-i18n="sidebar.startCompare">
+        开始对比
+      </button>
+      <button id="swapBtn2" class="btn btn-ghost btn-sm btn-icon" data-i18n-title="sidebar.swap" title="交换">
+        <svg class="ico ico-sm"><use href="#i-swap" /></svg>
+      </button>
+      <button id="undoBtn" class="btn btn-ghost btn-sm btn-icon" disabled data-i18n-title="sidebar.undo" title="撤回">
+        <svg class="ico ico-sm"><use href="#i-undo" /></svg>
+      </button>
+    </div>
+
+    <details class="fc-more">
+      <summary data-i18n="sidebar.moreActions">更多操作</summary>
+      <div class="action-row action-row-icons">
+        <button id="batchRightBtn" class="btn btn-sm btn-icon" disabled data-i18n-title="sidebar.batchRight" title="批量→右">
+          →
+        </button>
+        <button id="batchLeftBtn" class="btn btn-sm btn-icon" disabled data-i18n-title="sidebar.batchLeft" title="批量→左">
+          ←
+        </button>
+        <button id="exportBtn" class="btn btn-ghost btn-sm btn-icon" disabled title="导出 TXT">T</button>
+        <button id="exportHtmlBtn" class="btn btn-ghost btn-sm btn-icon" disabled title="导出 HTML">H</button>
+        <button id="clearMemBtn" class="btn btn-ghost btn-sm btn-icon" disabled title="清除">
+          <svg class="ico ico-sm"><use href="#i-trash" /></svg>
+        </button>
+      </div>
+    </details>
+  </div>
 </div>

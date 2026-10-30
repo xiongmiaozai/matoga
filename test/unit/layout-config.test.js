@@ -179,3 +179,54 @@ test('sanitize: 合法配置结构原样保留（仅重建容器）', async () =
   const out = sanitizeLayoutConfig(tree, ['a', 'b', 'c'])
   assert.deepEqual(out, tree)
 })
+test('migrate: 注入版本号 __v', async () => {
+  const { migrateLayoutConfig, LAYOUT_VERSION } = await import(MOD_URL)
+  const cfg = { root: row([stack([comp('a')])]) }
+  const out = migrateLayoutConfig(cfg)
+  assert.equal(out.__v, LAYOUT_VERSION)
+  assert.equal(out.root.type, 'row')
+})
+
+test('migrate: 缺失 __v 的旧配置被迁移并打标', async () => {
+  const { migrateLayoutConfig, LAYOUT_VERSION } = await import(MOD_URL)
+  const cfg = { root: row([stack([comp('a')]), stack([comp('b')])]) }
+  const out = migrateLayoutConfig(cfg)
+  assert.equal(out.__v, LAYOUT_VERSION)
+  assert.deepEqual(out.root, cfg.root)
+})
+
+test('migrate: 纯 root 结构（无 root 键）同样处理', async () => {
+  const { migrateLayoutConfig, LAYOUT_VERSION } = await import(MOD_URL)
+  const tree = row([stack([comp('a')])])
+  const out = migrateLayoutConfig(tree)
+  assert.equal(out.__v, LAYOUT_VERSION)
+  assert.equal(out.root.type, 'row')
+})
+
+test('migrate: 非对象输入原样返回', async () => {
+  const { migrateLayoutConfig } = await import(MOD_URL)
+  assert.equal(migrateLayoutConfig(null), null)
+  assert.equal(migrateLayoutConfig(undefined), undefined)
+  assert.equal(migrateLayoutConfig('x'), 'x')
+})
+
+test('migrate: 不修改原始输入（不可变）', async () => {
+  const { migrateLayoutConfig } = await import(MOD_URL)
+  const cfg = { root: row([stack([comp('a')])]) }
+  const snapshot = JSON.stringify(cfg)
+  migrateLayoutConfig(cfg)
+  assert.equal(JSON.stringify(cfg), snapshot)
+})
+test('migrate: leftSidebar 别名迁移为 folderCard', async () => {
+  const { migrateLayoutConfig } = await import(MOD_URL)
+  const cfg = { root: row([stack([comp('leftSidebar')]), stack([comp('compare')])]) }
+  const out = migrateLayoutConfig(cfg)
+  assert.deepEqual(out.root, row([stack([comp('folderCard')]), stack([comp('compare')])]))
+})
+
+test('migrate: 已是 folderCard 不受别名影响', async () => {
+  const { migrateLayoutConfig } = await import(MOD_URL)
+  const cfg = { root: row([stack([comp('folderCard')])]) }
+  const out = migrateLayoutConfig(cfg)
+  assert.deepEqual(out.root, row([stack([comp('folderCard')])]))
+})

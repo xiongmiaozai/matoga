@@ -1,6 +1,6 @@
 /* 独立 3D 视口面板 */
 
-.m3d-standalone-host { flex: 1; min-height: 160px; }
+.m3d-standalone-host { flex: 1; min-height: 100px; }
 
 .m3d-host-empty {
   position: absolute;
@@ -23,3 +23,20 @@
 .m3d-host-empty:hover { color: #c6cdf2; background: rgba(26, 26, 46, 0.72); }
 
 .m3d-host-active .m3d-host-empty { display: none; }
+/* 空模型提示（air / structure_void 等无几何无贴图方块） */
+.m3d-model-empty {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  color: #8890a8;
+  font-size: 13px;
+  line-height: 1.6;
+  pointer-events: none;
+  background: rgba(26, 26, 46, 0.35);
+  border-radius: inherit;
+}

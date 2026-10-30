@@ -8,7 +8,7 @@
 
 import { getGraphInfo, focusNodeInCanvas } from './node-canvas.js'
 import { t, onLocaleChange } from './i18n.js'
-import { createFloatingWindow } from './floating-window.js'
+
 
 import { S } from './nrel/state.js'
 import { actCollapseAll, actExpandAll, actFit, actToggleDir } from './nrel/actions.js'
@@ -24,33 +24,14 @@ export function initNodeRel(){
   if (S.initialized) return
   S.initialized = true
 
-  const vw = (typeof window !== 'undefined' && window.innerWidth) || 1280
-  const vh = (typeof window !== 'undefined' && window.innerHeight) || 800
-  const fw = createFloatingWindow({
-    id: 'nodeRel',
-    title: t('panel.nodeRel'),
-    icon: 'i-tree',
-    x: Math.max(16, vw - 636),
-    y: 72,
-    w: Math.min(620, vw - 32),
-    h: Math.min(420, vh - 160),
-  })
-
-  let view = document.getElementById('nodeRelView')
-  if (!view){
-    view = document.createElement('div')
-    view.id = 'nodeRelView'
-    view.className = 'nr-view'
-  }
-  fw.body.appendChild(view)
-
-  const toolBtns = [
-    fw.addToolButton({ icon: 'i-swap',     title: t('noderel.dirToggle'),   onClick: actToggleDir }),
-    fw.addToolButton({ icon: 'i-plus',     title: t('noderel.expandAll'),   onClick: actExpandAll }),
-    fw.addToolButton({ icon: 'i-minus',    title: t('noderel.collapseAll'), onClick: actCollapseAll }),
-    fw.addToolButton({ icon: 'i-maximize', title: t('noderel.fit'),         onClick: actFit }),
-  ]
-  fw.onToggle = (open) => { if (open) fitView() }
+  const dirBtn = document.getElementById('nrDirBtn')
+  const expandBtn = document.getElementById('nrExpandBtn')
+  const collapseBtn = document.getElementById('nrCollapseBtn')
+  const fitBtn = document.getElementById('nrFitBtn')
+  if (dirBtn) dirBtn.addEventListener('click', actToggleDir)
+  if (expandBtn) expandBtn.addEventListener('click', actExpandAll)
+  if (collapseBtn) collapseBtn.addEventListener('click', actCollapseAll)
+  if (fitBtn) fitBtn.addEventListener('click', actFit)
 
   bindInteractions()
   render()
@@ -64,13 +45,8 @@ export function initNodeRel(){
     }, 160)
   })
 
-  // 语言切换 → 标题 / 工具提示 / 状态栏重渲染
+  // 语言切换 → 状态栏重渲染
   onLocaleChange(() => {
-    fw.setTitle(t('panel.nodeRel'))
-    toolBtns[0].title = t('noderel.dirToggle')
-    toolBtns[1].title = t('noderel.expandAll')
-    toolBtns[2].title = t('noderel.collapseAll')
-    toolBtns[3].title = t('noderel.fit')
     render()
   })
 

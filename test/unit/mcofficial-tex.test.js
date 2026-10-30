@@ -388,6 +388,44 @@ test('路由: GET /:name/entries 文件浏览可用且穿越返回 4xx', async (
   }
 })
 
+test('listAllTexPaths: 扁平收集所有官方包贴图路径去重', async () => {
+  const paths = await mcmeta.listAllTexPaths(ROOT)
+  const set = new Set(paths)
+  assert.ok(set.has('assets/minecraft/textures/block/stone.png'), 'PackA 贴图收录')
+  assert.ok(set.has('assets/minecraft/textures/block/doors/oak.png'), 'PackA 嵌套子目录贴图收录')
+  assert.ok(set.has('assets/minecraft/textures/item/dirt.png'), 'PackA item 贴图收录')
+  assert.ok(set.has('assets/minecraft/textures/block/deep.png'), 'PackB 嵌套根贴图收录')
+  assert.ok(set.has('assets/minecraft/textures/block/oak.png'), 'PackC.zip 嵌套前缀归一化贴图收录')
+  assert.ok(set.has('assets/minecraft/textures/block/steel.png'), 'PackE Fabric 布局贴图收录')
+  assert.ok(set.has('assets/minecraft/textures/item/gem.png'), 'PackG 唯一子目录贴图收录')
+  assert.ok(set.has('assets/minecraft/textures/block/iron.png'), 'PackH.zip 贴图收录')
+  const unique = new Set(paths)
+  assert.equal(paths.length, unique.size, '路径去重无重复')
+  assert.ok(paths.length >= 8, '至少收录 8 张已知贴图（不含 Big.zip 的 4200 张，受 MAX_TEX_WALK=20000 限制仍应全部收录）')
+})
+
+test('listAllTexPaths: 不存在的根目录返回空数组', async () => {
+  const paths = await mcmeta.listAllTexPaths(path.join(ROOT, 'no-such-dir'))
+  assert.deepEqual(paths, [])
+})
+
+test('路由: GET /tex-index 返回全量贴图路径数组', async () => {
+  const server = http.createServer(createApp())
+  await new Promise((r) => server.listen(0, r))
+  const port = server.address().port
+  const base = `http://127.0.0.1:${port}/api/mc-official`
+  try {
+    const res = await (await fetch(base + '/tex-index')).json()
+    assert.equal(res.ok, true)
+    assert.ok(Array.isArray(res.data.paths), '返回 paths 数组')
+    const set = new Set(res.data.paths)
+    assert.ok(set.has('assets/minecraft/textures/block/stone.png'), '含 PackA 贴图')
+    assert.ok(set.has('assets/minecraft/textures/block/oak.png'), '含 PackC.zip 贴图')
+  } finally {
+    await new Promise((r) => server.close(r))
+  }
+})
+
 test('teardown: 清理临时目录并恢复真实配置', async () => {
   fs.rmSync(ROOT, { recursive: true, force: true })
   try { fs.unlinkSync(FILE) } catch {}

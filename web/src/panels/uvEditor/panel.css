@@ -16,30 +16,32 @@
 .uv-model-sel {
   max-width: 220px;
   min-width: 120px;
-  padding: 3px 6px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, .18);
-  background: rgba(255, 255, 255, .08);
-  color: #e8e8ee;
-  font-size: 12px;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: var(--fs-md);
   cursor: pointer;
+  transition: border-color var(--transition-fast);
 }
 
-.uv-model-sel:focus {
-  outline: none;
+.uv-model-sel:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
   border-color: var(--primary);
 }
 
 .uv-panel-hint {
-  font-size: 11px;
-  color: rgba(255, 255, 255, .55);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .uv-panel-hint.dirty {
-  color: #f0b060;
+  color: var(--warn);
 }
 
 .uv-panel-spacer {
@@ -49,26 +51,34 @@
 .uv-save-btn {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 10px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, .18);
-  background: rgba(255, 255, 255, .08);
-  color: #e8e8ee;
-  font-size: 12px;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-md);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: var(--fs-md);
   cursor: pointer;
+  transition: all var(--transition-fast);
 }
 
 .uv-save-btn:not(:disabled):hover {
-  background: rgba(255, 255, 255, .16);
+  background: var(--panel-bg);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.uv-save-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
 }
 
 .uv-save-btn:disabled {
-  opacity: .45;
+  opacity: 0.45;
   cursor: default;
 }
 
 .uv-save-btn.dirty {
-  border-color: #f0b060;
-  color: #f0d0a0;
+  border-color: var(--warn);
+  color: var(--warn);
 }

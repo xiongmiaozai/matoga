@@ -5,9 +5,9 @@ import { fileURLToPath } from 'node:url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(__dirname, '../../..')
 const MAP = {
-  'three': path.join(ROOT, 'node_modules/three/build/three.module.js'),
+  three: path.join(ROOT, 'node_modules/three/build/three.module.js'),
   '/vendor/three/three.module.js': path.join(ROOT, 'node_modules/three/build/three.module.js'),
-  'golden-layout': path.join(ROOT, 'node_modules/golden-layout/dist/index.js'),
+  'golden-layout': path.join(ROOT, 'node_modules/golden-layout/dist/index.js')
 }
 
 export async function resolve(specifier, context, next) {
@@ -23,10 +23,13 @@ export function updateMaterial3D(){}
 export function showCustomModel(g){ const f = globalThis.__m3dShow; return f ? !!f(g) : false }
 export function showCustomModelPair(l, r){ const f = globalThis.__m3dShowPair; return f ? !!f(l, r) : false }
 export function clearCustomModel(){}
+export function setModelEmptyHint(){}
 export function isCustomModelActive(){ return false }
 export function hasVisibleViewport(){ return false }
 export function applyPbrMapsToModelMaterial(){}
+export function makeMaterial(){ return { userData: {} } }
 export function refreshMaterial3DTint(){}
+export function setChannelView(){}
 `
 
 export async function load(url, context, next) {

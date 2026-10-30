@@ -26,6 +26,7 @@ function setup(server) {
       const token = url.searchParams.get('token')
       if (token !== expectedToken) { ws.close(1008, 'unauthorized'); return }
     }
+    const activeJobs = new Set()
     ws.on('message', (data) => {
       let msg
       try { msg = JSON.parse(data) } catch { return }
@@ -37,12 +38,22 @@ function setup(server) {
           return
         }
         logger.info('ws', `sync job ${jobId} started: ${msg.pairs.length} pairs`)
+        activeJobs.add(jobId)
         syncService.execute(msg.pairs, jobId, (evt) => {
           if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(evt))
         })
       } else if (msg.type === 'cancel') {
         syncService.cancel(msg.jobId)
       }
+    })
+    ws.on('close', () => {
+      for (const jobId of activeJobs) syncService.cancel(jobId)
+      activeJobs.clear()
+    })
+    ws.on('error', (err) => {
+      logger.warn('ws', 'socket error: ' + err.message)
+      for (const jobId of activeJobs) syncService.cancel(jobId)
+      activeJobs.clear()
     })
   })
   logger.info('ws', 'WebSocket server attached')

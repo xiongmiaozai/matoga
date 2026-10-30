@@ -4,7 +4,7 @@ const fs = require('fs')
 const path = require('path')
 const os = require('os')
 const crypto = require('crypto')
-const { hashFile, invalidateHash, hashCacheStats, computeAHash, computeDHash, hammingDistance } = require('../../server/services/file-service')
+const { hashFile, invalidateHash, hashCacheStats, computeAHash, computeDHash, hammingDistance, canonicalizeJson } = require('../../server/services/file-service')
 
 const TMP = path.join(os.tmpdir(), 'matoga-ut-hash-' + process.pid)
 
@@ -118,4 +118,82 @@ test('hammingDistance: 相似图像汉明距离小', () => {
   const hSimilar = computeDHash(similar, 16, 16)
   const hDiff = computeDHash(different, 16, 16)
   assert.ok(hammingDistance(hBase, hSimilar) <= hammingDistance(hBase, hDiff))
+})
+test('canonicalizeJson: 对象 key 按字典序排序', () => {
+  const input = { c: 1, a: 2, b: 3 }
+  const out = canonicalizeJson(input)
+  assert.deepEqual(Object.keys(out), ['a', 'b', 'c'])
+})
+
+test('canonicalizeJson: 递归排序嵌套对象', () => {
+  const input = { z: { y: 1, x: 2 }, a: { b: 3, a: 4 } }
+  const out = canonicalizeJson(input)
+  assert.deepEqual(Object.keys(out), ['a', 'z'])
+  assert.deepEqual(Object.keys(out.a), ['a', 'b'])
+  assert.deepEqual(Object.keys(out.z), ['x', 'y'])
+})
+
+test('canonicalizeJson: 数组保持顺序但元素递归排序', () => {
+  const input = [{ b: 1, a: 2 }, { d: 3, c: 4 }]
+  const out = canonicalizeJson(input)
+  assert.ok(Array.isArray(out))
+  assert.deepEqual(Object.keys(out[0]), ['a', 'b'])
+  assert.deepEqual(Object.keys(out[1]), ['c', 'd'])
+})
+
+test('hashFile canonical: 字段顺序不同但内容相同的 JSON 哈希一致', async () => {
+  setupTmp()
+  invalidateHash()
+  const f1 = path.join(TMP, 'm1.json')
+  const f2 = path.join(TMP, 'm2.json')
+  fs.writeFileSync(f1, JSON.stringify({ parent: 'block/cube', textures: { all: 'block/stone' }, elements: [{ from: [0, 0, 0], to: [1, 1, 1] }] }))
+  fs.writeFileSync(f2, JSON.stringify({ elements: [{ to: [1, 1, 1], from: [0, 0, 0] }], textures: { all: 'block/stone' }, parent: 'block/cube' }))
+  const h1 = await hashFile(f1, true)
+  const h2 = await hashFile(f2, true)
+  assert.equal(h1, h2, '字段顺序不同的等价 JSON 规范化哈希应一致')
+})
+
+test('hashFile canonical: 内容不同的 JSON 哈希不同', async () => {
+  setupTmp()
+  invalidateHash()
+  const f1 = path.join(TMP, 'a.json')
+  const f2 = path.join(TMP, 'b.json')
+  fs.writeFileSync(f1, JSON.stringify({ parent: 'block/cube' }))
+  fs.writeFileSync(f2, JSON.stringify({ parent: 'block/slab' }))
+  const h1 = await hashFile(f1, true)
+  const h2 = await hashFile(f2, true)
+  assert.notEqual(h1, h2)
+})
+
+test('hashFile canonical: 非 JSON 文件回退到普通哈希', async () => {
+  setupTmp()
+  invalidateHash()
+  const f = path.join(TMP, 'not-json.txt')
+  fs.writeFileSync(f, 'plain text content')
+  const hCanonical = await hashFile(f, true)
+  const hNormal = await hashFile(f, false)
+  assert.equal(hCanonical, hNormal, '非 JSON 文件 canonical 应回退到普通哈希')
+})
+
+test('hashFile canonical: 损坏 JSON 回退到普通哈希', async () => {
+  setupTmp()
+  invalidateHash()
+  const f = path.join(TMP, 'broken.json')
+  fs.writeFileSync(f, '{ invalid json !!!')
+  const hCanonical = await hashFile(f, true)
+  const hNormal = await hashFile(f, false)
+  assert.equal(hCanonical, hNormal, 'JSON 解析失败应回退到普通哈希')
+})
+
+test('hashFile canonical: 命中缓存', async () => {
+  setupTmp()
+  invalidateHash()
+  const f = path.join(TMP, 'cached.json')
+  fs.writeFileSync(f, JSON.stringify({ b: 1, a: 2 }))
+  const h1 = await hashFile(f, true)
+  const before = hashCacheStats().size
+  const h2 = await hashFile(f, true)
+  const after = hashCacheStats().size
+  assert.equal(h1, h2)
+  assert.equal(before, after, '缓存命中不应增长条目数')
 })

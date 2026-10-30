@@ -259,16 +259,11 @@ test('无路径资产不渲染 locate/copyPath 按钮', async () => {
   assert.match(html, /data-np-asset-act="copyName"/)
 })
 
-test('show-asset 自动打开被关闭的预览窗口（避免详情渲染进隐藏窗口）', async () => {
-  const fwMod = await import(pathToFileURL(path.join(ROOT, 'web/src/floating-window.js')).href)
-  const fw = fwMod.getWindow('nodePreview')
-  fw.close()
-  assert.equal(fw.isOpen(), false)
+test('show-asset 在面板中渲染资产详情（面板始终可见）', async () => {
   document.dispatchEvent(new CustomEvent('nodepreview:show-asset', { detail: {
     kind: 'asset', name: 'y.png', type: 'tex', typeLabel: '贴图', mtimeLabel: '—', fav: false,
   }}))
   await sleep(120)
-  assert.equal(fw.isOpen(), true)
   assert.match(viewContainer.innerHTML, /y\.png/)
 })
 

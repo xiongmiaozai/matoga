@@ -94,6 +94,71 @@ docs(readme): 补充环境变量说明
 
 ---
 
+## 📦 macOS 构建（Electron dmg）
+
+一键构建：
+
+```bash
+bash scripts/build-mac.sh
+```
+
+产物：`dist-electron/matoga-3.2.0-arm64.dmg`（含 Applications 拖拽快捷方式）
+
+### 构建流程（分步）
+
+1. **打包 app**：`npx electron-builder --mac --dir`（用 `--dir` 跳过 dmg-builder 的 plist bug）
+2. **生成 dmg**：`bash scripts/build-dmg.sh`（用 `hdiutil` 手动制作，含 Applications 快捷方式）
+
+### 必要环境变量（国内镜像加速）
+
+```bash
+export ELECTRON_MIRROR=https://mirrors.huaweicloud.com/electron/
+export ELECTRON_BUILDER_BINARIES_MIRROR=https://mirrors.huaweicloud.com/electron-builder-binaries/
+```
+
+> 不设镜像会从 GitHub CDN 下载（~23KB/s，极慢）
+
+### 已知坑
+
+| 问题 | 原因 | 解决 |
+|------|------|------|
+| electron-builder 卡在 packaging | 磁盘满 / GitHub 下载慢 | 清理磁盘 + 华为云镜像 |
+| dmg-builder 报 plist InvalidFile | dmg-builder@1.2.5 Python 脚本 bug | 用 `hdiutil` 手动生成 dmg |
+| hdiutil detach "资源忙" | Finder 打开了卷 | 脚本已跳过 AppleScript 布局设置 |
+| 残载点残留导致 dmg 冲突 | 之前失败构建残留 | `hdiutil detach` 清理 |
+
+### mc-packs 打包策略
+
+`package.json` 的 `extraResources` 中 mc-packs 用 filter 排除贴图（png/jpg/tga），只保留目录结构 + 元数据（json/mcmeta），减小体积约 78%。用户可自行往 `~/Library/Application Support/matoga/mc-packs/` 补放贴图。
+
+### 磁盘空间要求
+
+构建需 ≥ 3GB 可用空间（app ~500MB + 临时 dmg 600MB + 压缩 dmg ~220MB）。不足时清理：
+
+```bash
+npm cache clean --force
+rm -rf ~/Library/Caches/electron/electron-v3* ~/Library/Caches/electron/electron-v31*
+```
+
+---
+
+## 📦 Windows 构建（Electron NSIS）
+
+在 macOS 上交叉编译（需 wine，electron-builder 自动下载到缓存）：
+
+```bash
+bash scripts/build-win.sh
+```
+
+产物：`dist-electron/matoga Setup 3.2.0.exe`（x64 NSIS 安装包，~187MB）
+
+### 流程
+
+1. `npx electron-builder --win --x64`（用华为云镜像加速）
+2. 自动用缓存的 wine + nsis 生成 .exe 安装包
+
+---
+
 ## 🧪 测试策略
 
 - **单元测试**：覆盖 services / config / 纯逻辑函数，mock 文件系统与网络

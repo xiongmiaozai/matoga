@@ -147,3 +147,35 @@ test('readPackFile: zip 条目名大小写不敏感兜底', async () => {
   assert.equal(r.buf.toString(), 'case-bytes')
   assert.equal(r.mime, 'image/png', 'mime 按实际命中条目扩展名')
 })
+
+/* ── deletePack（v3.2.0 新增：目录 / zip / 不存在 / 非法包名）── */
+
+test('deletePack: 删除目录', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mc-del-'))
+  fs.mkdirSync(path.join(root, 'MyPack', 'assets'), { recursive: true })
+  fs.writeFileSync(path.join(root, 'MyPack', 'pack.mcmeta'), '{}')
+  const r = await svc.deletePack(root, 'MyPack')
+  assert.equal(r.deleted, true)
+  assert.ok(!fs.existsSync(path.join(root, 'MyPack')))
+  fs.rmSync(root, { recursive: true, force: true })
+})
+
+test('deletePack: 删除 zip', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mc-del-'))
+  fs.writeFileSync(path.join(root, 'MyPack.zip'), Buffer.from('PK'))
+  await svc.deletePack(root, 'MyPack.zip')
+  assert.ok(!fs.existsSync(path.join(root, 'MyPack.zip')))
+  fs.rmSync(root, { recursive: true, force: true })
+})
+
+test('deletePack: 不存在的包拒绝', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mc-del-'))
+  await assert.rejects(() => svc.deletePack(root, 'NoPack'), e => e.code === 'ERR_FS_NOT_FOUND')
+  fs.rmSync(root, { recursive: true, force: true })
+})
+
+test('deletePack: 非法包名拒绝', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mc-del-'))
+  await assert.rejects(() => svc.deletePack(root, '../evil'), AppError)
+  fs.rmSync(root, { recursive: true, force: true })
+})

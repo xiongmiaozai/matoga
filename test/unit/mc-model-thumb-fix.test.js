@@ -221,6 +221,29 @@ test('animFramePlan: 高帧率动画无去重损失（4 帧/0.4s → 4 帧 100ms
   assert.equal(plan.delay, 100)
 })
 
+test('sprite 模型缩略图：buildItemSpriteGroup 传 fileRoot → 贴图从各自包加载（左右不串）', async () => {
+  /* 回归：model-thumb.js buildGroupFor 曾漏传 spec.fileRoot 给 buildItemSpriteGroup，
+     导致 item/generated 类 sprite 模型贴图不从各自资源包加载，左右预览图均回退
+     official-packs vanilla 贴图而长得一样 */
+  const leftRoot = path.join(MC_ROOT, 'LeftPack')
+  const rightRoot = path.join(MC_ROOT, 'RightPack')
+  put(leftRoot, 'assets/minecraft/textures/item/foo.png', PNG)
+  put(rightRoot, 'assets/minecraft/textures/item/foo.png', PNG)
+  const textures = { layer0: 'minecraft:item/foo' }
+
+  texUrls.length = 0
+  const lg = mcm.buildItemSpriteGroup(textures, undefined, undefined, leftRoot)
+  assert.ok(lg, '左侧 sprite group 构建')
+  await mt.waitForTextures(lg, 500)
+  assert.ok(texUrls.some(u => u.includes('LeftPack')), '左侧贴图 URL 含 leftRoot 路径')
+
+  texUrls.length = 0
+  const rg = mcm.buildItemSpriteGroup(textures, undefined, undefined, rightRoot)
+  assert.ok(rg, '右侧 sprite group 构建')
+  await mt.waitForTextures(rg, 500)
+  assert.ok(texUrls.some(u => u.includes('RightPack')), '右侧贴图 URL 含 rightRoot 路径')
+})
+
 test('teardown: 关服务 / 恢复工作区配置', async () => {
   if (globalThis.__mcThumbFixServer) await new Promise(r => globalThis.__mcThumbFixServer.close(r))
   if (globalThis.__mcThumbFixRestoreConfig) globalThis.__mcThumbFixRestoreConfig()

@@ -1,8 +1,0 @@
-{
-  "id": "compareSettings",
-  "title": "对比设置",
-  "icon": "i-compare",
-  "html": "panel.html",
-  "mount": ".sidebar-left .sidebar-inner",
-  "order": 2
-}

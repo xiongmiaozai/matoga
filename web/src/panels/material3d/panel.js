@@ -17,12 +17,9 @@ export function init() {
   const fsBtn = document.getElementById('m3dStandaloneFullscreenBtn')
   if (fsBtn) fsBtn.addEventListener('click', () => toggleFullscreen())
 
-  /* UV 贴图视图浮窗（按需加载；无模型时浮窗显示空态提示） */
+  /* UV 编辑器面板（按需切换；无模型时面板显示空态提示） */
   const uvBtn = document.getElementById('m3dStandaloneUvBtn')
-  if (uvBtn) uvBtn.addEventListener('click', async () => {
-    try {
-      const m = await import('../../uv-view.js')
-      m.toggleUvView()
-    } catch (e) { console.error('[material3d-panel] uv-view', e) }
+  if (uvBtn) uvBtn.addEventListener('click', () => {
+    document.dispatchEvent(new CustomEvent('workspace:toggle-panel', { detail: { id: 'uvEditor' } }))
   })
 }

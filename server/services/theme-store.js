@@ -9,9 +9,9 @@
 
 const fs = require('fs')
 const path = require('path')
-const crypto = require('crypto')
 const { logger } = require('../middleware/logger')
 const { AppError } = require('../lib/errors')
+const { atomicWriteJson } = require('../config/atomic-write')
 const { DATA_ROOT } = require('../paths')
 
 const THEMES_DIR = path.join(DATA_ROOT, 'data', 'themes')
@@ -164,9 +164,7 @@ function put(id, def) {
     tokens: sanitizeTokens(def.tokens)
   }
   const file = path.join(THEMES_DIR, cleanId + '.json')
-  const tmp = file + '.' + crypto.randomUUID() + '.tmp'
-  fs.writeFileSync(tmp, JSON.stringify(rec, null, 2))
-  fs.renameSync(tmp, file)
+  atomicWriteJson(file, rec)
   return rec
 }
 

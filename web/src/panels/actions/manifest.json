@@ -1,8 +1,0 @@
-{
-  "id": "actions",
-  "title": "操作",
-  "icon": "i-swap",
-  "html": "panel.html",
-  "mount": ".sidebar-left .sidebar-inner",
-  "order": 3
-}

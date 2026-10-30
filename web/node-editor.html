@@ -152,31 +152,34 @@
             <div class="material3d-container" id="material3dContainer">
               <div class="m3d-badge" id="m3dBadge"></div>
               <div class="m3d-loading" id="m3dLoading"><div class="m3d-loading-text" data-i18n="m3d.loading">处理法线贴图...</div><div class="m3d-loading-bar"><div class="m3d-loading-fill"></div></div></div>
-              <div class="m3d-hud-bar">
-                <div class="m3d-segment" id="m3dGeoSeg">
-                  <button data-geo="sphere" data-i18n-title="m3d.geoSphere" title="球"><svg class="ico ico-sm"><use href="#i-sphere"/></svg></button>
-                  <button class="active" data-geo="cube" data-i18n-title="m3d.geoCube" title="方"><svg class="ico ico-sm"><use href="#i-cube"/></svg></button>
-                  <button data-geo="plane" data-i18n-title="m3d.geoPlane" title="面"><svg class="ico ico-sm"><use href="#i-plane"/></svg></button>
-                  <button data-geo="torus" data-i18n-title="m3d.geoTorus" title="环"><svg class="ico ico-sm"><use href="#i-torus"/></svg></button>
-                  <button data-geo="cylinder" data-i18n-title="m3d.geoCylinder" title="柱"><svg class="ico ico-sm"><use href="#i-cylinder"/></svg></button>
-                  <button data-geo="capsule" data-i18n-title="m3d.geoCapsule" title="囊"><svg class="ico ico-sm"><use href="#i-capsule"/></svg></button>
-                </div>
-                <div class="m3d-segment" id="m3dSrcSeg">
-                  <button data-src="left" data-i18n="common.left">左</button>
-                  <button class="active" data-src="dual" data-i18n="m3d.srcDual">双</button>
-                  <button data-src="right" data-i18n="common.right">右</button>
-                </div>
-                <div class="m3d-hud-spacer"></div>
+              <div class="m3d-toolbar-float">
                 <button class="m3d-hud-btn" id="m3dUvBtn" data-i18n-title="m3d.uv" title="UV 贴图"><svg class="ico ico-sm"><use href="#i-grid"/></svg></button>
                 <button class="m3d-hud-btn" id="m3dShotBtn" data-i18n-title="m3d.shot" title="截图"><svg class="ico ico-sm"><use href="#i-camera"/></svg></button>
                 <button class="m3d-hud-btn" id="m3dFreeCamBtn" data-i18n-title="m3d.freeCam" title="自由视角"><svg class="ico ico-sm"><use href="#i-move"/></svg></button>
                 <button class="m3d-hud-btn" id="m3dFullscreenBtn" data-i18n-title="m3d.fullscreen" title="全屏"><svg class="ico ico-sm"><use href="#i-maximize"/></svg></button>
                 <button class="m3d-hud-btn" id="m3dParamsBtn" data-i18n-title="m3d.params" title="参数"><svg class="ico ico-sm"><use href="#i-sliders"/></svg></button>
               </div>
-              <div class="m3d-params-overlay" id="m3dParamsOverlay">
-                <div class="m3d-params-drag" id="m3dParamsDrag">
+              <div class="m3d-drawer" id="m3dParamsOverlay">
+                <div class="m3d-drawer-head" id="m3dParamsDrag">
                   <span class="m3d-params-title" data-i18n="m3d.params">参数</span>
                   <button class="m3d-params-close" id="m3dParamsClose" data-i18n-title="common.close" title="关闭"><svg class="ico ico-sm"><use href="#i-x"/></svg></button>
+                </div>
+                <div class="m3d-drawer-top">
+                  <div class="m3d-ctrl-group">
+                    <div class="m3d-segment" id="m3dGeoSeg">
+                      <button data-geo="sphere" data-i18n-title="m3d.geoSphere" title="球"><svg class="ico ico-sm"><use href="#i-sphere"/></svg></button>
+                      <button class="active" data-geo="cube" data-i18n-title="m3d.geoCube" title="方"><svg class="ico ico-sm"><use href="#i-cube"/></svg></button>
+                      <button data-geo="plane" data-i18n-title="m3d.geoPlane" title="面"><svg class="ico ico-sm"><use href="#i-plane"/></svg></button>
+                      <button data-geo="torus" data-i18n-title="m3d.geoTorus" title="环"><svg class="ico ico-sm"><use href="#i-torus"/></svg></button>
+                      <button data-geo="cylinder" data-i18n-title="m3d.geoCylinder" title="柱"><svg class="ico ico-sm"><use href="#i-cylinder"/></svg></button>
+                      <button data-geo="capsule" data-i18n-title="m3d.geoCapsule" title="囊"><svg class="ico ico-sm"><use href="#i-capsule"/></svg></button>
+                    </div>
+                    <div class="m3d-segment" id="m3dSrcSeg">
+                      <button data-src="left" data-i18n="common.left">左</button>
+                      <button class="active" data-src="dual" data-i18n="m3d.srcDual">双</button>
+                      <button data-src="right" data-i18n="common.right">右</button>
+                    </div>
+                  </div>
                 </div>
                 <div class="m3d-tabs">
                   <button class="active" data-tab="material" data-i18n-title="m3d.tabMaterial" title="材质"><svg class="ico ico-sm"><use href="#i-layers"/></svg></button>

@@ -1,17 +1,20 @@
-<div class="panel" id="assetLibraryPanelWrap" data-panel="assetLibrary">
+<div class="panel" id="assetLibraryPanelWrap" data-panel="assetLibrary" role="region" aria-label="总资产库">
   <div class="panel-head">
     <div class="panel-title"><svg class="ico ico-sm"><use href="#i-folder"/></svg> <span data-i18n="panel.assetLibrary">总资产库</span></div>
     <div class="panel-tools">
-      <button class="panel-tool" data-panel-action="float" data-i18n-title="preview.float" title="浮动"><svg class="ico ico-sm"><use href="#i-external"/></svg></button>
-      <button class="panel-tool panel-close" data-panel-action="close" data-i18n-title="common.close" title="关闭"><svg class="ico ico-sm"><use href="#i-x"/></svg></button>
+      <button class="panel-tool" data-panel-action="float" data-i18n-title="preview.float" title="浮动" aria-label="浮动窗口"><svg class="ico ico-sm"><use href="#i-external"/></svg></button>
+      <button class="panel-tool panel-close" data-panel-action="close" data-i18n-title="common.close" title="关闭" aria-label="关闭面板"><svg class="ico ico-sm"><use href="#i-x"/></svg></button>
     </div>
   </div>
-  <div class="panel-toolbar">
-    <button class="panel-tool" id="assetLibRefresh" data-i18n-title="panel.refresh" title="刷新"><svg class="ico ico-sm"><use href="#i-refresh"/></svg></button>
-  </div>
   <div class="panel-body">
-    <div class="asset-lib-search"><svg class="ico ico-sm"><use href="#i-search"/></svg><input type="search" id="assetLibSearch" data-i18n-placeholder="panel.assetLibSearchPh" placeholder="搜索资产…" /></div>
-    <div class="asset-lib-toolbar" id="assetLibToolbar"></div>
-    <div class="asset-lib-list" id="assetLibraryBody"></div>
+    <div class="asset-lib-topbar">
+      <div class="asset-lib-search" role="search">
+        <svg class="ico ico-sm"><use href="#i-search"/></svg>
+        <input type="search" id="assetLibSearch" data-i18n-placeholder="panel.assetLibSearchPh" placeholder="搜索资产…" aria-label="搜索资产" />
+      </div>
+      <div class="asset-lib-toolbar" id="assetLibToolbar"></div>
+      <button class="panel-tool" id="assetLibRefresh" data-i18n-title="panel.refresh" title="刷新" aria-label="刷新资产库"><svg class="ico ico-sm"><use href="#i-refresh"/></svg></button>
+    </div>
+    <div class="asset-lib-list" id="assetLibraryBody" aria-live="polite"></div>
   </div>
 </div>

@@ -9,12 +9,18 @@
 
 ;(() => {
   const token = () => {
-    try { return new URLSearchParams(window.location.search).get('token') } catch { return null }
+    try {
+      return new URLSearchParams(window.location.search).get('token')
+    } catch {
+      return null
+    }
   }
 
   const hashCache = new Map()
 
-  function clearHashCache() { hashCache.clear() }
+  function clearHashCache() {
+    hashCache.clear()
+  }
 
   function url(path) {
     const t = token()
@@ -29,7 +35,11 @@
       body: body !== undefined ? JSON.stringify(body) : undefined
     })
     let j
-    try { j = await res.json() } catch { throw new Error('ERR_UNKNOWN: bad response') }
+    try {
+      j = await res.json()
+    } catch {
+      throw new Error('ERR_UNKNOWN: bad response')
+    }
     if (!j || !j.ok) {
       const e = new Error((j && j.msg) || (j && j.code) || 'ERR_UNKNOWN')
       e.code = j && j.code
@@ -39,14 +49,21 @@
   }
 
   function wrapFs(fn) {
-    return fn().then(d => ({ success: true, ...(d || {}) })).catch(e => ({ success: false, error: e.message }))
+    return fn()
+      .then(d => ({ success: true, ...(d || {}) }))
+      .catch(e => ({ success: false, error: e.message }))
   }
 
   const matogaUpload = {
     async pickFile(acceptExts) {
-      return new Promise((resolve) => {
+      return new Promise(resolve => {
         let settled = false
-        const done = (v) => { if (!settled) { settled = true; resolve(v) } }
+        const done = v => {
+          if (!settled) {
+            settled = true
+            resolve(v)
+          }
+        }
         const input = document.createElement('input')
         input.type = 'file'
         if (acceptExts && acceptExts.length) input.accept = '.' + acceptExts.join(',.')
@@ -59,7 +76,9 @@
             const end = await call('POST', '/api/upload/end?uploadId=' + begin.uploadId)
             const sep = end.rootPath.includes('\\') && !end.rootPath.includes('/') ? '\\' : '/'
             done(end.rootPath + sep + f.name)
-          } catch { done(null) }
+          } catch {
+            done(null)
+          }
         }
         input.addEventListener('cancel', () => done(null))
         input.click()
@@ -73,7 +92,9 @@
         await call('POST', '/api/upload/end?uploadId=' + begin.uploadId)
         const sep = begin.rootPath.includes('\\') && !begin.rootPath.includes('/') ? '\\' : '/'
         return { fullPath: begin.rootPath + sep + file.name, name: file.name }
-      } catch { return null }
+      } catch {
+        return null
+      }
     },
 
     async dropToTemp(dataTransfer) {
@@ -101,13 +122,15 @@
           return end.rootPath
         }
         return null
-      } catch { return null }
+      } catch {
+        return null
+      }
     }
   }
 
   async function walkEntry(entry, relBase, uploadId) {
     if (entry.isFile) {
-      const f = await new Promise((r) => entry.file(r, () => r(null)))
+      const f = await new Promise(r => entry.file(r, () => r(null)))
       if (f) await putRaw(uploadId, relBase ? relBase + '/' + entry.name : entry.name, f)
       return
     }
@@ -116,7 +139,7 @@
       const rel = relBase ? relBase + '/' + entry.name : entry.name
       let batch
       do {
-        batch = await new Promise((r) => reader.readEntries(r, () => r([])))
+        batch = await new Promise(r => reader.readEntries(r, () => r([])))
         for (const child of batch) await walkEntry(child, rel, uploadId)
       } while (batch.length)
     }
@@ -133,45 +156,78 @@
   }
 
   window.api = {
-    selectFolder: (side) => window.matogaFolderTree.pick(side),
+    selectFolder: side => window.matogaFolderTree.pick(side),
 
     readEntries: (p, ignore) => wrapFs(() => call('POST', '/api/compare/scan', { path: p, recursive: false, ignore })),
     readRecursive: (p, ignore) => wrapFs(() => call('POST', '/api/compare/scan', { path: p, recursive: true, ignore })),
 
-    hashFile: async (p) => {
-      const cached = hashCache.get(p)
+    hashFile: async (p, canonical) => {
+      const ck = canonical ? p + '|c' : p
+      const cached = hashCache.get(ck)
       if (cached !== undefined) return cached
       try {
-        const d = await call('POST', '/api/file/hash', { path: p })
+        const d = await call('POST', '/api/file/hash', { path: p, canonical: !!canonical })
         const h = d ? d.hash : null
-        if (h) hashCache.set(p, h)
+        if (h) hashCache.set(ck, h)
         return h
-      } catch { return null }
+      } catch {
+        return null
+      }
     },
 
-    openPath: async (p) => {
-      try { await call('POST', '/api/shell/open', { path: p }); return '' } catch (e) { return e.message }
+    openPath: async p => {
+      try {
+        await call('POST', '/api/shell/open', { path: p })
+        return ''
+      } catch (e) {
+        return e.message
+      }
     },
-    showInFolder: (p) => call('POST', '/api/shell/reveal', { path: p }).then(() => {}).catch(() => {}),
+    showInFolder: p =>
+      call('POST', '/api/shell/reveal', { path: p })
+        .then(() => {})
+        .catch(() => {}),
 
     getConfig: () => call('GET', '/api/config'),
-    setConfig: (patch) => call('PUT', '/api/config', patch).then(() => {}).catch(() => {}),
-    clearConfig: () => call('DELETE', '/api/config').then(() => {}).catch(() => {}),
+    setConfig: patch =>
+      call('PUT', '/api/config', patch)
+        .then(() => {})
+        .catch(() => {}),
+    clearConfig: () =>
+      call('DELETE', '/api/config')
+        .then(() => {})
+        .catch(() => {}),
 
     listThemes: () => call('GET', '/api/themes'),
-    getTheme: (id) => call('GET', '/api/themes/' + encodeURIComponent(id)),
+    getTheme: id => call('GET', '/api/themes/' + encodeURIComponent(id)),
     saveTheme: (id, def) => call('PUT', '/api/themes/' + encodeURIComponent(id), def),
-    deleteTheme: (id) => call('DELETE', '/api/themes/' + encodeURIComponent(id)).then(() => {}).catch(() => {}),
-    importTheme: (def) => call('POST', '/api/themes/import', def),
+    deleteTheme: id =>
+      call('DELETE', '/api/themes/' + encodeURIComponent(id))
+        .then(() => {})
+        .catch(() => {}),
+    importTheme: def => call('POST', '/api/themes/import', def),
 
-    copyFile: (src, dest) => wrapFs(() => call('POST', '/api/file/copy', { src, dest })).then(r => { if (r.success) { hashCache.delete(dest); hashCache.delete(src) } return r }),
-    backupFile: async (p) => {
+    copyFile: (src, dest) =>
+      wrapFs(() => call('POST', '/api/file/copy', { src, dest })).then(r => {
+        if (r.success) {
+          hashCache.delete(dest)
+          hashCache.delete(src)
+        }
+        return r
+      }),
+    backupFile: async p => {
       try {
         const d = await call('POST', '/api/file/backup', { path: p })
         return { success: true, backupPath: d.backupPath }
-      } catch (e) { return { success: false, error: e.message } }
+      } catch (e) {
+        return { success: false, error: e.message }
+      }
     },
-    deleteFile: (p) => wrapFs(() => call('POST', '/api/file/delete', { path: p })).then(r => { if (r.success) hashCache.delete(p); return r }),
+    deleteFile: p =>
+      wrapFs(() => call('POST', '/api/file/delete', { path: p })).then(r => {
+        if (r.success) hashCache.delete(p)
+        return r
+      }),
     writeFile: (p, dataUrl) => wrapFs(() => call('POST', '/api/file/write', { path: p, dataUrl })),
 
     getPathForFile: () => null,
@@ -180,50 +236,98 @@
     selectHDRFile: () => matogaUpload.pickFile(['hdr', 'exr']),
     selectModelFile: () => matogaUpload.pickFile(['json', 'bbmodel']),
     pickFolder: () => window.matogaFolderTree.pick(null),
-    createFolder: (p) => wrapFs(() => call('POST', '/api/fs/create', { path: p })),
+    createFolder: p => wrapFs(() => call('POST', '/api/fs/create', { path: p })),
 
-    listHdrPresets: () => call('GET', '/api/hdri/list')
-      .then(d => ({ success: true, dir: d.dir, entries: d.entries }))
-      .catch(e => ({ success: false, error: e.message, entries: [] })),
-    hdrThumbInfo: (fullPath) => call('GET', '/api/hdri/thumb-info?path=' + encodeURIComponent(fullPath))
-      .catch(e => ({ exists: false, stale: true, thumbUrl: null, error: e.message })),
+    listHdrPresets: () =>
+      call('GET', '/api/hdri/list')
+        .then(d => ({ success: true, dir: d.dir, entries: d.entries }))
+        .catch(e => ({ success: false, error: e.message, entries: [] })),
+    hdrThumbInfo: fullPath =>
+      call('GET', '/api/hdri/thumb-info?path=' + encodeURIComponent(fullPath)).catch(e => ({
+        exists: false,
+        stale: true,
+        thumbUrl: null,
+        error: e.message
+      })),
     saveHdrThumb: async (fullPath, dataUrl) => {
       try {
         const d = await call('POST', '/api/hdri/thumb', { path: fullPath, dataUrl })
         return { success: true, thumbUrl: d.thumbUrl }
-      } catch (e) { return { success: false, error: e.message } }
+      } catch (e) {
+        return { success: false, error: e.message }
+      }
     },
     cleanupHdrThumbs: () => call('POST', '/api/hdri/cleanup').catch(() => ({})),
 
-    thumbInfo: (fullPath) => call('GET', '/api/file/thumb-info?path=' + encodeURIComponent(fullPath))
-      .catch(e => ({ exists: false, stale: true, thumbUrl: null, error: e.message })),
+    thumbInfo: fullPath =>
+      call('GET', '/api/file/thumb-info?path=' + encodeURIComponent(fullPath)).catch(e => ({
+        exists: false,
+        stale: true,
+        thumbUrl: null,
+        error: e.message
+      })),
+    thumbInfoBatch: paths => call('POST', '/api/file/thumb-info-batch', { paths }),
     saveThumb: async (fullPath, dataUrl) => {
       try {
         const d = await call('POST', '/api/file/thumb', { path: fullPath, dataUrl })
         return { success: true, thumbUrl: d.thumbUrl }
-      } catch (e) { return { success: false, error: e.message } }
+      } catch (e) {
+        return { success: false, error: e.message }
+      }
     },
 
+
+    cacheStats: () => call('GET', '/api/cache/stats'),
+    clearCache: target => call('POST', '/api/cache/clear', { target }),
+    clearAllCache: () => call('POST', '/api/cache/clear-all'),
+    cleanupHdriOrphans: () => call('POST', '/api/cache/hdri-orphans').catch(() => ({})),
+
     copyFilesBatch: (pairs, onProgress) => {
-      return new Promise((resolve) => {
+      return new Promise(resolve => {
         const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:'
         const wsUrl = wsProto + '//' + location.host + '/ws' + (token() ? '?token=' + token() : '')
         const ws = new WebSocket(wsUrl)
-        const jobId = (crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + Math.random()
+        const jobId = crypto && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()
         let settled = false
-        const finish = (r) => { if (settled) return; settled = true; try { ws.close() } catch {}; resolve(r) }
-        ws.onopen = () => {
-          try { ws.send(JSON.stringify({ type: 'sync', jobId, pairs })) } catch (e) { finish({ ok: 0, fail: pairs.length, error: e.message }) }
+        const finish = r => {
+          if (settled) return
+          settled = true
+          try {
+            ws.close()
+          } catch {}
+          resolve(r)
         }
-        ws.onmessage = (e) => {
+        ws.onopen = () => {
+          try {
+            ws.send(JSON.stringify({ type: 'sync', jobId, pairs }))
+          } catch (e) {
+            finish({ ok: 0, fail: pairs.length, error: e.message })
+          }
+        }
+        ws.onmessage = e => {
           let msg
-          try { msg = JSON.parse(e.data) } catch { return }
-          if (msg.type === 'progress' && onProgress) { try { onProgress(msg) } catch {} }
-          if (msg.type === 'done') { if (msg.ok) clearHashCache(); finish({ ok: msg.ok || 0, fail: msg.fail || 0, cancelled: !!msg.cancelled }) }
+          try {
+            msg = JSON.parse(e.data)
+          } catch {
+            return
+          }
+          if (msg.type === 'progress' && onProgress) {
+            try {
+              onProgress(msg)
+            } catch {}
+          }
+          if (msg.type === 'done') {
+            if (msg.ok) clearHashCache()
+            finish({ ok: msg.ok || 0, fail: msg.fail || 0, cancelled: !!msg.cancelled })
+          }
         }
         ws.onerror = () => finish({ ok: 0, fail: pairs.length, error: 'ws_error' })
         ws.onclose = () => finish({ ok: 0, fail: pairs.length, error: 'ws_closed' })
-        window.__matogaCancelSync = () => { try { ws.send(JSON.stringify({ type: 'cancel', jobId })) } catch {} }
+        window.__matogaCancelSync = () => {
+          try {
+            ws.send(JSON.stringify({ type: 'cancel', jobId }))
+          } catch {}
+        }
       })
     }
   }

@@ -28,6 +28,8 @@ test('isModelEntry: models 与 items 路径识别', () => {
   assert.equal(isModelEntry(e('assets/minecraft/models/block/deep/nested.json')), true)
   assert.equal(isModelEntry(e('assets/minecraft/items/diamond.json')), true)
   assert.equal(isModelEntry(e('assets/minecraft/items/diamond.JSON')), true)
+  assert.equal(isModelEntry(e('models/block/stone.json')), true)
+  assert.equal(isModelEntry(e('assets/minecraft/models/block/stone.bbmodel')), true)
 })
 
 test('isModelEntry: 非模型路径拒绝', () => {
@@ -38,7 +40,7 @@ test('isModelEntry: 非模型路径拒绝', () => {
   assert.equal(isModelEntry(e('assets/minecraft/textures/block/stone.png')), false)
   assert.equal(isModelEntry(e('assets/minecraft/textures/animated.json')), false)
   assert.equal(isModelEntry(e('pack.mcmeta')), false)
-  assert.equal(isModelEntry(e('models/block/stone.json')), false)
+  assert.equal(isModelEntry(e('models/block/stone.json')), true)
   assert.equal(isModelEntry(e('assets/minecraft/items/sub/thing.json')), false)
   assert.equal(isModelEntry(e('assets/minecraft/models/block/stone.png')), false)
   assert.equal(isModelEntry(e('assets/minecraft/models/stone.json')), false)
@@ -136,4 +138,105 @@ test('diffLines: 超限输入返回 null（由上层退化为并排显示）', (
   const big = Array.from({ length: 1200 }, (_, i) => 'line-' + i)
   assert.equal(diffLines(big, big.slice().reverse()), null)
   assert.notEqual(diffLines(big, big), null)
+})
+test('resolveTexPath: 带命名空间引用', () => {
+  const { resolveTexPath } = globalThis.__md
+  assert.equal(resolveTexPath('minecraft:block/stone'), 'assets/minecraft/textures/block/stone.png')
+  assert.equal(resolveTexPath('custom:item/sword'), 'assets/custom/textures/item/sword.png')
+})
+
+test('resolveTexPath: 无命名空间默认 minecraft', () => {
+  const { resolveTexPath } = globalThis.__md
+  assert.equal(resolveTexPath('block/dirt'), 'assets/minecraft/textures/block/dirt.png')
+})
+
+test('resolveTexPath: 空值返回 null', () => {
+  const { resolveTexPath } = globalThis.__md
+  assert.equal(resolveTexPath(''), null)
+  assert.equal(resolveTexPath(null), null)
+  assert.equal(resolveTexPath(undefined), null)
+})
+
+test('extractTextureRefs: 提取 textures 引用', () => {
+  const { extractTextureRefs } = globalThis.__md
+  const obj = { textures: { all: 'minecraft:block/stone', side: 'block/dirt', particle: '#all' } }
+  const refs = extractTextureRefs(obj)
+  assert.deepEqual(refs, ['minecraft:block/stone', 'block/dirt'])
+})
+
+test('extractTextureRefs: 无 textures 返回空数组', () => {
+  const { extractTextureRefs } = globalThis.__md
+  assert.deepEqual(extractTextureRefs({}), [])
+  assert.deepEqual(extractTextureRefs(null), [])
+  assert.deepEqual(extractTextureRefs({ parent: 'block/cube' }), [])
+})
+
+test('checkTexRefs: 标记存在与缺失', () => {
+  const { checkTexRefs } = globalThis.__md
+  const obj = { textures: { all: 'minecraft:block/stone', side: 'minecraft:block/missing' } }
+  const existing = new Set(['assets/minecraft/textures/block/stone.png'])
+  const results = checkTexRefs(obj, existing)
+  assert.equal(results.length, 2)
+  assert.equal(results[0].ref, 'minecraft:block/stone')
+  assert.equal(results[0].exists, true)
+  assert.equal(results[1].ref, 'minecraft:block/missing')
+  assert.equal(results[1].exists, false)
+})
+
+test('checkTexRefs: 支持数组传入 existingPaths', () => {
+  const { checkTexRefs } = globalThis.__md
+  const obj = { textures: { all: 'block/stone' } }
+  const results = checkTexRefs(obj, ['assets/minecraft/textures/block/stone.png'])
+  assert.equal(results[0].exists, true)
+})
+test('checkTexRefs: 原版贴图集合标记 vanilla（资源包未含但原版提供）', () => {
+  const { checkTexRefs } = globalThis.__md
+  const obj = { textures: { pot: 'block/flower_pot', dirt: 'block/dirt', miss: 'block/missing' } }
+  const packPaths = new Set(['assets/minecraft/textures/block/dirt.png'])
+  const vanillaPaths = new Set([
+    'assets/minecraft/textures/block/flower_pot.png',
+    'assets/minecraft/textures/block/dirt.png',
+  ])
+  const results = checkTexRefs(obj, packPaths, vanillaPaths)
+  assert.equal(results.length, 3)
+  assert.equal(results[0].ref, 'block/flower_pot')
+  assert.equal(results[0].exists, false)
+  assert.equal(results[0].vanilla, true)
+  assert.equal(results[1].ref, 'block/dirt')
+  assert.equal(results[1].exists, true)
+  assert.equal(results[1].vanilla, false)
+  assert.equal(results[2].ref, 'block/missing')
+  assert.equal(results[2].exists, false)
+  assert.equal(results[2].vanilla, false)
+})
+
+test('checkTexRefs: 无 vanillaPaths 时 vanilla 恒为 false（向后兼容）', () => {
+  const { checkTexRefs } = globalThis.__md
+  const obj = { textures: { a: 'block/stone' } }
+  const results = checkTexRefs(obj, new Set())
+  assert.equal(results[0].exists, false)
+  assert.equal(results[0].vanilla, false)
+})
+test('checkTexRefs: 扩展名变体兜底（引用 .png 但包内实为 .jpg/.webp）', () => {
+  const { checkTexRefs } = globalThis.__md
+  const obj = { textures: { a: 'block/stone', b: 'block/dirt', c: 'block/missing' } }
+  const packPaths = new Set([
+    'assets/minecraft/textures/block/stone.jpg',
+    'assets/minecraft/textures/block/dirt.webp',
+  ])
+  const results = checkTexRefs(obj, packPaths)
+  assert.equal(results[0].ref, 'block/stone')
+  assert.equal(results[0].exists, true, '引用 .png 但包内 .jpg 应命中变体兜底')
+  assert.equal(results[1].ref, 'block/dirt')
+  assert.equal(results[1].exists, true, '引用 .png 但包内 .webp 应命中变体兜底')
+  assert.equal(results[2].exists, false, '无任何变体仍缺失')
+})
+
+test('checkTexRefs: vanilla 集合同样支持扩展名变体', () => {
+  const { checkTexRefs } = globalThis.__md
+  const obj = { textures: { a: 'block/flower_pot' } }
+  const vanillaPaths = new Set(['assets/minecraft/textures/block/flower_pot.jpg'])
+  const results = checkTexRefs(obj, new Set(), vanillaPaths)
+  assert.equal(results[0].exists, false)
+  assert.equal(results[0].vanilla, true, '原版集合 .jpg 变体应命中 vanilla')
 })
