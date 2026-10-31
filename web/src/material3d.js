@@ -11,6 +11,8 @@ import { loadEnvTexture, extFromUrl } from './hdr-env-loader.js'
 import { Sky } from './sky.js'
 import { t as _t } from './i18n.js'
 import { attachTextureAnimOnly, unloadTextureAnim } from './mc-model-viewer.js'
+import { computeTangents } from './m3d/geometry.js'
+import { LIGHT_PRESETS } from './m3d/presets.js'
 
 let scene, camera, renderer, animationId, pmrem, envTexture, pmremTexture
 let isWebGL2 = false
@@ -140,68 +142,6 @@ const _flyForward = new THREE.Vector3()
 const _flyRight = new THREE.Vector3()
 const _flyMove = new THREE.Vector3()
 
-const LIGHT_PRESETS = {
-  studio: {
-    name: '工作室',
-    ambient: { color: 0xffffff, intensity: 0.25 },
-    lights: [
-      { color: 0xffffff, intensity: 1.2, pos: [3, 3, 4] },
-      { color: 0xffffff, intensity: 0.8, pos: [-3, 2, 3] },
-      { color: 0xccddff, intensity: 0.5, pos: [0, -3, 2] }
-    ],
-    env: {
-      colors: ['#4a5a7a', '#2a2a4e', '#1a1a2e'],
-      light: { color: 'rgba(255,240,200,0.98)', x: 128, y: 50, r: 30 }
-    },
-    bg: 0x1a1a2e
-  },
-  outdoor: {
-    name: '户外阳光',
-    ambient: { color: 0x88aacc, intensity: 0.4 },
-    lights: [
-      { color: 0xffffee, intensity: 2.5, pos: [4, 5, 2] },
-      { color: 0x88aacc, intensity: 0.8, pos: [-4, 3, 3] },
-      { color: 0xaaccff, intensity: 0.5, pos: [0, -2, 4] }
-    ],
-    env: { colors: ['#87ceeb', '#4682b4', '#2a3a5a'], light: { color: 'rgba(255,255,220,1.0)', x: 200, y: 30, r: 45 } },
-    bg: 0x2a3a5a
-  },
-  soft: {
-    name: '柔和均匀',
-    ambient: { color: 0xffffff, intensity: 0.5 },
-    lights: [
-      { color: 0xffffff, intensity: 0.7, pos: [3, 2, 4] },
-      { color: 0xffffff, intensity: 0.7, pos: [-3, 2, 4] },
-      { color: 0xffffff, intensity: 0.5, pos: [0, -3, 3] },
-      { color: 0xffffff, intensity: 0.5, pos: [0, 3, -3] }
-    ],
-    env: { colors: ['#606080', '#404060', '#303050'], light: null },
-    bg: 0x303050
-  },
-  warm: {
-    name: '暖光',
-    ambient: { color: 0xffaa66, intensity: 0.3 },
-    lights: [
-      { color: 0xffaa66, intensity: 1.5, pos: [3, 2, 4] },
-      { color: 0xffcc88, intensity: 0.8, pos: [-3, 3, 3] },
-      { color: 0xff8844, intensity: 0.4, pos: [0, -2, 2] }
-    ],
-    env: { colors: ['#5a3a2a', '#3a2a1a', '#2a1a0a'], light: { color: 'rgba(255,180,100,0.9)', x: 128, y: 60, r: 35 } },
-    bg: 0x2a1a0a
-  },
-  cool: {
-    name: '冷光',
-    ambient: { color: 0x66aaff, intensity: 0.3 },
-    lights: [
-      { color: 0x88ccff, intensity: 1.5, pos: [3, 3, 4] },
-      { color: 0x4488ff, intensity: 0.8, pos: [-3, 2, 3] },
-      { color: 0x66aaff, intensity: 0.4, pos: [0, -2, 2] }
-    ],
-    env: { colors: ['#2a3a5a', '#1a2a4a', '#0a1a3a'], light: { color: 'rgba(150,200,255,0.9)', x: 128, y: 50, r: 35 } },
-    bg: 0x0a1a3a
-  }
-}
-
 function scaleUV(geometry, su, sv) {
   const uv = geometry.attributes.uv
   if (!uv) return geometry
@@ -209,79 +149,6 @@ function scaleUV(geometry, su, sv) {
     uv.setXY(i, uv.getX(i) * su, uv.getY(i) * sv)
   }
   uv.needsUpdate = true
-  return geometry
-}
-
-function computeTangents(geometry) {
-  const index = geometry.index
-  const positionAttribute = geometry.attributes.position
-  const normalAttribute = geometry.attributes.normal
-  const uvAttribute = geometry.attributes.uv
-  if (!positionAttribute || !normalAttribute || !uvAttribute) return geometry
-  const vertexCount = positionAttribute.count
-  const tan1 = new Float32Array(vertexCount * 3)
-  const tan2 = new Float32Array(vertexCount * 3)
-  const vA = new THREE.Vector3(),
-    vB = new THREE.Vector3(),
-    vC = new THREE.Vector3()
-  const uvA = new THREE.Vector2(),
-    uvB = new THREE.Vector2(),
-    uvC = new THREE.Vector2()
-  const sdir = new THREE.Vector3(),
-    tdir = new THREE.Vector3()
-  const handleTriangle = (a, b, c) => {
-    vA.fromBufferAttribute(positionAttribute, a)
-    vB.fromBufferAttribute(positionAttribute, b)
-    vC.fromBufferAttribute(positionAttribute, c)
-    uvA.fromBufferAttribute(uvAttribute, a)
-    uvB.fromBufferAttribute(uvAttribute, b)
-    uvC.fromBufferAttribute(uvAttribute, c)
-    const x1 = vB.x - vA.x,
-      x2 = vC.x - vA.x,
-      y1 = vB.y - vA.y,
-      y2 = vC.y - vA.y,
-      z1 = vB.z - vA.z,
-      z2 = vC.z - vA.z
-    const s1 = uvB.x - uvA.x,
-      s2 = uvC.x - uvA.x,
-      t1 = uvB.y - uvA.y,
-      t2 = uvC.y - uvA.y
-    const det = s1 * t2 - s2 * t1,
-      r = det === 0 ? 0 : 1 / det
-    sdir.set((t2 * x1 - t1 * x2) * r, (t2 * y1 - t1 * y2) * r, (t2 * z1 - t1 * z2) * r)
-    tdir.set((s1 * x2 - s2 * x1) * r, (s1 * y2 - s2 * y1) * r, (s1 * z2 - s2 * z1) * r)
-    for (const i of [a, b, c]) {
-      tan1[i * 3] += sdir.x
-      tan1[i * 3 + 1] += sdir.y
-      tan1[i * 3 + 2] += sdir.z
-      tan2[i * 3] += tdir.x
-      tan2[i * 3 + 1] += tdir.y
-      tan2[i * 3 + 2] += tdir.z
-    }
-  }
-  if (index) {
-    for (let i = 0; i < index.count; i += 3) handleTriangle(index.getX(i), index.getX(i + 1), index.getX(i + 2))
-  } else {
-    for (let i = 0; i < vertexCount; i += 3) handleTriangle(i, i + 1, i + 2)
-  }
-  const tangentArray = new Float32Array(vertexCount * 4)
-  const t = new THREE.Vector3(),
-    n = new THREE.Vector3(),
-    tmp = new THREE.Vector3(),
-    tmp2 = new THREE.Vector3()
-  for (let i = 0; i < vertexCount; i++) {
-    n.fromBufferAttribute(normalAttribute, i)
-    t.set(tan1[i * 3], tan1[i * 3 + 1], tan1[i * 3 + 2])
-    tmp.copy(n).multiplyScalar(n.dot(t))
-    t.sub(tmp).normalize()
-    tmp2.set(tan2[i * 3], tan2[i * 3 + 1], tan2[i * 3 + 2])
-    const w = n.cross(t).dot(tmp2) < 0 ? -1 : 1
-    tangentArray[i * 4] = t.x
-    tangentArray[i * 4 + 1] = t.y
-    tangentArray[i * 4 + 2] = t.z
-    tangentArray[i * 4 + 3] = w
-  }
-  geometry.setAttribute('tangent', new THREE.BufferAttribute(tangentArray, 4))
   return geometry
 }
 
