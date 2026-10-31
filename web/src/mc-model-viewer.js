@@ -38,6 +38,9 @@ import { clamp01, colormapRel, loadColormapData, sampleColormap, resolveTintColo
 import { packRelToMcRef, texUrlToRef, resolveMcModelRaw, borrowTemplateTextures, parseUv, applyFaceUvs, setHooks as setTexRefToolsHooks } from './mcv/tex-ref-tools.js'
 import { isSpecialTexPath, texPathForRef, writeMcTexRef, resolveTextureRef, expandTextureAliases, resolveMcModel, isItemDefPath, texturesHasConcreteRef, hasUnresolvedTexRefs, shulkerBoxEntityTexRef, resolveMcModelAsset, setHooks as setAssetResolveHooks } from './mcv/asset-resolve.js'
 import { parseVec3, expandElementFaces, packMcmetaUrl, normFaceRotation, texDisplayName, buildMcLayout, buildBbLayout, setHooks as setLayoutBuildHooks } from './mcv/layout-build.js'
+import { applyElementTransform, buildModelGroup, applyTexAnimFrame, getModelTexAnims, notifyModelShown, setHooks as setMiscToolsHooks } from './mcv/misc-tools.js'
+/* 门面 re-export（§2.3） */
+export { applyElementTransform, buildModelGroup, applyTexAnimFrame, getModelTexAnims, notifyModelShown } from './mcv/misc-tools.js'
 /* 门面 re-export（§2.3） */
 export { parseVec3, expandElementFaces, packMcmetaUrl, normFaceRotation, texDisplayName, buildMcLayout, buildBbLayout } from './mcv/layout-build.js'
 /* 门面 re-export（§2.3） */
@@ -275,65 +278,9 @@ const FACE_ROT_ORDER = {
 /* BoxGeometry 每面 4 顶点 UV（左上/右上/左下/右下）按 MC 像素坐标重映射（uvScale=16 或 bbmodel resolution）
    无 uv 的 face 用 vanilla 默认 UV（按元素尺寸），防止整张贴图拉伸 */
 /* element 变换：MC 单轴旋转 / bbmodel 欧拉旋转均绕 origin，几何中心置于元素中心 */
-function applyElementTransform(mesh, el, center) {
-  const c = [(center[0] - 8) / 16, (center[1] - 8) / 16, (center[2] - 8) / 16]
-  const rot = el.rotation
-  if (!rot) {
-    mesh.position.set(c[0], c[1], c[2])
-    return
-  }
-  const origin = parseVec3(Array.isArray(rot) ? el.origin : rot.origin, [8, 8, 8]).map(v => (v - 8) / 16)
-  if (Array.isArray(rot)) {
-    mesh.rotation.set(
-      ((+rot[0] || 0) * Math.PI) / 180,
-      ((+rot[1] || 0) * Math.PI) / 180,
-      ((+rot[2] || 0) * Math.PI) / 180
-    )
-  } else if (rot.axis === 'x' || rot.axis === 'y' || rot.axis === 'z') {
-    mesh.rotation[rot.axis] = ((+rot.angle || 0) * Math.PI) / 180
-  } else {
-    mesh.position.set(c[0], c[1], c[2])
-    return
-  }
-  /* position = origin + R(center - origin) */
-  const off = new THREE.Vector3(c[0] - origin[0], c[1] - origin[1], c[2] - origin[2])
-  off.applyEuler(mesh.rotation)
-  mesh.position.set(origin[0] + off.x, origin[1] + off.y, origin[2] + off.z)
-}
-
 /* faces "all" 简写展开（bbmodel / 社区模型）：复制到未定义的方向面（不改原对象） */
 /* 通用构建：elements（MC 或 bbmodel Cube）→ THREE.Group
     matFor(faceKey, faceDef, el) 返回该面材质（null/undefined → 隐藏面） */
-export function buildModelGroup(elements, matFor, uvScale = 16) {
-  const group = new THREE.Group()
-  const scale = uvScale || 16
-  const list = (Array.isArray(elements) ? elements : []).slice(0, MAX_ELEMENTS)
-  for (const el of list) {
-    if (!el || typeof el !== 'object') continue
-    const from = parseVec3(el.from, [0, 0, 0])
-    const to = parseVec3(el.to, [16, 16, 16])
-    const sx = Math.abs(to[0] - from[0]) || 0.01,
-      sy = Math.abs(to[1] - from[1]) || 0.01,
-      sz = Math.abs(to[2] - from[2]) || 0.01
-    const geo = new THREE.BoxGeometry(sx / 16, sy / 16, sz / 16)
-    const faces = expandElementFaces(el)
-    applyFaceUvs(geo, faces, scale, from, to)
-    const mats = FACE_KEYS.map(key => {
-      const m = matFor(key, faces[key], el)
-      return m || HIDDEN_MAT
-    })
-    const mesh = new THREE.Mesh(geo, mats)
-    mesh.castShadow = true
-    mesh.receiveShadow = true
-    /* 原始 element 引用（编辑联动：uv-view 编辑 UV 后按引用定位 mesh 重映射几何 UV） */
-    mesh.userData.mcElement = el
-    mesh.userData.uvScale = scale
-    applyElementTransform(mesh, el, [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2, (from[2] + to[2]) / 2])
-    group.add(mesh)
-  }
-  return group
-}
-
 /* MC 贴图像素风参数（同步/异步两条赋值路径共用） */
 function applyTexParams(tex) {
   tex.colorSpace = THREE.SRGBColorSpace
@@ -405,18 +352,6 @@ const TICKS_PER_SEC = 20
     否则边界精确压在 texel 分界上，光栅化插值的浮点误差叠加 RepeatWrapping 会把
     相邻帧的边缘行采进来（帧数非 2 的幂时 offset 本身就有 float 表示误差），
     渲染为面边缘的水平/垂直渗色线 */
-export function applyTexAnimFrame(tex, anim, frameIndex) {
-  if (!tex || !anim || !tex.repeat || !tex.offset) return tex
-  const i = Math.min(Math.max(Math.round(+frameIndex || 0), 0), anim.frameCount - 1)
-  const rx = anim.frameW / anim.texW
-  const ry = anim.frameH / anim.texH
-  const ex = 0.5 / anim.texW
-  const ey = 0.5 / anim.texH
-  tex.repeat.set(rx - 2 * ex, ry - 2 * ey)
-  tex.offset.set(ex, 1 - (i + 1) * ry + ey)
-  return tex
-}
-
 /* mcmeta 原始 JSON 缓存（404 / 解析失败 → null 一并缓存：非动画贴图不反复探测） */
 const animMetaCache = new Map() /* key → Promise<object|null> */
 
@@ -455,21 +390,6 @@ function texImageSize(tex) {
 
 /* 收集 group 内动画贴图的 { tex, anim }（去重；离屏缩略图多帧渲染用：
     逐帧 applyTexAnimFrame + animFrameIndexAt 驱动采样窗口） */
-export function getModelTexAnims(group) {
-  const out = []
-  if (!group || typeof group.traverse !== 'function') return out
-  group.traverse(o => {
-    if (!o || !o.isMesh) return
-    const mats = Array.isArray(o.material) ? o.material : o.material ? [o.material] : []
-    for (const m of mats) {
-      if (!m || !m.map || !animatedTexs.has(m.map)) continue
-      if (out.some(e => e.tex === m.map)) continue
-      out.push({ tex: m.map, anim: animatedTexs.get(m.map) })
-    }
-  })
-  return out
-}
-
 /* 贴图加载完成后：按 mcmeta 配置动画采样（首帧 + 注册驱动循环）；非动画仅设像素风参数。
    metaPromise 由调用方与贴图加载并行发起（此处只做解析与应用），返回 anim | null */
 function attachPackTexture(tex, metaPromise) {
@@ -1039,18 +959,6 @@ export function getLastModelLayoutPair() {
 }
 
 /* 模型成功展示后广播（uv-view 浮窗监听以自动刷新；无 DOM 环境安全跳过） */
-function notifyModelShown(layout) {
-  try {
-    if (
-      typeof window !== 'undefined' &&
-      typeof window.dispatchEvent === 'function' &&
-      typeof CustomEvent !== 'undefined'
-    ) {
-      window.dispatchEvent(new CustomEvent('mcmodel:shown', { detail: { layout } }))
-    }
-  } catch {}
-}
-
 /* ── 对外入口 ─────────────────────────────────────── */
 
 /* 获取导入模型 JSON（data/imported-models，可能是 .bbmodel 或 MC .json；供缩略图/视口复用） */
@@ -1412,4 +1320,12 @@ setLayoutBuildHooks({
   get_FACE_KEYS: () => FACE_KEYS,
   get_TEX_REF_EXT_RE: () => TEX_REF_EXT_RE,
   get_MAX_ELEMENTS: () => MAX_ELEMENTS
+})
+
+/* 模型杂项工具 常量注入 */
+setMiscToolsHooks({
+  get_MAX_ELEMENTS: () => MAX_ELEMENTS,
+  get_FACE_KEYS: () => FACE_KEYS,
+  get_HIDDEN_MAT: () => HIDDEN_MAT,
+  get_animatedTexs: () => animatedTexs
 })
