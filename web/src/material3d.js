@@ -15,6 +15,9 @@ import { computeTangents } from './m3d/geometry.js'
 import { LIGHT_PRESETS } from './m3d/presets.js'
 import { rotateTextureData, detectFormat, reconstructNormal, applySourceSide, setHooks as setGeoUtilsHooks } from './m3d/geo-utils.js'
 import { parseIncludes, makeMaterial, setHooks as setMaterialHooks } from './m3d/material.js'
+import { setupControls, disposeAllMaterialTextures, disposeMaterial3D, setHooks as setHooks } from './m3d/controls.js'
+/* 门面 re-export（§2.3） */
+export { setupControls, disposeAllMaterialTextures, disposeMaterial3D } from './m3d/controls.js'
 /* 门面 re-export（§2.3） */
 export { parseIncludes, makeMaterial } from './m3d/material.js'
 /* 门面 re-export（§2.3） */
@@ -1045,95 +1048,6 @@ export function initMaterial3D(containerEl) {
   document.dispatchEvent(new CustomEvent('material3d:ready'))
 }
 
-function setupControls() {
-  const canvas = renderer.domElement
-  canvas.style.cursor = 'grab'
-  canvas.addEventListener('contextmenu', e => e.preventDefault())
-  canvas.addEventListener('mousedown', e => {
-    isDragging = true
-    autoRotate = false
-    lastX = e.clientX
-    lastY = e.clientY
-    if (freeCamMode) dragMode = 'look'
-    else if (e.button === 0 && !e.shiftKey) dragMode = 'rotate'
-    else dragMode = 'pan'
-    canvas.style.cursor = 'grabbing'
-    if (e.button === 1) e.preventDefault()
-  })
-  canvas.addEventListener('mousemove', e => {
-    if (!isDragging) return
-    const dx = e.clientX - lastX,
-      dy = e.clientY - lastY
-    lastX = e.clientX
-    lastY = e.clientY
-    if (dragMode === 'look') {
-      flyYaw -= dx * 0.005
-      flyPitch = Math.max(-1.55, Math.min(1.55, flyPitch - dy * 0.005))
-    } else if (dragMode === 'rotate') {
-      targetRotY += dx * 0.01
-      targetRotX += dy * 0.01
-      targetRotX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, targetRotX))
-    } else {
-      const k = camDist * 0.0015
-      targetPanX -= dx * k
-      targetPanY += dy * k
-    }
-  })
-  window.addEventListener('mouseup', () => {
-    if (isDragging) {
-      isDragging = false
-      dragMode = null
-      canvas.style.cursor = freeCamMode ? 'crosshair' : 'grab'
-    }
-  })
-  canvas.addEventListener(
-    'wheel',
-    e => {
-      e.preventDefault()
-      if (freeCamMode) {
-        _flyForward.set(0, 0, -1).applyEuler(camera.rotation)
-        flyPos.addScaledVector(_flyForward, -e.deltaY * 0.01)
-        clampFlyPos()
-      } else {
-        targetCamDist = Math.max(1.5, Math.min(8, targetCamDist + e.deltaY * 0.003))
-      }
-    },
-    { passive: false }
-  )
-  canvas.addEventListener('dblclick', () => {
-    if (freeCamMode) {
-      resetFreeView()
-      return
-    }
-    autoRotate = !autoRotate
-    targetRotX = 0
-    targetRotY = 0
-    targetPanX = 0
-    targetPanY = 0
-  })
-  window.addEventListener('keydown', e => {
-    if (!freeCamMode) return
-    if (
-      e.target &&
-      (e.target.tagName === 'INPUT' ||
-        e.target.tagName === 'TEXTAREA' ||
-        e.target.tagName === 'SELECT' ||
-        e.target.isContentEditable)
-    )
-      return
-    if (FLY_KEYS.has(e.code)) {
-      flyKeys[e.code] = true
-      e.preventDefault()
-    }
-  })
-  window.addEventListener('keyup', e => {
-    delete flyKeys[e.code]
-  })
-  window.addEventListener('blur', () => {
-    for (const k in flyKeys) delete flyKeys[k]
-  })
-}
-
 function clampFlyPos() {
   flyPos.x = Math.max(-40, Math.min(40, flyPos.x))
   flyPos.y = Math.max(-20, Math.min(40, flyPos.y))
@@ -1660,31 +1574,6 @@ function disposeTexture(tex) {
     tex.dispose()
   }
 }
-function disposeAllMaterialTextures(m) {
-  disposeTexture(m.map)
-  disposeTexture(m.userData.baseMap)
-  m.userData.baseMap = null
-  disposeTexture(m.normalMap)
-  disposeTexture(m.roughnessMap)
-  disposeTexture(m.metalnessMap)
-  disposeTexture(m.emissiveMap)
-  if (m.userData.shaderRefs) {
-    disposeTexture(m.userData.shaderRefs.heightMap.value)
-    m.userData.shaderRefs.heightMap.value = null
-    m.userData.shaderRefs.hasHeightMap.value = 0.0
-  }
-  disposeTexture(m.userData.pendingHeightMap)
-  m.userData.pendingHeightMap = null
-  m.map = null
-  m.normalMap = null
-  m.roughnessMap = null
-  m.metalnessMap = null
-  m.emissiveMap = null
-  m.emissive.set(0x000000)
-  m.emissiveIntensity = 1.0
-  m.color.set(0x888888)
-}
-
 /* ── 3D 普通贴图模式染色：贴图文件（非 MC 模型）3D 预览时，按贴图名推断 tint，
     采样当前生物群系颜色设到 material.color（three.js 自动 color × map）。动态 import
     mc-model-viewer 避免循环依赖。biome 切换时 refreshMaterial3DTint 重染当前贴图 */
@@ -2406,55 +2295,6 @@ export function getMaterial3DInfo() {
   }
 }
 
-export function disposeMaterial3D() {
-  if (animationId) cancelAnimationFrame(animationId)
-  if (skyBakeTimer) {
-    clearTimeout(skyBakeTimer)
-    skyBakeTimer = null
-  }
-  if (hdrRotateTimer) {
-    clearTimeout(hdrRotateTimer)
-    hdrRotateTimer = null
-  }
-  if (customModelGroup) {
-    scene.remove(customModelGroup)
-    disposeGroupDeep(customModelGroup)
-    customModelGroup = null
-    markShaderMatsDirty()
-  }
-  for (const m of [meshLeft, meshRight]) {
-    if (m) {
-      if (m.material) {
-        disposeAllMaterialTextures(m.material)
-        m.material.dispose()
-      }
-      if (m.geometry) m.geometry.dispose()
-    }
-  }
-  if (groundMesh) {
-    groundMesh.geometry.dispose()
-    groundMesh.material.dispose()
-  }
-  if (gridHelper) {
-    gridHelper.geometry.dispose()
-    gridHelper.material.dispose()
-  }
-  if (envTexture) envTexture.dispose()
-  if (pmremTexture) pmremTexture.dispose()
-  if (hdrTextureOriginal) hdrTextureOriginal.dispose()
-  if (hdrTextureRotated) hdrTextureRotated.dispose()
-  if (skyEnvTexture) skyEnvTexture.dispose()
-  if (skyMesh) {
-    skyMesh.geometry.dispose()
-    skyMesh.material.dispose()
-    skyMesh = null
-  }
-  if (pmrem) pmrem.dispose()
-  if (renderer) renderer.dispose()
-  initialized = false
-}
-
-
 /* 几何与格式工具 依赖注入 */
 setGeoUtilsHooks({
   imgW: imgW,
@@ -2478,4 +2318,67 @@ setMaterialHooks({
   get_parallaxAdaptive: () => parallaxAdaptive,
   get_parallaxShadow: () => parallaxShadow,
   get_isWebGL2: () => isWebGL2
+})
+
+/* 控制与生命周期 依赖注入 */
+setHooks({
+  clampFlyPos: clampFlyPos,
+  resetFreeView: resetFreeView,
+  disposeTexture: disposeTexture,
+  disposeGroupDeep: disposeGroupDeep,
+  markShaderMatsDirty: markShaderMatsDirty,
+  get_renderer: () => renderer,
+  get_freeCamMode: () => freeCamMode,
+  get_camDist: () => camDist,
+  get__flyForward: () => _flyForward,
+  get_camera: () => camera,
+  get_flyPos: () => flyPos,
+  get_FLY_KEYS: () => FLY_KEYS,
+  get_flyKeys: () => flyKeys,
+  get_animationId: () => animationId,
+  get_scene: () => scene,
+  get_meshLeft: () => meshLeft,
+  get_meshRight: () => meshRight,
+  get_groundMesh: () => groundMesh,
+  get_gridHelper: () => gridHelper,
+  get_envTexture: () => envTexture,
+  get_pmremTexture: () => pmremTexture,
+  get_hdrTextureOriginal: () => hdrTextureOriginal,
+  get_hdrTextureRotated: () => hdrTextureRotated,
+  get_skyEnvTexture: () => skyEnvTexture,
+  get_pmrem: () => pmrem,
+  get_isDragging: () => isDragging,
+  set_isDragging: v => { isDragging = v },
+  get_autoRotate: () => autoRotate,
+  set_autoRotate: v => { autoRotate = v },
+  get_lastX: () => lastX,
+  set_lastX: v => { lastX = v },
+  get_lastY: () => lastY,
+  set_lastY: v => { lastY = v },
+  get_dragMode: () => dragMode,
+  set_dragMode: v => { dragMode = v },
+  get_flyYaw: () => flyYaw,
+  set_flyYaw: v => { flyYaw = v },
+  get_flyPitch: () => flyPitch,
+  set_flyPitch: v => { flyPitch = v },
+  get_targetRotY: () => targetRotY,
+  set_targetRotY: v => { targetRotY = v },
+  get_targetRotX: () => targetRotX,
+  set_targetRotX: v => { targetRotX = v },
+  get_targetPanX: () => targetPanX,
+  set_targetPanX: v => { targetPanX = v },
+  get_targetPanY: () => targetPanY,
+  set_targetPanY: v => { targetPanY = v },
+  get_targetCamDist: () => targetCamDist,
+  set_targetCamDist: v => { targetCamDist = v },
+  get_skyBakeTimer: () => skyBakeTimer,
+  set_skyBakeTimer: v => { skyBakeTimer = v },
+  get_hdrRotateTimer: () => hdrRotateTimer,
+  set_hdrRotateTimer: v => { hdrRotateTimer = v },
+  get_customModelGroup: () => customModelGroup,
+  set_customModelGroup: v => { customModelGroup = v },
+  get_skyMesh: () => skyMesh,
+  set_skyMesh: v => { skyMesh = v },
+  get_initialized: () => initialized,
+  set_initialized: v => { initialized = v }
 })
