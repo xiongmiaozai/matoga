@@ -13,6 +13,9 @@ import { t as _t } from './i18n.js'
 import { attachTextureAnimOnly, unloadTextureAnim } from './mc-model-viewer.js'
 import { computeTangents } from './m3d/geometry.js'
 import { LIGHT_PRESETS } from './m3d/presets.js'
+import { rotateTextureData, detectFormat, reconstructNormal, applySourceSide, setHooks as setGeoUtilsHooks } from './m3d/geo-utils.js'
+/* 门面 re-export（§2.3） */
+export { rotateTextureData, detectFormat, reconstructNormal, applySourceSide } from './m3d/geo-utils.js'
 
 let scene, camera, renderer, animationId, pmrem, envTexture, pmremTexture
 let isWebGL2 = false
@@ -445,39 +448,6 @@ function ensureRotatedTexture() {
   }
 }
 
-function rotateTextureData(tex, angleDeg) {
-  const img = tex && tex.image
-  if (!img) return tex
-  const src = img.data
-  const srcW = img.width,
-    srcH = img.height
-  if (!src || !srcW || !srcH) return tex
-  const n = ((angleDeg % 360) + 360) % 360
-  const shift = Math.round((n / 360) * srcW)
-  if (shift === 0 || shift === srcW) return tex
-  const stride = src.length / (srcW * srcH)
-  const newData = new src.constructor(src.length)
-  newData.set(src)
-  for (let y = 0; y < srcH; y++) {
-    const rowStart = y * srcW * stride
-    for (let x = 0; x < srcW; x++) {
-      const dst = rowStart + x * stride
-      const s = rowStart + ((x - shift + srcW * 100) % srcW) * stride
-      newData[dst] = src[s]
-      newData[dst + 1] = src[s + 1]
-      newData[dst + 2] = src[s + 2]
-      newData[dst + 3] = src[s + 3]
-    }
-  }
-  const newTex = new THREE.DataTexture(newData, srcW, srcH)
-  newTex.mapping = THREE.EquirectangularReflectionMapping
-  newTex.type = tex.type
-  newTex.colorSpace = tex.colorSpace
-  newTex.flipY = tex.flipY
-  newTex.needsUpdate = true
-  return newTex
-}
-
 function setEnvMode(mode) {
   if (!initialized || !['custom', 'sky', 'hdri'].includes(mode)) return
   currentEnvMode = mode
@@ -582,39 +552,6 @@ export function setChannelView(ch) {
   if (channelView === 'all') refreshMaterial3DTint()
 }
 
-function detectFormat(image) {
-  const canvas = document.createElement('canvas')
-  const w = Math.min(image.naturalWidth, 64),
-    h = Math.min(image.naturalHeight, 64)
-  canvas.width = w
-  canvas.height = h
-  const ctx = canvas.getContext('2d', { willReadFrequently: true })
-  ctx.drawImage(image, 0, 0, w, h)
-  const data = ctx.getImageData(0, 0, w, h).data
-  const total = w * h
-  let alphaNonFull = 0,
-    alphaMidrange = 0
-  let blueSum = 0,
-    blueSumSq = 0
-  for (let i = 0; i < data.length; i += 4) {
-    const a = data[i + 3]
-    if (a < 250) {
-      alphaNonFull++
-      if (a > 10 && a < 245) alphaMidrange++
-    }
-    const b = data[i + 2]
-    blueSum += b
-    blueSumSq += b * b
-  }
-  const alphaNonFullRatio = alphaNonFull / total
-  const alphaMidRatio = alphaNonFull > 0 ? alphaMidrange / alphaNonFull : 0
-  const blueMean = blueSum / total
-  const blueVar = blueSumSq / total - blueMean * blueMean
-  const blueStd = Math.sqrt(Math.max(0, blueVar))
-  if ((alphaNonFullRatio > 0.02 && alphaMidRatio < 0.3) || (blueStd > 20 && blueMean > 25)) return 'labpbr'
-  return 'old'
-}
-
 function extractRoughness(image) {
   const c = document.createElement('canvas')
   c.width = image.naturalWidth
@@ -693,29 +630,6 @@ function extractEmissive(specImage, mainImage) {
   ctx.putImageData(imageData, 0, 0)
   const tex = new THREE.CanvasTexture(c)
   tex.colorSpace = THREE.SRGBColorSpace
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping
-  return tex
-}
-
-function reconstructNormal(image) {
-  const c = document.createElement('canvas')
-  c.width = imgW(image)
-  c.height = imgH(image)
-  const ctx = c.getContext('2d', { willReadFrequently: true })
-  ctx.drawImage(image, 0, 0)
-  const imageData = ctx.getImageData(0, 0, c.width, c.height),
-    d = imageData.data
-  for (let i = 0; i < d.length; i += 4) {
-    const nx = (d[i] / 255) * 2 - 1,
-      ny = (d[i + 1] / 255) * 2 - 1
-    const nz = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny))
-    d[i] = Math.round((nx + 1) * 127.5)
-    d[i + 1] = Math.round((ny + 1) * 127.5)
-    d[i + 2] = Math.round((nz + 1) * 127.5)
-    d[i + 3] = 255
-  }
-  ctx.putImageData(imageData, 0, 0)
-  const tex = new THREE.CanvasTexture(c)
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping
   return tex
 }
@@ -1316,38 +1230,6 @@ export function initMaterial3D(containerEl) {
   setTimeout(handleResize, 50)
   setTimeout(handleResize, 120)
   document.dispatchEvent(new CustomEvent('material3d:ready'))
-}
-
-function applySourceSide() {
-  if (!initialized) return
-  if (customModelGroup) return
-
-  if (sourceSide === 'dual') {
-    meshLeft.visible = true
-    meshRight.visible = true
-    meshLeft.position.x = -1.1
-    meshRight.position.x = 1.1
-    meshLeft.scale.setScalar(0.75)
-    meshRight.scale.setScalar(0.75)
-    labelLeft.visible = true
-    labelRight.visible = true
-    labelLeft.position.set(-1.1, -0.95, 0)
-    labelRight.position.set(1.1, -0.95, 0)
-  } else if (sourceSide === 'left') {
-    meshLeft.visible = true
-    meshRight.visible = false
-    meshLeft.position.x = 0
-    meshLeft.scale.setScalar(1.0)
-    labelLeft.visible = false
-    labelRight.visible = false
-  } else {
-    meshLeft.visible = false
-    meshRight.visible = true
-    meshRight.position.x = 0
-    meshRight.scale.setScalar(1.0)
-    labelLeft.visible = false
-    labelRight.visible = false
-  }
 }
 
 function setupControls() {
@@ -2758,3 +2640,13 @@ export function disposeMaterial3D() {
   if (renderer) renderer.dispose()
   initialized = false
 }
+
+
+/* 几何与格式工具 依赖注入 */
+setGeoUtilsHooks({
+  imgW: imgW,
+  imgH: imgH,
+  get_initialized: () => initialized,
+  get_customModelGroup: () => customModelGroup,
+  get_sourceSide: () => sourceSide
+})
