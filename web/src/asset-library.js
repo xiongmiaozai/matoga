@@ -46,6 +46,9 @@ import { openCreateModelDialog, previewCustomModel } from './create-model-dialog
 import { openCreatePackDialog } from './create-pack-dialog.js'
 import { openImportPackDialog } from './import-pack-dialog.js'
 import { packEntryRawUrl, isAddableAssetPath, isModelBrowsePath, pbLoadView, pbSaveView, openPackBrowser, browseTo, browseUp, exitBrowse, browseCrumbs, buildBrowseHead, buildBrowseCrumbsBar, buildBrowseToolbar, setBrowseStatus, browseEntryPath, buildBrowseFolderCard, buildBrowseFileRow, fillBrowseError, fillBrowseView, renderBrowse, setHooks as setAssetBrowseHooks } from './asset-lib/browse.js'
+import { collectTexGroups, buildAssetGroup, buildTexGroup, buildTexSection, collectModelGroups, texRefToAssetPath, collectModelTexturePaths, matchTexturesToPaths, buildModelSection, setHooks as setAssetCollectHooks } from './asset-lib/collect.js'
+/* 门面 re-export（§2.3） */
+export { collectTexGroups, buildAssetGroup, buildTexGroup, buildTexSection, collectModelGroups, texRefToAssetPath, collectModelTexturePaths, matchTexturesToPaths, buildModelSection } from './asset-lib/collect.js'
 /* 门面 re-export（§2.3） */
 export { packEntryRawUrl, isAddableAssetPath, isModelBrowsePath, pbLoadView, pbSaveView, openPackBrowser, browseTo, browseUp, exitBrowse, browseCrumbs, buildBrowseHead, buildBrowseCrumbsBar, buildBrowseToolbar, setBrowseStatus, browseEntryPath, buildBrowseFolderCard, buildBrowseFileRow, fillBrowseError, fillBrowseView, renderBrowse } from './asset-lib/browse.js'
 
@@ -896,196 +899,6 @@ function buildPresetSection() {
 
 /* ── 材质贴图节：聚合左右目录 + MC 材质包 + 官方包全部贴图，按文件夹/包类别分组 ── */
 
-function collectTexGroups() {
-  const groups = []
-  const byKey = new Map()
-  const seen = new Set()
-  const addGroup = (key, label) => {
-    let g = byKey.get(key)
-    if (!g) {
-      g = { key, label, items: [] }
-      byKey.set(key, g)
-      groups.push(g)
-    }
-    return g
-  }
-
-  /* 左右已选对比目录：按相对父目录分组（根级文件归目录名组） */
-  for (const side of ['left', 'right']) {
-    const root = side === 'left' ? state.leftPath : state.rightPath
-    const entries = side === 'left' ? state.leftEntries : state.rightEntries
-    if (!entries) continue
-    const rootName = root ? String(root).replace(/\/+$/, '').split('/').pop() : ''
-    for (const e of entries) {
-      if (!isImg(e) || seen.has(e.fullPath)) continue
-      seen.add(e.fullPath)
-      let rel = e.name
-      if (root && e.fullPath && e.fullPath.startsWith(root + '/')) rel = e.fullPath.slice(root.length + 1)
-      const si = rel.lastIndexOf('/')
-      const dirRel = si >= 0 ? rel.slice(0, si) : ''
-      const gk = 'dir:' + (root ? root + '/' + dirRel : dirRel || 'root')
-      const label = root ? (dirRel ? rootName + ' · ' + dirRel : rootName) : dirRel || t('asset.texRootDir')
-      addGroup(gk, label).items.push({
-        key: 'tex:' + e.fullPath,
-        name: e.name,
-        thumb: thumbUrl(e.fullPath),
-        type: 'tex',
-        path: e.fullPath,
-        mtime: e.mtime || 0,
-        role: classifyByRole(e.name),
-        onAdd: () => addTextureAt(e.fullPath, e.name)
-      })
-    }
-  }
-
-  /* MC 材质包 + 官方包（/api/asset/tex）：每包按 textures/ 第一级类别分组；
-     dir 包有磁盘绝对路径（可直接引用），zip 包走包媒体 raw 接口 */
-  for (const p of texPacks || []) {
-    for (const g of p.groups || []) {
-      const gk = 'pack:' + p.source + ':' + p.name + '/' + g.key
-      const label = g.key ? p.name + ' · ' + g.key : p.name
-      const grp = addGroup(gk, label)
-      for (const f of g.files || []) {
-        /* 防御：仅图片扩展名（png/jpg 等）才作为贴图展示，mcmeta/json 排除 */
-        if (!IMG_EXTS.has((f.name.split('.').pop() || '').toLowerCase())) continue
-        if (p.kind === 'dir' && p.root) {
-          const fp = p.root + '/' + f.path
-          if (seen.has(fp)) continue
-          seen.add(fp)
-          grp.items.push({
-            key: 'tex:' + fp,
-            name: f.name,
-            thumb: thumbUrl(fp),
-            type: 'tex',
-            path: fp,
-            mtime: f.mtime || 0,
-            role: classifyByRole(f.name),
-            onAdd: () => addTextureAt(fp, f.name)
-          })
-        } else {
-          const packPath = 'pack:' + p.source + ':' + p.name + '/' + f.path
-          grp.items.push({
-            key: 'tex:' + packPath,
-            name: f.name,
-            thumb: packTexThumbUrl(p.source, p.name, f.path),
-            type: 'tex',
-            path: packPath,
-            mtime: 0,
-            role: classifyByRole(f.name),
-            onAdd: () => addPackTextureToCanvas({ type: p.source }, { name: p.name }, { path: f.path, name: f.name })
-          })
-        }
-      }
-    }
-  }
-
-  const dirGroups = groups.filter(g => g.key.startsWith('dir:')).sort((a, b) => a.label.localeCompare(b.label, 'zh'))
-  const packGroups = groups.filter(g => !g.key.startsWith('dir:'))
-  return [...dirGroups, ...packGroups]
-}
-
-function buildAssetGroup(g, collapsedSet, saveFn) {
-  const grp = el('div', 'asset-lib-group')
-  grp.dataset.group = g.key
-  if (collapsedSet.has(g.key)) grp.classList.add('collapsed')
-  const head = el(
-    'div',
-    'asset-lib-group-head',
-    `<span class="caret">▾</span><span class="gl" title="${escAttr(g.label)}">${escAttr(g.label)}</span><span class="cnt">${g.items.length}</span>`
-  )
-  if (typeof g.openDir === 'function') {
-    const locBtn = el('button', 'asset-lib-group-btn')
-    locBtn.type = 'button'
-    locBtn.title = t('asset.openLocalDir')
-    locBtn.innerHTML = '<svg class="ico ico-sm"><use href="#i-folder"/></svg>'
-    locBtn.addEventListener('click', e => {
-      e.stopPropagation()
-      g.openDir()
-    })
-    head.appendChild(locBtn)
-  }
-  head.addEventListener('click', () => {
-    grp.classList.toggle('collapsed')
-    if (grp.classList.contains('collapsed')) {
-      collapsedSet.add(g.key)
-      saveFn(collapsedSet)
-    } else {
-      collapsedSet.delete(g.key)
-      saveFn(collapsedSet)
-    }
-  })
-  grp.appendChild(head)
-
-  const grid = el('div', 'asset-lib-grid')
-  if (viewMode === 'list') grid.classList.add('list-view')
-  const sorted = sortItems(g.items)
-  const shown = sorted.slice(0, TEX_GROUP_PAGE)
-  for (const it of shown) grid.appendChild(makeCard(it))
-  if (sorted.length > shown.length) {
-    const more = el('button', 'asset-lib-more', t('asset.texShowMore', { n: String(sorted.length - shown.length) }))
-    more.addEventListener('click', () => {
-      more.remove()
-      for (const it of sorted.slice(TEX_GROUP_PAGE)) grid.appendChild(makeCard(it))
-      observeModelThumbs(grid)
-      applyFilter()
-    })
-    grid.appendChild(more)
-  }
-  grp.appendChild(grid)
-  return grp
-}
-
-function buildTexGroup(g) {
-  return buildAssetGroup(g, texCollapsedSet, saveTexCollapsed)
-}
-
-function buildTexSection() {
-  const groups = collectTexGroups()
-  const total = groups.reduce((s, g) => s + g.items.length, 0)
-  const loading = texPacks === null
-
-  const sec = el('div', 'asset-lib-section')
-  sec.dataset.cat = 'tex'
-  if (collapsedSet.has('tex')) sec.classList.add('collapsed')
-  const head = el(
-    'div',
-    'asset-lib-section-head',
-    `<span class="caret">▾</span><span>${t('asset.texSection')}</span><span class="cnt">${total}</span>`
-  )
-  head.addEventListener('click', () => {
-    sec.classList.toggle('collapsed')
-    if (sec.classList.contains('collapsed')) {
-      collapsedSet.add('tex')
-      saveCollapsed(collapsedSet)
-    } else {
-      collapsedSet.delete('tex')
-      saveCollapsed(collapsedSet)
-    }
-  })
-  sec.appendChild(head)
-
-  if (!total && loading) {
-    const grid = el('div', 'asset-lib-grid')
-    grid.appendChild(el('div', 'asset-lib-hint', t('asset.loading')))
-    sec.appendChild(grid)
-    return sec
-  }
-  if (!total && loadErrors.tex) {
-    const grid = el('div', 'asset-lib-grid')
-    grid.appendChild(el('div', 'asset-lib-hint error', t('asset.loadFailed', { msg: loadErrors.tex })))
-    sec.appendChild(grid)
-    return sec
-  }
-  if (!total) return null
-
-  const wrap = el('div', 'asset-lib-groups')
-  for (const g of groups) wrap.appendChild(buildTexGroup(g))
-  if (loadErrors.tex)
-    wrap.appendChild(el('div', 'asset-lib-hint error', t('asset.loadFailed', { msg: loadErrors.tex })))
-  sec.appendChild(wrap)
-  return sec
-}
-
 /* ── 模型节：MC 材质包/官方包内 assets/<ns>/models/*.json，按来源/包类别/名称前缀分组 ── */
 
 /* 在系统文件管理器中打开某类模型的专属本地目录（imported / custom） */
@@ -1100,171 +913,10 @@ function openModelDir(kind) {
   })
 }
 
-function collectModelGroups() {
-  const groups = []
-  const byKey = new Map()
-  const addGroup = (key, label) => {
-    let g = byKey.get(key)
-    if (!g) {
-      g = { key, label, items: [] }
-      byKey.set(key, g)
-      groups.push(g)
-    }
-    return g
-  }
-
-  /* 导入模型（data/imported-models，用户主动上传的 .bbmodel / MC .json，专属目录） */
-  const imGroup = addGroup('im', t('asset.importedModelGroup'))
-  imGroup.openDir = () => openModelDir('imported')
-  for (const m of importedModels || []) {
-    if (!m || !m.id) continue
-    imGroup.items.push({
-      key: 'model:im:' + m.id,
-      name: m.name || m.id,
-      thumb: null,
-      icon: 'i-cube',
-      color: '#e8993c',
-      type: 'model',
-      path: 'im:' + m.id,
-      mtime: m.mtime || 0,
-      role: 'model',
-      badge: m.model_format || m.format || m.ext || null,
-      modelThumb: { kind: 'im', id: m.id, path: 'im:' + m.id, mtime: m.mtime || 0 },
-      modelFile: userModelFilePath(modelDirs.imported, m),
-      modelDelete: { api: IMPORT_API, id: m.id },
-      onAdd: () => viewImportedModelAsset(m.id, m.name || m.id)
-    })
-  }
-
-  /* 自定义模型（data/custom-models，从模板创建，专属目录） */
-  const cmGroup = addGroup('cm', t('asset.cmModelGroup'))
-  cmGroup.openDir = () => openModelDir('custom')
-  for (const m of customModels || []) {
-    if (!m || !m.id) continue
-    cmGroup.items.push({
-      key: 'model:cm:' + m.id,
-      name: m.name || m.id,
-      thumb: null,
-      icon: 'i-cube',
-      color: '#5fd0a0',
-      type: 'model',
-      path: 'cm:' + m.id,
-      mtime: m.mtime || 0,
-      role: 'model',
-      badge: m.template || null,
-      modelFile: userModelFilePath(modelDirs.custom, m),
-      modelDelete: { api: CUSTOM_API, id: m.id },
-      onAdd: () => previewCustomModel(m.id, m.name || m.id)
-    })
-  }
-
-  /* MC 材质包 + 官方包（/api/asset/model）：每包按 models/ 第一级类别分组 */
-  for (const p of modelPacks || []) {
-    for (const g of p.groups || []) {
-      const gk = 'modelpack:' + p.source + ':' + p.name + '/' + g.key
-      const label = g.key ? p.name + ' · ' + g.key : p.name
-      const grp = addGroup(gk, label)
-      for (const f of g.files || []) {
-        /* 防御：仅 .json 扩展名才作为模型展示 */
-        if (!f.name || !MODEL_JSON_RE.test(f.name)) continue
-        const modelPath = 'packmodel:' + p.source + ':' + p.name + '/' + f.path
-        grp.items.push({
-          key: 'model:' + modelPath,
-          name: f.name,
-          thumb: null,
-          icon: 'i-cube',
-          color: '#6f9ff0',
-          type: 'model',
-          path: modelPath,
-          mtime: f.mtime || 0,
-          role: 'model',
-          badge: g.key || null,
-          modelThumb: {
-            kind: 'mc',
-            api: packApiFor(p.source),
-            packName: p.name,
-            rel: f.path,
-            path: modelPath,
-            mtime: f.mtime || 0
-          },
-          onAdd: () => viewMcModelAsset(p.source, p.name, f.path, f.name)
-        })
-      }
-    }
-  }
-
-  const pinOrder = ['im', 'cm']
-  const pinned = groups
-    .filter(g => pinOrder.includes(g.key))
-    .sort((a, b) => pinOrder.indexOf(a.key) - pinOrder.indexOf(b.key))
-  const rest = groups.filter(g => !pinOrder.includes(g.key)).sort((a, b) => a.label.localeCompare(b.label, 'zh'))
-  /* 每组内按名称前缀进一步细分（区分 oak/stone 等不同系列；全部同桶时保持原组） */
-  const out = []
-  for (const g of [...pinned, ...rest]) {
-    if (!g.items.length) continue
-    out.push(...splitGroupsByPrefix(g.key, g.label, g.items, t('asset.modelUngrouped')))
-  }
-  return out
-}
-
 /* MC 贴图引用 → 资产相对路径："minecraft:block/stone" → assets/minecraft/textures/block/stone.png
    与 mc-model-viewer.textureAssetPath 同语义（前端独立实现避免循环依赖） */
-function texRefToAssetPath(ref) {
-  if (typeof ref !== 'string' || !ref) return null
-  if (/^(data:|file:|https?:\/\/|\/)/i.test(ref)) return null
-  let ns = 'minecraft',
-    rest = ref
-  const ci = ref.indexOf(':')
-  if (ci >= 0) {
-    ns = ref.slice(0, ci)
-    rest = ref.slice(ci + 1)
-  }
-  if (!rest) return null
-  const hasExt = /\.(png|jpe?g|webp|gif|bmp|tiff?|avif)$/i.test(rest)
-  return `assets/${ns}/textures/${hasExt ? rest : rest + '.png'}`
-}
-
 /* 从模型 JSON 收集所有贴图引用需要的资产路径（含 #别名解析） */
-function collectModelTexturePaths(json) {
-  if (!json || typeof json !== 'object') return []
-  const textures = json.textures && typeof json.textures === 'object' ? json.textures : {}
-  const seen = new Set()
-  const out = []
-  const resolve = ref => {
-    if (typeof ref !== 'string' || !ref) return
-    if (ref.startsWith('#')) {
-      resolve(textures[ref.slice(1)])
-      return
-    }
-    const p = texRefToAssetPath(ref)
-    if (p && !seen.has(p)) {
-      seen.add(p)
-      out.push(p)
-    }
-  }
-  for (const k in textures) resolve(textures[k])
-  return out
-}
-
 /* 按文件名匹配贴图到资产路径：文件名去扩展名 === 资产路径末段去扩展名 */
-function matchTexturesToPaths(files, neededPaths) {
-  const map = {}
-  const byBasename = {}
-  for (const f of files) {
-    const name = f.name.replace(/\.[^.]+$/, '')
-    if (!byBasename[name]) byBasename[name] = f
-  }
-  for (const p of neededPaths) {
-    const base = p
-      .split('/')
-      .pop()
-      .replace(/\.[^.]+$/, '')
-    const f = byBasename[base]
-    if (f) map[p] = f
-  }
-  return map
-}
-
 async function fileToDataUrl(f) {
   const buf = await f.arrayBuffer()
   const bytes = new Uint8Array(buf)
@@ -1347,72 +999,6 @@ async function deleteUserModel(item) {
   } catch (e) {
     showToast(t('asset.toastModelDeleteFail', { msg: e.message || '' }))
   }
-}
-
-function buildModelSection() {
-  const groups = collectModelGroups()
-  const total = groups.reduce((s, g) => s + g.items.length, 0)
-  const loading = modelPacks === null
-
-  const sec = el('div', 'asset-lib-section')
-  sec.dataset.cat = 'model'
-  if (collapsedSet.has('model')) sec.classList.add('collapsed')
-  const head = el(
-    'div',
-    'asset-lib-section-head',
-    `<span class="caret">▾</span><span>${t('asset.modelSection')}</span><span class="cnt">${total}</span>`
-  )
-  const uploadBtn = el('button', 'asset-lib-section-btn')
-  uploadBtn.type = 'button'
-  uploadBtn.title = t('asset.uploadModelTitle')
-  uploadBtn.innerHTML = `<svg class="ico ico-sm"><use href="#i-plus"/></svg><span>${t('asset.uploadModel')}</span>`
-  uploadBtn.addEventListener('click', e => {
-    e.stopPropagation()
-    uploadModelToLibrary()
-  })
-  head.appendChild(uploadBtn)
-  const newBtn = el('button', 'asset-lib-section-btn')
-  newBtn.type = 'button'
-  newBtn.title = t('asset.newModelTitle')
-  newBtn.innerHTML = `<svg class="ico ico-sm"><use href="#i-cube"/></svg><span>${t('asset.newModel')}</span>`
-  newBtn.addEventListener('click', e => {
-    e.stopPropagation()
-    openCreateModelDialog({ onCreated: () => refreshAssetLibrary() })
-  })
-  head.appendChild(newBtn)
-  head.addEventListener('click', () => {
-    sec.classList.toggle('collapsed')
-    if (sec.classList.contains('collapsed')) {
-      collapsedSet.add('model')
-      saveCollapsed(collapsedSet)
-    } else {
-      collapsedSet.delete('model')
-      saveCollapsed(collapsedSet)
-    }
-  })
-  sec.appendChild(head)
-
-  if (!total && loading) {
-    const grid = el('div', 'asset-lib-grid')
-    grid.appendChild(el('div', 'asset-lib-hint', t('asset.loading')))
-    sec.appendChild(grid)
-    return sec
-  }
-  if (!total && loadErrors.model) {
-    const grid = el('div', 'asset-lib-grid')
-    grid.appendChild(el('div', 'asset-lib-hint error', t('asset.loadFailed', { msg: loadErrors.model })))
-    sec.appendChild(grid)
-    return sec
-  }
-  if (!total) return null
-
-  const wrap = el('div', 'asset-lib-groups')
-  for (const g of groups) wrap.appendChild(buildAssetGroup(g, modelCollapsedSet, saveModelCollapsed))
-  if (loadErrors.model)
-    wrap.appendChild(el('div', 'asset-lib-hint error', t('asset.loadFailed', { msg: loadErrors.model })))
-  observeModelThumbs(wrap)
-  sec.appendChild(wrap)
-  return sec
 }
 
 function buildHdriSection() {
@@ -2666,4 +2252,44 @@ setAssetBrowseHooks({
   set_browse: v => { browse = v },
   get_browseSeq: () => browseSeq,
   set_browseSeq: v => { browseSeq = v }
+})
+
+/* AssetCollect 依赖注入 */
+setAssetCollectHooks({
+  isImg: isImg,
+  thumbUrl: thumbUrl,
+  classifyByRole: classifyByRole,
+  packTexThumbUrl: packTexThumbUrl,
+  addPackTextureToCanvas: addPackTextureToCanvas,
+  el: el,
+  sortItems: sortItems,
+  makeCard: makeCard,
+  applyFilter: applyFilter,
+  saveTexCollapsed: saveTexCollapsed,
+  saveCollapsed: saveCollapsed,
+  openModelDir: openModelDir,
+  userModelFilePath: userModelFilePath,
+  viewImportedModelAsset: viewImportedModelAsset,
+  packApiFor: packApiFor,
+  viewMcModelAsset: viewMcModelAsset,
+  uploadModelToLibrary: uploadModelToLibrary,
+  refreshAssetLibrary: refreshAssetLibrary,
+  saveModelCollapsed: saveModelCollapsed,
+  get_collapsedSet: () => collapsedSet,
+  get_TEX_GROUP_PAGE: () => TEX_GROUP_PAGE,
+  get_texCollapsedSet: () => texCollapsedSet,
+  get_loadErrors: () => loadErrors,
+  get_importedModels: () => importedModels,
+  get_modelDirs: () => modelDirs,
+  get_IMPORT_API: () => IMPORT_API,
+  get_customModels: () => customModels,
+  get_CUSTOM_API: () => CUSTOM_API,
+  get_MODEL_JSON_RE: () => MODEL_JSON_RE,
+  get_modelCollapsedSet: () => modelCollapsedSet,
+  get_texPacks: () => texPacks,
+  set_texPacks: v => { texPacks = v },
+  get_viewMode: () => viewMode,
+  set_viewMode: v => { viewMode = v },
+  get_modelPacks: () => modelPacks,
+  set_modelPacks: v => { modelPacks = v }
 })
