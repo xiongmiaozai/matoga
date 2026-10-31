@@ -33,6 +33,9 @@ import { t as _t } from './i18n.js'
 import { fileUrl, apiUrl, joinPath } from './url-utils.js'
 import { defaultFaceUv, resolveItemDefRefs, MAX_ITEM_DEF_DEPTH } from './mcv/geometry.js'
 import { rawUrl, texCacheKey, fetchJson, fetchOkData, parentModelPath, setHooks as setMcvPathsHooks } from './mcv/paths.js'
+import { applyItemTransformation, getOfficialPack, parseAnimMeta, animFrameIndexAt, setHooks as setMcvGeoToolsHooks } from './mcv/geo-tools.js'
+/* 门面 re-export（文档 §2.3） */
+export { applyItemTransformation, getOfficialPack, parseAnimMeta, animFrameIndexAt } from './mcv/geo-tools.js'
 /* 门面 re-export：这些函数原为本地 export，搬走后仍须从本文件对外可见 */
 export { rawUrl, texCacheKey, fetchJson, fetchOkData, parentModelPath } from './mcv/paths.js'
 
@@ -663,40 +666,6 @@ export function isPartsEmptyModel(parts) {
    顶点变换 T + L*(S*(R*v))——外层 position/quaternion 承载 T/L，scale 承载 S，
    right_rotation 非单位四元数时经内层 Group 承载 R（保持与 vanilla 组合顺序一致）。
    负 scale（镜像）翻转三角绕序，材质置 DoubleSide 防背面剔除消失 */
-export function applyItemTransformation(group, tr) {
-  if (!group || !tr || typeof tr !== 'object') return group
-  const t = Array.isArray(tr.translation) ? tr.translation : null
-  if (t && t.length >= 3 && t.every(n => Number.isFinite(+n))) {
-    group.position.set(+t[0], +t[1], +t[2])
-  }
-  const toQuat = q => {
-    if (!Array.isArray(q) || q.length < 4 || !q.every(n => Number.isFinite(+n))) return null
-    return new THREE.Quaternion(+q[0], +q[1], +q[2], +q[3]).normalize()
-  }
-  const lq = toQuat(tr.left_rotation)
-  if (lq) group.quaternion.copy(lq)
-  const s = Array.isArray(tr.scale) ? tr.scale : null
-  const rq = toQuat(tr.right_rotation)
-  if (s && s.length >= 3 && s.every(n => Number.isFinite(+n))) {
-    group.scale.set(+s[0], +s[1], +s[2])
-    if (rq) {
-      const inner = new THREE.Group()
-      inner.quaternion.copy(rq)
-      for (const c of [...group.children]) inner.add(c)
-      group.add(inner)
-    }
-    if (+s[0] < 0 || +s[1] < 0 || +s[2] < 0) {
-      group.traverse(o => {
-        const mats = Array.isArray(o.material) ? o.material : o.material ? [o.material] : []
-        for (const m of mats) {
-          if (m && !(m.userData && m.userData.shared)) m.side = THREE.DoubleSide
-        }
-      })
-    }
-  }
-  return group
-}
-
 function parseVec3(v, fallback) {
   if (Array.isArray(v) && v.length >= 3 && v.every(n => Number.isFinite(+n))) return [+v[0], +v[1], +v[2]]
   if (typeof v === 'string') {
@@ -868,24 +837,6 @@ function loadTextureCached(key, url) {
    回退到 official-packs 加载原版贴图，避免 shulker_box 等方块预览无贴图 */
 let officialPackCache = null
 let officialPackLoading = null
-function getOfficialPack() {
-  if (officialPackCache) return Promise.resolve(officialPackCache)
-  if (officialPackLoading) return officialPackLoading
-  officialPackLoading = fetchOkData('/api/mc-official/list')
-    .then(data => {
-      const packs = Array.isArray(data) ? data : (data && data.packs) || []
-      officialPackCache = packs.length && packs[0].name ? { api: '/api/mc-official', packName: packs[0].name } : null
-      officialPackLoading = null
-      return officialPackCache
-    })
-    .catch(() => {
-      officialPackCache = null
-      officialPackLoading = null
-      return null
-    })
-  return officialPackLoading
-}
-
 /* 贴图加载 + official-packs vanilla 回退：包内贴图缺失时尝试 official-packs 同路径贴图。
    返回 { tex, anim } 或 null。仅对标准 MC 贴图路径生效（扩展引用 data:/file:/URL 不回退） */
 async function loadTexWithOfficialFallback(texPath, api, packName, fileRoot) {
@@ -923,52 +874,7 @@ async function loadTexWithOfficialFallback(texPath, api, packName, fileRoot) {
 const TICKS_PER_SEC = 20
 
 /* mcmeta JSON → 动画定义（非法 / 单帧 → null）；timeline 为 [{ index, ticks }]（ticks ≥ 1 整数） */
-export function parseAnimMeta(meta, texW, texH) {
-  const anim = meta && typeof meta === 'object' ? meta.animation : null
-  if (!anim || typeof anim !== 'object') return null
-  const w = Number.isFinite(+texW) ? +texW : 0
-  const h = Number.isFinite(+texH) ? +texH : 0
-  if (w <= 0 || h <= 0) return null
-  const fw = Number.isFinite(+anim.width) && +anim.width > 0 ? Math.floor(+anim.width) : w
-  const fh = Number.isFinite(+anim.height) && +anim.height > 0 ? Math.floor(+anim.height) : fw
-  if (fw <= 0 || fh <= 0 || fw > w || fh > h) return null
-  const frameCount = Math.floor(h / fh)
-  if (frameCount <= 1) return null
-  const defaultTicks = Math.max(1, Math.round(Number.isFinite(+anim.frametime) ? +anim.frametime : 1))
-  const timeline = []
-  if (Array.isArray(anim.frames)) {
-    for (const f of anim.frames) {
-      let index = -1,
-        ticks = defaultTicks
-      if (typeof f === 'number' && Number.isFinite(f)) index = Math.floor(f)
-      else if (f && typeof f === 'object' && Number.isFinite(+f.index)) {
-        index = Math.floor(+f.index)
-        if (Number.isFinite(+f.time) && +f.time > 0) ticks = Math.max(1, Math.round(+f.time))
-      }
-      if (index < 0 || index >= frameCount) continue
-      timeline.push({ index, ticks })
-    }
-  }
-  if (!timeline.length) for (let i = 0; i < frameCount; i++) timeline.push({ index: i, ticks: defaultTicks })
-  const totalTicks = timeline.reduce((s, f) => s + f.ticks, 0)
-  return { texW: w, texH: h, frameW: fw, frameH: fh, frameCount, timeline, totalSec: totalTicks / TICKS_PER_SEC }
-}
-
 /* 播放时刻（秒）→ 帧号：帧边界均为整数 tick，换算到 tick 域比较（避免浮点累积误差），循环播放 */
-export function animFrameIndexAt(anim, tSec) {
-  const tl = anim && anim.timeline
-  if (!tl || !tl.length) return 0
-  const totalSec = anim.totalSec
-  const t = totalSec > 0 ? tSec % totalSec : 0
-  const tick = Math.max(0, Math.floor(t * TICKS_PER_SEC))
-  let acc = 0
-  for (const f of tl) {
-    acc += f.ticks
-    if (tick < acc) return f.index
-  }
-  return tl[tl.length - 1].index
-}
-
 /* 贴图采样矩阵 → 指定帧（几何 UV 已归一化 [0,1]；越界 clamp）。
     half-texel inset：采样窗口自帧边界内收半像素（texel 域 [i·fh+0.5, (i+1)·fh-0.5]），
     NearestFilter 取整后仍覆盖帧内全部行/列（视觉无损失），但窗口永不触碰帧边界——
@@ -2038,3 +1944,9 @@ export function isViewportVisible() {
 
 /* 路径工具模块的依赖注入 */
 setMcvPathsHooks({ isSpecialTexPath })
+
+
+/* geo-tools 模块的常量注入（常量留主文件） */
+setMcvGeoToolsHooks({
+  get_TICKS_PER_SEC: () => TICKS_PER_SEC
+})
