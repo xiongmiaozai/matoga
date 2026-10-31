@@ -39,6 +39,9 @@ import { packRelToMcRef, texUrlToRef, resolveMcModelRaw, borrowTemplateTextures,
 import { isSpecialTexPath, texPathForRef, writeMcTexRef, resolveTextureRef, expandTextureAliases, resolveMcModel, isItemDefPath, texturesHasConcreteRef, hasUnresolvedTexRefs, shulkerBoxEntityTexRef, resolveMcModelAsset, setHooks as setAssetResolveHooks } from './mcv/asset-resolve.js'
 import { parseVec3, expandElementFaces, packMcmetaUrl, normFaceRotation, texDisplayName, buildMcLayout, buildBbLayout, setHooks as setLayoutBuildHooks } from './mcv/layout-build.js'
 import { applyElementTransform, buildModelGroup, applyTexAnimFrame, getModelTexAnims, notifyModelShown, setHooks as setMiscToolsHooks } from './mcv/misc-tools.js'
+import { bindActiveModel, highlightModelFace, exportActiveModelJson, setHooks as setModelExportHooks } from './mcv/model-export.js'
+/* 门面 re-export（§2.3） */
+export { bindActiveModel, highlightModelFace, exportActiveModelJson } from './mcv/model-export.js'
 /* 门面 re-export（§2.3） */
 export { applyElementTransform, buildModelGroup, applyTexAnimFrame, getModelTexAnims, notifyModelShown } from './mcv/misc-tools.js'
 /* 门面 re-export（§2.3） */
@@ -680,17 +683,6 @@ let activeExportModel = null /* 导出信息：{ type:'mc', parts, filename } | 
 /* 展示成功后绑定：收集 mesh.userData.mcElement → mesh 映射 + 导出信息（bindActiveModel 也可供测试注入）；
     exportModel.ctx = { api, packName } 模型包上下文（mc 包模式传入，替换贴图时用于
     判断能否把新贴图转成标准 MC 引用；im/bb 等无包上下文不传 → 一律扩展引用形式） */
-export function bindActiveModel(group, exportModel, append = false) {
-  if (!append) {
-    activeElementMeshes.clear()
-    activeExportModel = exportModel || null
-  }
-  if (!group || typeof group.traverse !== 'function') return
-  group.traverse(o => {
-    if (o && o.isMesh && o.userData && o.userData.mcElement) activeElementMeshes.set(o.userData.mcElement, o)
-  })
-}
-
 /* 编辑落成显式 face（来自 "all" 展开或默认 UV 的面：显式定义优先，与 Blockbench 语义一致） */
 function ensureExplicitFace(el, faceKey) {
   if (!el || typeof el !== 'object') return null
@@ -893,54 +885,8 @@ function writeBackTexRef(texIndex, texUrl, lay) {
 /* UV 视图 hover/选中 → 3D 视口对应面 emissive 高亮 */
 let highlightedFace = null /* { element, faceKey, mat } */
 
-export function highlightModelFace(element, faceKey, on) {
-  if (highlightedFace) {
-    try {
-      if (highlightedFace.mat.emissive) highlightedFace.mat.emissive.setHex(0x000000)
-    } catch {}
-    highlightedFace = null
-  }
-  if (!on) return true
-  const mesh = activeElementMeshes.get(element)
-  if (!mesh) return false
-  const mi = MAT_INDEX[faceKey]
-  const mat =
-    mi != null && Array.isArray(mesh.material)
-      ? mesh.material[mi]
-      : mi == null && mesh.material && !Array.isArray(mesh.material)
-        ? mesh.material
-        : null
-  if (!mat || (mat.userData && mat.userData.shared)) return false
-  try {
-    if (!mat.emissive) return false
-    mat.emissive.setHex(0x2e4a8f)
-    highlightedFace = { element, faceKey, mat }
-    return true
-  } catch {
-    return false
-  }
-}
-
 /* 导出当前模型 JSON（编辑直接写回原始 element 引用 → 序列化即包含 UV 修改；
    mc 为烘焙后的独立模型（parent 链已合并），bb 为完整 bbmodel） */
-export function exportActiveModelJson() {
-  const m = activeExportModel
-  if (!m) return null
-  if (m.type === 'bb' && m.json && typeof m.json === 'object') {
-    return { filename: m.filename || 'model.bbmodel', json: m.json }
-  }
-  const parts = Array.isArray(m.parts) ? m.parts : []
-  const textures = {}
-  const elements = []
-  for (const p of parts) {
-    if (!p || typeof p !== 'object') continue
-    for (const k in p.textures || {}) if (textures[k] == null) textures[k] = p.textures[k]
-    for (const el of p.elements || []) elements.push(el)
-  }
-  if (!elements.length) return null
-  return { filename: m.filename || 'model.json', json: { textures, elements } }
-}
-
 export function getActiveModelSource() {
   const m = activeExportModel
   if (!m || !m.source) return null
@@ -1328,4 +1274,14 @@ setMiscToolsHooks({
   get_FACE_KEYS: () => FACE_KEYS,
   get_HIDDEN_MAT: () => HIDDEN_MAT,
   get_animatedTexs: () => animatedTexs
+})
+
+/* 模型高亮与导出 依赖注入 */
+setModelExportHooks({
+  get_activeElementMeshes: () => activeElementMeshes,
+  get_MAT_INDEX: () => MAT_INDEX,
+  get_activeExportModel: () => activeExportModel,
+  set_activeExportModel: v => { activeExportModel = v },
+  get_highlightedFace: () => highlightedFace,
+  set_highlightedFace: v => { highlightedFace = v }
 })
