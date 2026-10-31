@@ -43,6 +43,7 @@ import {
 import { exportUvTemplate, exportModel, setHooks as setUvExportHooks } from './uvc/export.js'
 import { startDrag, onDragMove, hitRect, hitHandle, setHooks as setUvDragHooks } from './uvc/drag.js'
 import { updateStatus, setHooks as setUvStatusHooks } from './uvc/status.js'
+import { applyCustomTexture, removeTexture, pickLibraryTexture, setHooks as setUvTexOpsHooks } from './uvc/texture-ops.js'
 
 const ZOOM_STEPS = ['fit', 1, 2, 4, 8, 16]
 const IMG_CACHE_MAX = 48
@@ -860,73 +861,12 @@ export function createUvEditor(opts) {
     if (replaced > 1) flashNotice(t('uv.replacedN', { n: replaced }))
   }
 
-  function applyCustomTexture(dataUrl, filename, texIndex, extra) {
-    const layout = state.layout
-    if (!layout || !isUsableTexUrl(dataUrl)) return
-    const i = texIndex != null && Number.isFinite(+texIndex) ? +texIndex : state.activeTex
-    const tex = layout.textures[i]
-    if (!tex) return
-    tex.url = dataUrl
-    tex.mcmetaUrl = null /* 自定义贴图无动画元数据 */
-    if (filename) tex.name = String(filename).replace(/\.[^.]+$/, '')
-    state.customTex.add(i)
-    rebuildChips()
-    loadTexImage(dataUrl) /* 预载 → onload 后重绘 */
-    if (typeof hooks.onTexture === 'function') {
-      try {
-        Promise.resolve(hooks.onTexture(i, dataUrl, layout, extra)).catch(() => {})
-      } catch {}
-    }
-    updateStatus()
-    draw()
-    notifyDirty()
-  }
-
   /* 移除材质：清空贴图槽位引用（face.tex 索引保持不变，不删除槽位本身）；
      UV 画布仅剩棋盘底 + 面矩形，3D 视口面变纯色（onTexture 空串 → 宿主清除材质）；
      重新上传 / 拖入 / 贴图库选择即可恢复 */
-  function removeTexture(texIndex) {
-    const layout = state.layout
-    if (!layout) return
-    const i = texIndex != null && Number.isFinite(+texIndex) ? +texIndex : state.activeTex
-    const tex = layout.textures[i]
-    if (!tex || !tex.url) return
-    tex.url = ''
-    tex.mcmetaUrl = null
-    state.customTex.add(i)
-    rebuildChips()
-    updateStatus()
-    draw()
-    notifyDirty()
-    if (typeof hooks.onTexture === 'function') {
-      try {
-        Promise.resolve(hooks.onTexture(i, '', layout)).catch(() => {})
-      } catch {}
-    }
-  }
-
   /* 贴图库选择：hooks.pickTexture 可覆盖（返回 Promise<{name,url,normal,specular}|null>）；
      默认动态加载 uv-tex-picker 浮窗（总资产库材质球 → raw URL）。
      返回材质组：主图写入 UV 槽位，normal/specular 透传宿主做 3D 视口 PBR 预览 */
-  async function pickLibraryTexture() {
-    if (!state.layout) return
-    let picked = null
-    try {
-      if (typeof hooks.pickTexture === 'function') {
-        picked = await hooks.pickTexture()
-      } else {
-        const m = await import('./uv-tex-picker.js')
-        picked = await m.openTexPicker()
-      }
-    } catch (e) {
-      console.error('[uv-editor] tex-picker', e)
-    }
-    if (picked && isUsableTexUrl(picked.url)) {
-      const extra = { normal: picked.normal || '', specular: picked.specular || '' }
-      applyCustomTexture(picked.url, picked.name || null, null, extra)
-    }
-  }
-
   /* 状态栏短暂提示（3s 后自动让位给常规状态文本） */
   function flashNotice(msg) {
     state.notice = msg
@@ -1038,6 +978,16 @@ export function createUvEditor(opts) {
     t: t,
     rebuildChips: rebuildChips,
     draw: draw
+  })
+
+  /* 贴图槽位操作模块的依赖注入 */
+  setUvTexOpsHooks({
+    get_state: () => state,
+    get_layout: () => layout,
+    get_hooks: () => hooks,
+    draw: draw,
+    notifyDirty: notifyDirty,
+    updateStatus: updateStatus
   })
 
   /* 绘制模块的闭包状态注入（只读，getter 转发） */
