@@ -17,6 +17,9 @@ import { rotateTextureData, detectFormat, reconstructNormal, applySourceSide, se
 import { parseIncludes, makeMaterial, setHooks as setMaterialHooks } from './m3d/material.js'
 import { setupControls, disposeAllMaterialTextures, disposeMaterial3D, setHooks as setHooks } from './m3d/controls.js'
 import { extractChannel, extractRoughness, extractMetalness, extractEmissive } from './m3d/channel-extract.js'
+import { createLabel, applyOpacityMode, applyHeightFilter, applyTextureFilter, setHooks as setMaterialFiltersHooks } from './m3d/material-filters.js'
+/* 门面 re-export（§2.3） */
+export { createLabel, applyOpacityMode, applyHeightFilter, applyTextureFilter } from './m3d/material-filters.js'
 /* 门面 re-export（§2.3） */
 export { extractChannel, extractRoughness, extractMetalness, extractEmissive } from './m3d/channel-extract.js'
 /* 门面 re-export（§2.3） */
@@ -637,98 +640,6 @@ function extractHeightFromNormal(image) {
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping
   applyHeightFilter(tex)
   return tex
-}
-
-function createLabel(text, color) {
-  const c = document.createElement('canvas')
-  c.width = 128
-  c.height = 32
-  const ctx = c.getContext('2d', { willReadFrequently: true })
-  ctx.fillStyle = color
-  ctx.fillRect(0, 0, 128, 32)
-  ctx.fillStyle = '#fff'
-  ctx.font = 'bold 16px sans-serif'
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.fillText(text, 64, 16)
-  const tex = new THREE.CanvasTexture(c)
-  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true })
-  const sprite = new THREE.Sprite(mat)
-  sprite.scale.set(0.6, 0.15, 1)
-  return sprite
-}
-
-function applyOpacityMode(material) {
-  const hasAlpha = material.userData.hasAlpha || false
-  const hasSemiTrans = material.userData.hasSemiTrans || false
-  const mode = opacityMode
-  if (mode === 'cutout') {
-    material.transparent = false
-    material.alphaTest = hasAlpha ? 0.5 : 0
-    material.transmission = 0
-  } else if (mode === 'blend') {
-    material.transparent = hasAlpha
-    material.alphaTest = 0
-    material.transmission = 0
-  } else if (mode === 'glass') {
-    material.transparent = true
-    material.alphaTest = 0
-    material.transmission = transmissionValue
-    material.ior = iorValue
-    material.thickness = 0.5
-  } else {
-    if (hasSemiTrans) {
-      material.transparent = true
-      material.alphaTest = 0
-    } else if (hasAlpha) {
-      material.transparent = false
-      material.alphaTest = 0.5
-    } else {
-      material.transparent = false
-      material.alphaTest = 0
-    }
-    material.transmission = 0
-  }
-  if (opacityValue < 1.0) {
-    material.transparent = true
-    material.opacity = opacityValue
-  } else {
-    material.opacity = 1.0
-  }
-  material.needsUpdate = true
-}
-
-function applyHeightFilter(tex) {
-  if (!tex) return
-  tex.generateMipmaps = true
-  tex.magFilter = THREE.LinearFilter
-  tex.minFilter = THREE.LinearMipmapLinearFilter
-  tex.anisotropy = 1
-  tex.needsUpdate = true
-}
-
-function applyTextureFilter(tex) {
-  if (!tex) return
-  if (alignOfficial) {
-    tex.generateMipmaps = true
-    tex.magFilter = THREE.NearestFilter
-    tex.minFilter = THREE.NearestMipmapLinearFilter
-    tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping
-    tex.anisotropy = Math.min(anisotropyLevel, maxAnisotropy)
-    tex.needsUpdate = true
-    return
-  }
-  const useMipmap = mipmapsEnabled && (textureFilter === 'trilinear' || textureFilter === 'anisotropic')
-  tex.generateMipmaps = useMipmap
-  if (textureFilter === 'nearest') {
-    tex.magFilter = THREE.NearestFilter
-    tex.minFilter = useMipmap ? THREE.NearestMipmapNearestFilter : THREE.NearestFilter
-  } else {
-    tex.magFilter = THREE.LinearFilter
-    tex.minFilter = useMipmap ? THREE.LinearMipmapLinearFilter : THREE.LinearFilter
-  }
-  tex.anisotropy = textureFilter === 'anisotropic' && useMipmap ? Math.min(anisotropyLevel, maxAnisotropy) : 1
-  tex.needsUpdate = true
 }
 
 function collectMaterialTextures(m) {
@@ -2280,4 +2191,18 @@ setHooks({
   set_skyMesh: v => { skyMesh = v },
   get_initialized: () => initialized,
   set_initialized: v => { initialized = v }
+})
+
+/* 材质滤镜与透明度 依赖注入 */
+setMaterialFiltersHooks({
+  get_opacityMode: () => opacityMode,
+  get_transmissionValue: () => transmissionValue,
+  get_iorValue: () => iorValue,
+  get_opacityValue: () => opacityValue,
+  get_alignOfficial: () => alignOfficial,
+  get_anisotropyLevel: () => anisotropyLevel,
+  get_maxAnisotropy: () => maxAnisotropy,
+  get_mipmapsEnabled: () => mipmapsEnabled,
+  get_textureFilter: () => textureFilter,
+  set_textureFilter: v => { textureFilter = v }
 })
