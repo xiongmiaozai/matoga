@@ -35,6 +35,9 @@ import { defaultFaceUv, resolveItemDefRefs, MAX_ITEM_DEF_DEPTH } from './mcv/geo
 import { rawUrl, texCacheKey, fetchJson, fetchOkData, parentModelPath, setHooks as setMcvPathsHooks } from './mcv/paths.js'
 import { applyItemTransformation, getOfficialPack, parseAnimMeta, animFrameIndexAt, setHooks as setMcvGeoToolsHooks } from './mcv/geo-tools.js'
 import { clamp01, colormapRel, loadColormapData, sampleColormap, resolveTintColor, infer2dTintType, sampleTintForTexture, textureAssetPath, loadTextureCached, setHooks as setTexToolsHooks } from './mcv/tex-tools.js'
+import { packRelToMcRef, texUrlToRef, resolveMcModelRaw, borrowTemplateTextures, parseUv, applyFaceUvs, setHooks as setHooks } from './mcv/tex-ref-tools.js'
+/* 门面 re-export（§2.3） */
+export { packRelToMcRef, texUrlToRef, resolveMcModelRaw, borrowTemplateTextures, parseUv, applyFaceUvs } from './mcv/tex-ref-tools.js'
 /* 门面 re-export（§2.3） */
 export { clamp01, colormapRel, loadColormapData, sampleColormap, resolveTintColor, infer2dTintType, sampleTintForTexture, textureAssetPath, loadTextureCached } from './mcv/tex-tools.js'
 /* 门面 re-export（文档 §2.3） */
@@ -143,40 +146,11 @@ export function texPathForRef(ref) {
 }
 
 /* 包内贴图路径 → 标准 MC 引用（assets/<ns>/textures/<rest>.png → <ns>:<rest>） */
-function packRelToMcRef(rel) {
-  const m = String(rel).match(/^assets\/([^/]+)\/textures\/(.+)\.(png|jpe?g|webp|gif|bmp)$/i)
-  return m ? m[1] + ':' + m[2] : null
-}
-
 /* 替换贴图 URL → 模型贴图引用（智能引用）：
     '' → 移除；dataURL → data: 内嵌；外部 http(s) → 原样；
     站内 file raw URL → file:<磁盘路径>；站内包 raw URL → 模型包上下文
     （ctx = { api, packName }，可缺省）匹配时转标准 MC 引用（保持 MC 兼容），
     跨包保留站内 URL（重新打开可直接加载） */
-export function texUrlToRef(url, ctx) {
-  if (typeof url !== 'string') return null
-  if (!url) return ''
-  if (/^data:/i.test(url)) return url
-  let path = url
-  if (/^https?:\/\//i.test(url)) {
-    /* 外部 URL 原样保留；LAN apiUrl 包装（http 前缀 + token）的站内 URL 剥离前缀 */
-    const ai = url.indexOf('/api/')
-    if (ai < 0) return url
-    path = url.slice(ai)
-  }
-  if (!path.startsWith('/api/')) return path /* 相对/未知形式原样 */
-  const fm = path.match(/^\/api\/file\/raw\?path=([^&]+)/)
-  if (fm) return 'file:' + decodeURIComponent(fm[1])
-  const bm = path.match(/^\/api\/(mc-packs|mc-official)\/([^/]+)\/raw\?path=([^&]+)/)
-  if (bm) {
-    const std = packRelToMcRef(decodeURIComponent(bm[3]))
-    if (std && ctx && ctx.api === '/api/' + bm[1] && ctx.packName === decodeURIComponent(bm[2])) return std
-    if (std && !ctx) return std
-    return path /* 跨包：保留站内 URL 引用（重新打开可直接加载） */
-  }
-  return path
-}
-
 /* 模型 textures 表贴图引用写回：解析命中 oldTexPath 的键改写为 newRef。
     直接持有该路径的键（含 #互引链命中）统一改写到新值；oldTexPath = '' 匹配被移除的空键 */
 export function writeMcTexRef(textures, oldTexPath, newRef) {
@@ -303,38 +277,6 @@ const BUILTIN_PARENT_MODELS = {
     最外层解析完成后统一展开一次——若逐层先展开再合并，子层的 side 展开键
     （north/south/east/west）会错误覆盖父层的显式方向键（command_block 的
     north=#front / south=#back 被覆盖成 #side → front/back 贴图丢失）。 */
-async function resolveMcModelRaw(api, packName, rel, depth = 0, fileRoot) {
-  const url = rawUrl(api, packName, rel, fileRoot, true)
-  let model
-  if (modelJsonCache.has(url)) {
-    model = await modelJsonCache.get(url)
-  } else {
-    const p = fetchJson(url).catch(e => {
-      const builtin = BUILTIN_PARENT_MODELS[rel]
-      if (!builtin) { modelJsonCache.delete(url); throw e }
-      return builtin
-    })
-    modelJsonCache.set(url, p)
-    model = await p
-  }
-  if (!model || typeof model !== 'object') throw new Error('invalid model json')
-  let elements = Array.isArray(model.elements) ? model.elements : null
-  const textures = model.textures && typeof model.textures === 'object' ? model.textures : {}
-  if (model.parent && depth < MAX_PARENT_DEPTH) {
-    const parentRel = parentModelPath(model.parent)
-    if (parentRel) {
-      try {
-        const p = await resolveMcModelRaw(api, packName, parentRel, depth + 1, fileRoot)
-        if (!elements && p.elements.length) elements = p.elements
-        const merged = { ...p.textures }
-        for (const k in textures) merged[k] = textures[k]
-        return { elements: elements || [], textures: merged }
-      } catch {}
-    }
-  }
-  return { elements: elements || [], textures }
-}
-
 export async function resolveMcModel(api, packName, rel, depth = 0, fileRoot) {
   const { elements, textures } = await resolveMcModelRaw(api, packName, rel, depth, fileRoot)
   return { elements, textures: expandTextureAliases(textures) }
@@ -395,66 +337,6 @@ export function hasUnresolvedTexRefs(elements, textures) {
    parent 的子模型的 textures，让模板也能显示真实贴图。包模式走 entries 接口列目录，
    fileRoot 模式走 /api/compare/scan 非递归列目录；最多探测 60 个候选 .json，
    命中首个含贴图的子模型即止 */
-export async function borrowTemplateTextures(api, packName, rel, fileRoot) {
-  if (typeof rel !== 'string' || !rel) return null
-  const li = rel.lastIndexOf('/')
-  if (li < 0) return null
-  const dir = rel.slice(0, li)
-  const selfName = rel.slice(li + 1)
-  const m = rel.match(/^assets\/([^/]+)\/models\/(.+)\.json$/)
-  if (!m) return null
-  const withNs = m[1] + ':' + m[2]
-  const noNs = m[2]
-  /* 同级子模型候选文件名：包模式走 entries 接口，fileRoot 模式走 compare/scan 非递归 */
-  let candidates
-  try {
-    if (fileRoot) {
-      const res = await fetch(apiUrl('/api/compare/scan'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: joinPath(fileRoot, dir), recursive: false })
-      })
-      const j = await res.json()
-      const ents = j && j.ok && j.data && Array.isArray(j.data.entries) ? j.data.entries : []
-      candidates = ents
-        .map(e => e && e.name)
-        .filter(n => typeof n === 'string' && n.endsWith('.json') && n !== selfName && !n.startsWith('template_'))
-    } else {
-      if (typeof api !== 'string' || typeof packName !== 'string' || !packName) return null
-      const entries = await fetchOkData(`${api}/${encodeURIComponent(packName)}/entries?dir=${encodeURIComponent(dir)}`)
-      const files = entries && Array.isArray(entries.files) ? entries.files : []
-      candidates = files
-        .map(f => f && f.name)
-        .filter(n => typeof n === 'string' && n.endsWith('.json') && n !== selfName && !n.startsWith('template_'))
-    }
-  } catch {
-    return null
-  }
-  /* 候选优先级：文件名包含父模型基础名的子模型最可能引用该 parent（如 coral_fan 的
-     子模型 brain_coral_fan / tube_coral_fan 均含 "coral_fan"），优先探测；同级目录
-     可能有数千 json，仅前 60 会被 fetch，按相关性排序避免漏掉真正引用者 */
-  const base = selfName.replace(/\.json$/i, '')
-  const matched = candidates.filter(n => n.includes(base))
-  const rest = matched.length < 60 ? candidates.filter(n => !n.includes(base)) : []
-  const ordered = matched.length ? matched.concat(rest) : candidates
-  for (const name of ordered.slice(0, 60)) {
-    const childRel = dir + '/' + name
-    let child
-    try {
-      child = await fetchJson(rawUrl(api, packName, childRel, fileRoot, true))
-    } catch {
-      continue
-    }
-    if (!child || typeof child !== 'object' || typeof child.parent !== 'string') continue
-    const cp = child.parent
-    const cpNoNs = cp.includes(':') ? cp.slice(cp.indexOf(':') + 1) : cp
-    if (cp !== withNs && cp !== noNs && cpNoNs !== withNs && cpNoNs !== noNs) continue
-    const ct = child.textures && typeof child.textures === 'object' ? child.textures : null
-    if (ct && Object.keys(ct).length) return ct
-  }
-  return null
-}
-
 /* shulker_box 内嵌渲染器贴图引用 → 实体贴图引用：
    minecraft:shulker_yellow → minecraft:entity/shulker/shulker_yellow */
 function shulkerBoxEntityTexRef(ref) {
@@ -552,12 +434,6 @@ function parseVec3(v, fallback) {
   return fallback
 }
 
-function parseUv(uv) {
-  const a = Array.isArray(uv) ? uv : typeof uv === 'string' ? uv.split(',').map(s => +s.trim()) : null
-  if (a && a.length === 4 && a.every(n => Number.isFinite(n))) return a
-  return null
-}
-
 /* face.rotation（0/90/180/270，顺时针）：几何四角 [TL,TR,BL,BR] 的采样角随之轮转
    （贴图顺时针转 90° 后，原 BL 像素显示在几何 TL 位置：TL←BL, TR←TL, BL←BR, BR←TR） */
 const FACE_ROT_ORDER = {
@@ -574,37 +450,6 @@ const FACE_ROT_ORDER = {
    uvScale≠16（bbmodel resolution）时按比例换算 */
 /* BoxGeometry 每面 4 顶点 UV（左上/右上/左下/右下）按 MC 像素坐标重映射（uvScale=16 或 bbmodel resolution）
    无 uv 的 face 用 vanilla 默认 UV（按元素尺寸），防止整张贴图拉伸 */
-function applyFaceUvs(geo, faces, uvScale, from, to) {
-  if (!faces || typeof faces !== 'object') return
-  const uvAttr = geo.attributes.uv
-  if (!uvAttr) return
-  for (const key of FACE_KEYS) {
-    const f = faces[key]
-    if (!f || typeof f !== 'object') continue
-    const uv = parseUv(f.uv) || defaultFaceUv(key, from, to, uvScale)
-    if (!uv) continue
-    /* u1/u2 与 v1/v2 支持翻转（uv[2] < uv[0] 时为水平镜像采样） */
-    const u1 = uv[0] / uvScale,
-      u2 = uv[2] / uvScale
-    const v1 = 1 - uv[1] / uvScale,
-      v2 = 1 - uv[3] / uvScale
-    const corners = [
-      [u1, v1],
-      [u2, v1],
-      [u1, v2],
-      [u2, v2]
-    ]
-    const rot = Number.isFinite(+f.rotation) ? (((Math.round(+f.rotation / 90) * 90) % 360) + 360) % 360 : 0
-    const order = FACE_ROT_ORDER[rot] || [0, 1, 2, 3]
-    const i = MAT_INDEX[key] * 4
-    for (let k = 0; k < 4; k++) {
-      const c = corners[order[k]]
-      uvAttr.setXY(i + k, c[0], c[1])
-    }
-  }
-  uvAttr.needsUpdate = true
-}
-
 /* element 变换：MC 单轴旋转 / bbmodel 欧拉旋转均绕 origin，几何中心置于元素中心 */
 function applyElementTransform(mesh, el, center) {
   const c = [(center[0] - 8) / 16, (center[1] - 8) / 16, (center[2] - 8) / 16]
@@ -1822,4 +1667,14 @@ setTexToolsHooks({
   get_currentBiome: () => currentBiome,
   get_TEX_REF_EXT_RE: () => TEX_REF_EXT_RE,
   get_texCache: () => texCache
+})
+
+/* 贴图引用与模型解析工具 常量注入 */
+setHooks({
+  get_modelJsonCache: () => modelJsonCache,
+  get_BUILTIN_PARENT_MODELS: () => BUILTIN_PARENT_MODELS,
+  get_MAX_PARENT_DEPTH: () => MAX_PARENT_DEPTH,
+  get_FACE_KEYS: () => FACE_KEYS,
+  get_FACE_ROT_ORDER: () => FACE_ROT_ORDER,
+  get_MAT_INDEX: () => MAT_INDEX
 })
