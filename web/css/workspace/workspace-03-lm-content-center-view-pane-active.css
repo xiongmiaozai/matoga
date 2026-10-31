@@ -1,0 +1,300 @@
+.lm_content > .center > .view-pane.active {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 表格填充 */
+.lm_content .result-table-wrap {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+
+/* 3D 参数浮层在 GL 面板内用 absolute 定位 */
+.lm_content .m3d-drawer {
+  position: absolute;
+  z-index: 10;
+}
+
+/* ===== 深色模式覆盖 ===== */
+:root[data-theme='dark'] .lm_content {
+  background: var(--panel-bg);
+}
+:root[data-theme='dark'] .lm_stack > .lm_header {
+  background: var(--panel-2);
+  border-bottom-color: var(--border);
+}
+:root[data-theme='dark'] .lm_tab.lm_active {
+  background: var(--panel-bg);
+}
+:root[data-theme='dark'] .lm_drag_proxy {
+  background: var(--panel-bg);
+  border-color: var(--border);
+}
+:root[data-theme='dark'] .workspace-bar {
+  background: var(--panel-2);
+  border-bottom-color: var(--border);
+}
+:root[data-theme='dark'] .workspace-tab.active {
+  background: var(--panel-bg);
+  border-color: var(--border);
+}
+
+/* ===== 面板标题栏图标 ===== */
+.lm_tab .lm_icon {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+/* ===== 浮动面板浮层按钮区 ===== */
+.panel-float-tools {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  z-index: 20;
+  display: flex;
+  gap: 2px;
+}
+.panel-float-tools button {
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.panel-float-tools button:hover {
+  color: var(--text);
+  background: var(--row-hover);
+}
+
+/* 隐藏原 layout 的 resizer/collapse-btn（GL 接管） */
+body.gl-active .resizer,
+body.gl-active .collapse-btn,
+body.gl-active #collapseLeftBtn,
+body.gl-active #collapseRightBtn {
+  display: none !important;
+}
+
+/* 原 workspace 隐藏（GL 接管后） */
+body.gl-active #workspace {
+  display: none !important;
+}
+
+/* 动态注入面板（mount:body，由 panel-loader 包裹在 .panel-host 中）位于 #workspace 之外：
+   GL 激活但未被当前工作区布局收纳时隐藏，避免「默认」等不含该面板的工作区出现游离面板。
+   被 GL 收纳时带 .gl-panel-content、经典浮动时带 .floating，均不受影响。
+   通用规则覆盖所有动态注入面板，新增面板无需再维护 ID 白名单 */
+body.gl-active .panel-host > .panel:not(.gl-panel-content):not(.floating) {
+  display: none !important;
+}
+
+/* ===== 工作区预设管理对话框 ===== */
+.preset-mgr-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+}
+.preset-mgr-dlg {
+  width: 560px;
+  max-width: 92vw;
+  max-height: 80vh;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.6);
+}
+.preset-mgr-head {
+  height: 42px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-soft);
+  font-weight: 700;
+  font-size: 14px;
+}
+.preset-mgr-head .pm-x {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 16px;
+}
+.preset-mgr-head .pm-x:hover {
+  color: var(--danger);
+}
+.preset-mgr-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+.preset-mgr-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.preset-mgr-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  transition: all 0.12s;
+}
+.preset-mgr-item:hover {
+  background: var(--row-hover);
+  border-color: var(--border);
+}
+.preset-mgr-item.active {
+  border-color: var(--primary);
+  background: var(--primary-soft, rgba(124, 189, 86, 0.08));
+}
+.preset-mgr-item .pm-name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+}
+.preset-mgr-item .pm-tag {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--panel-2);
+  color: var(--text-muted);
+  border: 1px solid var(--border-soft);
+}
+.preset-mgr-item .pm-actions {
+  display: flex;
+  gap: 4px;
+}
+.pm-btn {
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+  background: var(--panel-bg);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 11px;
+  transition: all 0.12s;
+}
+.pm-btn:hover {
+  color: var(--text);
+  border-color: var(--primary);
+}
+.pm-btn.pm-danger:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.preset-mgr-foot {
+  height: 50px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid var(--border-soft);
+}
+.pm-foot-spacer {
+  flex: 1;
+}
+.pm-foot-btn {
+  height: 30px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--panel-bg);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.12s;
+}
+.pm-foot-btn:hover {
+  color: var(--text);
+  border-color: var(--primary);
+}
+.pm-foot-btn.pm-primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #1a1a1e;
+  font-weight: 600;
+}
+.pm-foot-btn.pm-primary:hover {
+  opacity: 0.9;
+}
+/* ===== 添加窗口菜单 ===== */
+.add-win-menu {
+  position: fixed;
+  z-index: 1001;
+  min-width: 180px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  padding: 4px 0;
+  user-select: none;
+}
+.add-win-header {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  padding: 8px 12px 4px;
+  font-weight: 600;
+}
+.add-win-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+  transition: all 0.1s;
+}
+.add-win-item:hover {
+  background: var(--row-hover);
+  border-left-color: var(--primary);
+}
+.add-win-item .aw-name {
+  font-size: 12px;
+  color: var(--text);
+}
+.add-win-item .aw-ico {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.add-win-item:hover .aw-ico {
+  color: var(--text);
+}
+.add-win-item .aw-count {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--text-dim);
+  background: var(--panel-2);
+  padding: 1px 6px;
+  border-radius: 8px;
+  border: 1px solid var(--border-soft);
+  line-height: 1.4;
+}
+.add-win-hint {
+  margin-top: 4px;
+  padding: 6px 12px;
+  border-top: 1px solid var(--border-soft);
+  font-size: 10px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.add-win-menu {
+  animation: aw-fade-in 0.12s ease-out;
+}

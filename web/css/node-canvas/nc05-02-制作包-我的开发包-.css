@@ -1,0 +1,45 @@
+/* 制作包（我的开发包） */
+.craft-stat {
+  padding: 0 10px 6px;
+  font-size: 10px;
+  color: var(--text-dim);
+}
+.craft-pack-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px 10px 8px;
+}
+.craft-pack-list-title {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.craft-pack-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-sm);
+  background: rgba(0, 0, 0, 0.2);
+  font-size: 11px;
+}
+.craft-pack-name {
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.craft-pack-meta {
+  font-size: 10px;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-left: auto;
+}
+.craft-pack-row .asset-lib-sec-btn {
+  flex: none;
+}

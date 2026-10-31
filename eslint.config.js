@@ -69,7 +69,15 @@ export default [
   },
 
   {
-    files: ['test/**/*.js', 'test/**/*.mjs', 'scripts/**/*.mjs'],
+    /* 脚本类目录：Node 环境 + ESM。
+       tools/ 也必须列进来 —— 它同样是通过 node 直接跑 .mjs 的构建/分片工具，
+       漏掉会报 'process' / 'console' is not defined 的 no-undef 错误。 */
+    files: [
+      'test/**/*.js',
+      'test/**/*.mjs',
+      'scripts/**/*.mjs',
+      'tools/**/*.mjs',
+    ],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',

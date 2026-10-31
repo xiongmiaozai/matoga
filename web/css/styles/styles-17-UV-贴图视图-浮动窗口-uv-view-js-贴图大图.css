@@ -1,0 +1,206 @@
+/* ════════════════════════════════════════════════════════════
+   UV 贴图视图（浮动窗口，uv-view.js）：贴图大图 + UV 采样网格叠加
+   ════════════════════════════════════════════════════════════ */
+.uvv-wrap {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  color: #e8e8ee;
+  font-size: 12px;
+}
+.uvv-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+.uvv-tex-chips {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+  min-width: 120px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.uvv-chip {
+  flex-shrink: 0;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: #ddd;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s var(--ease);
+}
+.uvv-chip:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+.uvv-chip.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+.uvv-zoom-sel {
+  flex-shrink: 0;
+  padding: 2px 6px;
+  border-radius: var(--radius-md, 6px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: #ccc;
+  font-size: 11px;
+  cursor: pointer;
+}
+.uvv-zoom-sel:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+.uvv-icon-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 24px;
+  padding: 0;
+  border-radius: var(--radius-md, 6px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: #ccc;
+  cursor: pointer;
+  transition: all 0.15s var(--ease);
+}
+.uvv-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+.uvv-icon-btn.active {
+  background: rgba(124, 189, 86, 0.25);
+  border-color: var(--primary);
+  color: #fff;
+}
+.uvv-icon-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.uvv-flip-x {
+  transform: scaleX(-1);
+}
+.uvv-grid-btn {
+  flex-shrink: 0;
+  padding: 2px 10px;
+  border-radius: var(--radius-md, 6px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: #ccc;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s var(--ease);
+}
+.uvv-grid-btn.active {
+  background: rgba(124, 189, 86, 0.25);
+  border-color: var(--primary);
+  color: #fff;
+}
+.uvv-canvas-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  background: var(--panel-2);
+}
+.uvv-canvas-wrap canvas {
+  margin: auto;
+  display: block;
+  image-rendering: pixelated;
+}
+.uvv-status {
+  flex-shrink: 0;
+  padding: 5px 10px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.65);
+  border-top: 1px solid rgba(255, 255, 255, 0.09);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.uvv-empty {
+  margin: auto;
+  text-align: center;
+  padding: 24px;
+  color: rgba(255, 255, 255, 0.5);
+}
+.uvv-empty-title {
+  font-size: 13px;
+  margin-bottom: 8px;
+  color: rgba(255, 255, 255, 0.75);
+}
+.uvv-empty-hint {
+  font-size: 11px;
+  line-height: 1.6;
+  max-width: 300px;
+}
+/* UV 编辑工具条（编辑模式显示） */
+.uvv-edit-btn.active {
+  background: rgba(74, 124, 255, 0.25);
+  border-color: var(--primary);
+  color: #fff;
+}
+.uvv-edit-bar {
+  display: none;
+  width: 100%;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0 4px;
+  flex-wrap: wrap;
+}
+.uvv-edit-bar.show {
+  display: flex;
+}
+.uvv-edit-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+  flex-shrink: 0;
+}
+.uvv-uv-input {
+  width: 52px;
+  padding: 2px 5px;
+  border-radius: var(--radius-md, 6px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: #e8e8ee;
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.uvv-uv-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  background: rgba(74, 124, 255, 0.12);
+}
+.uvv-uv-input:disabled {
+  opacity: 0.4;
+}
+.uvv-edit-bar .uvv-grid-btn {
+  padding: 2px 8px;
+}
+.uvv-grid-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.uvv-edit-hint {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.42);
+  margin-left: auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.uvv-canvas-wrap.uvv-drop-active {
+  outline: 2px dashed var(--primary);
+  outline-offset: -4px;
+  background: rgba(74, 124, 255, 0.08);
+}

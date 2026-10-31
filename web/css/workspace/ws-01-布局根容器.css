@@ -1,0 +1,7 @@
+/* ===== 布局根容器 ===== */
+.layout-root {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}

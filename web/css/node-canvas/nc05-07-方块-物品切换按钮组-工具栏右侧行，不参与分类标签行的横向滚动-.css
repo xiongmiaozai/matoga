@@ -1,0 +1,146 @@
+/* 方块/物品切换按钮组（工具栏右侧行，不参与分类标签行的横向滚动） */
+.asset-lib-kind {
+  flex: none;
+}
+.asset-lib-tag {
+  height: 22px;
+  padding: 0 10px;
+  background: transparent;
+  border: none;
+  border-radius: var(--r-xs);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  flex: none;
+  line-height: 1;
+  transition:
+    background 0.15s var(--ease),
+    color 0.15s var(--ease),
+    box-shadow 0.15s var(--ease);
+}
+.asset-lib-tag:hover {
+  color: var(--primary);
+  background: rgba(124, 189, 86, 0.1);
+}
+.asset-lib-tag.active {
+  background: var(--primary);
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(124, 189, 86, 0.35);
+}
+.asset-lib-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.asset-lib-sel-wrap {
+  position: relative;
+  flex: none;
+  display: flex;
+}
+.asset-lib-sel-wrap::after {
+  content: '';
+  position: absolute;
+  right: 9px;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  border-right: 1.5px solid var(--text-muted);
+  border-bottom: 1.5px solid var(--text-muted);
+  transform: translateY(-70%) rotate(45deg);
+  pointer-events: none;
+  transition: border-color 0.15s var(--ease);
+}
+.asset-lib-sel-wrap:hover::after {
+  border-color: var(--primary);
+}
+.asset-lib-sel {
+  height: 26px;
+  padding: 0 24px 0 9px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font-size: 11px;
+  outline: none;
+  flex: none;
+  cursor: pointer;
+  transition:
+    border-color 0.15s var(--ease),
+    color 0.15s var(--ease);
+}
+.asset-lib-sel:hover,
+.asset-lib-sel:focus-visible {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.asset-lib-btn-group {
+  display: flex;
+  align-items: center;
+  flex: none;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-sm);
+  transition: border-color 0.15s var(--ease);
+}
+.asset-lib-btn-group:hover {
+  border-color: var(--primary);
+}
+.asset-lib-btn {
+  height: 24px;
+  width: 28px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  line-height: 1;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    color 0.15s var(--ease),
+    background 0.15s var(--ease);
+}
+.asset-lib-btn + .asset-lib-btn {
+  border-left: 1px solid var(--border-soft);
+}
+.asset-lib-btn:hover {
+  color: var(--primary);
+  background: rgba(124, 189, 86, 0.1);
+}
+.asset-lib-btn .ico {
+  transition: transform 0.22s var(--ease);
+}
+.asset-lib-btn.desc .ico {
+  transform: rotate(180deg);
+}
+.asset-lib-stat {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.2px;
+  margin-left: auto;
+  padding: 3px 9px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+}
+
+.asset-lib-hint {
+  padding: 8px 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+  grid-column: 1/-1;
+}
+.asset-lib-hint.error {
+  color: var(--warn);
+}

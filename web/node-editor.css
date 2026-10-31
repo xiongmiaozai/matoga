@@ -1,0 +1,10 @@
+/*
+ * matoga - 材质贴图对比工具
+ * Copyright (c) 2026 芝世 (xiongmiaozai). All rights reserved.
+ * SPDX-License-Identifier: MIT
+ *
+ * 由 web/node-editor.html 的 <style> 块抽出（拆分后按序引入）。
+ */
+/* 分片入口：顺序 = 原行号升序，层叠结果与拆分前等价 */
+@import './css/node-editor/ne-01-matoga-Node-Canvas-无限画布节点编辑器.css';
+@import './css/node-editor/ne-02-toast-position-fixed-bottom.css';

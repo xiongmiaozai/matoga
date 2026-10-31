@@ -1,0 +1,75 @@
+/* ===== 添加窗口菜单 ===== */
+.add-win-menu {
+  position: fixed;
+  z-index: 1001;
+  min-width: 180px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  padding: 4px 0;
+  user-select: none;
+}
+.add-win-header {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  padding: 8px 12px 4px;
+  font-weight: 600;
+}
+.add-win-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+  transition: all 0.1s;
+}
+.add-win-item:hover {
+  background: var(--row-hover);
+  border-left-color: var(--primary);
+}
+.add-win-item .aw-name {
+  font-size: 12px;
+  color: var(--text);
+}
+.add-win-item .aw-ico {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.add-win-item:hover .aw-ico {
+  color: var(--text);
+}
+.add-win-item .aw-count {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--text-dim);
+  background: var(--panel-2);
+  padding: 1px 6px;
+  border-radius: 8px;
+  border: 1px solid var(--border-soft);
+  line-height: 1.4;
+}
+.add-win-hint {
+  margin-top: 4px;
+  padding: 6px 12px;
+  border-top: 1px solid var(--border-soft);
+  font-size: 10px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.add-win-menu {
+  animation: aw-fade-in 0.12s ease-out;
+}
+@keyframes aw-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

@@ -15,12 +15,28 @@ const ROOT = path.resolve(__dirname, '../..')
 register('./helpers/frontend-resolve.mjs', pathToFileURL(__dirname + '/'))
 
 function makeStub() {
-  const fn = function () { return makeStub() }
-  const styleObj = { setProperty() {}, removeProperty() {}, getPropertyValue() { return '' } }
+  const fn = function () {
+    return makeStub()
+  }
+  const styleObj = {
+    setProperty() {},
+    removeProperty() {},
+    getPropertyValue() {
+      return ''
+    }
+  }
   return new Proxy(fn, {
     get(t, p) {
       if (p === 'style') return styleObj
-      if (p === 'classList') return { add() {}, remove() {}, toggle() {}, contains() { return false } }
+      if (p === 'classList')
+        return {
+          add() {},
+          remove() {},
+          toggle() {},
+          contains() {
+            return false
+          }
+        }
       if (p === 'isConnected') return false
       if (p === 'children' || p === 'childNodes') return []
       if (p === 'length') return 0
@@ -29,9 +45,15 @@ function makeStub() {
       if (typeof p === 'symbol') return undefined
       return makeStub()
     },
-    apply() { return makeStub() },
-    construct() { return makeStub() },
-    set() { return true },
+    apply() {
+      return makeStub()
+    },
+    construct() {
+      return makeStub()
+    },
+    set() {
+      return true
+    }
   })
 }
 
@@ -39,11 +61,20 @@ let canvasCaptured = {}
 function makeCanvas() {
   const cv = { width: 0, height: 0 }
   cv.getContext = () => ({
-    set fillStyle(v) { canvasCaptured.fillStyle = v },
-    get fillStyle() { return canvasCaptured.fillStyle },
-    fillRect() { canvasCaptured.filled = true },
+    set fillStyle(v) {
+      canvasCaptured.fillStyle = v
+    },
+    get fillStyle() {
+      return canvasCaptured.fillStyle
+    },
+    fillRect() {
+      canvasCaptured.filled = true
+    }
   })
-  cv.toDataURL = type => { canvasCaptured.toDataType = type; return `data:${type};base64,AAAA` }
+  cv.toDataURL = type => {
+    canvasCaptured.toDataType = type
+    return `data:${type};base64,AAAA`
+  }
   return cv
 }
 
@@ -51,7 +82,7 @@ globalThis.window = { CSS: { escape: s => s }, addEventListener() {} }
 globalThis.requestAnimationFrame = fn => setTimeout(fn, 0)
 globalThis.document = {
   createElement: tag => (tag === 'canvas' ? ((canvasCaptured = {}), makeCanvas()) : makeStub()),
-  getElementById: () => makeStub(),
+  getElementById: () => makeStub()
 }
 
 let blankTexDataUrl

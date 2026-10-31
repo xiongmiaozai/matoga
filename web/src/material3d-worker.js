@@ -7,7 +7,7 @@
  * 主线程传入 ImageBitmap（transferable），处理完毕返回新的 ImageBitmap。
  */
 
-self.onmessage = async (e) => {
+self.onmessage = async e => {
   const { id, op, bitmap, params } = e.data
   const w = bitmap.width
   const h = bitmap.height

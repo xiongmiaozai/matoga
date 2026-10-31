@@ -1,0 +1,299 @@
+.lm_tab .lm_title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 130px;
+}
+.lm_tab .lm_close_tab {
+  width: 20px;
+  height: 20px;
+  margin-left: 4px;
+  opacity: 0.7;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  color: var(--text);
+  background-image: none !important;
+  transition:
+    opacity 0.12s ease,
+    background 0.12s ease,
+    color 0.12s ease;
+}
+.lm_tab .lm_close_tab::before {
+  content: '×';
+  line-height: 1;
+}
+.lm_tab:hover .lm_close_tab {
+  opacity: 1;
+}
+.lm_tab.lm_active .lm_close_tab {
+  opacity: 1;
+}
+.lm_tab .lm_close_tab:hover {
+  opacity: 1;
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+/* 标签组工具按钮（最大化等） */
+.lm_stack > .lm_header > .lm_stack_controls {
+  margin-left: auto;
+  display: flex;
+  gap: 2px;
+}
+/* 移除 GoldenLayout 内置的「在新窗口打开」按钮（popout），只保留最大化/关闭 */
+.lm_stack > .lm_header > .lm_stack_controls .lm_popout {
+  display: none !important;
+}
+.lm_stack > .lm_header > .lm_stack_controls .lm_stack_button {
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.lm_stack > .lm_header > .lm_stack_controls .lm_stack_button:hover {
+  color: var(--text);
+  background: var(--row-hover);
+}
+
+/* 分割条 — Blender Action Zone 风格：默认安静，交互时淡入激活 */
+.lm_splitter {
+  z-index: 5 !important;
+  position: relative;
+  opacity: 1 !important;
+  transition: background 0.15s var(--ease);
+}
+.lm_splitter.lm_vertical {
+  cursor: ns-resize !important;
+  background: var(--border-soft) !important;
+}
+.lm_splitter.lm_horizontal {
+  cursor: ew-resize !important;
+  background: var(--border-soft) !important;
+}
+.lm_splitter .lm_drag_handle {
+  background: transparent !important;
+  z-index: 10;
+  cursor: inherit !important;
+}
+
+.lm_splitter::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 2px;
+  opacity: 0;
+  transition:
+    opacity 0.15s var(--ease),
+    background 0.15s var(--ease);
+  pointer-events: none;
+}
+.lm_splitter.lm_vertical::before {
+  width: 18px;
+  height: 2px;
+}
+.lm_splitter.lm_horizontal::before {
+  width: 2px;
+  height: 18px;
+}
+.lm_splitter:hover::before,
+.lm_splitter.lm_dragging::before {
+  opacity: 1;
+  background: #fff;
+}
+.lm_splitter.lm_dragging::before {
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.9);
+}
+.lm_splitter:hover {
+  background: var(--primary) !important;
+}
+.lm_splitter.lm_dragging {
+  background: var(--primary) !important;
+  box-shadow: 0 0 10px var(--primary-glow);
+}
+.lm-split-active {
+  outline: 1px solid var(--primary-glow);
+  outline-offset: -1px;
+}
+
+.lm_splitter:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+.lm_splitter:focus-visible::before {
+  opacity: 1;
+  background: #fff;
+}
+.lm_content {
+  min-width: 80px;
+  min-height: 60px;
+}
+
+/* 拖拽比例提示气泡（参考 Blender screen_draw_area_drag_tip） */
+.lm-splitter-tip {
+  position: fixed;
+  z-index: 3000;
+  transform: translate(-50%, -50%) scale(0.85);
+  padding: 3px 8px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  box-shadow: var(--shadow-2);
+  white-space: nowrap;
+  opacity: 0;
+  transition:
+    opacity 0.12s var(--ease),
+    transform 0.12s var(--ease);
+}
+.lm-splitter-tip.lm-show {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+/* 停靠指示器 — Blender 风格：圆角 + 内填层次 + 轮廓高亮 */
+.lm_drop_target_indicator {
+  background: var(--primary) !important;
+  opacity: 0.12;
+  border: 2px solid var(--primary);
+  border-radius: 6px;
+  box-shadow:
+    0 0 0 1px var(--primary-glow),
+    var(--shadow-2);
+  z-index: 1000;
+  transition: opacity 0.12s var(--ease);
+}
+.lm_drop_preview {
+  background: var(--primary);
+  opacity: 0.1;
+  border: 1px solid var(--primary);
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px var(--primary-glow);
+}
+
+/* 拖拽代理（拖动中的面板预览） */
+.lm_drag_proxy {
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: var(--shadow-3);
+  opacity: 0.9;
+  z-index: 2000;
+}
+.lm_drag_proxy .lm_header {
+  background: var(--panel-2);
+}
+
+/* 浮动面板（popout）阴影 */
+.lm_content:has(.panel.floating) {
+  box-shadow: var(--shadow-3);
+}
+
+/* 最大化面板 */
+.lm_maximised {
+  z-index: 100;
+}
+
+/* 行列容器 */
+.lm_row > .lm_item,
+.lm_column > .lm_item {
+  float: none;
+}
+.lm_row {
+  display: flex;
+  flex-direction: row;
+}
+.lm_column {
+  display: flex;
+  flex-direction: column;
+}
+.lm_row > .lm_splitter {
+  flex: 0 0 10px;
+}
+.lm_column > .lm_splitter {
+  flex: 0 0 10px;
+}
+.lm_row > .lm_item {
+  flex: 1 1 auto;
+}
+.lm_column > .lm_item {
+  flex: 1 1 auto;
+}
+
+/* ===== 面板内容自适应（迁移进来的原 DOM） ===== */
+.lm_content > .folder-card,
+.lm_content > .panel-card,
+.lm_content > .panel,
+.lm_content > .center {
+  height: 100%;
+  overflow: auto;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+.lm_content > .panel-card {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lm_content > .center {
+  display: flex;
+  flex-direction: column;
+}
+.lm_content > .panel {
+  display: flex;
+  flex-direction: column;
+}
+.lm_content > .panel > .panel-body {
+  position: relative;
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+.lm_content > .panel:has(.material3d-container) > .panel-body {
+  overflow: hidden;
+}
+.lm_content > .panel > .panel-head {
+  display: none;
+}
+.lm_content > .panel > .panel-toolbar {
+  flex-shrink: 0;
+}
+.lm_content > .folder-card {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 14px;
+  gap: 0;
+  height: 100%;
+}
+
+/* 隐藏面板内重复标题（GL 标签栏已显示） */
+.lm_content > .panel-card > .panel-card-title {
+  display: none;
+}
+
+/* center 面板内部布局 */
+.lm_content > .center > .center-head {
+  flex-shrink: 0;
+}
+.lm_content > .center > .view-pane {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
