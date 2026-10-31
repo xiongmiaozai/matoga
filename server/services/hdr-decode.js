@@ -33,7 +33,7 @@ function decodeHDR(buffer) {
   const first = readLine()
   if (!/^#\?(\S+)/.test(first)) throw new Error('HDR decode: bad magic')
   let width = 0, height = 0, format = ''
-  while (true) {
+  while (pos < bytes.length) {
     const line = readLine()
     if (line === '') continue
     if (line.charAt(0) === '#') continue
@@ -90,13 +90,16 @@ function rleDecodeTo(src, p, targetLen) {
   const out = new Uint8Array(targetLen)
   let o = 0
   while (o < targetLen) {
+    if (p >= src.length) throw new Error('EXR decode: truncated RLE data')
     const count = src[p++]
     if (count < 128) {
+      if (p >= src.length) throw new Error('EXR decode: truncated RLE data')
       const val = src[p++]
       const n = count + 1
       for (let k = 0; k < n; k++) out[o++] = val
     } else {
       const n = 257 - count
+      if (p + n > src.length) throw new Error('EXR decode: truncated RLE data')
       for (let k = 0; k < n; k++) out[o++] = src[p++]
     }
   }

@@ -110,21 +110,30 @@ function setSelection(items) {
 }
 
 function addItem(item) {
-  const cur = getSelection()
   const s = sanitizeItem(item)
   if (!s) throw new AppError('ERR_INVALID_PARAM', 'invalid craft item')
-  const exists = cur.some(it => it.key === s.key)
-  if (exists) return { added: false, count: cur.length }
-  if (cur.length >= MAX_ITEMS) throw new AppError('ERR_INVALID_PARAM', 'craft pack full: ' + MAX_ITEMS)
-  cur.push(s)
-  return setSelection(cur).then(list => ({ added: true, count: list.length }))
+  const result = writeQueue.then(() => {
+    const cur = getSelection()
+    if (cur.some(it => it.key === s.key)) return { added: false, count: cur.length }
+    if (cur.length >= MAX_ITEMS) throw new AppError('ERR_INVALID_PARAM', 'craft pack full: ' + MAX_ITEMS)
+    cur.push(s)
+    atomicWriteJson(SELECTION_FILE, { items: cur })
+    return { added: true, count: cur.length }
+  })
+  writeQueue = result.catch(e => logger.error('craft', 'addItem failed: ' + e.message))
+  return result
 }
 
 function removeItem(key) {
-  const cur = getSelection()
-  const next = cur.filter(it => it.key !== key)
-  if (next.length === cur.length) return Promise.resolve({ removed: false, count: cur.length })
-  return setSelection(next).then(list => ({ removed: true, count: list.length }))
+  const result = writeQueue.then(() => {
+    const cur = getSelection()
+    const next = cur.filter(it => it.key !== key)
+    if (next.length === cur.length) return { removed: false, count: cur.length }
+    atomicWriteJson(SELECTION_FILE, { items: next })
+    return { removed: true, count: next.length }
+  })
+  writeQueue = result.catch(e => logger.error('craft', 'removeItem failed: ' + e.message))
+  return result
 }
 
 function clearSelection() {

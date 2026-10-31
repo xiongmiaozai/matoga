@@ -958,6 +958,115 @@ async function readPackFile(root, name, relPath, opts = {}) {
   return { buf: readZipEntry(buf, entry), mime: mimeOf(entry.name) }
 }
 
+/* ── 导入外部资源包 ─────────────────────────────── */
+
+/* 解压 zip buffer 到目标目录（防 Zip Slip：每个条目解析后必须仍在 destDir 之内） */
+async function extractZipToDir(buf, destDir) {
+  const entries = parseZipCentralDirectory(buf)
+  const base = path.resolve(destDir)
+  /* 先校验全部条目路径（防 Zip Slip），再写入——避免部分写入后才发现恶意条目 */
+  for (const e of entries) {
+    const rel = e.name
+    if (!rel || rel.startsWith('/') || rel.includes('\\') || rel.includes('\0')) {
+      throw new AppError('ERR_INVALID_PARAM', 'invalid zip entry: ' + rel)
+    }
+    const dest = path.resolve(base, rel)
+    if (dest !== base && !dest.startsWith(base + path.sep)) {
+      throw new AppError('ERR_PATH_DENIED', 'zip slip detected: ' + rel)
+    }
+  }
+  await fs.promises.mkdir(base, { recursive: true })
+  for (const e of entries) {
+    const dest = path.resolve(base, e.name)
+    await fs.promises.mkdir(path.dirname(dest), { recursive: true })
+    await fs.promises.writeFile(dest, readZipEntry(buf, e))
+  }
+  return { count: entries.length }
+}
+
+/* 从 zip 的 pack.mcmeta 描述推断包名，回退 '导入的资源包' */
+function inferPackNameFromZip(buf) {
+  try {
+    const entries = parseZipCentralDirectory(buf)
+    const mc = pickMcmetaEntry(entries)
+    if (mc) {
+      const text = readZipEntry(buf, mc).toString('utf8')
+      const meta = parseMcmetaText(text)
+      if (meta.description) {
+        const cleaned = meta.description.replace(/[\\/:*?"<>|]/g, '').trim()
+        if (cleaned && validPackName(cleaned)) return cleaned
+      }
+    }
+  } catch {}
+  return '导入的资源包'
+}
+
+/* 目标名去重：name 已存在时追加 -2/-3… */
+async function resolveImportName(root, name, overwrite) {
+  if (!validPackName(name)) throw new AppError('ERR_INVALID_PARAM', 'invalid pack name')
+  if (overwrite) return name
+  const exists = await fs.promises.access(path.join(root, name)).then(() => true, () => false)
+  if (!exists) return name
+  for (let i = 2; i < 100; i++) {
+    const candidate = name + '-' + i
+    if (!(await fs.promises.access(path.join(root, candidate)).then(() => true, () => false))) return candidate
+  }
+  throw new AppError('ERR_FS', 'cannot allocate pack name')
+}
+
+/* 导入 zip 资源包到 root，返回 { name, entry } */
+async function importPackFromZip(root, zipBuf, opts = {}) {
+  const wantName = (opts.name && String(opts.name).trim()) || inferPackNameFromZip(zipBuf)
+  const name = await resolveImportName(root, wantName, !!opts.overwrite)
+  const destDir = path.join(root, name)
+  guardWritePath(destDir, root)
+  if (opts.overwrite) await fs.promises.rm(destDir, { recursive: true, force: true }).catch(() => {})
+  await extractZipToDir(zipBuf, destDir)
+  const st = await fs.promises.stat(destDir)
+  const entry = await analyzePack(destDir, st)
+  return { name, entry }
+}
+
+/* 导入目录文件集（{ path, data:Buffer }）到 root/<name>/，返回 { name, entry } */
+async function importPackFromFiles(root, files, opts = {}) {
+  if (!Array.isArray(files) || !files.length) {
+    throw new AppError('ERR_INVALID_PARAM', 'no files to import')
+  }
+  const wantName = (opts.name && String(opts.name).trim()) || '导入的资源包'
+  const name = await resolveImportName(root, wantName, !!opts.overwrite)
+  const destDir = path.join(root, name)
+  guardWritePath(destDir, root)
+  if (opts.overwrite) await fs.promises.rm(destDir, { recursive: true, force: true }).catch(() => {})
+  const base = path.resolve(destDir)
+  await fs.promises.mkdir(base, { recursive: true })
+  let count = 0
+  for (const f of files) {
+    const rel = f.path
+    if (!rel || typeof rel !== 'string' || rel.startsWith('/') || rel.includes('\\') || rel.includes('\0') || rel.includes('..')) {
+      throw new AppError('ERR_INVALID_PARAM', 'invalid file path: ' + rel)
+    }
+    const dest = path.resolve(base, rel)
+    if (dest !== base && !dest.startsWith(base + path.sep)) {
+      throw new AppError('ERR_PATH_DENIED', 'path outside import dir: ' + rel)
+    }
+    await fs.promises.mkdir(path.dirname(dest), { recursive: true })
+    await fs.promises.writeFile(dest, Buffer.isBuffer(f.data) ? f.data : Buffer.from(f.data))
+    count++
+  }
+  const st = await fs.promises.stat(destDir)
+  const entry = await analyzePack(destDir, st)
+  return { name, entry, count }
+}
+
+/* guardWrite 在服务层不可用（中间件），这里内联信任根校验的简化版：仅校验路径在 root 之下 */
+function guardWritePath(dest, root) {
+  const r = path.resolve(root)
+  const d = path.resolve(dest)
+  if (d !== r && !d.startsWith(r + path.sep)) {
+    throw new AppError('ERR_PATH_DENIED', 'import target outside root')
+  }
+}
+
 module.exports = {
   PACK_FORMAT_VERSIONS,
   formatToVersions,
@@ -983,4 +1092,7 @@ module.exports = {
   walkDirModels,
   zipModelEntries,
   ZIP_EXTS,
+  extractZipToDir,
+  importPackFromZip,
+  importPackFromFiles,
 }

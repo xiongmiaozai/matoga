@@ -10,7 +10,8 @@
     <div class="asset-lib-topbar">
       <div class="asset-lib-search" role="search">
         <svg class="ico ico-sm"><use href="#i-search"/></svg>
-        <input type="search" id="assetLibSearch" data-i18n-placeholder="panel.assetLibSearchPh" placeholder="搜索资产…" aria-label="搜索资产" />
+        <input type="search" id="assetLibSearch" autocomplete="off" data-i18n-placeholder="panel.assetLibSearchPh" placeholder="搜索资产…" aria-label="搜索资产" />
+        <button class="asset-lib-search-clear is-hidden" id="assetLibSearchClear" data-i18n-title="common.clear" title="清除" aria-label="清除搜索"><svg class="ico ico-sm"><use href="#i-x"/></svg></button>
       </div>
       <div class="asset-lib-toolbar" id="assetLibToolbar"></div>
       <button class="panel-tool" id="assetLibRefresh" data-i18n-title="panel.refresh" title="刷新" aria-label="刷新资产库"><svg class="ico ico-sm"><use href="#i-refresh"/></svg></button>

@@ -545,6 +545,7 @@ function initCtxMenu() {
   if (Array.isArray(cfg.hiddenKeys)) state.hiddenKeys = new Set(cfg.hiddenKeys)
   if (cfg.categoryFilter && typeof cfg.categoryFilter === 'object')
     state.categoryFilter = { ...state.categoryFilter, ...cfg.categoryFilter }
+  if (typeof cfg.resultSearchTerm === 'string') state.resultSearchTerm = cfg.resultSearchTerm
   if (cfg.customTags && typeof cfg.customTags === 'object') state.customTags = cfg.customTags
   if (typeof cfg.modelGroupBy === 'string') state.modelGroupBy = cfg.modelGroupBy
   if (Array.isArray(cfg.modelGroupRules)) state.modelGroupRules = cfg.modelGroupRules

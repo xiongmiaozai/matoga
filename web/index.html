@@ -1186,31 +1186,38 @@
       window.__panelsInjected = new Set()
       try {
         const r = await fetch('/api/panels')
+        if (!r.ok) throw new Error('/api/panels 返回 ' + r.status)
         const { panels } = await r.json()
+        if (!Array.isArray(panels)) throw new Error('/api/panels 返回非数组')
         for (const p of panels) {
           if (!p.htmlUrl) continue
-          const hr = await fetch(p.htmlUrl)
-          const html = await hr.text()
-          const tpl = document.createElement('template')
-          tpl.innerHTML = html.trim()
-          const sel = p.mount
-          const mount =
-            !sel || sel === 'body'
-              ? document.body
-              : sel === 'head'
-                ? document.head
-                : document.querySelector(sel) || document.body
-          const useHost = !sel || sel === 'body' || sel === 'head'
-          if (useHost) {
-            const host = document.createElement('div')
-            host.className = 'panel-host'
-            host.dataset.panelId = p.id
-            host.appendChild(tpl.content.cloneNode(true))
-            mount.appendChild(host)
-          } else {
-            mount.appendChild(tpl.content.cloneNode(true))
+          try {
+            const hr = await fetch(p.htmlUrl)
+            if (!hr.ok) { console.error('[pre-inject] 面板 ' + p.id + ' HTML 加载失败: ' + hr.status); continue }
+            const html = await hr.text()
+            const tpl = document.createElement('template')
+            tpl.innerHTML = html.trim()
+            const sel = p.mount
+            const mount =
+              !sel || sel === 'body'
+                ? document.body
+                : sel === 'head'
+                  ? document.head
+                  : document.querySelector(sel) || document.body
+            const useHost = !sel || sel === 'body' || sel === 'head'
+            if (useHost) {
+              const host = document.createElement('div')
+              host.className = 'panel-host'
+              host.dataset.panelId = p.id
+              host.appendChild(tpl.content.cloneNode(true))
+              mount.appendChild(host)
+            } else {
+              mount.appendChild(tpl.content.cloneNode(true))
+            }
+            window.__panelsInjected.add(p.id)
+          } catch (pe) {
+            console.error('[pre-inject] 面板 ' + p.id + ' 注入失败:', pe)
           }
-          window.__panelsInjected.add(p.id)
         }
       } catch (e) {
         console.error('[pre-inject] failed', e)

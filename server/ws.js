@@ -40,6 +40,7 @@ function setup(server) {
         logger.info('ws', `sync job ${jobId} started: ${msg.pairs.length} pairs`)
         activeJobs.add(jobId)
         syncService.execute(msg.pairs, jobId, (evt) => {
+          if (evt && evt.type === 'done') activeJobs.delete(jobId)
           if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(evt))
         })
       } else if (msg.type === 'cancel') {

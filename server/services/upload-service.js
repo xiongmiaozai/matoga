@@ -22,7 +22,7 @@ function cleanup() {
   } catch {}
 }
 
-function begin() {
+function cleanExpired() {
   const now = Date.now()
   for (const [id, s] of sessions) {
     if (now - s.created > TTL_MS) {
@@ -30,10 +30,16 @@ function begin() {
       sessions.delete(id)
     }
   }
+}
+
+setInterval(cleanExpired, 10 * 60 * 1000).unref?.()
+
+function begin() {
+  cleanExpired()
   const uploadId = crypto.randomUUID()
   const rootPath = path.join(UPLOAD_DIR, uploadId)
   fs.mkdirSync(rootPath, { recursive: true })
-  sessions.set(uploadId, { rootPath, created: now })
+  sessions.set(uploadId, { rootPath, created: Date.now() })
   return { uploadId, rootPath }
 }
 

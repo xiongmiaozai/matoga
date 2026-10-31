@@ -27,29 +27,10 @@ import {
   _rng,
   _quintic
 } from './node-canvas/math.js'
-import { _PS_BLEND, _psBlendComponent, _psBlendApply, _psNode } from './node-canvas/ps-blend.js'
+import { _psBlendApply, _psNode } from './node-canvas/ps-blend.js'
 import {
-  _octaveStep,
-  _fbm2D,
-  _voronoiCells2D,
-  _voronoiSmooth2D,
-  _white2D,
-  _cell2D,
-  _cubicNoise2D,
-  _cubicFbm2D,
-  _pingpongFbm2D,
-  _billow2D,
-  _voronoise2D,
-  _reactionField,
-  _sampleField,
-  _lightningField,
-  _mandelPoint,
   _paletteRGB,
-  _simplex2D,
-  _simplexFbm2D,
-  _ridged2D,
   _noiseValue,
-  _valueNoise2D,
   _noiseGrid,
   _gridToImageData,
   _noisePreviewUrl,

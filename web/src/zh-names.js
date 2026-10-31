@@ -8,7 +8,7 @@
  * / enCandidatesOfZh 参与中文、拼音、反向匹配与展示。
  */
 
-import { apiUrl } from './utils.js'
+import { apiUrl } from './url-utils.js'
 
 let _maps = null
 let _loading = null
@@ -37,14 +37,29 @@ export function getZhMaps() {
   return _maps
 }
 
+/* 贴图变体名回退：按 _ 分段逐步缩短查映射表，命中即返回。
+ * 如 crafting_table_top → crafting_table → "工作台"；log_top → log。
+ * 仅当直接查不到时触发，避免对已有精确映射产生干扰。 */
+function texNameFuzzy(name, table) {
+  if (!table || !name) return ''
+  const parts = String(name).split('_')
+  for (let i = parts.length - 1; i >= 1; i--) {
+    const cand = parts.slice(0, i).join('_')
+    const v = table[cand]
+    if (v) return v
+  }
+  return ''
+}
+
 export function zhOfTexName(name) {
   if (!_maps || !name) return ''
-  return _maps.byTexName[name] || ''
+  return _maps.byTexName[name] || texNameFuzzy(name, _maps.byTexName)
 }
 
 export function pinyinOfTexName(name) {
   if (!_maps || !name) return ''
-  return _maps.byTexPinyin ? _maps.byTexPinyin[name] || '' : ''
+  const table = _maps.byTexPinyin || {}
+  return table[name] || texNameFuzzy(name, table)
 }
 
 export function zhOfTexPath(texPath) {
@@ -56,7 +71,7 @@ export function zhOfTexPath(texPath) {
   return _maps.byTexKey[cat + '/' + name] || _maps.byTexName[name] || ''
 }
 
-function baseNameOf(name) {
+export function baseNameOf(name) {
   return String(name).replace(EXT_RE, '')
 }
 

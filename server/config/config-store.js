@@ -47,12 +47,21 @@ const SCHEMA = {
 
 let writeQueue = Promise.resolve()
 
+let cachedRaw = null
+let cachedMtime = -1
+
 function readRaw() {
   try {
-    return JSON.parse(fs.readFileSync(FILE, 'utf8'))
+    const st = fs.statSync(FILE)
+    if (cachedRaw !== null && st.mtimeMs === cachedMtime) return cachedRaw
+    cachedRaw = JSON.parse(fs.readFileSync(FILE, 'utf8'))
+    cachedMtime = st.mtimeMs
+    return cachedRaw
   } catch (e) {
     if (e.code !== 'ENOENT') logger.warn('config', 'bad config.json: ' + e.message)
-    return {}
+    cachedRaw = {}
+    cachedMtime = -1
+    return cachedRaw
   }
 }
 
@@ -75,6 +84,7 @@ function put(patch) {
       Object.assign(merged, patch || {})
       delete merged.windowBounds
       atomicWriteJson(FILE, merged)
+      cachedMtime = -1
     } catch (e) {
       logger.error('config', 'write failed: ' + e.message)
     }
@@ -86,6 +96,7 @@ function clear() {
   writeQueue = writeQueue.then(() => {
     try {
       atomicWriteJson(FILE, {})
+      cachedMtime = -1
     } catch (e) {
       logger.error('config', 'clear failed: ' + e.message)
     }

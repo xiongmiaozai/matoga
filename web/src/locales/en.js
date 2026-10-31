@@ -204,7 +204,8 @@ export default {
   'settings.cacheOrphansCleared': 'Removed {n} orphan HDRI thumbnails',
   'settings.cacheRefresh': 'Refresh',
   'settings.perfTitle': 'Thumbnail Performance',
-  'settings.perfDesc': 'Tune concurrency and prefetch distance for model thumbnail generation to speed up scrolling. Changes apply instantly and auto-save.',
+  'settings.perfDesc':
+    'Tune concurrency and prefetch distance for model thumbnail generation to speed up scrolling. Changes apply instantly and auto-save.',
   'settings.perfRender': 'Render concurrency',
   'settings.perfInflight': 'Load concurrency',
   'settings.perfMargin': 'Prefetch margin (px)',
@@ -438,6 +439,8 @@ export default {
   'category.tagLabel': 'Tag',
   'category.block': 'Block',
   'categoryFilter.title': 'Category Filter',
+  'categoryFilter.searchPh': 'Search texture / model name, pinyin or Chinese…',
+  'categoryFilter.noMatch': 'No results matching “{q}”',
   'category.item': 'Item',
   'category.other': 'Other',
   'category.untagged': 'Untagged',

@@ -26,7 +26,7 @@ function createApp() {
     next()
   })
 
-  app.use(express.json({ limit: '12mb' }))
+  app.use(express.json({ limit: '20mb' }))
 
   app.use('/api/health', require('./routes/health'))
 

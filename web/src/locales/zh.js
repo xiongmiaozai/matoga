@@ -438,6 +438,8 @@ export default {
   'category.item': '物品',
   'category.other': '其他',
   'categoryFilter.title': '分类筛选',
+  'categoryFilter.searchPh': '搜索贴图 / 模型名称、拼音或中文…',
+  'categoryFilter.noMatch': '没有匹配“{q}”的结果',
   'category.untagged': '未分类',
   'category.anim.animated': '动画模型',
   'category.anim.static': '静态模型',

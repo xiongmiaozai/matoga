@@ -10,12 +10,22 @@ const { AppError } = require('../lib/errors')
 
 const STAT_BATCH = 32
 
+const reCache = new Map()
+function compileGlob(p) {
+  let re = reCache.get(p)
+  if (!re) {
+    re = new RegExp('^' + p.replace(/[.+?^${}()|[\]\\*]/g, '\\$&').replace(/\\\*/g, '.*') + '$', 'i')
+    reCache.set(p, re)
+  }
+  return re
+}
+
 function shouldIgnore(name, patterns) {
   if (!patterns || !patterns.length) return false
   const lower = name.toLowerCase()
   for (const p of patterns) {
     if (p.startsWith('*.')) { if (lower.endsWith(p.slice(1).toLowerCase())) return true }
-    else if (p.includes('*')) { if (new RegExp('^' + p.replace(/[.+?^${}()|[\]\\*]/g, '\\$&').replace(/\\\*/g, '.*') + '$', 'i').test(name)) return true }
+    else if (p.includes('*')) { if (compileGlob(p).test(name)) return true }
     else if (lower === p.toLowerCase()) return true
   }
   return false

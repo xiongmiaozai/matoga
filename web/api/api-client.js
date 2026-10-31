@@ -283,20 +283,21 @@
     cleanupHdriOrphans: () => call('POST', '/api/cache/hdri-orphans').catch(() => ({})),
 
     copyFilesBatch: (pairs, onProgress) => {
-      return new Promise(resolve => {
-        const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:'
-        const wsUrl = wsProto + '//' + location.host + '/ws' + (token() ? '?token=' + token() : '')
-        const ws = new WebSocket(wsUrl)
-        const jobId = crypto && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()
-        let settled = false
+      const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:'
+      const wsUrl = wsProto + '//' + location.host + '/ws' + (token() ? '?token=' + token() : '')
+      const ws = new WebSocket(wsUrl)
+      const jobId = crypto && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()
+      let settled = false
+      let timer
+      const promise = new Promise(resolve => {
         const finish = r => {
           if (settled) return
           settled = true
-          try {
-            ws.close()
-          } catch {}
+          clearTimeout(timer)
+          try { ws.close() } catch {}
           resolve(r)
         }
+        timer = setTimeout(() => finish({ ok: 0, fail: pairs.length, error: 'timeout' }), 5 * 60 * 1000)
         ws.onopen = () => {
           try {
             ws.send(JSON.stringify({ type: 'sync', jobId, pairs }))
@@ -323,12 +324,13 @@
         }
         ws.onerror = () => finish({ ok: 0, fail: pairs.length, error: 'ws_error' })
         ws.onclose = () => finish({ ok: 0, fail: pairs.length, error: 'ws_closed' })
-        window.__matogaCancelSync = () => {
-          try {
-            ws.send(JSON.stringify({ type: 'cancel', jobId }))
-          } catch {}
-        }
       })
+      const cancel = () => {
+        try {
+          ws.send(JSON.stringify({ type: 'cancel', jobId }))
+        } catch {}
+      }
+      return { promise, cancel }
     }
   }
 

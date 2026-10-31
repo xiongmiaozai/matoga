@@ -563,11 +563,43 @@ export function isTemplateModelName(rel) {
   return name.startsWith('template_')
 }
 
-/* 模板模型（template_*）直接预览时 textures 全空 → 所有面回退灰色占位。借用同级目录下
-   引用该模板为 parent 的子模型的 textures，让模板也能显示真实贴图。仅包模式生效
-   （fileRoot 模式无列目录接口）；最多探测 60 个候选 .json，命中首个含贴图的子模型即止 */
+/* textures 表是否含至少一个具体贴图引用（非空、非 # 变量引用）。
+   全为 # 变量引用或空表 → false：此类模型（template_*、coral_fan、coral_wall_fan 等
+   父模板）自身无法解析出贴图，需借用子模型 textures 才能预览 */
+export function texturesHasConcreteRef(textures) {
+  if (!textures || typeof textures !== 'object') return false
+  for (const v of Object.values(textures)) {
+    if (typeof v === 'string' && v && v[0] !== '#') return true
+  }
+  return false
+}
+
+/* elements 中是否存在 textures 表未定义的 #变量 引用（混合模板场景）。
+   flower_pot_cross 等模板既有具体引用（flowerpot/dirt）又有未定义变量引用（plant）：
+   texturesHasConcreteRef 误判为已就绪 → plant 面灰色占位。此处检测 elements 各面
+   引用的 #key 是否在 textures 表中有对应键，缺键 → true，需借用子模型 textures 补全 */
+export function hasUnresolvedTexRefs(elements, textures) {
+  if (!Array.isArray(elements) || !elements.length) return false
+  const tex = textures && typeof textures === 'object' ? textures : null
+  for (const el of elements) {
+    const faces = el && typeof el === 'object' && el.faces && typeof el.faces === 'object' ? el.faces : null
+    if (!faces) continue
+    for (const f of Object.values(faces)) {
+      const t = f && typeof f === 'object' && typeof f.texture === 'string' ? f.texture : ''
+      if (t[0] !== '#') continue
+      if (!tex || !(t.slice(1) in tex)) return true
+    }
+  }
+  return false
+}
+
+/* 模板模型（template_* 及 coral_fan/coral_wall_fan 等无具体贴图的父模板）直接预览时
+   textures 全空或仅含 # 变量引用 → 所有面回退灰色占位。借用同级目录下引用该模板为
+   parent 的子模型的 textures，让模板也能显示真实贴图。包模式走 entries 接口列目录，
+   fileRoot 模式走 /api/compare/scan 非递归列目录；最多探测 60 个候选 .json，
+   命中首个含贴图的子模型即止 */
 export async function borrowTemplateTextures(api, packName, rel, fileRoot) {
-  if (fileRoot || typeof api !== 'string' || typeof packName !== 'string' || !packName) return null
+  if (typeof rel !== 'string' || !rel) return null
   const li = rel.lastIndexOf('/')
   if (li < 0) return null
   const dir = rel.slice(0, li)
@@ -576,17 +608,39 @@ export async function borrowTemplateTextures(api, packName, rel, fileRoot) {
   if (!m) return null
   const withNs = m[1] + ':' + m[2]
   const noNs = m[2]
-  let entries
+  /* 同级子模型候选文件名：包模式走 entries 接口，fileRoot 模式走 compare/scan 非递归 */
+  let candidates
   try {
-    entries = await fetchOkData(`${api}/${encodeURIComponent(packName)}/entries?dir=${encodeURIComponent(dir)}`)
+    if (fileRoot) {
+      const res = await fetch(apiUrl('/api/compare/scan'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: joinPath(fileRoot, dir), recursive: false })
+      })
+      const j = await res.json()
+      const ents = j && j.ok && j.data && Array.isArray(j.data.entries) ? j.data.entries : []
+      candidates = ents
+        .map(e => e && e.name)
+        .filter(n => typeof n === 'string' && n.endsWith('.json') && n !== selfName && !n.startsWith('template_'))
+    } else {
+      if (typeof api !== 'string' || typeof packName !== 'string' || !packName) return null
+      const entries = await fetchOkData(`${api}/${encodeURIComponent(packName)}/entries?dir=${encodeURIComponent(dir)}`)
+      const files = entries && Array.isArray(entries.files) ? entries.files : []
+      candidates = files
+        .map(f => f && f.name)
+        .filter(n => typeof n === 'string' && n.endsWith('.json') && n !== selfName && !n.startsWith('template_'))
+    }
   } catch {
     return null
   }
-  const files = entries && Array.isArray(entries.files) ? entries.files : []
-  const candidates = files
-    .map(f => f && f.name)
-    .filter(n => typeof n === 'string' && n.endsWith('.json') && n !== selfName && !n.startsWith('template_'))
-  for (const name of candidates.slice(0, 60)) {
+  /* 候选优先级：文件名包含父模型基础名的子模型最可能引用该 parent（如 coral_fan 的
+     子模型 brain_coral_fan / tube_coral_fan 均含 "coral_fan"），优先探测；同级目录
+     可能有数千 json，仅前 60 会被 fetch，按相关性排序避免漏掉真正引用者 */
+  const base = selfName.replace(/\.json$/i, '')
+  const matched = candidates.filter(n => n.includes(base))
+  const rest = matched.length < 60 ? candidates.filter(n => !n.includes(base)) : []
+  const ordered = matched.length ? matched.concat(rest) : candidates
+  for (const name of ordered.slice(0, 60)) {
     const childRel = dir + '/' + name
     let child
     try {
@@ -624,10 +678,13 @@ export async function resolveMcModelAsset(api, packName, rel, fileRoot) {
   if (!isItemDefPath(rel)) {
     try {
       let { elements, textures } = await resolveMcModel(api, packName, rel, 0, fileRoot)
-      /* 模板模型贴图借用：有几何体 + textures 全空 + 文件名 template_* → 借子模型 textures */
-      if (elements.length && !Object.keys(textures).length && isTemplateModelName(rel)) {
+      /* 模板贴图借用：有几何体且 textures 无任何具体贴图引用（空表或全 # 变量引用），
+         或 elements 引用了 textures 表未定义的 #变量（混合模板如 flower_pot_cross：
+         有 flowerpot/dirt 具体引用但 #plant 未定义）→ 借子模型 textures 补全。
+         合并而非替换：当前 textures 的具体引用保留，借来的子模型 textures 补缺失键 */
+      if (elements.length && (!texturesHasConcreteRef(textures) || hasUnresolvedTexRefs(elements, textures))) {
         const borrowed = await borrowTemplateTextures(api, packName, rel, fileRoot)
-        if (borrowed) textures = expandTextureAliases(borrowed)
+        if (borrowed) textures = expandTextureAliases({ ...borrowed, ...textures })
       }
       return { parts: [{ elements, textures, transform: null, tints: null }] }
     } catch {

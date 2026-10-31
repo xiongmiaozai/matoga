@@ -822,11 +822,15 @@ export async function initPreviewPanel() {
         set('m3dTransmission', 0)
       } else if (p === 'glass') {
         set('m3dMetalness', 0)
-        set('m3dRoughness', 0)
+        set('m3dRoughness', 0.05)
         set('m3dEmissive', 1)
         set('m3dOpacity', 1)
-        set('m3dTransmission', 1)
+        set('m3dTransmission', 0.92)
         set('m3dIOR', 1.5)
+        set('m3dClearcoat', 0.4)
+        setOpacityMode('glass')
+        const seg = $('m3dOpacityModeSeg')
+        if (seg) seg.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.mode === 'glass'))
       } else if (p === 'fabric') {
         set('m3dMetalness', 0)
         set('m3dRoughness', 0.8)

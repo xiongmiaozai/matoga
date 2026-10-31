@@ -78,6 +78,28 @@ function createPackRouter(rootOf, { versionMap = false } = {}) {
     ok(res, await mcmeta.deletePack(root, req.params.name))
   }))
 
+  router.post('/import', wrap(async (req, res) => {
+    const root = rootOf()
+    const b = req.body || {}
+    if (b.zipData) {
+      const zipBuf = Buffer.from(b.zipData, 'base64')
+      const r = await mcmeta.importPackFromZip(root, zipBuf, {
+        name: b.name,
+        overwrite: !!b.overwrite,
+      })
+      ok(res, r)
+    } else if (Array.isArray(b.files)) {
+      const files = b.files.map(f => ({ path: String(f.path || ''), data: Buffer.from(f.data || '', 'base64') }))
+      const r = await mcmeta.importPackFromFiles(root, files, {
+        name: b.name,
+        overwrite: !!b.overwrite,
+      })
+      ok(res, r)
+    } else {
+      fail(res, 'ERR_INVALID_PARAM', 'expected zipData or files')
+    }
+  }))
+
   router.post('/:name/export', wrap(async (req, res) => {
     const root = rootOf()
     guardRead(path.join(root, String(req.params.name)))

@@ -15,6 +15,7 @@ function init() {
 
 function middleware(req, res, next) {
   if (!lanToken) return next()
+  if (req.method === 'GET' && /\.js$/i.test(req.path)) return next()
   const t = req.query.token || req.headers['x-matoga-token']
   if (t && t === lanToken) return next()
   res.status(401).json({ ok: false, code: 'ERR_UNAUTHORIZED', msg: 'invalid token' })

@@ -39,7 +39,7 @@ router.get('/', (req, res) => {
         dynamic: !!mf.dynamic,
         deps: Array.isArray(mf.deps) ? mf.deps : [],
       })
-    } catch (e) { /* 损坏的 manifest 跳过 */ }
+    } catch (e) { console.error('[panels] manifest 损坏，已跳过:', mfPath, e.message) }
   }
 
   panels.sort((a, b) => (a.order - b.order) || String(a.id).localeCompare(b.id))

@@ -19,7 +19,7 @@ let currentPort = null
 const PREFERRED_PORT = 5273
 const START_TIMEOUT_MS = 15000
 
-function configurePaths() {
+async function configurePaths() {
   const projectRoot = path.join(__dirname, '..')
   const resRoot = app.isPackaged ? process.resourcesPath : projectRoot
   const dataRoot = app.getPath('userData')
@@ -27,14 +27,14 @@ function configurePaths() {
   process.env.MATOGA_RES_ROOT = resRoot
   process.env.MATOGA_DATA_ROOT = dataRoot
   process.env.MATOGA_PRESET_ROOT = presetRoot
-  seedBuiltinData(resRoot, dataRoot)
+  await seedBuiltinData(resRoot, dataRoot)
 }
 
-function seedBuiltinData(srcRoot, dataRoot) {
+async function seedBuiltinData(srcRoot, dataRoot) {
   const src = path.join(srcRoot, 'data')
   const dest = path.join(dataRoot, 'data')
   if (!fs.existsSync(dest) && fs.existsSync(src)) {
-    fs.cpSync(src, dest, { recursive: true })
+    await fs.promises.cp(src, dest, { recursive: true })
   }
 }
 
@@ -157,8 +157,8 @@ function startWithError(cmd, args, env) {
   })
 }
 
-function createWindow(port) {
-  const savedBounds = loadWindowBounds()
+async function createWindow(port) {
+  const savedBounds = await loadWindowBounds()
   mainWindow = new BrowserWindow({
     width: savedBounds?.width || 1600,
     height: savedBounds?.height || 1000,
@@ -204,12 +204,12 @@ function getWindowStateFile() {
   return path.join(app.getPath('userData'), 'window-state.json')
 }
 
-function loadWindowBounds() {
+async function loadWindowBounds() {
   try {
     const file = getWindowStateFile()
-    if (!fs.existsSync(file)) return null
-    const data = JSON.parse(fs.readFileSync(file, 'utf-8'))
+    const data = JSON.parse(await fs.promises.readFile(file, 'utf-8'))
     if (typeof data.width !== 'number' || typeof data.height !== 'number') return null
+    if (typeof data.x !== 'number' || typeof data.y !== 'number') return null
     const display = screen.getPrimaryDisplay()
     const workArea = display.workArea
     if (data.x + data.width < 0 || data.x > workArea.width || data.y + data.height < 0 || data.y > workArea.height) {
@@ -221,7 +221,7 @@ function loadWindowBounds() {
   }
 }
 
-function saveWindowBounds(maximized) {
+async function saveWindowBounds(maximized) {
   if (!mainWindow) return
   try {
     const bounds = mainWindow.getBounds()
@@ -229,7 +229,7 @@ function saveWindowBounds(maximized) {
       ...bounds,
       maximized: maximized !== undefined ? maximized : mainWindow.isMaximized()
     }
-    fs.writeFileSync(getWindowStateFile(), JSON.stringify(state))
+    await fs.promises.writeFile(getWindowStateFile(), JSON.stringify(state))
   } catch {}
 }
 
@@ -240,7 +240,7 @@ function debounceSaveWindowBounds() {
 }
 
 app.whenReady().then(async () => {
-  configurePaths()
+  await configurePaths()
   try {
     currentPort = await startServer()
   } catch (e) {
@@ -248,7 +248,7 @@ app.whenReady().then(async () => {
     app.quit()
     return
   }
-  createWindow(currentPort)
+  await createWindow(currentPort)
 })
 
 app.on('activate', async () => {
@@ -262,7 +262,7 @@ app.on('activate', async () => {
         return
       }
     }
-    createWindow(currentPort)
+    await createWindow(currentPort)
   }
 })
 

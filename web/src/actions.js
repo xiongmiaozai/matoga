@@ -34,6 +34,7 @@ import {
   joinPath
 } from './utils.js'
 import { compare } from './compare.js'
+import { modelDestKey } from './model-dest-key.js'
 import { applyEntries, setLoading, renderResult, renderSidebar } from './render.js'
 import { t, getLocale } from './i18n.js'
 import { uiConfirm } from './ui-dialog.js'
@@ -140,6 +141,7 @@ export function saveOptions() {
 
     hiddenKeys: [...state.hiddenKeys],
     categoryFilter: state.categoryFilter,
+    resultSearchTerm: state.resultSearchTerm,
     customTags: state.customTags,
     modelGroupBy: state.modelGroupBy,
     modelGroupDir: state.modelGroupDir,
@@ -294,13 +296,16 @@ async function executeCopyBatch(pairs) {
   const onCancel = () => {
     cancelled = true
     cancelBtn.disabled = true
-    if (window.__matogaCancelSync) window.__matogaCancelSync()
+    if (jobCancel) jobCancel()
   }
   cancelBtn.addEventListener('click', onCancel, { once: true })
 
   let r
+  let jobCancel = null
   try {
-    r = await window.api.copyFilesBatch(pairs, onProgress)
+    const job = window.api.copyFilesBatch(pairs, onProgress)
+    jobCancel = job.cancel
+    r = await job.promise
   } catch (e) {
     r = { ok: 0, fail: pairs.length, error: e.message }
   }
@@ -336,6 +341,7 @@ async function executeCopySequential(pairs) {
 
 export async function reloadAndCompare() {
   const prevKey = state.selected && state.selected.key
+  const savedExpanded = new Set(state.expandedKeys)
   if (state.leftPath) await loadFromPath('left', state.leftPath, { forceRecursive: true })
   if (state.rightPath) await loadFromPath('right', state.rightPath, { forceRecursive: true })
   if (state.leftPath && state.rightPath) await compare()
@@ -343,7 +349,16 @@ export async function reloadAndCompare() {
     const g = state.result.find(g => g.key === prevKey)
     if (g) {
       state.selected = g
+      for (const k of savedExpanded) state.expandedKeys.add(k)
+      renderResult()
       renderSidebar()
+    } else {
+      const fallback = state.result.find(r => r.isModel)
+      if (fallback) {
+        state.selected = fallback
+        renderResult()
+        renderSidebar()
+      }
     }
   }
 }
@@ -400,6 +415,7 @@ export async function addTextureToRight(destPath) {
   } else showToast(t('toast.replaceFail', { msg: r.error }))
 }
 
+
 export async function uploadModelToRight(g) {
   if (!state.rightPath) {
     showToast(t('toast.destNotSelected'))
@@ -407,7 +423,8 @@ export async function uploadModelToRight(g) {
   }
   const newFile = await window.api.selectModelFile()
   if (!newFile) return
-  const destPath = joinPath(state.rightPath, g.key)
+  const destKey = modelDestKey(g.key, newFile)
+  const destPath = joinPath(state.rightPath, destKey)
   const lastSep = Math.max(destPath.lastIndexOf('/'), destPath.lastIndexOf('\\'))
   if (lastSep > 0) await window.api.createFolder(destPath.slice(0, lastSep))
   const re = g.right && (g.right.file || g.right.dir)
@@ -766,8 +783,12 @@ export function showPixelDiff(pairs, panel) {
             const dC = xC.createImageData(w, h)
             for (let i = 0; i < dL.data.length; i += 4) {
               const dv = Math.abs(dL.data[i + ci] - dR.data[i + ci])
-              if (ci === 3) { dC.data[i] = dv; dC.data[i + 1] = dv; dC.data[i + 2] = dv; dC.data[i + 3] = 255 }
-              else {
+              if (ci === 3) {
+                dC.data[i] = dv
+                dC.data[i + 1] = dv
+                dC.data[i + 2] = dv
+                dC.data[i + 3] = 255
+              } else {
                 dC.data[i] = ci === 0 ? dv : 0
                 dC.data[i + 1] = ci === 1 ? dv : 0
                 dC.data[i + 2] = ci === 2 ? dv : 0

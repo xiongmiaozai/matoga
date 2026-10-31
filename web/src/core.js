@@ -31,6 +31,7 @@ export const state = {
   modelMeta: null,
   modelGroupRules: [],
   categoryFilter: { type: 'all', content: 'all', status: 'all', folder: 'all', tag: 'all' },
+  resultSearchTerm: '',
   customTags: {}
 }
 
@@ -57,7 +58,7 @@ export const ignoreInput = $('ignoreInput')
 export const leftPathEl = $('leftPath')
 export const rightPathEl = $('rightPath')
 
-export const summaryEl = $('summary')
+
 export const resultBody = $('resultBody')
 export const folderCard = $('folderCard')
 
@@ -108,11 +109,11 @@ export function kindText(kind) {
 export const ROLE_LABEL = new Proxy({}, { get: (_, k) => roleLabel(k) })
 export const KIND_TEXT = new Proxy({}, { get: (_, k) => kindText(k) })
 
-export function showToast(msg) {
+export function showToast(msg, duration) {
   const t = $('toast')
   if (!t) return
   t.textContent = msg
   t.classList.add('show')
   clearTimeout(showToast._timer)
-  showToast._timer = setTimeout(() => t.classList.remove('show'), 2000)
+  showToast._timer = setTimeout(() => t.classList.remove('show'), duration || 2000)
 }

@@ -43,6 +43,7 @@ import { ensureModelThumb, observeModelThumbs } from './model-thumb.js'
 import { splitGroupsByPrefix } from './model-prefix.js'
 import { openCreateModelDialog, previewCustomModel } from './create-model-dialog.js'
 import { openCreatePackDialog } from './create-pack-dialog.js'
+import { openImportPackDialog } from './import-pack-dialog.js'
 
 const PRESETS = [
   { id: 'metal', color: '#c8c8d0' },
@@ -110,13 +111,6 @@ const TYPE_LABEL_KEYS = {
   craft: 'asset.catCraft'
 }
 
-function detectTypeFromPath(p) {
-  if (!p || typeof p !== 'string') return null
-  const ext = (p.split('.').pop() || '').toLowerCase()
-  if (HDRI_EXTS.has(ext)) return 'hdri'
-  if (IMG_EXTS.has(ext)) return 'tex'
-  return null
-}
 
 function classifyByRole(name) {
   if (!name || typeof name !== 'string') return null
@@ -165,6 +159,8 @@ let lastTexSig = ''
 let loadErrors = { hdri: null, mc: null, official: null, project: null, tex: null, model: null }
 
 let favorites = loadList('matoga:assetFav')
+let favKeys = new Set(favorites.map(f => f.key))
+function syncFavKeys() { favKeys = new Set(favorites.map(f => f.key)) }
 let recent = loadList('matoga:assetRecent')
 let serverSynced = false
 
@@ -350,6 +346,7 @@ async function loadAssetStore() {
     const data = await assetApiCall('GET', '/api/asset')
     if (Array.isArray(data.favorites)) {
       favorites = data.favorites
+      syncFavKeys()
       saveList('matoga:assetFav', favorites)
     }
     if (Array.isArray(data.recent)) {
@@ -364,6 +361,7 @@ async function loadAssetStore() {
 }
 
 function persistFavorites() {
+  syncFavKeys()
   saveList('matoga:assetFav', favorites)
   if (serverSynced) assetApiCall('PUT', '/api/asset/favorites', { items: favorites }).catch(() => {})
 }
@@ -504,7 +502,7 @@ function resolveLocatePath(item) {
 }
 
 function isFav(item) {
-  return favorites.some(f => f.key === item.key)
+  return favKeys.has(item.key)
 }
 
 function toggleFav(item) {
@@ -1465,10 +1463,25 @@ function buildMcSection() {
       saveCollapsed(collapsedSet)
     }
   })
+  const importBtn = el('button', 'asset-lib-section-action', '+ 导入')
+  importBtn.title = '导入资源包'
+  importBtn.style.cssText =
+    'margin-left:auto;background:none;border:1px solid var(--border,#333);' +
+    'border-radius:5px;padding:1px 8px;font-size:11px;cursor:pointer;color:var(--text,#e8e8e8);'
+  importBtn.addEventListener('click', async ev => {
+    ev.stopPropagation()
+    await openImportPackDialog({
+      onImported: async () => {
+        await loadMc()
+        rebuild()
+      }
+    })
+  })
+  head.appendChild(importBtn)
   const createBtn = el('button', 'asset-lib-section-action', '+ 创建')
   createBtn.title = '创建材质包'
   createBtn.style.cssText =
-    'margin-left:auto;background:none;border:1px solid var(--border,#333);' +
+    'margin-left:6px;background:none;border:1px solid var(--border,#333);' +
     'border-radius:5px;padding:1px 8px;font-size:11px;cursor:pointer;color:var(--text,#e8e8e8);'
   createBtn.addEventListener('click', async ev => {
     ev.stopPropagation()
@@ -2251,38 +2264,54 @@ function applyFilter() {
   const enCands = searching ? enCandidatesOfZh(term) : []
   const kind = contentKindFilter
 
-  /* 卡片：命中名称（搜索词）且符合方块/物品过滤才显示 */
-  body.querySelectorAll('.asset-card').forEach(card => {
+  const groupVisible = new Set()
+  const secVisible = new Set()
+  const secCount = new Map()
+
+  /* 卡片：单次遍历，命中名称（搜索词）且符合方块/物品过滤才显示；同时累加组/分区可见计数 */
+  const cards = body.querySelectorAll('.asset-card')
+  for (let i = 0; i < cards.length; i++) {
+    const card = cards[i]
     const name = (card.dataset.name || '').toLowerCase()
     const zh = (card.dataset.zhName || '').toLowerCase()
     const py = (card.dataset.pinyin || '').toLowerCase()
     const nameOk = !searching || assetSearchMatch(name, zh, py, enCands, termLower)
     const kindOk = kind === 'all' || card.dataset.kind === kind
-    card.classList.toggle('is-hidden', !nameOk || !kindOk)
-  })
+    const show = nameOk && kindOk
+    card.classList.toggle('is-hidden', !show)
+    if (!show) continue
+    const grp = card.closest('.asset-lib-group')
+    if (grp) groupVisible.add(grp)
+    const sec = card.closest('.asset-lib-section')
+    if (sec) { secVisible.add(sec); secCount.set(sec, (secCount.get(sec) || 0) + 1) }
+  }
 
-  /* 分组：组内无可见卡片则整组隐藏；搜索命中时临时展开折叠分组，保证结果可见 */
-  body.querySelectorAll('.asset-lib-group').forEach(grp => {
-    const hit = !!grp.querySelector('.asset-card:not(.is-hidden)')
+  /* 分组：组内无可见卡片则整组隐藏；搜索命中时临时展开折叠分组 */
+  const groups = body.querySelectorAll('.asset-lib-group')
+  for (let i = 0; i < groups.length; i++) {
+    const grp = groups[i]
+    const hit = groupVisible.has(grp)
     grp.classList.toggle('is-hidden', !hit)
     grp.classList.toggle('search-open', searching && hit)
-  })
+  }
 
-  /* 分区：非搜索时按当前分类标签过滤；搜索时跨分类展示（快捷视图分区不重复展示） */
+  /* 分区：非搜索时按当前分类标签过滤；搜索时跨分类展示 */
   let visible = 0
-  body.querySelectorAll('.asset-lib-section').forEach(sec => {
+  const sections = body.querySelectorAll('.asset-lib-section')
+  for (let i = 0; i < sections.length; i++) {
+    const sec = sections[i]
     const cat = sec.dataset.cat
     const catOk = searching
       ? !QUICK_CATS.has(cat)
       : categoryFilter === 'all'
         ? SECTION_CATS.includes(cat)
         : cat === categoryFilter
-    const hit = !!sec.querySelector('.asset-card:not(.is-hidden)')
+    const hit = secVisible.has(sec)
     const hint = !!sec.querySelector('.asset-lib-hint')
     sec.classList.toggle('is-hidden', !catOk || (!hit && !hint))
     sec.classList.toggle('search-open', searching && hit)
-    if (catOk) visible += sec.querySelectorAll('.asset-card:not(.is-hidden)').length
-  })
+    if (catOk && hit) visible += secCount.get(sec) || 0
+  }
 
   updateStat(visible)
   const hasVisibleHint = !!body.querySelector('.asset-lib-section:not(.is-hidden) .asset-lib-hint')
@@ -2794,22 +2823,35 @@ function buildToolbar() {
   sortGroup.appendChild(dirBtn)
   popover.appendChild(sortGroup)
 
+  for (const stale of document.querySelectorAll('body > .asset-lib-popover')) stale.remove()
   const chipWrap = el('div', 'asset-lib-chip-wrap')
   chipWrap.appendChild(filterChip)
-  chipWrap.appendChild(popover)
+  document.body.appendChild(popover)
   bar.appendChild(chipWrap)
 
+  const placePopover = () => {
+    const r = filterChip.getBoundingClientRect()
+    popover.style.top = r.bottom + 4 + 'px'
+    popover.style.left = r.left + 'px'
+  }
   const togglePopover = open => {
     const isOpen = open === undefined ? !popover.classList.contains('open') : open
     popover.classList.toggle('open', isOpen)
     filterChip.classList.toggle('open', isOpen)
     filterChip.setAttribute('aria-expanded', String(isOpen))
     if (isOpen) {
-      requestAnimationFrame(() => document.addEventListener('mousedown', onOutside, { once: true }))
+      placePopover()
+      document.addEventListener('mousedown', onOutside)
+      window.addEventListener('resize', placePopover)
+      window.addEventListener('scroll', placePopover, true)
+    } else {
+      document.removeEventListener('mousedown', onOutside)
+      window.removeEventListener('resize', placePopover)
+      window.removeEventListener('scroll', placePopover, true)
     }
   }
   const onOutside = e => {
-    if (!chipWrap.contains(e.target)) togglePopover(false)
+    if (!chipWrap.contains(e.target) && !popover.contains(e.target)) togglePopover(false)
   }
   filterChip.addEventListener('click', e => {
     e.stopPropagation()
@@ -2840,14 +2882,6 @@ function buildToolbar() {
   bar.appendChild(right)
 }
 
-function detailRow(label, value) {
-  const row = el('div', 'asset-detail-row')
-  row.appendChild(el('div', 'asset-detail-label', label))
-  const val = el('div', 'asset-detail-value')
-  val.textContent = value
-  row.appendChild(val)
-  return row
-}
 
 /* 模型详情元信息：MC .json 模型（parent / 贴图引用 / 元素数） */
 function modelMetaRows(j) {
@@ -3042,11 +3076,31 @@ export function initAssetLibrary() {
   if (_initialized) return
   _initialized = true
   const search = document.getElementById('assetLibSearch')
-  if (search)
-    search.addEventListener('input', () => {
+  const searchClear = document.getElementById('assetLibSearchClear')
+  if (search) {
+    const runSearch = () => {
       searchTerm = search.value
+      if (searchClear) searchClear.classList.toggle('is-hidden', !search.value)
       applyFilter()
+    }
+    let timer
+    search.addEventListener('input', () => {
+      clearTimeout(timer)
+      timer = setTimeout(runSearch, 180)
     })
+    search.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && search.value) {
+        search.value = ''
+        runSearch()
+      }
+    })
+    if (searchClear)
+      searchClear.addEventListener('click', () => {
+        search.value = ''
+        runSearch()
+        search.focus()
+      })
+  }
   buildToolbar()
   const refreshBtn = document.getElementById('assetLibRefresh')
   if (refreshBtn)

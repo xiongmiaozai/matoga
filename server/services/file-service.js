@@ -60,7 +60,7 @@ async function hashFile(p, canonical) {
       HASH_CACHE.set(key, h)
       resolve(h)
     })
-    stream.on('error', () => resolve(null))
+    stream.on('error', () => { stream.destroy(); resolve(null) })
   })
 }
 

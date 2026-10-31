@@ -46,6 +46,7 @@ export async function loadPanel(p) {
 
     if (p.htmlUrl && !(window.__panelsInjected && window.__panelsInjected.has(p.id))) {
       const r = await fetch(p.htmlUrl)
+      if (!r.ok) throw new Error('面板 ' + p.id + ' HTML 加载失败: ' + r.status)
       const html = await r.text()
       const tpl = document.createElement('template')
       tpl.innerHTML = html.trim()

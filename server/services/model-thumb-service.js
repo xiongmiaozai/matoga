@@ -24,6 +24,9 @@
  *   v5 — 等轴测视角对齐 vanilla GUI（north 面可见：方向性方块 front 特色面朝向
  *        观察者）；textures 沿 parent 链改为原始表合并（command_block 等子层 side
  *        键不再覆盖父层显式方向键，front/back 贴图不再丢失）
+ *   v6 — 模板贴图借用扩展：textures 仅含 # 变量引用的父模板（coral_fan /
+ *        coral_wall_fan / carpet / fence_post / door_* 等 133 个非 template_ 前缀
+ *        模板）也借用子模型贴图；fileRoot 模式经 compare/scan 列目录
  */
 
 const fs = require('fs')
@@ -43,7 +46,7 @@ const THUMB_KIND_DIRS = {
 }
 const MAX_DATA_URL = 5 * 1024 * 1024
 const MAX_FRAMES = 8
-const RENDERER_VERSION = 5
+const RENDERER_VERSION = 6
 
 function kindFor(key) {
   const s = String(key || '')

@@ -78,7 +78,7 @@ router.get('/search', wrap(async (req, res) => {
 }))
 
 router.post('/create', wrap(async (req, res) => {
-  const { fileService } = require('../services/file-service')
+  const fileService = require('../services/file-service')
   const p = guardWrite(req.body && req.body.path)
   ok(res, await fileService.createFolder(p))
 }))
