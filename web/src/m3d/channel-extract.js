@@ -18,7 +18,7 @@ const m3dWorkerPending = new Map()
 function getM3dWorker() {
   if (m3dWorker) return m3dWorker
   m3dWorker = new Worker(new URL('../material3d-worker.js', import.meta.url), { type: 'module' })
-  m3dWorker.onmessage = (e) => {
+  m3dWorker.onmessage = e => {
     const { id, bitmap } = e.data
     const resolve = m3dWorkerPending.get(id)
     if (resolve) {
@@ -33,7 +33,7 @@ async function runPixelOp(op, image, params) {
   const bitmap = await createImageBitmap(image)
   const id = ++m3dWorkerSeq
   const w = getM3dWorker()
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     m3dWorkerPending.set(id, resolve)
     w.postMessage({ id, op, bitmap, params }, [bitmap])
   })
