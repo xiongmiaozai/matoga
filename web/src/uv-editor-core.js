@@ -32,6 +32,17 @@ import { t, onLocaleChange } from './i18n.js'
 import { parseAnimMeta, animFrameIndexAt, defaultFaceUv } from './mc-model-viewer.js'
 import { getTexDragData } from './utils.js'
 import { readAsDataURL, isUsableTexUrl } from './uvc/tex-utils.js'
+import {
+  draw,
+  drawCheckerboard,
+  drawMissing,
+  showEmpty,
+  fmtUvNum,
+  setHooks as setUvRenderHooks
+} from './uvc/render.js'
+import { exportUvTemplate, exportModel, setHooks as setUvExportHooks } from './uvc/export.js'
+import { startDrag, onDragMove, hitRect, hitHandle, setHooks as setUvDragHooks } from './uvc/drag.js'
+import { updateStatus, setHooks as setUvStatusHooks } from './uvc/status.js'
 
 const ZOOM_STEPS = ['fit', 1, 2, 4, 8, 16]
 const IMG_CACHE_MAX = 48
@@ -827,66 +838,6 @@ export function createUvEditor(opts) {
 
   /* ── 拖拽编辑（移动 / 手柄缩放）────────────────────── */
 
-  function startDrag(e, mode, mx, my) {
-    const rc = selectedRect() || hitRect(mx, my)
-    if (!rc) return
-    state.drag = { mode, rc, sx: mx, sy: my, orig: [...rc.face.uv], moved: false }
-    try {
-      canvas.setPointerCapture && canvas.setPointerCapture(e.pointerId)
-    } catch {}
-  }
-
-  function onDragMove(mx, my, altKey) {
-    const d = state.drag
-    if (!d) return
-    const px = state.px || 1
-    const maxW = state.uvMaxW || 16
-    const maxH = state.uvMaxH || 16
-    const step = altKey ? 0.25 : 1
-    const snap = v => Math.round(v / step) * step
-    const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi)
-    let uv
-    if (d.mode === 'move') {
-      let dx = snap((mx - d.sx) / px)
-      let dy = snap((my - d.sy) / px)
-      const [u1, v1, u2, v2] = d.orig
-      dx = clamp(dx, -Math.min(u1, u2), maxW - Math.max(u1, u2))
-      dy = clamp(dy, -Math.min(v1, v2), maxH - Math.max(v1, v2))
-      uv = [u1 + dx, v1 + dy, u2 + dx, v2 + dy]
-    } else {
-      const [u1, v1, u2, v2] = d.orig
-      let minX = Math.min(u1, u2),
-        maxX = Math.max(u1, u2)
-      let minY = Math.min(v1, v2),
-        maxY = Math.max(v1, v2)
-      const U = clamp(snap(mx / px), 0, maxW)
-      const V = clamp(snap(my / px), 0, maxH)
-      const m = d.mode
-      if (m.includes('w')) minX = clamp(Math.min(maxX - step, U), 0, maxW)
-      if (m.includes('e')) maxX = clamp(Math.max(minX + step, U), 0, maxW)
-      if (m.includes('n')) minY = clamp(Math.min(maxY - step, V), 0, maxH)
-      if (m.includes('s')) maxY = clamp(Math.max(minY + step, V), 0, maxH)
-      uv = [u1 <= u2 ? minX : maxX, v1 <= v2 ? minY : maxY, u1 <= u2 ? maxX : minX, v1 <= v2 ? maxY : minY]
-    }
-    const before = d.rc.face.uv
-    if (uv.every((v, i) => v === before[i])) return
-    d.moved = true
-    applyFaceUvValues(d.rc.el, d.rc.key, uv)
-    syncEditInputs()
-    updateStatus()
-    requestDraw()
-  }
-
-  function hitRect(mx, my) {
-    return state.rects.findLast(rc => mx >= rc.x && mx <= rc.x + rc.w && my >= rc.y && my <= rc.y + rc.h)
-  }
-
-  function hitHandle(mx, my) {
-    for (const h of state.handles) {
-      if (Math.abs(mx - h.x) <= HANDLE_HIT && Math.abs(my - h.y) <= HANDLE_HIT) return h
-    }
-    return null
-  }
 
   /* ── 自定义贴图（上传 / 拖放 → dataURL 替换 + 换图钩子） ──────────
      多文件：从当前选中贴图槽位起按顺序替换（画师一次导出多张贴图逐槽位对应）；
@@ -990,114 +941,9 @@ export function createUvEditor(opts) {
 
   /* ── 导出编辑后的模型 JSON（经 exportJson 钩子） ─────────────────────────── */
 
-  function exportModel() {
-    let r = null
-    try {
-      r = typeof hooks.exportJson === 'function' ? hooks.exportJson() : null
-    } catch {}
-    if (!r || !r.json) return
-    try {
-      const blob = new Blob([JSON.stringify(r.json, null, 2)], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = r.filename || 'model.json'
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      setTimeout(() => {
-        try {
-          URL.revokeObjectURL(url)
-        } catch {}
-      }, 4000)
-    } catch (e) {
-      console.error('[uv-editor] export', e)
-    }
-  }
-
   /* ── UV 线框模板导出（透明底 PNG，画师填色用） ───────────────────
      与贴图同尺寸 1:1 输出：uvScale 网格 + 每元素面矩形（元素色描边 +
      低透明度填充 + 面标签），可直接垫在像素画软件的底图层。 */
-
-  function exportUvTemplate() {
-    const layout = state.layout
-    if (!layout) return
-    const tex = layout.textures[state.activeTex]
-    if (!tex) return
-    const rec = imgCache.get(tex.url)
-    const W = rec && rec.ok && rec.img ? rec.img.naturalWidth : layout.uvScale || 16
-    const H = rec && rec.ok && rec.img ? rec.img.naturalHeight : layout.uvScale || 16
-    try {
-      const off = document.createElement('canvas')
-      off.width = W
-      off.height = H
-      const c = off.getContext('2d')
-      if (!c) return
-      c.clearRect(0, 0, W, H)
-      /* uvScale 网格（淡线） */
-      const scale = layout.uvScale || 16
-      const cell = W / scale
-      if (cell >= 1) {
-        c.strokeStyle = 'rgba(128,128,140,.35)'
-        c.lineWidth = 1
-        c.beginPath()
-        for (let i = 1; i < scale; i++) {
-          const p = Math.round(i * cell) + 0.5
-          c.moveTo(p, 0)
-          c.lineTo(p, H)
-          c.moveTo(0, p)
-          c.lineTo(W, p)
-        }
-        c.stroke()
-      }
-      /* 面矩形（每元素一色） */
-      layout.elements.forEach((el, elIdx) => {
-        for (const key in el.faces) {
-          const face = el.faces[key]
-          if (!face || face.tex !== state.activeTex) continue
-          const x = Math.min(face.uv[0], face.uv[2])
-          const y = Math.min(face.uv[1], face.uv[3])
-          const w = Math.abs(face.uv[2] - face.uv[0])
-          const h = Math.abs(face.uv[3] - face.uv[1])
-          const hue = (elIdx * 47 + 20) % 360
-          c.fillStyle = `hsla(${hue}, 68%, 62%, .25)`
-          c.fillRect(x, y, w, h)
-          c.strokeStyle = `hsla(${hue}, 75%, 75%, .95)`
-          c.lineWidth = 1
-          c.strokeRect(x + 0.5, y + 0.5, Math.max(w - 1, 0.5), Math.max(h - 1, 0.5))
-          /* 标签（矩形足够大时） */
-          const label = `E${elIdx} ${key}`
-          if (w >= 12 && h >= 7) {
-            c.font = '5px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
-            c.fillStyle = `hsla(${hue}, 80%, 85%, .95)`
-            c.fillText(label, x + 1, y + 5)
-          }
-        }
-      })
-      if (typeof off.toBlob !== 'function') return
-      off.toBlob(blob => {
-        if (!blob) return
-        try {
-          const url = URL.createObjectURL(blob)
-          const a = document.createElement('a')
-          a.href = url
-          a.download = String(tex.name || 'texture').replace(/[\/\\]/g, '_') + '_uv_template.png'
-          document.body.appendChild(a)
-          a.click()
-          a.remove()
-          setTimeout(() => {
-            try {
-              URL.revokeObjectURL(url)
-            } catch {}
-          }, 4000)
-        } catch (e) {
-          console.error('[uv-editor] template download', e)
-        }
-      }, 'image/png')
-    } catch (e) {
-      console.error('[uv-editor] template', e)
-    }
-  }
 
   /* ── UV ↔ 3D 高亮联动（highlightFace 钩子） ─────────────────────────── */
 
@@ -1126,270 +972,6 @@ export function createUvEditor(opts) {
 
   /* ── 绘制 ─────────────────────────────────── */
 
-  function draw() {
-    if (!ctx || !canvas || !canvasWrap || !visible()) return
-    const layout = state.layout
-    if (!layout) {
-      showEmpty()
-      return
-    }
-
-    const tex = layout.textures[state.activeTex]
-    if (!tex) {
-      showEmpty()
-      return
-    }
-    const removed = !tex.url
-    const rec = removed ? null : loadTexImage(tex.url)
-    const img = rec && rec.ok ? rec.img : null
-    const texW = img ? img.naturalWidth : layout.uvScale || 16
-    const texH = img ? img.naturalHeight : layout.uvScale || 16
-    state.texW = texW
-    state.texH = texH
-    state.uvMaxW = animInfo ? animInfo.frameW : texW
-    state.uvMaxH = animInfo ? animInfo.frameH : texH
-    /* 动画贴图：按播放时间计算当前帧（暂停时停在当前帧） */
-    const animInfo = loadTexAnimInfo(tex, texW, texH)
-    const frameW = animInfo ? animInfo.frameW : texW
-    const frameH = animInfo ? animInfo.frameH : texH
-    let frameIndex = 0
-    if (animInfo) {
-      frameIndex = animFrameIndexAt(animInfo, state.animTime)
-    }
-
-    const availW = Math.max(canvasWrap.clientWidth - 16, 32)
-    const availH = Math.max(canvasWrap.clientHeight - 16, 32)
-    let px
-    if (state.zoom === 'fit') {
-      const f = Math.min(availW / frameW, availH / frameH)
-      px = f >= 1 ? Math.max(1, Math.floor(f)) : f
-    } else {
-      px = state.zoom
-    }
-    const W = Math.max(Math.round(frameW * px), 1)
-    const H = Math.max(Math.round(frameH * px), 1)
-    state.px = px
-
-    const dpr = window.devicePixelRatio || 1
-    canvas.style.display = ''
-    emptyEl.style.display = 'none'
-    canvas.style.width = W + 'px'
-    canvas.style.height = H + 'px'
-    canvas.width = Math.round(W * dpr)
-    canvas.height = Math.round(H * dpr)
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    ctx.imageSmoothingEnabled = false
-
-    /* 透明棋盘底 */
-    drawCheckerboard(W, H, Math.max(4, Math.round(px * 2)))
-
-    /* 贴图底图（缺失时红斜纹警示；动画贴图取当前帧源区域；已移除仅剩棋盘底） */
-    if (img) {
-      if (animInfo) ctx.drawImage(img, 0, frameIndex * frameH, frameW, frameH, 0, 0, W, H)
-      else ctx.drawImage(img, 0, 0, W, H)
-    } else if (!removed) {
-      drawMissing(W, H)
-    }
-
-    /* uvScale 网格（格子足够大才画，避免过密） */
-    const scale = layout.uvScale || 16
-    const cell = W / scale
-    if (state.grid && cell >= 5) {
-      ctx.strokeStyle = 'rgba(128,128,140,.28)'
-      ctx.lineWidth = 1
-      ctx.beginPath()
-      for (let i = 1; i < scale; i++) {
-        const p = Math.round(i * cell) + 0.5
-        ctx.moveTo(p, 0)
-        ctx.lineTo(p, H)
-        ctx.moveTo(0, p)
-        ctx.lineTo(W, p)
-      }
-      ctx.stroke()
-    }
-
-    /* 面采样矩形（每元素一色；编辑选中面蓝框高亮） */
-    state.rects = []
-    layout.elements.forEach((el, elIdx) => {
-      for (const key in el.faces) {
-        const face = el.faces[key]
-        if (!face || face.tex !== state.activeTex) continue
-        const x = Math.min(face.uv[0], face.uv[2]) * px
-        const y = Math.min(face.uv[1], face.uv[3]) * px
-        const w = Math.abs(face.uv[2] - face.uv[0]) * px
-        const h = Math.abs(face.uv[3] - face.uv[1]) * px
-        const hovered = state.hover && state.hover.el === el && state.hover.key === key
-        const isSel = state.edit && state.selected && state.selected.el === el && state.selected.key === key
-        const hue = (elIdx * 47 + 20) % 360
-        ctx.fillStyle = `hsla(${hue}, 68%, 62%, ${hovered || isSel ? 0.34 : 0.14})`
-        ctx.lineWidth = isSel ? 3 : hovered ? 2.5 : 1.5
-        ctx.strokeStyle = isSel ? '#4c8dff' : `hsla(${hue}, 75%, ${hovered ? 70 : 60}%, .95)`
-        ctx.fillRect(x, y, w, h)
-        ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1)
-        state.rects.push({ x, y, w, h, el, face, key, elIdx })
-        /* 标签（矩形足够大时） */
-        const label = `E${elIdx} ${key}` + (face.rotation ? ` ${face.rotation}°` : '') + (face.mirror ? ' ⇄' : '')
-        const fs = Math.min(Math.max(9, Math.round(px * 1.4)), 14)
-        if (w > 34 && h > fs + 4) {
-          ctx.font = `${fs}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`
-          const tw = ctx.measureText(label).width
-          if (tw + 6 < w) {
-            ctx.fillStyle = hovered || isSel ? `hsla(${hue}, 80%, 30%, .92)` : `hsla(${hue}, 70%, 22%, .85)`
-            ctx.fillRect(x + 1, y + 1, tw + 6, fs + 4)
-            ctx.fillStyle = hovered || isSel ? '#fff' : 'rgba(255,255,255,.92)'
-            ctx.fillText(label, x + 4, y + fs + 1)
-          }
-        }
-      }
-    })
-
-    /* 选中面 8 向缩放手柄（编辑模式） */
-    state.handles = []
-    if (state.edit && state.selected) {
-      const rc = selectedRect()
-      if (rc) {
-        const defs = [
-          ['nw', rc.x, rc.y],
-          ['n', rc.x + rc.w / 2, rc.y],
-          ['ne', rc.x + rc.w, rc.y],
-          ['e', rc.x + rc.w, rc.y + rc.h / 2],
-          ['se', rc.x + rc.w, rc.y + rc.h],
-          ['s', rc.x + rc.w / 2, rc.y + rc.h],
-          ['sw', rc.x, rc.y + rc.h],
-          ['w', rc.x, rc.y + rc.h / 2]
-        ]
-        for (const [mode, hx, hy] of defs) {
-          ctx.fillStyle = '#ffffff'
-          ctx.strokeStyle = '#1c1c22'
-          ctx.lineWidth = 1
-          ctx.fillRect(hx - HANDLE_DRAW, hy - HANDLE_DRAW, HANDLE_DRAW * 2, HANDLE_DRAW * 2)
-          ctx.strokeRect(hx - HANDLE_DRAW + 0.5, hy - HANDLE_DRAW + 0.5, HANDLE_DRAW * 2 - 1, HANDLE_DRAW * 2 - 1)
-          state.handles.push({ x: hx, y: hy, mode })
-        }
-      }
-    }
-
-    /* 播放按钮显隐：仅动画贴图显示 */
-    if (playBtn) playBtn.style.display = animInfo ? '' : 'none'
-
-    updateStatus()
-
-    /* 动画播放 rAF 调度 */
-    if (animRafId) {
-      cancelAnimationFrame(animRafId)
-      animRafId = 0
-    }
-    if (animInfo && state.animPlaying && visible()) {
-      animRafId = requestAnimationFrame(ts => {
-        animRafId = 0
-        if (state.animLastTs) state.animTime += (ts - state.animLastTs) / 1000
-        state.animLastTs = ts
-        draw()
-      })
-    } else {
-      state.animLastTs = 0
-    }
-  }
-
-  function drawCheckerboard(W, H, size) {
-    const s = Math.max(4, size)
-    ctx.fillStyle = '#3a3a44'
-    ctx.fillRect(0, 0, W, H)
-    ctx.fillStyle = '#2e2e36'
-    for (let y = 0; y < H; y += s) {
-      for (let x = ((y / s) % 2) * s; x < W; x += s * 2) {
-        ctx.fillRect(x, y, Math.min(s, W - x), Math.min(s, H - y))
-      }
-    }
-  }
-
-  function drawMissing(W, H) {
-    ctx.fillStyle = 'rgba(120,32,32,.25)'
-    ctx.fillRect(0, 0, W, H)
-    ctx.strokeStyle = 'rgba(230,74,74,.5)'
-    ctx.lineWidth = 2
-    ctx.beginPath()
-    const step = Math.max(12, W / 8)
-    for (let p = -H; p < W; p += step) {
-      ctx.moveTo(p, 0)
-      ctx.lineTo(p + H, H)
-    }
-    ctx.stroke()
-  }
-
-  function showEmpty() {
-    if (!canvas || !emptyEl) return
-    canvas.style.display = 'none'
-    emptyEl.style.display = ''
-    emptyEl.innerHTML = ''
-    const title = document.createElement('div')
-    title.className = 'uvv-empty-title'
-    title.textContent = t('uv.empty')
-    const hint = document.createElement('div')
-    hint.className = 'uvv-empty-hint'
-    hint.textContent = t('uv.emptyHint')
-    emptyEl.appendChild(title)
-    emptyEl.appendChild(hint)
-    if (statusEl) statusEl.textContent = ''
-  }
-
-  function fmtUvNum(v) {
-    const n = +v
-    return Number.isFinite(n) && !Number.isInteger(n) ? Math.round(n * 100) / 100 : n
-  }
-
-  function updateStatus() {
-    if (!statusEl) return
-    const layout = state.layout
-    if (!layout) {
-      statusEl.textContent = state.notice || ''
-      return
-    }
-    const tex = layout.textures[state.activeTex]
-    if (!tex) {
-      statusEl.textContent = state.notice || ''
-      return
-    }
-    if (state.notice) {
-      statusEl.textContent = state.notice
-      return
-    }
-    let faceCount = 0
-    layout.elements.forEach(el => {
-      for (const key in el.faces) if (el.faces[key].tex === state.activeTex) faceCount++
-    })
-    const rec = imgCache.get(tex.url)
-    const failed = rec && rec.done && !rec.ok
-    const sizeStr = rec && rec.ok && rec.img ? `${rec.img.naturalWidth}×${rec.img.naturalHeight}` : ''
-    const animInfo = sizeStr ? loadTexAnimInfo(tex, rec.img.naturalWidth, rec.img.naturalHeight) : null
-    const animStr = animInfo ? ` · ${t('uv.animFrames', { n: animInfo.frames })}` : ''
-    const removedStr = !tex.url ? ` · ${t('uv.removed')}` : ''
-    const customStr = !tex.url || !state.customTex.has(state.activeTex) ? '' : ` · ${t('uv.custom')}`
-    let text =
-      (tex.name || '') +
-      (sizeStr ? ` · ${sizeStr}` : '') +
-      animStr +
-      customStr +
-      removedStr +
-      (failed ? ` · ${t('uv.missing')}` : '') +
-      ` · ${t('uv.faces', { n: faceCount })}`
-    if (state.drag && state.drag.moved) {
-      const f = state.drag.rc.face
-      text +=
-        '  ·  ' + `${t('uv.el')} ${state.drag.rc.elIdx} ${state.drag.rc.key} · uv [${f.uv.map(fmtUvNum).join(', ')}]`
-    } else if (state.hover) {
-      const f = state.hover.face
-      const parts = [`${t('uv.el')} ${layout.elements.indexOf(state.hover.el)}`, state.hover.key]
-      if (f.rotation) parts.push(`${t('uv.rot')} ${f.rotation}°`)
-      if (f.mirror) parts.push(t('uv.mirror'))
-      text += '  ·  ' + parts.join(' · ')
-    } else if (state.edit && state.selected) {
-      const f = state.selected.face
-      text +=
-        '  ·  ' + `${t('uv.el')} ${state.selected.elIdx} ${state.selected.key} · uv [${f.uv.map(fmtUvNum).join(', ')}]`
-    }
-    statusEl.textContent = text
-  }
 
   /* ── 脏状态 ─────────────────────────────────── */
 
@@ -1441,6 +1023,34 @@ export function createUvEditor(opts) {
       if (wrap.parentNode) wrap.parentNode.removeChild(wrap)
     } catch {}
   }
+
+  /* 导出模块的闭包状态注入 */
+  setUvExportHooks({
+    get_state: () => state,
+    t: t,
+    get_hooks: () => hooks
+  })
+
+  /* 状态刷新模块的闭包依赖注入 */
+  setUvStatusHooks({
+    get_state: () => state,
+    get_statusEl: () => statusEl,
+    t: t,
+    rebuildChips: rebuildChips,
+    draw: draw
+  })
+
+  /* 绘制模块的闭包状态注入（只读，getter 转发） */
+  setUvRenderHooks({
+    get_ctx: () => ctx,
+    get_canvas: () => canvas,
+    get_canvasWrap: () => canvasWrap,
+    get_state: () => state,
+    visible: visible,
+    t: t,
+    loadTexImage: loadTexImage,
+    loadTexAnimInfo: loadTexAnimInfo
+  })
 
   return {
     refresh,
