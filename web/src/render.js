@@ -84,6 +84,20 @@ import {
   renderPreviewModel,
   renderPreviewTex2d
 } from './rnd/model-cards.js'
+import { renderSidebar } from './rnd/sidebar.js'
+import { loadModelDiffView } from './rnd/diff-grid.js'
+import { renderCategoryBar, setHooks as setCategoryBarHooks } from './rnd/category-bar.js'
+import { bindPreviewImages, loadModelTex2dPreview, setHooks as setPreviewBindHooks } from './rnd/preview-bind.js'
+import { bindEmptyCellActions } from './rnd/empty-cell.js'
+import { bindResultSearch, setHooks as setResultSearchBindHooks } from './rnd/result-search-bind.js'
+import { initViewTabs } from './rnd/view-tabs.js'
+/* 门面 re-export：保持对外导出名不变 */
+export { initViewTabs } from './rnd/view-tabs.js'
+import { renderModelTypeResult, setHooks as setModelTypeResultHooks } from './rnd/model-type-result.js'
+
+/* 门面 re-export：这些函数原为本地 export，搬到子模块后仍须从本文件对外可见，
+   否则外部 import 拿到 undefined（曾导致浏览器报 does not provide an export named ...）。 */
+export { renderSidebar } from './rnd/sidebar.js'
 loadZhNames().catch(() => {})
 
 function zhOfKey(key) {
@@ -100,44 +114,6 @@ function zhOfKey(key) {
 const _searchFieldCache = new Map()
 function applyResultSearch(arr) {
   return filterByResultSearch(arr, state.resultSearchTerm, _searchFieldCache)
-}
-
-function bindResultSearch() {
-  const input = $('resultSearch')
-  if (!input) return
-  if (input.value !== (state.resultSearchTerm || '')) input.value = state.resultSearchTerm || ''
-  const clearBtn = $('resultSearchClear')
-  if (clearBtn) clearBtn.classList.toggle('is-hidden', !input.value)
-  if (input.dataset.bound) return
-  input.dataset.bound = '1'
-  let timer
-  input.addEventListener('input', () => {
-    clearTimeout(timer)
-    timer = setTimeout(() => {
-      state.resultSearchTerm = input.value
-      state.renderLimit = 200
-      saveOptions()
-      renderResult()
-    }, 180)
-  })
-  input.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && input.value) {
-      input.value = ''
-      state.resultSearchTerm = ''
-      state.renderLimit = 200
-      saveOptions()
-      renderResult()
-    }
-  })
-  if (clearBtn) {
-    clearBtn.addEventListener('click', () => {
-      input.value = ''
-      state.resultSearchTerm = ''
-      state.renderLimit = 200
-      saveOptions()
-      renderResult()
-    })
-  }
 }
 
 const _rowMap = new Map()
@@ -375,167 +351,6 @@ function modelTexRoleThumbs(grp, role) {
 }
 
 
-export function renderModelTypeResult() {
-  const body = $('modelGridBody')
-  if (!body) return
-  const result = state.result
-  let models = result.filter(g => g.isModel)
-  const onlyDiff = onlyMissingChk.checked
-  if (onlyDiff) models = models.filter(g => g.kind !== 'have')
-  const kindFilter = state.modelKindFilter || 'all'
-  if (kindFilter === 'diff') models = models.filter(g => g.kind !== 'have')
-  else if (kindFilter !== 'all') models = models.filter(g => g.kind === kindFilter)
-  models = models.filter(g => !state.hiddenKeys.has(g.key))
-  models = applyCategoryFilter(models)
-  models = applyResultSearch(models)
-  sortResult(models)
-  if (models.length === 0) {
-    let msg
-    if (!state.leftPath || !state.rightPath) msg = t('render.dragHint')
-    else if (result.length === 0) msg = t('render.bothEmpty')
-    else if (state.resultSearchTerm && state.resultSearchTerm.trim()) {
-      const baseModels = applyResultSearch(
-        applyCategoryFilter(
-          result
-            .filter(g => g.isModel)
-            .filter(g => !onlyMissingChk.checked || g.kind !== 'have')
-            .filter(g => !state.hiddenKeys.has(g.key))
-        )
-      )
-      msg = baseModels.length ? t('categoryFilter.noMatch', { q: state.resultSearchTerm.trim() }) : t('render.noModel')
-    } else msg = t('render.noModel')
-    body.innerHTML = `<div class="model-grid-empty">${msg}</div>`
-    return
-  }
-  const catMap = new Map()
-  const groupBy = state.modelGroupBy || 'type'
-  for (const g of models) {
-    let cat
-    if (groupBy === 'ns') cat = modelNsOf(g)
-    else if (groupBy === 'kind') cat = g.kind || 'unknown'
-    else if (groupBy === 'format') cat = modelFormatOf(g)
-    else if (groupBy === 'tex') cat = modelTexBucketOf(g, state.modelMeta)
-    else if (groupBy === 'anim') cat = modelAnimatedOf(g, state.modelMeta) ? 'animated' : 'static'
-    else if (groupBy === 'name') cat = modelNameBucketOf(g)
-    else if (groupBy === 'prefix') cat = modelPrefixBucketOf(g)
-    else if (groupBy === 'custom') cat = modelCustomGroupOf(g, state.modelGroupRules) || '__ungrouped__'
-    else {
-      const tp = modelTypeOf(g)
-      cat = tp === 'block' ? 'block' : tp === 'item' ? 'item' : 'other'
-    }
-    if (!catMap.has(cat)) catMap.set(cat, [])
-    catMap.get(cat).push(g)
-  }
-  const _groupDir = state.modelGroupDir === 'desc' ? -1 : 1
-  const catOrder =
-    groupBy === 'type'
-      ? _groupDir === 1
-        ? ['block', 'item', 'other']
-        : ['other', 'item', 'block']
-      : groupBy === 'kind'
-        ? (_groupDir === 1
-            ? ['have', 'diff', 'partial', 'miss', 'extra']
-            : ['extra', 'miss', 'partial', 'diff', 'have']
-          ).filter(k => catMap.has(k))
-        : [...catMap.keys()].sort((a, b) => a.localeCompare(b, 'zh') * _groupDir)
-  const frag = document.createDocumentFragment()
-  const limit = state.renderLimit
-  let rendered = 0
-  let truncated = false
-  const buildSummary = items => {
-    const fc = { have: 0, diff: 0, partial: 0, miss: 0, extra: 0 }
-    for (const g of items) fc[g.kind]++
-    const sp = []
-    if (fc.have) sp.push(`<span class="fc fc-have">✓${fc.have}</span>`)
-    if (fc.diff) sp.push(`<span class="fc fc-diff">≈${fc.diff}</span>`)
-    if (fc.partial) sp.push(`<span class="fc fc-partial">◐${fc.partial}</span>`)
-    if (fc.miss) sp.push(`<span class="fc fc-miss">✗${fc.miss}</span>`)
-    if (fc.extra) sp.push(`<span class="fc fc-extra">＋${fc.extra}</span>`)
-    return sp.join(' ')
-  }
-  const grid = state.modelViewMode !== 'list'
-
-
-  const toolbar = document.createElement('div')
-  toolbar.className = 'mc-toolbar'
-  toolbar.innerHTML =
-    `<div class="mc-view-seg">` +
-    `<button class="mc-view-btn${grid ? ' on' : ''}" data-mc-view="grid">${t('render.viewModelGrid')}</button>` +
-    `<button class="mc-view-btn${!grid ? ' on' : ''}" data-mc-view="list">${t('render.viewModelList')}</button>` +
-    `</div>`
-  toolbar.querySelectorAll('[data-mc-view]').forEach(b =>
-    b.addEventListener('click', () => {
-      state.modelViewMode = b.dataset.mcView
-      renderModelTypeResult()
-    })
-  )
-
-  frag.appendChild(toolbar)
-  for (const cat of catOrder) {
-    const items = catMap.get(cat)
-    if (!items || !items.length) continue
-    if (rendered >= limit) {
-      truncated = true
-      break
-    }
-    const catKey = '__cat__' + cat
-    const collapsed = state.collapsedFolders.has(catKey)
-    const catLabel =
-      groupBy === 'type'
-        ? t('category.' + cat)
-        : groupBy === 'anim'
-          ? t('category.anim.' + cat)
-          : groupBy === 'tex'
-            ? t('category.tex.' + cat, { n: cat })
-            : groupBy === 'custom' && cat === '__ungrouped__'
-              ? t('category.untagged')
-              : cat
-    const grp = document.createElement('div')
-    grp.className = 'mc-grp' + (collapsed ? ' collapsed' : '')
-    grp.dataset.cat = cat
-    grp.innerHTML = `<div class="mc-grp-head"><span class="mc-arrow">${collapsed ? '▸' : '▾'}</span><svg class="ico ico-sm"><use href="#i-cube"/></svg><span class="mc-grp-lbl">${escHtml(catLabel)}</span><span class="mc-grp-cnt">${t('render.modelTypeCount', { n: items.length })}</span><span class="mc-grp-sum">${buildSummary(items)}</span></div><div class="mc-grp-body"></div>`
-    grp.querySelector('.mc-grp-head').addEventListener('click', () => {
-      if (state.collapsedFolders.has(catKey)) state.collapsedFolders.delete(catKey)
-      else state.collapsedFolders.add(catKey)
-      renderModelTypeResult()
-    })
-    if (!collapsed) {
-      const grpBody = grp.querySelector('.mc-grp-body')
-      const wrap = document.createElement('div')
-      wrap.className = grid ? 'mc-cards' : 'mc-rows'
-      for (const g of items) {
-        if (rendered >= limit) {
-          truncated = true
-          break
-        }
-        if (grid) appendModelGridCard(wrap, g)
-        else appendModelCompareRow(wrap, g)
-        rendered++
-      }
-      grpBody.appendChild(wrap)
-    }
-    frag.appendChild(grp)
-  }
-  if (truncated) {
-    const more = document.createElement('div')
-    more.className = 'model-show-more'
-    more.innerHTML = `<button class="btn btn-ghost btn-sm">${t('render.showMore', { rendered, total: models.length })}</button>`
-    more.querySelector('button').addEventListener('click', () => {
-      state.renderLimit += 200
-      renderModelTypeResult()
-    })
-    frag.appendChild(more)
-  }
-  if (grid && state.selected && state.selected.isModel && models.includes(state.selected)) {
-    frag.appendChild(buildModelDetailPanel(state.selected))
-  }
-  body.innerHTML = ''
-  body.appendChild(frag)
-  observeThumbs(body)
-  observeModelThumbs(body)
-  prefetchModelThumbs(body)
-}
-
 async function loadModelTexComparePanel(row, g) {
   const wrap = row.querySelector('.mc-tex-wrap')
   if (!wrap) return
@@ -642,87 +457,6 @@ function renderMaterialPreviewHtml(matG) {
   return h
 }
 
-function bindPreviewImages(container) {
-  container.querySelectorAll('img').forEach(img => {
-    const cell = img.parentElement
-    cell.classList.add('pv-loading')
-    img.addEventListener('click', () => openPreview(img.src, img.dataset.name || ''))
-    img.addEventListener('load', () => {
-      cell.classList.remove('pv-loading')
-      const sl = cell.querySelector('.pv-size')
-      if (sl && img.naturalWidth) sl.textContent = `${img.naturalWidth}×${img.naturalHeight}`
-    })
-    img.addEventListener('error', () => {
-      cell.classList.remove('pv-loading')
-      cell.classList.add('pv-error')
-    })
-    const btn = document.createElement('button')
-    btn.className = 'pv-replace-btn'
-    btn.textContent = t('preview.replace')
-    btn.title = t('preview.replaceTitle')
-    btn.addEventListener('click', e => {
-      e.stopPropagation()
-      replaceWithExternalFile(img.dataset.path)
-    })
-    cell.appendChild(btn)
-    const delBtn = document.createElement('button')
-    delBtn.className = 'pv-delete-btn'
-    delBtn.textContent = t('preview.delete')
-    delBtn.title = t('preview.deleteTitle')
-    delBtn.addEventListener('click', e => {
-      e.stopPropagation()
-      deleteTexture(img.dataset.path)
-    })
-    cell.appendChild(delBtn)
-  })
-}
-
-async function loadModelTex2dPreview(container, g) {
-  if (!container) return
-  container.innerHTML = `<span class="mc-tex-loading">${t('render.modelTexLoading')}</span>`
-  const le = g.left && g.left.file,
-    re = g.right && g.right.file
-  const leftList =
-    le && isModelEntry(le)
-      ? await resolveModelTexList({ fileRoot: state.leftPath, rel: le.name }).catch(() => null)
-      : null
-  const rightList =
-    re && isModelEntry(re)
-      ? await resolveModelTexList({ fileRoot: state.rightPath, rel: re.name }).catch(() => null)
-      : null
-  if (!container.isConnected) return
-  const groupMap = new Map()
-  for (const grp of state.result) groupMap.set(grp.key, grp)
-  const seen = new Set()
-  const mats = []
-  for (const tx of [...(leftList || []), ...(rightList || [])]) {
-    const ap = textureAssetPath(tx.name)
-    if (!ap) continue
-    const dot = ap.lastIndexOf('.')
-    const key = dot >= 0 ? ap.slice(0, dot) : ap
-    if (seen.has(key)) continue
-    seen.add(key)
-    const grp = groupMap.get(key)
-    if (grp && grp.isMaterial) mats.push(grp)
-  }
-  if (!mats.length) {
-    container.innerHTML = `<span class="mc-tex-none">${t('render.modelTexNone')}</span>`
-    return
-  }
-  const frag = document.createDocumentFragment()
-  for (const matG of mats) {
-    const block = document.createElement('div')
-    block.className = 'pv-model-mat'
-    block.innerHTML = `<div class="pv-model-mat-title" title="${escAttr(matG.key)}">${escHtml(matG.key)} ${statusBadge(matG.kind)}</div>${renderMaterialPreviewHtml(matG)}`
-    frag.appendChild(block)
-    bindPreviewImages(block)
-    bindEmptyCellActions(block, matG)
-  }
-  container.innerHTML = ''
-  container.appendChild(frag)
-  observeThumbs(container)
-}
-
 function applyCategoryFilter(arr) {
   const f = state.categoryFilter
   if (!f) return arr
@@ -766,127 +500,6 @@ function buildCatRow(dim, labelKey, items, currentVal, scrollable) {
     })
     .join('')
   return `<div class="cat-row${scrollable ? ' cat-row-scroll' : ''}">${label}<div class="cat-btns">${btns}</div></div>`
-}
-
-function renderCategoryBar(baseSet) {
-  _lastBaseSet = baseSet || []
-  const bar = $('categoryBar')
-  if (!bar) return
-  const f = state.categoryFilter || { type: 'all', content: 'all', status: 'all', folder: 'all', tag: 'all' }
-  bindResultSearch()
-  const total = _lastBaseSet.length
-  if (total === 0) {
-    bar.innerHTML = ''
-    return
-  }
-
-  const typeCounts = { material: 0, model: 0, dir: 0, file: 0 }
-  const contentCounts = { block: 0, item: 0, other: 0 }
-  const statusCounts = { have: 0, diff: 0, partial: 0, miss: 0, extra: 0 }
-  const folderCounts = new Map()
-  const tagCounts = new Map()
-  let hasCustomTag = false
-  for (const g of _lastBaseSet) {
-    typeCounts[groupTypeOf(g)]++
-    const ck = groupContentKind(g)
-    if (ck === 'block') contentCounts.block++
-    else if (ck === 'item') contentCounts.item++
-    else contentCounts.other++
-    statusCounts[g.kind]++
-    const fo = folderOf(g)
-    folderCounts.set(fo, (folderCounts.get(fo) || 0) + 1)
-    const tg = groupTagOf(g, state.customTags)
-    if (tg) {
-      tagCounts.set(tg, (tagCounts.get(tg) || 0) + 1)
-      hasCustomTag = true
-    }
-  }
-
-  const rows = []
-  rows.push(
-    buildCatRow(
-      'type',
-      'category.typeLabel',
-      [
-        ['all', 'common.all', total],
-        ['material', 'type.material', typeCounts.material],
-        ['model', 'type.model', typeCounts.model],
-        ['dir', 'type.folder', typeCounts.dir],
-        ['file', 'type.file', typeCounts.file]
-      ],
-      f.type
-    )
-  )
-  if (contentCounts.block || contentCounts.item) {
-    rows.push(
-      buildCatRow(
-        'content',
-        'category.contentLabel',
-        [
-          ['all', 'common.all', total],
-          ['block', 'category.block', contentCounts.block],
-          ['item', 'category.item', contentCounts.item],
-          ['other', 'category.other', contentCounts.other]
-        ],
-        f.content
-      )
-    )
-  }
-  rows.push(
-    buildCatRow(
-      'status',
-      'category.statusLabel',
-      [
-        ['all', 'common.all', total],
-        ['have', 'status.haveShort', statusCounts.have],
-        ['diff', 'status.diffShort', statusCounts.diff],
-        ['partial', 'status.partialShort', statusCounts.partial],
-        ['miss', 'status.missShort', statusCounts.miss],
-        ['extra', 'status.extraShort', statusCounts.extra]
-      ],
-      f.status
-    )
-  )
-  if (folderCounts.size > 1) {
-    const items = [['all', 'common.all', total]]
-    const folders = [...folderCounts.keys()].sort((a, b) => a.localeCompare(b, 'zh'))
-    for (const fo of folders) items.push([fo, null, folderCounts.get(fo), fo])
-    rows.push(buildCatRow('folder', 'category.folderLabel', items, f.folder, true))
-  }
-  if (hasCustomTag) {
-    let tagged = 0
-    for (const v of tagCounts.values()) tagged += v
-    const noneCount = total - tagged
-    const items = [
-      ['all', 'common.all', total],
-      ['none', 'category.untagged', noneCount]
-    ]
-    const tags = [...tagCounts.keys()].sort((a, b) => a.localeCompare(b, 'zh'))
-    for (const tg of tags) items.push([tg, null, tagCounts.get(tg), tg])
-    rows.push(buildCatRow('tag', 'category.tagLabel', items, f.tag, true))
-  }
-
-  bar.innerHTML = rows.join('')
-  bar.querySelectorAll('.cat-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const dim = btn.dataset.dim,
-        val = btn.dataset.val
-      if (state.categoryFilter[dim] === val) return
-      state.categoryFilter[dim] = val
-      state.renderLimit = 200
-      saveOptions()
-      renderResult()
-    })
-  })
-  bar.querySelectorAll('.cat-select').forEach(sel => {
-    sel.addEventListener('change', () => {
-      const dim = sel.dataset.dim
-      state.categoryFilter[dim] = sel.value
-      state.renderLimit = 200
-      saveOptions()
-      renderResult()
-    })
-  })
 }
 
 export function renderResult() {
@@ -1102,61 +715,6 @@ function pvCell(entry, side) {
   return `<div class="pv-cell"><span class="pv-tag">${side}</span><img src="${url}" data-name="${entry.name}" data-path="${entry.fullPath}" alt="" /><span class="pv-size"></span></div>`
 }
 
-function bindEmptyCellActions(panel, g) {
-  if (!state.rightPath) return
-  panel.querySelectorAll('.pv-row').forEach(row => {
-    const cells = row.querySelectorAll('.pv-cell')
-    if (cells.length < 2) return
-    const rightCell = cells[1]
-    if (rightCell.querySelector('img')) return
-    const role = row.dataset.role
-    let le = null
-    if (g.isMaterial) le = g.left && g.left[role]
-    else le = g.left && (g.left.file || g.left.dir)
-    const hasLeft = le && !le.isDirectory
-    const canBlank = g.isMaterial && (role === 'normal' || role === 'specular')
-    if (!hasLeft && !canBlank) return
-    const empty = rightCell.querySelector('.pv-empty')
-    if (empty) empty.remove()
-    const actions = document.createElement('div')
-    actions.className = 'pv-empty-actions'
-    if (hasLeft) {
-      const rel = relPath(state.leftPath, le.fullPath)
-      const dest = joinPath(state.rightPath, rel)
-      const copyBtn = document.createElement('button')
-      copyBtn.className = 'pv-empty-btn pv-empty-copy'
-      copyBtn.textContent = t('preview.copyFromLeft')
-      copyBtn.title = t('preview.copyFromLeftTitle')
-      copyBtn.addEventListener('click', e => {
-        e.stopPropagation()
-        copySingleToRight(le.fullPath, dest)
-      })
-      actions.appendChild(copyBtn)
-      const addBtn = document.createElement('button')
-      addBtn.className = 'pv-empty-btn pv-empty-add'
-      addBtn.textContent = t('preview.addTex')
-      addBtn.title = t('preview.addTexTitle')
-      addBtn.addEventListener('click', e => {
-        e.stopPropagation()
-        addTextureToRight(dest)
-      })
-      actions.appendChild(addBtn)
-    }
-    if (canBlank) {
-      const createBtn = document.createElement('button')
-      createBtn.className = 'pv-empty-btn pv-empty-create'
-      createBtn.textContent = t('preview.createBlank')
-      createBtn.title = role === 'normal' ? t('preview.createBlankNormalTitle') : t('preview.createBlankSpecularTitle')
-      createBtn.addEventListener('click', e => {
-        e.stopPropagation()
-        createBlankTextureToRight(g, role)
-      })
-      actions.appendChild(createBtn)
-    }
-    rightCell.appendChild(actions)
-  })
-}
-
 const MD_MAX_LINES = 600
 
 async function fetchModelText(entry) {
@@ -1251,103 +809,6 @@ function modelSumLine(text) {
 function mdRow(l, r, cls) {
   return `<div class="md-cell ${l ? cls : 'md-gap'}">${l ? escHtml(l) : ''}</div><div class="md-cell ${r ? cls : 'md-gap'}">${r ? escHtml(r) : ''}</div>`
 }
-
-function renderModelDiffGrid(grid, lt, rt, g) {
-  const a = typeof lt === 'string' && lt ? parseModelText(lt).pretty.split('\n') : []
-  const b = typeof rt === 'string' && rt ? parseModelText(rt).pretty.split('\n') : []
-  const truncated = a.length > MD_MAX_LINES || b.length > MD_MAX_LINES
-  const as = a.slice(0, MD_MAX_LINES),
-    bs = b.slice(0, MD_MAX_LINES)
-  const showCopy = g && g.isModel && state.rightPath && g.left && (g.left.file || g.left.dir)
-  const copyBtn = showCopy
-    ? `<button class="md-head-btn" data-act="copy-model-right" title="${escAttr(t('detail.copyModel'))}"><svg class="ico ico-sm"><use href="#i-clipboard"/></svg><span>${escHtml(t('detail.copyModel'))}</span></button>`
-    : ''
-  const importBtn =
-    g && g.isModel && state.rightPath
-      ? `<button class="md-head-btn" data-act="upload-model-right" title="${escAttr(t('detail.uploadModel'))}"><svg class="ico ico-sm"><use href="#i-plus"/></svg><span>${escHtml(t('detail.uploadModel'))}</span></button>`
-      : ''
-  let html = `<div class="md-cell md-head">${t('common.left')}</div><div class="md-cell md-head md-head-right"><span>${t('common.right')}</span>${copyBtn}${importBtn}</div>`
-  if (!as.length && !bs.length) {
-    html += `<div class="md-cell md-empty">${t('render.noData')}</div><div class="md-cell md-empty"></div>`
-  } else {
-    const ops = diffLines(as, bs)
-    if (ops) {
-      for (const op of ops) {
-        if (op.type === 'same') html += mdRow(op.text, op.text, 'md-same')
-        else if (op.type === 'del') html += mdRow(op.text, '', 'md-del')
-        else html += mdRow('', op.text, 'md-add')
-      }
-    } else {
-      const rows = Math.max(as.length, bs.length)
-      for (let i = 0; i < rows; i++) html += mdRow(as[i] || '', bs[i] || '', 'md-same')
-    }
-  }
-  if (truncated)
-    html += `<div class="md-cell md-trunc">${t('preview.modelTruncated', { n: MD_MAX_LINES })}</div><div class="md-cell md-trunc"></div>`
-  grid.innerHTML = html
-  const importBtnEl = grid.querySelector('.md-head-right [data-act="upload-model-right"]')
-  if (importBtnEl)
-    importBtnEl.addEventListener('click', ev => {
-      ev.stopPropagation()
-      handleAction('upload-model-right', g)
-    })
-  const copyBtnEl = grid.querySelector('.md-head-right [data-act="copy-model-right"]')
-  if (copyBtnEl)
-    copyBtnEl.addEventListener('click', ev => {
-      ev.stopPropagation()
-      handleAction('copy-model-right', g)
-    })
-}
-
-async function loadModelDiffView(g, panel) {
-  const grid = panel.querySelector('.md-grid')
-  const sumEl = panel.querySelector('.pv-model-sum')
-  if (!grid || !sumEl) return
-  const le = g.left && g.left.file,
-    re = g.right && g.right.file
-  const [lt, rt] = await Promise.all([fetchModelText(le), fetchModelText(re)])
-  if (state.selected !== g) return
-  const modelName = modelBaseNameOf(g) || '—'
-  sumEl.innerHTML =
-    `<div class="pv-model-sum-row pv-model-name-row"><span class="pv-model-tag">${t('preview.modelName')}</span><span class="pv-model-name">${escHtml(modelName)}</span></div>` +
-    `<div class="pv-model-sum-row"><span class="pv-model-tag">${t('common.left')}</span><span>${escHtml(modelSumLine(lt))}</span></div>` +
-    `<div class="pv-model-sum-row"><span class="pv-model-tag">${t('common.right')}</span><span>${escHtml(modelSumLine(rt))}</span></div>`
-  renderModelDiffGrid(grid, lt, rt, g)
-
-  const refEl = panel.querySelector('.pv-tex-refs')
-  if (refEl) {
-    const leftPaths = new Set(state.leftEntries.filter(e => !e.isDirectory).map(e => e.name))
-    const rightPaths = new Set(state.rightEntries.filter(e => !e.isDirectory).map(e => e.name))
-    const vanillaSet = await getVanillaTexSet()
-    if (state.selected !== g) return
-    const leftObj = await resolveModelTexturesDeep(lt, state.leftPath)
-    if (state.selected !== g) return
-    const rightObj = await resolveModelTexturesDeep(rt, state.rightPath)
-    if (state.selected !== g) return
-    const leftRefs = leftObj ? checkTexRefs(leftObj, leftPaths, vanillaSet) : []
-    const rightRefs = rightObj ? checkTexRefs(rightObj, rightPaths, vanillaSet) : []
-    const renderRefList = (refs, tag) => {
-      if (!refs.length) return ''
-      const items = refs
-        .map(r => {
-          const cls = r.exists ? 'tex-ref-ok' : r.vanilla ? 'tex-ref-vanilla' : 'tex-ref-miss'
-          const badge = r.vanilla ? `<span class="tex-ref-badge">${t('preview.texRefVanilla')}</span>` : ''
-          const ico = r.exists
-            ? `<svg class="ico ico-sm"><use href="#i-check"/></svg>`
-            : r.vanilla
-              ? ''
-              : `<svg class="ico ico-sm"><use href="#i-x"/></svg>`
-          return `<div class="tex-ref-item ${cls}">${ico}${badge}<span class="tex-ref-path">${escHtml(r.ref)}</span></div>`
-        })
-        .join('')
-      return `<div class="tex-ref-group"><span class="pv-model-tag">${tag}</span>${items}</div>`
-    }
-    const allRefs = renderRefList(leftRefs, t('common.left')) + renderRefList(rightRefs, t('common.right'))
-    refEl.innerHTML = allRefs
-    refEl.style.display = allRefs ? '' : 'none'
-  }
-}
-
 /* 确保 3D 视口就绪。autoSwitch=true 时（用户主动操作）才切到预览面板 3D tab；
    自动选中模型时不切 tab，保留用户当前的 2D/3D 选择，避免 2D 内容被切走。 */
 function tryActivateCompareModelViewport(autoSwitch = false) {
@@ -1405,133 +866,6 @@ async function loadModelTexEffectPreview(g, leftTexUrl, rightTexUrl) {
     })
   } catch {}
 }
-
-export function renderSidebar() {
-  const g = state.selected
-  const panel = $('previewPanel')
-
-  const mat3dContainer = $('material3dContainer')
-
-  if (mat3dContainer) initMaterial3D(mat3dContainer)
-
-  if (!g) {
-    panel.innerHTML = `<div class="pv-hint">${t('preview.hint')}</div>`
-
-    updateMaterial3D(null)
-    clearCustomModel()
-    setModelEmptyHint('')
-    return
-  }
-
-  updateMaterial3D(g.isMaterial ? g : null)
-  if (!g.isModel) {
-    clearCustomModel()
-    setModelEmptyHint('')
-  }
-
-  let html = ''
-  const diffPairs = []
-  if (g.isMaterial) {
-    const hasMain = (g.left && g.left.main) || (g.right && g.right.main)
-    for (const role of ROLES) {
-      const le = g.left && g.left[role],
-        re = g.right && g.right[role]
-      if (!le && !re) {
-        if ((role === 'normal' || role === 'specular') && hasMain && state.rightPath)
-          html += `<div class="pv-row pv-row-empty" data-role="${role}"><span class="pv-role">${ROLE_LABEL[role]}</span>${pvCell(null, t('common.left'))}${pvCell(null, t('common.right'))}</div>`
-        continue
-      }
-      html += `<div class="pv-row" data-role="${role}"><span class="pv-role">${ROLE_LABEL[role]}</span>${pvCell(le, t('common.left'))}${pvCell(re, t('common.right'))}</div>`
-      if (le && re && !le.isDirectory && !re.isDirectory && isImageFile(le.name) && isImageFile(re.name))
-        diffPairs.push([le, re, ROLE_LABEL[role]])
-    }
-  } else if (g.isDir) {
-    html = `<div class="pv-hint">${t('preview.folder')}</div>`
-  } else if (g.isModel) {
-    const tab = state.modelPreviewTab === 'tex2d' ? 'tex2d' : 'model'
-    html =
-      `<div class="pv-model">` +
-      `<div class="pv-model-tabs">` +
-      `<button class="pv-model-tab${tab === 'model' ? ' on' : ''}" data-pv-mtab="model">${t('render.previewTabModel')}</button>` +
-      `<button class="pv-model-tab${tab === 'tex2d' ? ' on' : ''}" data-pv-mtab="tex2d">${t('render.previewTabTex2d')}</button>` +
-      `</div>` +
-      `<div class="pv-model-sum">${t('toast.computing')}</div>` +
-      `<div class="pv-model-preview"${tab === 'model' ? '' : ' style="display:none"'}></div>` +
-      `<div class="pv-model-texs mc-tex-wrap"${tab === 'tex2d' ? '' : ' style="display:none"'}>${t('toast.computing')}</div>` +
-      `<div class="md-grid"><div class="md-cell md-load">${t('toast.computing')}</div><div class="md-cell md-load">${t('toast.computing')}</div></div>` +
-      `<div class="pv-tex-refs" style="display:none"></div>` +
-      `</div>`
-  } else {
-    const le = g.left && (g.left.file || g.left.dir),
-      re = g.right && (g.right.file || g.right.dir)
-    html = `<div class="pv-row" data-role="file"><span class="pv-role">${t('preview.file')}</span>${pvCell(le, t('common.left'))}${pvCell(re, t('common.right'))}</div>`
-    if (le && re && !le.isDirectory && !re.isDirectory && isImageFile(le.name) && isImageFile(re.name))
-      diffPairs.push([le, re, t('preview.file')])
-  }
-  if (diffPairs.length) {
-    html += `<div class="pv-diff-btn-bar"><button class="btn btn-ghost btn-sm" id="pixelDiffBtn">${t('preview.pixelDiff')}</button></div>`
-  }
-  panel.querySelectorAll('.pv-row').forEach(row => {
-    if (row._splitCleanup) row._splitCleanup()
-  })
-  panel.innerHTML = html
-  panel.querySelectorAll('img').forEach(img => {
-    const cell = img.parentElement
-    cell.classList.add('pv-loading')
-    img.addEventListener('click', () => openPreview(img.src, img.dataset.name || ''))
-    img.addEventListener('load', () => {
-      cell.classList.remove('pv-loading')
-      const sl = cell.querySelector('.pv-size')
-      if (sl && img.naturalWidth) sl.textContent = `${img.naturalWidth}×${img.naturalHeight}`
-    })
-    img.addEventListener('error', () => {
-      cell.classList.remove('pv-loading')
-      cell.classList.add('pv-error')
-    })
-    const btn = document.createElement('button')
-    btn.className = 'pv-replace-btn'
-    btn.textContent = t('preview.replace')
-    btn.title = t('preview.replaceTitle')
-    btn.addEventListener('click', e => {
-      e.stopPropagation()
-      replaceWithExternalFile(img.dataset.path)
-    })
-    cell.appendChild(btn)
-    const delBtn = document.createElement('button')
-    delBtn.className = 'pv-delete-btn'
-    delBtn.textContent = t('preview.delete')
-    delBtn.title = t('preview.deleteTitle')
-    delBtn.addEventListener('click', e => {
-      e.stopPropagation()
-      deleteTexture(img.dataset.path)
-    })
-    cell.appendChild(delBtn)
-  })
-  bindEmptyCellActions(panel, g)
-
-  const diffBtn = $('pixelDiffBtn')
-  if (diffBtn) diffBtn.addEventListener('click', () => showPixelDiff(diffPairs, panel))
-  if (g.isModel) {
-    loadModelDiffView(g, panel)
-    loadModelPreview(g)
-    const tab = state.modelPreviewTab === 'tex2d' ? 'tex2d' : 'model'
-    if (tab === 'model') {
-      const pv = panel.querySelector('.pv-model-preview')
-      if (pv) renderPreviewModel(pv, g)
-    } else {
-      loadModelTex2dPreview(panel.querySelector('.pv-model-texs'), g)
-    }
-    panel.querySelectorAll('[data-pv-mtab]').forEach(b =>
-      b.addEventListener('click', () => {
-        state.modelPreviewTab = b.dataset.pvMtab
-        renderSidebar()
-      })
-    )
-  }
-
-  enhancePreview()
-}
-
 export function updateSortIndicators() {
   document.querySelectorAll('.result-table th[data-key]').forEach(th => {
     th.classList.remove('asc', 'desc')
@@ -1540,14 +874,6 @@ export function updateSortIndicators() {
     }
   })
 }
-
-export function initViewTabs() {
-  document.querySelectorAll('input[name="viewMode"]').forEach(r => {
-    r.checked = r.value === state.viewMode
-  })
-}
-
-
 
 /* 模型卡片模块的段外依赖注入（该模块正文按裸标识符引用这些符号） */
 setModelCardHooks({
@@ -1558,4 +884,28 @@ setModelCardHooks({
   selectGroup: selectGroup,
   loadModelTexComparePanel: loadModelTexComparePanel,
   statusBadge: statusBadge
+})
+
+/* 分类栏模块的段外依赖注入 */
+setCategoryBarHooks({
+  bindResultSearch: bindResultSearch,
+  buildCatRow: buildCatRow,
+  renderResult: renderResult,
+  getLastBaseSet: () => _lastBaseSet,
+  setLastBaseSet: (v) => {
+    _lastBaseSet = v
+  }
+})
+
+
+/* 预览绑定模块的段外依赖注入 */
+setPreviewBindHooks({ bindEmptyCellActions: bindEmptyCellActions })
+
+/* 结果搜索绑定模块的段外依赖注入 */
+setResultSearchBindHooks({ renderResult: renderResult })
+
+/* 模型类型结果模块的段外依赖注入 */
+setModelTypeResultHooks({
+  applyCategoryFilter: applyCategoryFilter,
+  applyResultSearch: applyResultSearch
 })
