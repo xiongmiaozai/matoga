@@ -34,6 +34,9 @@ import { fileUrl, apiUrl, joinPath } from './url-utils.js'
 import { defaultFaceUv, resolveItemDefRefs, MAX_ITEM_DEF_DEPTH } from './mcv/geometry.js'
 import { rawUrl, texCacheKey, fetchJson, fetchOkData, parentModelPath, setHooks as setMcvPathsHooks } from './mcv/paths.js'
 import { applyItemTransformation, getOfficialPack, parseAnimMeta, animFrameIndexAt, setHooks as setMcvGeoToolsHooks } from './mcv/geo-tools.js'
+import { clamp01, colormapRel, loadColormapData, sampleColormap, resolveTintColor, infer2dTintType, sampleTintForTexture, textureAssetPath, loadTextureCached, setHooks as setHooks } from './mcv/tex-tools.js'
+/* 门面 re-export（§2.3） */
+export { clamp01, colormapRel, loadColormapData, sampleColormap, resolveTintColor, infer2dTintType, sampleTintForTexture, textureAssetPath, loadTextureCached } from './mcv/tex-tools.js'
 /* 门面 re-export（文档 §2.3） */
 export { applyItemTransformation, getOfficialPack, parseAnimMeta, animFrameIndexAt } from './mcv/geo-tools.js'
 /* 门面 re-export：这些函数原为本地 export，搬走后仍须从本文件对外可见 */
@@ -83,83 +86,7 @@ const BIOMES = [
 let currentBiome = BIOMES[0]
 const colormapCache = new Map() /* key → Promise<ImageData|null> */
 
-function clamp01(v) {
-  return v < 0 ? 0 : v > 1 ? 1 : v
-}
-
-function colormapRel(type) {
-  return `assets/minecraft/textures/colormap/${type}.png`
-}
-
-function loadColormapData(api, packName, type, fileRoot) {
-  const ck = texCacheKey(api, packName, colormapRel(type), fileRoot)
-  if (!colormapCache.has(ck)) {
-    const url = rawUrl(api, packName, colormapRel(type), fileRoot, false)
-    const p = (async () => {
-      try {
-        const res = await fetch(url)
-        if (!res.ok) return null
-        const blob = await res.blob()
-        if (typeof createImageBitmap !== 'function') return null
-        const bmp = await createImageBitmap(blob)
-        const w = bmp.width,
-          h = bmp.height
-        const ctx =
-          typeof OffscreenCanvas !== 'undefined'
-            ? new OffscreenCanvas(w, h).getContext('2d')
-            : (() => {
-                const c = document.createElement('canvas')
-                c.width = w
-                c.height = h
-                return c.getContext('2d')
-              })()
-        ctx.drawImage(bmp, 0, 0)
-        return ctx.getImageData(0, 0, w, h)
-      } catch {
-        return null
-      }
-    })()
-    colormapCache.set(ck, p)
-  }
-  return colormapCache.get(ck)
-}
-
-function sampleColormap(img, temp, downfall) {
-  if (!img) return null
-  const W = img.width,
-    H = img.height,
-    d = img.data
-  const ct = clamp01(temp),
-    cd = clamp01(downfall)
-  const adjD = cd * ct
-  const x = Math.min(W - 1, Math.max(0, Math.floor((1 - ct) * (W - 1))))
-  const y = Math.min(H - 1, Math.max(0, Math.floor((1 - adjD) * (H - 1))))
-  const i = (y * W + x) * 4
-  return new THREE.Color(d[i] / 255, d[i + 1] / 255, d[i + 2] / 255)
-}
-
 /* tintindex + tints（item 定义）→ 染色颜色；texPath 用于无 tints 时启发式推断类型 */
-async function resolveTintColor(tintIndex, tints, biome, texPath, api, packName, fileRoot, fallbackRoot) {
-  let tint = null
-  if (Array.isArray(tints) && tints[tintIndex]) tint = tints[tintIndex]
-  let type = tint && typeof tint.type === 'string' ? tint.type.replace(/^[^:]*:/, '') : ''
-  if (!type) {
-    const tn = (texPath || '').toLowerCase()
-    type = tn.includes('leaves') || tn.includes('vine') || tn.includes('lily') ? 'foliage' : 'grass'
-  }
-  const temp = tint && Number.isFinite(+tint.temperature) ? +tint.temperature : biome.temperature
-  const down = tint && Number.isFinite(+tint.downfall) ? +tint.downfall : biome.downfall
-  if (type === 'constant') {
-    const v = tint && Number.isFinite(+tint.value) ? +tint.value | 0 : 0xffffff
-    const rgb = v & 0xffffff
-    return new THREE.Color(((rgb >> 16) & 0xff) / 255, ((rgb >> 8) & 0xff) / 255, (rgb & 0xff) / 255)
-  }
-  const cmType = type === 'foliage' ? 'foliage' : 'grass'
-  let img = await loadColormapData(api, packName, cmType, fileRoot)
-  if (!img && fallbackRoot) img = await loadColormapData(api, packName, cmType, fallbackRoot)
-  return sampleColormap(img, temp, down)
-}
-
 export function getMcBiomes() {
   return BIOMES
 }
@@ -181,46 +108,9 @@ const CONSTANT_TINTS = {
   lava_still: [0xfe, 0xa1, 0x00],
   lava_flow: [0xfe, 0xa1, 0x00]
 }
-function infer2dTintType(base) {
-  if (CONSTANT_TINTS[base]) return 'constant'
-  if (/^(vine|lily_pad|leaf_litter)$/.test(base)) return 'foliage'
-  if (/^bamboo_/.test(base)) return 'grass'
-  if (/_leaves$/.test(base)) return 'foliage'
-  if (
-    /^(grass_block_top|grass_block_side_overlay|short_grass|fern|tall_grass_top|tall_grass_bottom|large_fern_top|large_fern_bottom|sugar_cane|bush|wildflowers|pink_petals|pumpkin_stem|melon_stem|attached_pumpkin_stem|attached_melon_stem|short_dry_grass|tall_dry_grass|seagrass|tall_seagrass_top|tall_seagrass_bottom)$/.test(
-      base
-    )
-  )
-    return 'grass'
-  return null
-}
-
 /* 供 2D 贴图预览复用：贴图绝对路径 → 当前生物群系下的染色颜色 {r,g,b} 0-1 或 null。
     constant 类型直接返回固定色；grass/foliage 从路径中 assets/minecraft/textures/
     前缀推断资源包根，加载 colormap 并采样 */
-export async function sampleTintForTexture(texFullPath) {
-  if (!texFullPath) return null
-  const norm = String(texFullPath).replace(/\\/g, '/')
-  const base = norm
-    .split('/')
-    .pop()
-    .replace(/\.[^.]+$/, '')
-    .toLowerCase()
-  const type = infer2dTintType(base)
-  if (!type) return null
-  if (type === 'constant') {
-    const rgb = CONSTANT_TINTS[base]
-    return { r: rgb[0] / 255, g: rgb[1] / 255, b: rgb[2] / 255 }
-  }
-  const amIdx = norm.toLowerCase().indexOf('/assets/minecraft/textures/')
-  if (amIdx < 0) return null
-  const fileRoot = texFullPath.slice(0, amIdx)
-  const cmType = type === 'foliage' ? 'foliage' : 'grass'
-  const img = await loadColormapData(undefined, undefined, cmType, fileRoot)
-  const c = sampleColormap(img, currentBiome.temperature, currentBiome.downfall)
-  return c ? { r: c.r, g: c.g, b: c.b } : null
-}
-
 /* 最近一次成功展示的模型 UV 布局（uv-view 浮窗数据源） */
 let lastLayout = null
 let lastLayoutPair = null /* 左右对比布局 { left, right }，仅 pair 路径设置；单模型为 null */
@@ -243,19 +133,6 @@ const SPECIAL_TEX_RE = /^(data:|file:|https?:\/\/|\/)/i
 
 function isSpecialTexPath(p) {
   return typeof p === 'string' && SPECIAL_TEX_RE.test(p)
-}
-
-export function textureAssetPath(ref) {
-  if (typeof ref !== 'string' || !ref) return null
-  let ns = 'minecraft',
-    rest = ref
-  const ci = ref.indexOf(':')
-  if (ci >= 0) {
-    ns = ref.slice(0, ci)
-    rest = ref.slice(ci + 1)
-  }
-  if (!rest) return null
-  return `assets/${ns}/textures/${TEX_REF_EXT_RE.test(rest) ? rest : rest + '.png'}`
 }
 
 /* 引用值 → 贴图路径（扩展引用原样；标准引用走命名空间解析） */
@@ -817,19 +694,6 @@ function makeModelMaterial(tex, withParallax = false) {
   }
   if (tex) m.map = applyTexParams(tex)
   return m
-}
-
-function loadTextureCached(key, url) {
-  if (!texCache.has(key)) {
-    const loader = new THREE.TextureLoader()
-    /* 失败不缓存（下次可重试） */
-    const p = loader.loadAsync(url).catch(() => {
-      texCache.delete(key)
-      return null
-    })
-    texCache.set(key, p)
-  }
-  return texCache.get(key)
 }
 
 /* 官方材质包缓存（懒加载）：贴图加载失败时回退到 official-packs 加载 vanilla 贴图。
@@ -1949,4 +1813,13 @@ setMcvPathsHooks({ isSpecialTexPath })
 /* geo-tools 模块的常量注入（常量留主文件） */
 setMcvGeoToolsHooks({
   get_TICKS_PER_SEC: () => TICKS_PER_SEC
+})
+
+/* 贴图与着色工具 常量注入 */
+setHooks({
+  get_colormapCache: () => colormapCache,
+  get_CONSTANT_TINTS: () => CONSTANT_TINTS,
+  get_currentBiome: () => currentBiome,
+  get_TEX_REF_EXT_RE: () => TEX_REF_EXT_RE,
+  get_texCache: () => texCache
 })
