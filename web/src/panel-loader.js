@@ -34,6 +34,12 @@ function resolveMount(mount) {
   return document.querySelector(mount) || document.body
 }
 
+// 查找父面板 host：parent 指定时挂到父面板 .panel-host 内部，实现嵌套层级。
+function resolveParentMount(parent) {
+  if (!parent) return null
+  return document.querySelector(`.panel-host[data-panel-id="${parent}"]`) || null
+}
+
 export async function loadPanel(p) {
   try {
     if (p.cssUrl) {
@@ -50,12 +56,18 @@ export async function loadPanel(p) {
       const html = await r.text()
       const tpl = document.createElement('template')
       tpl.innerHTML = html.trim()
-      const mount = resolveMount(p.mount)
-      const useHost = !p.mount || p.mount === 'body' || p.mount === 'head'
+      const parentHost = resolveParentMount(p.parent)
+      const mount = parentHost || resolveMount(p.mount)
+      const useHost = parentHost != null || !p.mount || p.mount === 'body' || p.mount === 'head'
       if (useHost) {
         const host = document.createElement('div')
         host.className = 'panel-host'
         host.dataset.panelId = p.id
+        // 注意：不给 host 设 position/z-index。
+        // 面板内部含 position:fixed 元素（如右键菜单 z-index:9999、资产弹出框 10000），
+        // 若 host 创建 stacking context（position:relative+z-index），会把内部 fixed 元素
+        // 困在 host 内，破坏其与 header 下拉（ws-dropdown z-index:9999 等）的层叠关系，
+        // 导致下拉浮层被遮挡或空框浮在顶部。level/group/zIndex 仅作元数据供管理 UI 使用。
         host.appendChild(tpl.content.cloneNode(true))
         mount.appendChild(host)
         applyI18n(host)
@@ -98,5 +110,8 @@ export async function initPanelLoader() {
 }
 
 export function getPanelDefs() {
-  return (_manifests || []).map(p => ({ id: p.id, title: p.title, icon: p.icon }))
+  return (_manifests || []).map(p => ({
+    id: p.id, title: p.title, icon: p.icon,
+    level: p.level, group: p.group, parent: p.parent, zIndex: p.zIndex,
+  }))
 }

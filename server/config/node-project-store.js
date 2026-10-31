@@ -18,7 +18,8 @@ const crypto = require('crypto')
 const { logger } = require('../middleware/logger')
 const { DATA_ROOT } = require('../paths')
 const { AppError } = require('../lib/errors')
-const { atomicWrite } = require('./atomic-write')
+const { atomicWrite, atomicWriteAsync } = require('./atomic-write')
+const { readJsonMtu } = require('./json-cache')
 const configStore = require('./config-store')
 
 const DEFAULT_DIR = path.join(DATA_ROOT, 'data', 'node-projects')
@@ -36,6 +37,8 @@ const ID_RE = /^[A-Za-z0-9_-]{1,64}$/
 const IMG_EXT_RE = /\.(png|jpe?g|webp|gif|bmp|tiff?|avif|svg|ico)$/i
 
 let writeQueue = Promise.resolve()
+
+let _listCache = null // { sig, items }
 
 function sanitizeName(name) {
   if (typeof name !== 'string') return null
@@ -83,7 +86,7 @@ function newId() {
 
 function readProjectMeta(id) {
   try {
-    const raw = JSON.parse(fs.readFileSync(projectFile(id), 'utf8'))
+    const raw = readJsonMtu(projectFile(id))
     if (raw && raw.format === FORMAT && raw.meta && Array.isArray(raw.graph && raw.graph.nodes)) {
       return {
         id,
@@ -105,22 +108,36 @@ function readProjectMeta(id) {
 
 function list() {
   fs.mkdirSync(dir(), { recursive: true })
-  const out = []
   let entries
   try {
     entries = fs.readdirSync(dir(), { withFileTypes: true })
   } catch {
-    return out
+    return []
   }
+  const ids = []
   for (const e of entries) {
     if (!e.isDirectory() || !e.name.endsWith('.mtgp')) continue
     const id = e.name.slice(0, -5)
-    if (!ID_RE.test(id)) continue
+    if (ID_RE.test(id)) ids.push(id)
+  }
+  // 目录签名：dir() + 各 project.json mtime，任一变化则重新解析
+  let sig = dir()
+  try {
+    sig += '\n' + ids.map((id) => {
+      const st = fs.statSync(projectFile(id))
+      return `${id}:${st.mtimeMs}`
+    }).join('|')
+  } catch { sig += '\n' }
+  if (_listCache && _listCache.sig === sig) return _listCache.items
+
+  const out = []
+  for (const id of ids) {
     const meta = readProjectMeta(id)
     if (meta) out.push(meta)
     if (out.length >= MAX_PROJECTS) break
   }
   out.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+  _listCache = { sig, items: out }
   return out
 }
 
@@ -249,7 +266,7 @@ async function save({ id, name, graph, thumbnail, textures }) {
       graph: cleanGraph,
       textures: texMeta
     }
-    atomicWrite(projectFile(finalId), JSON.stringify(doc, null, 2))
+    await atomicWriteAsync(projectFile(finalId), JSON.stringify(doc, null, 2))
     return finalId
   }
 
@@ -307,8 +324,8 @@ function remove(id) {
     throw e
   }
   const dir = projectDir(id)
-  const run = () => {
-    fs.rmSync(dir, { recursive: true, force: true })
+  const run = async () => {
+    await fs.promises.rm(dir, { recursive: true, force: true })
   }
   writeQueue = writeQueue.then(run, run)
   return writeQueue
@@ -322,13 +339,13 @@ function rename(id, name) {
     throw e
   }
   const doc = load(id)
-  const run = () => {
+  const run = async () => {
     const file = projectFile(id)
     const raw = JSON.parse(fs.readFileSync(file, 'utf8'))
     raw.meta = raw.meta || {}
     raw.meta.name = cleanName
     raw.meta.updatedAt = Date.now()
-    atomicWrite(file, JSON.stringify(raw, null, 2))
+    await atomicWriteAsync(file, JSON.stringify(raw, null, 2))
   }
   writeQueue = writeQueue.then(run, run)
   return writeQueue.then(() => ({ id, name: cleanName }))

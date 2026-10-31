@@ -27,7 +27,8 @@ import {
   hasVisibleViewport,
   applyPbrMapsToModelMaterial,
   setModelEmptyHint,
-  makeMaterial
+  makeMaterial,
+  isParallaxEnabled
 } from './material3d.js'
 import { t as _t } from './i18n.js'
 import { fileUrl, apiUrl, joinPath } from './url-utils.js'
@@ -131,7 +132,6 @@ let lastLayout = null
 let lastLayoutPair = null /* 左右对比布局 { left, right }，仅 pair 路径设置；单模型为 null */
 let lastRenderFn = null /* 供生物群系切换后重渲染（单模型/对比） */
 
-
 /* 资源 raw URL 构造：包模式走 /api/pack/<name>/raw?path=<rel>（any=1 放行 .mcmeta 等扩展）；
     文件根模式（对比结果等任意文件夹）走 /api/file/raw?path=<join(root,rel)>（file 接口直接读任意路径，无需 any）；
     扩展引用（data:/file:/URL）直接可加载，原样返回 */
@@ -217,6 +217,8 @@ const BUILTIN_PARENT_MODELS = {
     最外层解析完成后统一展开一次——若逐层先展开再合并，子层的 side 展开键
     （north/south/east/west）会错误覆盖父层的显式方向键（command_block 的
     north=#front / south=#back 被覆盖成 #side → front/back 贴图丢失）。 */
+/* resolveMcModelRaw / resolveMcModel 已抽至 mcv/tex-ref-tools.js 与 mcv/asset-resolve.js */
+
 /* ── 1.21.4+ 物品模型定义（assets/<ns>/items/*.json）────────
    结构：{ model: <节点> }，节点按 type 递归解析出要渲染的普通模型引用：
      model          → 引用 models/ 路径（可带 transformation / tints）
@@ -294,9 +296,10 @@ function applyTexParams(tex) {
 }
 
 function makeModelMaterial(tex, withParallax = false) {
+
   const m = withParallax
     ? makeMaterial()
-    : new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0.0, alphaTest: 0.5 })
+    : new THREE.MeshPhysicalMaterial({ color: 0x888888, roughness: 0.9, metalness: 0.0, alphaTest: 0.5 })
   if (withParallax) {
     m.roughness = 0.9
     m.metalness = 0.0
@@ -469,6 +472,7 @@ export function mcMatFor(
     const metaPromise = loadAnimMetaCached(ck + ':mcmeta', packMcmetaUrl(api, packName, texPath, fileRoot))
     const mat = makeModelMaterial(null, withParallax)
     const tintIndex = Number.isInteger(face.tintindex) ? face.tintindex : -1
+    mat.userData.hasTint = tintIndex >= 0
     if (tintIndex >= 0) {
       resolveTintColor(tintIndex, tints, effBiome, texPath, api, packName, fileRoot, fallbackRoot)
         .then(color => {
@@ -498,6 +502,7 @@ export function mcMatFor(
         await attachPackTexture(tex, metaPromise)
         if (mat.userData.replaced) return
         mat.map = tex
+        if (!mat.userData.hasTint) mat.color.set(0xffffff)
         mat.needsUpdate = true
         return
       }
@@ -513,6 +518,7 @@ export function mcMatFor(
           )
           if (mat.userData.replaced) return
           mat.map = fbTex
+          if (!mat.userData.hasTint) mat.color.set(0xffffff)
           mat.needsUpdate = true
           return
         }
@@ -532,11 +538,13 @@ export function mcMatFor(
             )
             if (mat.userData.replaced) return
             mat.map = fbTex
+            if (!mat.userData.hasTint) mat.color.set(0xffffff)
             mat.needsUpdate = true
             return
           }
         }
       }
+      if (!mat.userData.replaced && !mat.userData.hasTint) mat.color.set(0x444466)
       mat.userData.texFailed = true
     })
     return mat
@@ -564,12 +572,27 @@ export function buildItemSpriteGroup(textures, api, packName, fileRoot, fallback
   const ck = texCacheKey(api, packName, texPath, fileRoot)
   const url = rawUrl(api, packName, texPath, fileRoot, false)
   const metaPromise = loadAnimMetaCached(ck + ':mcmeta', packMcmetaUrl(api, packName, texPath, fileRoot))
+  if (!isSpecialTexPath(texPath)) {
+    const dot = texPath.lastIndexOf('.')
+    if (dot >= 0) {
+      const base = texPath.slice(0, dot),
+        ext = texPath.slice(dot)
+      applyPbrMapsToModelMaterial(
+        mat,
+        rawUrl(api, packName, base + '_n' + ext, fileRoot, false),
+        rawUrl(api, packName, base + '_s' + ext, fileRoot, false),
+        false,
+        withParallax ? rawUrl(api, packName, base + '_h' + ext, fileRoot, false) : null
+      )
+    }
+  }
   mat.userData.texReady = loadTextureCached(ck, url).then(async tex => {
     if (mat.userData.replaced) return
     if (tex) {
       await attachPackTexture(tex, metaPromise)
       if (mat.userData.replaced) return
       mat.map = tex
+      mat.color.set(0xffffff)
       mat.needsUpdate = true
       return
     }
@@ -585,6 +608,7 @@ export function buildItemSpriteGroup(textures, api, packName, fileRoot, fallback
         )
         if (mat.userData.replaced) return
         mat.map = fbTex
+        mat.color.set(0xffffff)
         mat.needsUpdate = true
         return
       }
@@ -603,11 +627,13 @@ export function buildItemSpriteGroup(textures, api, packName, fileRoot, fallback
           )
           if (mat.userData.replaced) return
           mat.map = fbTex
+          mat.color.set(0xffffff)
           mat.needsUpdate = true
           return
         }
       }
     }
+    mat.color.set(0x444466)
     mat.userData.texFailed = true
   })
   const mesh = new THREE.Mesh(geo, mat)
@@ -938,14 +964,24 @@ export async function viewMcModelInViewport({ api, packName, rel, fileRoot }) {
     if (part.elements.length) {
       sub = buildModelGroup(
         part.elements,
-        mcMatFor(part.textures, api, packName, fileRoot, undefined, undefined, part.tints),
+        mcMatFor(
+          part.textures,
+          api,
+          packName,
+          fileRoot,
+          undefined,
+          undefined,
+          part.tints,
+          undefined,
+          isParallaxEnabled()
+        ),
         16
       )
       partLayout = buildMcLayout(part.elements, part.textures, api, packName, fileRoot)
     } else {
       /* sprite 合成 element（mesh 挂引用 → 贴图替换联动；UV 编辑不适用） */
       const spriteEl = { faces: { sprite: { texture: spriteTexKey(part.textures) || undefined } } }
-      sub = buildItemSpriteGroup(part.textures, api, packName, fileRoot)
+      sub = buildItemSpriteGroup(part.textures, api, packName, fileRoot, undefined, isParallaxEnabled())
       if (sub && sub.children[0]) sub.children[0].userData.mcElement = spriteEl
       noElements = true
       partLayout = buildSpriteLayout(part.textures, api, packName, spriteEl, fileRoot)
@@ -998,6 +1034,7 @@ async function buildMcGroupFromRel(fileRoot, rel, texRoot, overrideUrl) {
   const texSource = texRoot || fileRoot
   const fbRoot = texRoot && !overrideUrl ? fileRoot : undefined
   const { parts } = await resolveMcModelAsset(undefined, undefined, rel, fileRoot)
+
   let layout = null
   const subs = []
   let anyTransform = false
@@ -1007,13 +1044,23 @@ async function buildMcGroupFromRel(fileRoot, rel, texRoot, overrideUrl) {
     if (part.elements.length) {
       sub = buildModelGroup(
         part.elements,
-        mcMatFor(part.textures, undefined, undefined, texSource, fbRoot, overrideUrl, part.tints),
+        mcMatFor(
+          part.textures,
+          undefined,
+          undefined,
+          texSource,
+          fbRoot,
+          overrideUrl,
+          part.tints,
+          undefined,
+          isParallaxEnabled()
+        ),
         16
       )
       partLayout = buildMcLayout(part.elements, part.textures, undefined, undefined, texSource)
     } else {
       const spriteEl = { faces: { sprite: { texture: spriteTexKey(part.textures) || undefined } } }
-      sub = buildItemSpriteGroup(part.textures, undefined, undefined, texSource)
+      sub = buildItemSpriteGroup(part.textures, undefined, undefined, texSource, undefined, isParallaxEnabled())
       if (sub && sub.children[0]) sub.children[0].userData.mcElement = spriteEl
       partLayout = buildSpriteLayout(part.textures, undefined, undefined, spriteEl, texSource)
     }
@@ -1155,7 +1202,21 @@ export async function viewImportedModelInViewport({ id }) {
     return { shown: false }
   }
   const textures = json.textures && typeof json.textures === 'object' ? json.textures : {}
-  const group = buildModelGroup(json.elements, mcMatFor(textures, undefined, undefined, texRoot || undefined), 16)
+  const group = buildModelGroup(
+    json.elements,
+    mcMatFor(
+      textures,
+      undefined,
+      undefined,
+      texRoot || undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      isParallaxEnabled()
+    ),
+    16
+  )
   if (!group.children.length) return { shown: false }
   const shown = showCustomModel(group)
   if (shown) {
@@ -1193,11 +1254,15 @@ export async function viewCustomModelInViewport({ id, api, packName }) {
   let group = null
   let layout = null
   if (elements && elements.length) {
-    group = buildModelGroup(elements, mcMatFor(textures, api, packName), 16)
+    group = buildModelGroup(
+      elements,
+      mcMatFor(textures, api, packName, undefined, undefined, undefined, undefined, undefined, isParallaxEnabled()),
+      16
+    )
     layout = buildMcLayout(elements, textures, api, packName)
   } else {
     const spriteEl = { faces: { sprite: { texture: spriteTexKey(textures) || undefined } } }
-    group = buildItemSpriteGroup(textures, api, packName)
+    group = buildItemSpriteGroup(textures, api, packName, undefined, undefined, isParallaxEnabled())
     if (group && group.children[0]) group.children[0].userData.mcElement = spriteEl
     layout = buildSpriteLayout(textures, api, packName, spriteEl)
   }

@@ -57,6 +57,7 @@ export function makeMaterial() {
   mat.userData.pendingHeightMap = null
   mat.onBeforeCompile = shader => {
     const prev = mat.userData.shaderRefs
+
     shader.uniforms.heightMap = { value: prev ? prev.heightMap.value : mat.userData.pendingHeightMap }
     shader.uniforms.hasHeightMap = {
       value: prev ? prev.hasHeightMap.value : mat.userData.pendingHeightMap && _get_parallaxEnabled() ? 1.0 : 0.0
@@ -78,7 +79,7 @@ export function makeMaterial() {
     shader.fragmentShader = shader.fragmentShader
       .replace(
         '#include <common>',
-        'uniform sampler2D heightMap;\nuniform vec2 uHeightTexSize;\nuniform vec3 uHeightLightDir;\nuniform float hasHeightMap;\nuniform float _get_parallaxScale();\nuniform float _get_parallaxSteps();\nuniform float _get_parallaxMode();\nuniform float _get_parallaxAdaptive();\nuniform float _get_parallaxShadow();\n#include <common>'
+        'uniform sampler2D heightMap;\nuniform vec2 uHeightTexSize;\nuniform vec3 uHeightLightDir;\nuniform float hasHeightMap;\nuniform float parallaxScale;\nuniform float parallaxSteps;\nuniform float parallaxMode;\nuniform float parallaxAdaptive;\nuniform float parallaxShadow;\n#include <common>'
       )
       .replace(
         '#include <clipping_planes_fragment>',
@@ -94,7 +95,7 @@ export function makeMaterial() {
           parallaxUv = vec2(0.0);
         #endif
         float parallaxShadowFactor = 1.0;
-        if (abs(_get_parallaxScale()) > 0.0 && hasHeightMap > 0.5) {
+        if (abs(parallaxScale) > 0.0 && hasHeightMap > 0.5) {
           vec3 viewDir = normalize(vViewPosition);
           vec2 P;
           float viewDotN;
@@ -132,22 +133,20 @@ export function makeMaterial() {
             tLight.z = dot( n, uHeightLightDir );
           #endif
           viewDotN = clamp(abs(tView.z), 0.0, 1.0);
-          P = tView.xy / max(abs(tView.z), 0.05) * _get_parallaxScale();
+          P = tView.xy / max(abs(tView.z), 0.05) * parallaxScale;
           float Plen = length(P);
           P *= 1.0 / (1.0 + max(Plen - 0.1, 0.0) * 4.0);
-          float uvFade = 1.0;
-          ${_get_isWebGL2() ? 'uvFade = 1.0 - smoothstep(0.15, 0.45, length(fwidth(parallaxUv)));' : ''}
-          P *= uvFade;
+
           P *= smoothstep(0.0, 0.2, viewDotN);
           float hMip = 0.0;
-          ${_get_isWebGL2() ? 'hMip = log2(max(max(fwidth(parallaxUv.x) * uHeightTexSize.x, fwidth(parallaxUv.y) * uHeightTexSize.y), 1.0));' : ''}
-          if (_get_parallaxMode() < 0.5) {
+
+          if (parallaxMode < 0.5) {
             float height = ${_get_isWebGL2() ? 'textureLod( heightMap, parallaxUv, hMip )' : 'texture2D( heightMap, parallaxUv )'}.r;
             parallaxUv = parallaxUv - P * height;
           } else {
-            float numLayers = _get_parallaxSteps();
-            if (_get_parallaxAdaptive() > 0.5) {
-              numLayers = mix(_get_parallaxSteps(), max(_get_parallaxSteps() * 0.3, 4.0), viewDotN);
+            float numLayers = parallaxSteps;
+            if (parallaxAdaptive > 0.5) {
+              numLayers = mix(parallaxSteps, max(parallaxSteps * 0.3, 4.0), viewDotN);
             }
             numLayers = clamp(numLayers, 4.0, 64.0);
             float layerDepth = 1.0 / numLayers;
@@ -161,9 +160,9 @@ export function makeMaterial() {
               currentDepthValue = ${_get_isWebGL2() ? 'textureLod( heightMap, currentTexCoords, hMip )' : 'texture2D( heightMap, currentTexCoords )'}.r;
               currentLayerDepth += layerDepth;
             }
-            if (_get_parallaxMode() < 1.5) {
+            if (parallaxMode < 1.5) {
               parallaxUv = currentTexCoords;
-            } else if (_get_parallaxMode() < 2.5) {
+            } else if (parallaxMode < 2.5) {
               vec2 prevTexCoords = currentTexCoords + deltaTexCoords;
               float beforeDepth = ${_get_isWebGL2() ? 'textureLod( heightMap, prevTexCoords, hMip )' : 'texture2D( heightMap, prevTexCoords )'}.r - currentLayerDepth + layerDepth;
               float afterDepth = currentDepthValue - currentLayerDepth;
@@ -189,9 +188,9 @@ export function makeMaterial() {
               parallaxUv = prevTexCoords;
             }
           }
-          if (_get_parallaxShadow() > 0.0 && tLight.z > 0.01) {
+          if (parallaxShadow > 0.0 && tLight.z > 0.01) {
             float numSS = 8.0;
-            vec2 ssDelta = tLight.xy / max(abs(tLight.z), 0.05) * abs(_get_parallaxScale()) / numSS;
+            vec2 ssDelta = tLight.xy / max(abs(tLight.z), 0.05) * abs(parallaxScale) / numSS;
             float hRay = ${_get_isWebGL2() ? 'textureLod( heightMap, parallaxUv, hMip )' : 'texture2D( heightMap, parallaxUv )'}.r;
             vec2 ssUv = parallaxUv;
             for (int i = 0; i < 8; i++) {
@@ -200,7 +199,7 @@ export function makeMaterial() {
               float hSurf = ${_get_isWebGL2() ? 'textureLod( heightMap, ssUv, hMip )' : 'texture2D( heightMap, ssUv )'}.r;
               parallaxShadowFactor = min(parallaxShadowFactor, smoothstep(0.0, 0.06, hRay - hSurf));
             }
-            parallaxShadowFactor = mix(1.0, parallaxShadowFactor, _get_parallaxShadow());
+            parallaxShadowFactor = mix(1.0, parallaxShadowFactor, parallaxShadow);
           }
         }`
       )

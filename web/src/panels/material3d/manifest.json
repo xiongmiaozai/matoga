@@ -7,5 +7,7 @@
   "js": "panel.js",
   "mount": ".sidebar-right",
   "order": 7,
+  "level": 0,
+  "group": "sidebar",
   "dynamic": true
 }

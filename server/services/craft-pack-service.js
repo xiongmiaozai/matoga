@@ -22,7 +22,8 @@ const { logger } = require('../middleware/logger')
 const { DATA_ROOT } = require('../paths')
 const { AppError } = require('../lib/errors')
 const { BUILD_TEX_EXTS } = require('./img-exts')
-const { atomicWriteJson } = require('../config/atomic-write')
+const { atomicWriteJsonAsync } = require('../config/atomic-write')
+const { readJsonMtu } = require('../config/json-cache')
 const { guardRead } = require('../middleware/validate')
 const configStore = require('../config/config-store')
 const assetStore = require('../config/asset-store')
@@ -50,7 +51,7 @@ let writeQueue = Promise.resolve()
 
 function readRaw(file) {
   try {
-    return JSON.parse(fs.readFileSync(file, 'utf8'))
+    return readJsonMtu(file)
   } catch (e) {
     if (e.code !== 'ENOENT') logger.warn('craft', 'bad ' + path.basename(file) + ': ' + e.message)
     return {}
@@ -101,8 +102,8 @@ function getSelection() {
 
 function setSelection(items) {
   const clean = sanitizeList(items, MAX_ITEMS)
-  const result = writeQueue.then(() => {
-    atomicWriteJson(SELECTION_FILE, { items: clean })
+  const result = writeQueue.then(async () => {
+    await atomicWriteJsonAsync(SELECTION_FILE, { items: clean })
     return clean
   })
   writeQueue = result.catch((e) => { logger.error('craft', 'setSelection failed: ' + e.message) })
@@ -112,12 +113,12 @@ function setSelection(items) {
 function addItem(item) {
   const s = sanitizeItem(item)
   if (!s) throw new AppError('ERR_INVALID_PARAM', 'invalid craft item')
-  const result = writeQueue.then(() => {
+  const result = writeQueue.then(async () => {
     const cur = getSelection()
     if (cur.some(it => it.key === s.key)) return { added: false, count: cur.length }
     if (cur.length >= MAX_ITEMS) throw new AppError('ERR_INVALID_PARAM', 'craft pack full: ' + MAX_ITEMS)
     cur.push(s)
-    atomicWriteJson(SELECTION_FILE, { items: cur })
+    await atomicWriteJsonAsync(SELECTION_FILE, { items: cur })
     return { added: true, count: cur.length }
   })
   writeQueue = result.catch(e => logger.error('craft', 'addItem failed: ' + e.message))
@@ -125,11 +126,11 @@ function addItem(item) {
 }
 
 function removeItem(key) {
-  const result = writeQueue.then(() => {
+  const result = writeQueue.then(async () => {
     const cur = getSelection()
     const next = cur.filter(it => it.key !== key)
     if (next.length === cur.length) return { removed: false, count: cur.length }
-    atomicWriteJson(SELECTION_FILE, { items: next })
+    await atomicWriteJsonAsync(SELECTION_FILE, { items: next })
     return { removed: true, count: next.length }
   })
   writeQueue = result.catch(e => logger.error('craft', 'removeItem failed: ' + e.message))

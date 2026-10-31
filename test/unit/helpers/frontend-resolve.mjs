@@ -28,6 +28,7 @@ export function isCustomModelActive(){ return false }
 export function hasVisibleViewport(){ return false }
 export function applyPbrMapsToModelMaterial(){}
 export function makeMaterial(){ return { userData: {} } }
+export function isParallaxEnabled(){ return false }
 export function refreshMaterial3DTint(){}
 export function setChannelView(){}
 `

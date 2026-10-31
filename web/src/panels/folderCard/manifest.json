@@ -4,5 +4,7 @@
   "icon": "i-folder",
   "html": "panel.html",
   "mount": ".sidebar-left .sidebar-inner",
-  "order": 1
+  "order": 1,
+  "level": 0,
+  "group": "sidebar"
 }

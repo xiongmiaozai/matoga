@@ -4,5 +4,7 @@
   "icon": "i-layers",
   "html": "panel.html",
   "mount": "body",
-  "order": 9
+  "order": 9,
+  "level": 20,
+  "group": "node"
 }

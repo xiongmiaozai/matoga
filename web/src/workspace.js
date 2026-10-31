@@ -541,6 +541,7 @@ function bindWorkspaceKeyboard() {
   })
 }
 
+
 function sanitizeSavedConfig(config, presetName) {
   const fixed = sanitizeConfig(config)
   if (JSON.stringify(fixed) === JSON.stringify(config)) return config

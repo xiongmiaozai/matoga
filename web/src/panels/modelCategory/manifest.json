@@ -4,5 +4,7 @@
   "icon": "i-cube",
   "html": "panel.html",
   "mount": "#workspace",
-  "order": 5
+  "order": 5,
+  "level": 0,
+  "group": "workspace"
 }

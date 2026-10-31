@@ -4,5 +4,7 @@
   "icon": "i-folder",
   "html": "panel.html",
   "mount": "body",
-  "order": 10
+  "order": 10,
+  "level": 20,
+  "group": "asset"
 }

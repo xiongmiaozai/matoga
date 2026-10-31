@@ -1,3 +1,10 @@
+/**
+ * matoga - 材质贴图对比工具
+ * Copyright (c) 2026 芝世 (xiongmiaozai). All rights reserved.
+ * SPDX-License-Identifier: MIT
+ *
+ * Adobe 风格浮动面板系统主题（覆盖 Golden-Layout 默认）
+ */
 /* 分片入口：顺序 = 原顶层规则顺序，层叠结果与拆分前等价 */
 @import './css/workspace/workspace-01-matoga---材质贴图对比工具.css';
 @import './css/workspace/workspace-02-lm-tab-lm-title.css';

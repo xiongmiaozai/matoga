@@ -30,6 +30,12 @@ const modelThumb = require('../services/model-thumb-service')
 
 const router = express.Router()
 
+// 资产聚合扫描结果缓存：资源包内容运行时很少变化，TTL 内复用上次扫描结果，
+// 避免每次请求都全量遍历 mc-packs + official-packs。路径变化或 TTL 到期自动重扫。
+const SCAN_TTL = 15000
+let _texCache = null // { key, at, data }
+let _modelCache = null // { key, at, data }
+
 router.get(
   '/',
   wrap(async (req, res) => {
@@ -75,12 +81,19 @@ router.get(
   '/tex',
   wrap(async (req, res) => {
     const cfg = configStore.get()
+    const key = `${cfg.mcPacksPath}|${cfg.officialPacksPath}`
+    const now = Date.now()
+    if (_texCache && _texCache.key === key && now - _texCache.at < SCAN_TTL) {
+      return ok(res, _texCache.data)
+    }
     const mc = (await collectPacks(cfg.mcPacksPath, mcmeta.listPackTexGroups)).map(p => ({ ...p, source: 'mc' }))
     const official = (await collectPacks(cfg.officialPacksPath, mcmeta.listPackTexGroups)).map(p => ({
       ...p,
       source: 'official'
     }))
-    ok(res, { packs: [...mc, ...official] })
+    const data = { packs: [...mc, ...official] }
+    _texCache = { key, at: now, data }
+    ok(res, data)
   })
 )
 
@@ -89,10 +102,18 @@ router.get(
   '/model',
   wrap(async (req, res) => {
     const cfg = configStore.get()
-    const lister = req.query.meta === '1' ? modelAnalysis.enrichModelGroups : mcmeta.listPackModelGroups
+    const meta = req.query.meta === '1'
+    const key = `${cfg.mcPacksPath}|${cfg.officialPacksPath}|${meta ? 1 : 0}`
+    const now = Date.now()
+    if (_modelCache && _modelCache.key === key && now - _modelCache.at < SCAN_TTL) {
+      return ok(res, _modelCache.data)
+    }
+    const lister = meta ? modelAnalysis.enrichModelGroups : mcmeta.listPackModelGroups
     const mc = (await collectPacks(cfg.mcPacksPath, lister)).map(p => ({ ...p, source: 'mc' }))
     const official = (await collectPacks(cfg.officialPacksPath, lister)).map(p => ({ ...p, source: 'official' }))
-    ok(res, { packs: [...mc, ...official] })
+    const data = { packs: [...mc, ...official] }
+    _modelCache = { key, at: now, data }
+    ok(res, data)
   })
 )
 

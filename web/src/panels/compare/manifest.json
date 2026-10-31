@@ -4,5 +4,7 @@
   "icon": "i-compare",
   "html": "panel.html",
   "mount": "#workspace",
-  "order": 4
+  "order": 4,
+  "level": 0,
+  "group": "workspace"
 }

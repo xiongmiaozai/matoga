@@ -8,7 +8,7 @@ const fs = require('fs')
 const path = require('path')
 const crypto = require('crypto')
 const { logger } = require('../middleware/logger')
-const { atomicWriteJson } = require('./atomic-write')
+const { atomicWriteJsonAsync } = require('./atomic-write')
 const { DATA_ROOT, PRESET_ROOT } = require('../paths')
 
 const ROOT = DATA_ROOT
@@ -78,12 +78,12 @@ function get() {
 }
 
 function put(patch) {
-  writeQueue = writeQueue.then(() => {
+  writeQueue = writeQueue.then(async () => {
     try {
       const merged = { ...SCHEMA, ...readRaw() }
       Object.assign(merged, patch || {})
       delete merged.windowBounds
-      atomicWriteJson(FILE, merged)
+      await atomicWriteJsonAsync(FILE, merged)
       cachedMtime = -1
     } catch (e) {
       logger.error('config', 'write failed: ' + e.message)
@@ -93,9 +93,9 @@ function put(patch) {
 }
 
 function clear() {
-  writeQueue = writeQueue.then(() => {
+  writeQueue = writeQueue.then(async () => {
     try {
-      atomicWriteJson(FILE, {})
+      await atomicWriteJsonAsync(FILE, {})
       cachedMtime = -1
     } catch (e) {
       logger.error('config', 'clear failed: ' + e.message)

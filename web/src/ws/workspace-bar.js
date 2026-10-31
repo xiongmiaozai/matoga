@@ -269,10 +269,8 @@ export function renderWorkspaceBar() {
       dd.appendChild(panelHint)
 
       const rect = btn.getBoundingClientRect()
-      const ctxEl = _get_barEl().closest('.app-header') || _get_barEl().parentElement
-      const ctxRect = ctxEl.getBoundingClientRect()
-      dd.style.left = rect.left - ctxRect.left + 'px'
-      dd.style.top = rect.bottom - ctxRect.top + 'px'
+      dd.style.left = rect.left + 'px'
+      dd.style.top = rect.bottom + 'px'
       dd.hidden = false
       btn.classList.add('open')
       ddOpen = true

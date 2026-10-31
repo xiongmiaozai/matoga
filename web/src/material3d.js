@@ -186,6 +186,7 @@ const geometries = {
 
 let customLightConfig = null
 
+/* 已抽至 env-light.js（applyLightPreset/applyCustomLightConfig/updateSkySunPosition/bakeSkyEnvironment/scheduleSkyBake/applyProceduralSky/applyHDREnvMode/ensureRotatedTexture/setEnvMode）、geo-utils.js（rotateTextureData）、height-extract.js（imgW/imgH）、channel-extract.js（worker 基础设施 getM3dWorker/runPixelOp/bitmapToTexture + extractChannel） */
 function applyChannelViewToMaterial(material) {
   const baseMap = material.userData.baseMap
   if (!baseMap) return
@@ -237,6 +238,7 @@ export function setChannelView(ch) {
   if (channelView === 'all') refreshMaterial3DTint()
 }
 
+/* 已抽至 geo-utils.js（detectFormat/reconstructNormal）、channel-extract.js（extractRoughness/extractMetalness/extractEmissive）、height-extract.js（extractHeight/extractHeightFromNormal）、material-filters.js（createLabel/applyOpacityMode/applyHeightFilter/applyTextureFilter）、material.js（parseIncludes） */
 function collectMaterialTextures(m) {
   const list = []
   if (m.map) list.push(m.map)
@@ -258,6 +260,7 @@ function applyFilterToAllTextures() {
   }
 }
 
+/* 已抽至 material.js（makeMaterial） */
 function isHostVisible(el) {
   if (!el || !el.isConnected) return false
   const r = el.getBoundingClientRect()
@@ -666,6 +669,9 @@ export function setParallaxAdaptive(val) {
     }
   }
 }
+export function isParallaxEnabled() {
+  return parallaxEnabled
+}
 export function setParallaxEnabled(on) {
   parallaxEnabled = on
   if (initialized) {
@@ -1059,7 +1065,7 @@ function applyTexturesToMesh(mesh, group, side) {
 
   if (specEntry) {
     const specImg = new Image()
-    specImg.onload = () => {
+    specImg.onload = async () => {
       if (material.userData.loadVer !== myVer) return
       let fmt = materialFormat
       if (fmt === 'auto') {
@@ -1070,9 +1076,11 @@ function applyTexturesToMesh(mesh, group, side) {
       disposeTexture(material.metalnessMap)
       disposeTexture(material.emissiveMap)
       if (fmt === 'old') {
-        material.roughnessMap = extractChannel(specImg, 0, true)
-        material.metalnessMap = extractChannel(specImg, 1, false)
-        material.emissiveMap = extractChannel(specImg, 2, false)
+        ;[material.roughnessMap, material.metalnessMap, material.emissiveMap] = await Promise.all([
+          extractChannel(specImg, 0, true),
+          extractChannel(specImg, 1, false),
+          extractChannel(specImg, 2, false),
+        ])
         applyTextureFilter(material.roughnessMap)
         applyTextureFilter(material.metalnessMap)
         applyTextureFilter(material.emissiveMap)
@@ -1080,8 +1088,10 @@ function applyTexturesToMesh(mesh, group, side) {
         material.emissiveIntensity = emissiveIntensity
         material.needsUpdate = true
       } else {
-        material.roughnessMap = extractRoughness(specImg)
-        material.metalnessMap = extractMetalness(specImg)
+        ;[material.roughnessMap, material.metalnessMap] = await Promise.all([
+          extractRoughness(specImg),
+          extractMetalness(specImg),
+        ])
         applyTextureFilter(material.roughnessMap)
         applyTextureFilter(material.metalnessMap)
         if (mainEntry) {
@@ -1325,11 +1335,13 @@ function applySpecTextureToMaterial(mat, url) {
   if (!mat || !url) return
   const specImg = new Image()
   specImg.crossOrigin = 'anonymous'
-  specImg.onload = () => {
+  specImg.onload = async () => {
     disposeTexture(mat.roughnessMap)
     disposeTexture(mat.metalnessMap)
-    mat.roughnessMap = extractRoughness(specImg)
-    mat.metalnessMap = extractMetalness(specImg)
+    ;[mat.roughnessMap, mat.metalnessMap] = await Promise.all([
+      extractRoughness(specImg),
+      extractMetalness(specImg),
+    ])
     applyTextureFilter(mat.roughnessMap)
     applyTextureFilter(mat.metalnessMap)
     mat.needsUpdate = true
@@ -1353,12 +1365,37 @@ export function clearSpecularTexture() {
   for (const m of [meshLeft, meshRight]) clearSpecTexture(m.material)
 }
 
+/* 从法线贴图提取高度并写入视差 uniform（模型通道回退）。
+     仅在视差材质（有 shaderRefs 或 pendingHeightMap 机制）且未成功加载显式 _h 贴图时生效。
+     shaderRefs 未就绪（onBeforeCompile 尚未调用）时存入 pendingHeightMap，由 makeMaterial 的 onBeforeCompile 接管。 */
+function applyHeightFromNormalFallback(mat, image) {
+  if (!mat.userData) return
+  if (mat.userData.explicitHeightLoaded) return
+  if (mat.userData.shaderRefs == null && mat.userData.pendingHeightMap === undefined) return
+  let hTex = extractHeight(image)
+  if (!hTex) hTex = extractHeightFromNormal(image)
+  if (!hTex) return
+  if (mat.userData.shaderRefs) {
+    disposeTexture(mat.userData.shaderRefs.heightMap.value)
+    mat.userData.shaderRefs.heightMap.value = hTex
+    mat.userData.shaderRefs.hasHeightMap.value = parallaxEnabled ? 1.0 : 0.0
+    mat.userData.shaderRefs.uHeightTexSize.value.set(hTex.image.width, hTex.image.height)
+  } else {
+    disposeTexture(mat.userData.pendingHeightMap)
+    mat.userData.pendingHeightMap = hTex
+  }
+  mat.needsUpdate = true
+}
+
 /* 应用 PBR 贴图到模型面材质（法线/高光）。
      normalUrl/specUrl：非空字符串 → 加载应用；空串 → 清除对应 map；null/undefined → 不动。
      force=true 跳过 replaced 守卫（编辑器替换主图后强制覆盖旧 PBR；模型加载流程保持 replaced 守卫阻断竞态） */
 export function applyPbrMapsToModelMaterial(mat, normalUrl, specUrl, force, heightUrl) {
   if (!mat) return
+
   const blocked = () => !force && mat.userData && mat.userData.replaced
+  let normalImgLoaded = null
+  let heightFallbackPending = false
   if (normalUrl != null) {
     if (normalUrl === '') {
       disposeTexture(mat.normalMap)
@@ -1376,6 +1413,9 @@ export function applyPbrMapsToModelMaterial(mat, normalUrl, specUrl, force, heig
         mat.normalMap = nTex
         if (mat.normalScale) mat.normalScale.set(1.0, 1.0)
         mat.needsUpdate = true
+        normalImgLoaded = img
+        if (heightUrl == null) applyHeightFromNormalFallback(mat, img)
+        else if (heightFallbackPending) applyHeightFromNormalFallback(mat, img)
       }
       img.src = normalUrl
     }
@@ -1390,12 +1430,11 @@ export function applyPbrMapsToModelMaterial(mat, normalUrl, specUrl, force, heig
     } else {
       const img = new Image()
       img.crossOrigin = 'anonymous'
-      img.onload = () => {
+      img.onload = async () => {
         if (blocked()) return
         disposeTexture(mat.roughnessMap)
         disposeTexture(mat.metalnessMap)
-        const rTex = extractRoughness(img)
-        const mTex = extractMetalness(img)
+        const [rTex, mTex] = await Promise.all([extractRoughness(img), extractMetalness(img)])
         rTex.magFilter = THREE.NearestFilter
         rTex.minFilter = THREE.NearestFilter
         mTex.magFilter = THREE.NearestFilter
@@ -1439,6 +1478,7 @@ export function applyPbrMapsToModelMaterial(mat, normalUrl, specUrl, force, heig
         hTex.colorSpace = THREE.NoColorSpace
         hTex.wrapS = hTex.wrapT = THREE.RepeatWrapping
         applyHeightFilter(hTex)
+        if (mat.userData) mat.userData.explicitHeightLoaded = true
         if (mat.userData.shaderRefs) {
           disposeTexture(mat.userData.shaderRefs.heightMap.value)
           mat.userData.shaderRefs.heightMap.value = hTex
@@ -1449,6 +1489,12 @@ export function applyPbrMapsToModelMaterial(mat, normalUrl, specUrl, force, heig
           mat.userData.pendingHeightMap = hTex
         }
         mat.needsUpdate = true
+      }
+      img.onerror = () => {
+
+        if (blocked()) return
+        if (normalImgLoaded) applyHeightFromNormalFallback(mat, normalImgLoaded)
+        else heightFallbackPending = true
       }
       img.src = heightUrl
     }

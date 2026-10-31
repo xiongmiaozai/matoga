@@ -24,7 +24,7 @@ export const state = {
   history: [],
   renderLimit: 200,
   modelLoadSeq: 0,
-  modelViewMode: 'grid',
+
   modelPreviewTab: 'model',
   modelGroupBy: 'type',
   modelGroupDir: 'asc',

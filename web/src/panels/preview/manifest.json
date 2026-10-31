@@ -4,5 +4,7 @@
   "icon": "i-image",
   "html": "panel.html",
   "mount": ".sidebar-right",
-  "order": 5
+  "order": 5,
+  "level": 0,
+  "group": "sidebar"
 }

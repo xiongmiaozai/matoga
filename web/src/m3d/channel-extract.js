@@ -3,73 +3,67 @@
  * Copyright (c) 2026 芝世 (xiongmiaozai). All rights reserved.
  * SPDX-License-Identifier: MIT
  *
- * 从 mc-model-viewer.js 按领域搬出（正文逐字未改）。
- * 职责：从位图抽取 RGBA 通道、粗糙度、金属度、自发光图
+ * 从 material3d.js 按领域搬出。
+ * 职责：从位图抽取 RGBA 通道、粗糙度、金属度、自发光图。
+ * 通道/粗糙度/金属度提取走 OffscreenCanvas Worker（v3.3.1 起），
+ * 自发光图（extractEmissive）依赖双图合成，仍主线程同步执行。
  */
 import * as THREE from 'three'
 
-export function extractChannel(image, channelIndex, invert) {
-  const canvas = document.createElement('canvas')
-  canvas.width = image.naturalWidth
-  canvas.height = image.naturalHeight
-  const ctx = canvas.getContext('2d', { willReadFrequently: true })
-  ctx.drawImage(image, 0, 0)
-  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
-  const data = imageData.data
-  for (let i = 0; i < data.length; i += 4) {
-    let v = data[i + channelIndex]
-    if (invert) v = 255 - v
-    data[i] = v
-    data[i + 1] = v
-    data[i + 2] = v
-    data[i + 3] = 255
+/* ── 像素处理 Worker：通道提取等重像素遍历移出主线程，避免 4K 贴图处理时卡顿 UI ── */
+let m3dWorker = null
+let m3dWorkerSeq = 0
+const m3dWorkerPending = new Map()
+
+function getM3dWorker() {
+  if (m3dWorker) return m3dWorker
+  m3dWorker = new Worker(new URL('../material3d-worker.js', import.meta.url), { type: 'module' })
+  m3dWorker.onmessage = (e) => {
+    const { id, bitmap } = e.data
+    const resolve = m3dWorkerPending.get(id)
+    if (resolve) {
+      m3dWorkerPending.delete(id)
+      resolve(bitmap)
+    }
   }
-  ctx.putImageData(imageData, 0, 0)
+  return m3dWorker
+}
+
+async function runPixelOp(op, image, params) {
+  const bitmap = await createImageBitmap(image)
+  const id = ++m3dWorkerSeq
+  const w = getM3dWorker()
+  return new Promise((resolve) => {
+    m3dWorkerPending.set(id, resolve)
+    w.postMessage({ id, op, bitmap, params }, [bitmap])
+  })
+}
+
+function bitmapToTexture(bitmap) {
+  const canvas = document.createElement('canvas')
+  canvas.width = bitmap.width
+  canvas.height = bitmap.height
+  const ctx = canvas.getContext('2d')
+  ctx.drawImage(bitmap, 0, 0)
+  bitmap.close()
   const tex = new THREE.CanvasTexture(canvas)
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping
   return tex
 }
 
-export function extractRoughness(image) {
-  const c = document.createElement('canvas')
-  c.width = image.naturalWidth
-  c.height = image.naturalHeight
-  const ctx = c.getContext('2d', { willReadFrequently: true })
-  ctx.drawImage(image, 0, 0)
-  const imageData = ctx.getImageData(0, 0, c.width, c.height),
-    d = imageData.data
-  for (let i = 0; i < d.length; i += 4) {
-    const r = 255 - d[i]
-    d[i] = r
-    d[i + 1] = r
-    d[i + 2] = r
-    d[i + 3] = 255
-  }
-  ctx.putImageData(imageData, 0, 0)
-  const tex = new THREE.CanvasTexture(c)
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping
-  return tex
+export async function extractChannel(image, channelIndex, invert) {
+  const bitmap = await runPixelOp('extractChannel', image, { channelIndex, invert })
+  return bitmapToTexture(bitmap)
 }
 
-export function extractMetalness(image) {
-  const c = document.createElement('canvas')
-  c.width = image.naturalWidth
-  c.height = image.naturalHeight
-  const ctx = c.getContext('2d', { willReadFrequently: true })
-  ctx.drawImage(image, 0, 0)
-  const imageData = ctx.getImageData(0, 0, c.width, c.height),
-    d = imageData.data
-  for (let i = 0; i < d.length; i += 4) {
-    const v = d[i + 1]
-    d[i] = v
-    d[i + 1] = v
-    d[i + 2] = v
-    d[i + 3] = 255
-  }
-  ctx.putImageData(imageData, 0, 0)
-  const tex = new THREE.CanvasTexture(c)
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping
-  return tex
+export async function extractRoughness(image) {
+  const bitmap = await runPixelOp('extractRoughness', image, {})
+  return bitmapToTexture(bitmap)
+}
+
+export async function extractMetalness(image) {
+  const bitmap = await runPixelOp('extractMetalness', image, {})
+  return bitmapToTexture(bitmap)
 }
 
 export function extractEmissive(specImage, mainImage) {

@@ -7,5 +7,7 @@
   "js": "panel.js",
   "mount": "body",
   "order": 9,
+  "level": 20,
+  "group": "node",
   "dynamic": true
 }

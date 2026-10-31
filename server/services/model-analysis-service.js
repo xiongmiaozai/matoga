@@ -94,6 +94,17 @@ async function enrichModelGroups(root, name) {
     models = mcmeta.zipModelEntries(zipEntries)
   }
 
+  // 目录包：分批并行预加载模型文本（32 并发，避免 fd 耗尽），替代逐文件串行 await
+  const dirTexts = new Map()
+  if (st.isDirectory()) {
+    const CONCURRENCY = 32
+    for (let i = 0; i < models.length; i += CONCURRENCY) {
+      const batch = models.slice(i, i + CONCURRENCY)
+      const texts = await Promise.all(batch.map((t) => readDirModelText(packRoot, t.path)))
+      for (let j = 0; j < batch.length; j++) dirTexts.set(batch[j].path, texts[j])
+    }
+  }
+
   const groups = new Map()
   for (const t of models) {
     const p = mcmeta.parseModelPath(t.path)
@@ -111,7 +122,7 @@ async function enrichModelGroups(root, name) {
     let animated = false
     let text = null
     if (st.isDirectory()) {
-      text = await readDirModelText(packRoot, t.path)
+      text = dirTexts.get(t.path) || null
     } else if (zipBuf && zipEntries) {
       text = readZipEntryText(zipBuf, zipEntries, t.path)
     }    if (text) {
