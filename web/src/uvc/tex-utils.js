@@ -23,8 +23,5 @@ export function readAsDataURL(file) {
 
 /* 贴图 URL 是否可直接给 <img> / canvas 使用 */
 export function isUsableTexUrl(url) {
-  return (
-    typeof url === 'string' &&
-    (url.startsWith('data:') || /^https?:\/\//i.test(url) || url.startsWith('/'))
-  )
+  return typeof url === 'string' && (url.startsWith('data:') || /^https?:\/\//i.test(url) || url.startsWith('/'))
 }
