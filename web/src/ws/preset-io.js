@@ -33,7 +33,7 @@ export async function importPreset(onDone) {
         for (const [n, p] of Object.entries(data.presets)) {
           if (p && p.config) {
             await call('PUT', '/api/workspace/preset', { name: n, config: p.config })
-            userPresets[n] = { config: p.config }
+            _get_userPresets()[n] = { config: p.config }
           }
         }
         renderWorkspaceBar()
@@ -45,7 +45,7 @@ export async function importPreset(onDone) {
           return
         }
         await call('PUT', '/api/workspace/preset', { name: data.name, config: data.config })
-        userPresets[data.name] = { config: data.config }
+        _get_userPresets()[data.name] = { config: data.config }
         renderWorkspaceBar()
         if (onDone) onDone()
         showToast('已导入「' + data.name + '」')
