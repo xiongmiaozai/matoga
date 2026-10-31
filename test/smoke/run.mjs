@@ -55,7 +55,12 @@ let failed = true
 try {
   dataRoot = tmpRoot('data')
   await cleanDataRoot(dataRoot)
-  const { child, base } = await startServer({ dataRoot })
+  /* 隔离预设根：hdri-presets/ 在仓库里被 .gitignore 忽略（属运行时的资源包根），
+     CI 上不存在；不隔离的话 /api/hdri/list 会因 ENOENT 返回 ERR_FS 导致冒烟失败。
+     这里建一个只含空 hdri-presets 的临时预设根，让冒烟不依赖开发者本机状态。 */
+  const presetRoot = tmpRoot('presets')
+  await ensureDir(join(presetRoot, 'hdri-presets'))
+  const { child, base } = await startServer({ dataRoot, presetRoot })
   server = child
   console.log(`冒烟服务器已就绪: ${base} (pid ${server.pid})\n`)
 
