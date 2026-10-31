@@ -47,6 +47,9 @@ import { openCreatePackDialog } from './create-pack-dialog.js'
 import { openImportPackDialog } from './import-pack-dialog.js'
 import { packEntryRawUrl, isAddableAssetPath, isModelBrowsePath, pbLoadView, pbSaveView, openPackBrowser, browseTo, browseUp, exitBrowse, browseCrumbs, buildBrowseHead, buildBrowseCrumbsBar, buildBrowseToolbar, setBrowseStatus, browseEntryPath, buildBrowseFolderCard, buildBrowseFileRow, fillBrowseError, fillBrowseView, renderBrowse, setHooks as setAssetBrowseHooks } from './asset-lib/browse.js'
 import { collectTexGroups, buildAssetGroup, buildTexGroup, buildTexSection, collectModelGroups, texRefToAssetPath, collectModelTexturePaths, matchTexturesToPaths, buildModelSection, setHooks as setAssetCollectHooks } from './asset-lib/collect.js'
+import { applyFilter, updateStat, sigEntries, startPoll, buildToolbar, setHooks as setAssetToolbarHooks } from './asset-lib/toolbar.js'
+/* 门面 re-export（§2.3） */
+export { applyFilter, updateStat, sigEntries, startPoll, buildToolbar } from './asset-lib/toolbar.js'
 /* 门面 re-export（§2.3） */
 export { collectTexGroups, buildAssetGroup, buildTexGroup, buildTexSection, collectModelGroups, texRefToAssetPath, collectModelTexturePaths, matchTexturesToPaths, buildModelSection } from './asset-lib/collect.js'
 /* 门面 re-export（§2.3） */
@@ -1471,91 +1474,6 @@ function rebuild() {
   applyFilter()
 }
 
-function applyFilter() {
-  const body = document.getElementById('assetLibraryBody')
-  if (!body) return
-  if (browse) return
-  const term = searchTerm.trim()
-  const searching = !!term
-  const termLower = term.toLowerCase()
-  const enCands = searching ? enCandidatesOfZh(term) : []
-  const kind = contentKindFilter
-
-  const groupVisible = new Set()
-  const secVisible = new Set()
-  const secCount = new Map()
-
-  /* 卡片：单次遍历，命中名称（搜索词）且符合方块/物品过滤才显示；同时累加组/分区可见计数 */
-  const cards = body.querySelectorAll('.asset-card')
-  for (let i = 0; i < cards.length; i++) {
-    const card = cards[i]
-    const name = (card.dataset.name || '').toLowerCase()
-    const zh = (card.dataset.zhName || '').toLowerCase()
-    const py = (card.dataset.pinyin || '').toLowerCase()
-    const nameOk = !searching || assetSearchMatch(name, zh, py, enCands, termLower)
-    const kindOk = kind === 'all' || card.dataset.kind === kind
-    const show = nameOk && kindOk
-    card.classList.toggle('is-hidden', !show)
-    if (!show) continue
-    const grp = card.closest('.asset-lib-group')
-    if (grp) groupVisible.add(grp)
-    const sec = card.closest('.asset-lib-section')
-    if (sec) { secVisible.add(sec); secCount.set(sec, (secCount.get(sec) || 0) + 1) }
-  }
-
-  /* 分组：组内无可见卡片则整组隐藏；搜索命中时临时展开折叠分组 */
-  const groups = body.querySelectorAll('.asset-lib-group')
-  for (let i = 0; i < groups.length; i++) {
-    const grp = groups[i]
-    const hit = groupVisible.has(grp)
-    grp.classList.toggle('is-hidden', !hit)
-    grp.classList.toggle('search-open', searching && hit)
-  }
-
-  /* 分区：非搜索时按当前分类标签过滤；搜索时跨分类展示 */
-  let visible = 0
-  const sections = body.querySelectorAll('.asset-lib-section')
-  for (let i = 0; i < sections.length; i++) {
-    const sec = sections[i]
-    const cat = sec.dataset.cat
-    const catOk = searching
-      ? !QUICK_CATS.has(cat)
-      : categoryFilter === 'all'
-        ? SECTION_CATS.includes(cat)
-        : cat === categoryFilter
-    const hit = secVisible.has(sec)
-    const hint = !!sec.querySelector('.asset-lib-hint')
-    sec.classList.toggle('is-hidden', !catOk || (!hit && !hint))
-    sec.classList.toggle('search-open', searching && hit)
-    if (catOk && hit) visible += secCount.get(sec) || 0
-  }
-
-  updateStat(visible)
-  const hasVisibleHint = !!body.querySelector('.asset-lib-section:not(.is-hidden) .asset-lib-hint')
-  let empty = body.querySelector('.asset-lib-empty')
-  if (visible === 0 && !hasVisibleHint) {
-    if (!empty) {
-      empty = el('div', 'asset-lib-empty')
-      body.appendChild(empty)
-    }
-    let msg
-    if (term) msg = t('asset.emptyFiltered')
-    else if (contentKindFilter !== 'all')
-      msg = t('asset.emptyKind', { kind: t(contentKindFilter === 'block' ? 'asset.kindBlock' : 'asset.kindItem') })
-    else if (categoryFilter !== 'all') msg = t('asset.emptyCategory', { cat: categoryLabel(categoryFilter) })
-    else msg = t('asset.empty')
-    empty.textContent = msg
-    empty.style.display = ''
-  } else if (empty) {
-    empty.style.display = 'none'
-  }
-}
-
-function updateStat(n) {
-  const stat = document.querySelector('.asset-lib-stat')
-  if (stat) stat.textContent = t('asset.statTotal', { n })
-}
-
 async function deleteMcPack(item) {
   const name = item.pack && item.pack.name
   if (!name) return
@@ -1771,206 +1689,6 @@ export async function refreshAssetLibrary() {
   ])
   rebuild()
 }
-
-function sigEntries() {
-  let s = 0
-  for (const e of state.leftEntries || []) s += e.mtime || 0
-  for (const e of state.rightEntries || []) s += e.mtime || 0
-  return (state.leftEntries?.length || 0) + ':' + (state.rightEntries?.length || 0) + ':' + s
-}
-
-function startPoll() {
-  if (pollTimer) return
-  pollTimer = setInterval(() => {
-    const sig = sigEntries()
-    if (sig !== lastTexSig) {
-      lastTexSig = sig
-      rebuild()
-    }
-  }, 1500)
-}
-
-function buildToolbar() {
-  const bar = document.getElementById('assetLibToolbar')
-  if (!bar) return
-  bar.innerHTML = ''
-
-  const quickCats = [
-    ['fav', 'i-star', t('asset.catFav')],
-    ['recent', 'i-clock', t('asset.catRecent')]
-  ]
-  const fullCats = [
-    ['all', 'i-folder', t('asset.catAll')],
-    ['project', 'i-layers', t('asset.catProject')],
-    ['preset', 'i-sliders', t('asset.catPreset')],
-    ['tex', 'i-image', t('asset.catTex')],
-    ['model', 'i-cube', t('asset.catModel')],
-    ['hdri', 'i-palette', t('asset.catHdri')],
-    ['mc', 'i-box', t('asset.catMc')],
-    ['official', 'i-box', t('asset.catOfficial')]
-  ]
-  const catLabel = v => [...quickCats, ...fullCats].find(c => c[0] === v)?.[2] || v
-
-  const sortLabel = v => sortOptions.find(s => s[0] === v)?.[2] || v
-  const sortOptions = [
-    ['name', 'i-arrow-down', t('asset.sortName')],
-    ['mtime', 'i-clock', t('asset.sortMtime')],
-
-    ['fav', 'i-star', t('asset.sortFav')]
-  ]
-
-  const quickGroup = el('div', 'asset-lib-tags')
-  for (const [v, icon, label] of quickCats) {
-    const btn = el('button', 'asset-lib-tag icon-only' + (categoryFilter === v ? ' active' : ''))
-    btn.innerHTML = `<svg class="ico ico-sm"><use href="#${icon}"/></svg>`
-    btn.title = label
-    btn.dataset.cat = v
-    btn.addEventListener('click', () => {
-      categoryFilter = v
-      syncFilterChip()
-      rebuild()
-    })
-    quickGroup.appendChild(btn)
-  }
-  bar.appendChild(quickGroup)
-
-  const filterChip = el(
-    'button',
-    'asset-lib-chip' + (categoryFilter !== 'all' || contentKindFilter !== 'all' ? ' active' : '')
-  )
-  filterChip.innerHTML = `<svg class="ico ico-sm"><use href="#i-filter"/></svg><span class="chip-label">${catLabel(categoryFilter)}</span><svg class="ico ico-sm chip-caret"><use href="#i-chevron-down"/></svg>`
-  filterChip.title = t('asset.filterTitle')
-  filterChip.setAttribute('aria-haspopup', 'true')
-  filterChip.setAttribute('aria-expanded', 'false')
-
-  const popover = el('div', 'asset-lib-popover')
-  popover.setAttribute('role', 'menu')
-  const popCats = el('div', 'asset-lib-pop-cats')
-  for (const [v, icon, label] of fullCats) {
-    const btn = el('button', 'asset-lib-pop-tag' + (categoryFilter === v ? ' active' : ''))
-    btn.innerHTML = `<svg class="ico ico-sm"><use href="#${icon}"/></svg><span>${label}</span>`
-    btn.dataset.cat = v
-    btn.addEventListener('click', () => {
-      categoryFilter = v
-      popCats.querySelectorAll('.asset-lib-pop-tag').forEach(b => b.classList.toggle('active', b.dataset.cat === v))
-      syncFilterChip()
-      rebuild()
-    })
-    popCats.appendChild(btn)
-  }
-  popover.appendChild(popCats)
-
-  popover.appendChild(el('div', 'asset-lib-pop-sep'))
-
-  const kindGroup = el('div', 'asset-lib-pop-kind')
-  for (const [v, icon, label] of [
-    ['block', 'i-box', t('asset.kindBlock')],
-    ['item', 'i-cube', t('asset.kindItem')]
-  ]) {
-    const btn = el('button', 'asset-lib-pop-tag' + (contentKindFilter === v ? ' active' : ''))
-    btn.innerHTML = `<svg class="ico ico-sm"><use href="#${icon}"/></svg><span>${label}</span>`
-    btn.dataset.kind = v
-    btn.title = t('asset.kindFilterTitle')
-    btn.addEventListener('click', () => {
-      contentKindFilter = contentKindFilter === v ? 'all' : v
-      kindGroup
-        .querySelectorAll('.asset-lib-pop-tag')
-        .forEach(b => b.classList.toggle('active', b.dataset.kind === contentKindFilter))
-      syncFilterChip()
-      applyFilter()
-    })
-    kindGroup.appendChild(btn)
-  }
-  popover.appendChild(kindGroup)
-
-  popover.appendChild(el('div', 'asset-lib-pop-sep'))
-
-  const sortGroup = el('div', 'asset-lib-pop-sort')
-  const sortTags = el('div', 'asset-lib-pop-sort-tags')
-  for (const [v, icon, label] of sortOptions) {
-    const btn = el('button', 'asset-lib-pop-tag' + (sortKey === v ? ' active' : ''))
-    btn.innerHTML = `<svg class="ico ico-sm"><use href="#${icon}"/></svg><span>${label}</span>`
-    btn.dataset.sort = v
-    btn.addEventListener('click', () => {
-      sortKey = v
-      sortTags.querySelectorAll('.asset-lib-pop-tag').forEach(b => b.classList.toggle('active', b.dataset.sort === v))
-      syncFilterChip()
-      rebuild()
-    })
-    sortTags.appendChild(btn)
-  }
-  sortGroup.appendChild(sortTags)
-  const dirBtn = el('button', 'asset-lib-pop-dir' + (sortDir === 'desc' ? ' desc' : ''))
-  dirBtn.title = t('asset.sortDirTitle')
-  dirBtn.innerHTML = '<svg class="ico ico-sm"><use href="#i-arrow-up"/></svg>'
-  dirBtn.addEventListener('click', () => {
-    sortDir = sortDir === 'asc' ? 'desc' : 'asc'
-    dirBtn.classList.toggle('desc', sortDir === 'desc')
-    syncFilterChip()
-    rebuild()
-  })
-  sortGroup.appendChild(dirBtn)
-  popover.appendChild(sortGroup)
-
-  for (const stale of document.querySelectorAll('body > .asset-lib-popover')) stale.remove()
-  const chipWrap = el('div', 'asset-lib-chip-wrap')
-  chipWrap.appendChild(filterChip)
-  document.body.appendChild(popover)
-  bar.appendChild(chipWrap)
-
-  const placePopover = () => {
-    const r = filterChip.getBoundingClientRect()
-    popover.style.top = r.bottom + 4 + 'px'
-    popover.style.left = r.left + 'px'
-  }
-  const togglePopover = open => {
-    const isOpen = open === undefined ? !popover.classList.contains('open') : open
-    popover.classList.toggle('open', isOpen)
-    filterChip.classList.toggle('open', isOpen)
-    filterChip.setAttribute('aria-expanded', String(isOpen))
-    if (isOpen) {
-      placePopover()
-      document.addEventListener('mousedown', onOutside)
-      window.addEventListener('resize', placePopover)
-      window.addEventListener('scroll', placePopover, true)
-    } else {
-      document.removeEventListener('mousedown', onOutside)
-      window.removeEventListener('resize', placePopover)
-      window.removeEventListener('scroll', placePopover, true)
-    }
-  }
-  const onOutside = e => {
-    if (!chipWrap.contains(e.target) && !popover.contains(e.target)) togglePopover(false)
-  }
-  filterChip.addEventListener('click', e => {
-    e.stopPropagation()
-    togglePopover()
-  })
-
-  function syncFilterChip() {
-    const lbl = filterChip.querySelector('.chip-label')
-    if (lbl) lbl.textContent = catLabel(categoryFilter)
-    const hasActive = categoryFilter !== 'all' || contentKindFilter !== 'all' || sortKey !== 'name' || sortDir !== 'asc'
-    filterChip.classList.toggle('active', hasActive)
-  }
-
-  const right = el('div', 'asset-lib-toolbar-right')
-  const btnGroup = el('div', 'asset-lib-btn-group')
-  const viewBtn = el('button', 'asset-lib-btn')
-  viewBtn.title = t('asset.viewToggleTitle')
-  viewBtn.innerHTML = '<svg class="ico ico-sm"><use href="#i-' + (viewMode === 'grid' ? 'grid' : 'list') + '"/></svg>'
-  viewBtn.addEventListener('click', () => {
-    viewMode = viewMode === 'grid' ? 'list' : 'grid'
-    viewBtn.querySelector('use').setAttribute('href', '#i-' + (viewMode === 'grid' ? 'grid' : 'list'))
-    rebuild()
-  })
-  btnGroup.appendChild(viewBtn)
-  btnGroup.appendChild(el('span', 'asset-lib-stat', ''))
-  right.appendChild(btnGroup)
-
-  bar.appendChild(right)
-}
-
 
 /* 模型详情元信息：MC .json 模型（parent / 贴图引用 / 元素数） */
 function modelMetaRows(j) {
@@ -2292,4 +2010,30 @@ setAssetCollectHooks({
   set_viewMode: v => { viewMode = v },
   get_modelPacks: () => modelPacks,
   set_modelPacks: v => { modelPacks = v }
+})
+
+/* AssetToolbar 依赖注入 */
+setAssetToolbarHooks({
+  el: el,
+  categoryLabel: categoryLabel,
+  rebuild: rebuild,
+  get_browse: () => browse,
+  get_searchTerm: () => searchTerm,
+  get_QUICK_CATS: () => QUICK_CATS,
+  get_SECTION_CATS: () => SECTION_CATS,
+  get_recent: () => recent,
+  get_contentKindFilter: () => contentKindFilter,
+  set_contentKindFilter: v => { contentKindFilter = v },
+  get_categoryFilter: () => categoryFilter,
+  set_categoryFilter: v => { categoryFilter = v },
+  get_pollTimer: () => pollTimer,
+  set_pollTimer: v => { pollTimer = v },
+  get_lastTexSig: () => lastTexSig,
+  set_lastTexSig: v => { lastTexSig = v },
+  get_sortKey: () => sortKey,
+  set_sortKey: v => { sortKey = v },
+  get_sortDir: () => sortDir,
+  set_sortDir: v => { sortDir = v },
+  get_viewMode: () => viewMode,
+  set_viewMode: v => { viewMode = v }
 })
