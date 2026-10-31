@@ -1,0 +1,4 @@
+# Go 构建产物（锚定根目录，避免误伤 cmd/matoga/ 源码目录）
+/matoga
+/matoga.exe
+*.exe.tmp
