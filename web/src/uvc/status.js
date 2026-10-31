@@ -13,6 +13,7 @@ let _get_statusEl = () => null
 let _t = k => k
 let _rebuildChips = () => {}
 let _draw = () => {}
+let _loadTexAnimInfo = () => {}
 
 export function setHooks(h) {
   if (h.get_state) _get_state = h.get_state
@@ -20,6 +21,7 @@ export function setHooks(h) {
   if (h.t) _t = h.t
   if (h.rebuildChips) _rebuildChips = h.rebuildChips
   if (h.draw) _draw = h.draw
+  if (h.loadTexAnimInfo) _loadTexAnimInfo = h.loadTexAnimInfo
 }
 
 export function updateStatus() {
@@ -45,7 +47,7 @@ export function updateStatus() {
   const rec = imgCache.get(tex.url)
   const failed = rec && rec.done && !rec.ok
   const sizeStr = rec && rec.ok && rec.img ? `${rec.img.naturalWidth}×${rec.img.naturalHeight}` : ''
-  const animInfo = sizeStr ? loadTexAnimInfo(tex, rec.img.naturalWidth, rec.img.naturalHeight) : null
+  const animInfo = sizeStr ? _loadTexAnimInfo(tex, rec.img.naturalWidth, rec.img.naturalHeight) : null
   const animStr = animInfo ? ` · ${_t('uv.animFrames', { n: animInfo.frames })}` : ''
   const removedStr = !tex.url ? ` · ${_t('uv.removed')}` : ''
   const customStr = !tex.url || !_get_state().customTex.has(_get_state().activeTex) ? '' : ` · ${_t('uv.custom')}`

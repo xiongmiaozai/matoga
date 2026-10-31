@@ -11,6 +11,7 @@
  */
 
 import { isUsableTexUrl } from './tex-utils.js'
+import { rebuildChips } from './tex-chips.js'
 
 /* 宿主对象（getter 转发）与回调函数 */
 let _get_state = () => ({})
@@ -18,6 +19,7 @@ let _get_layout = () => ({})
 let _get_hooks = () => ({})
 let _draw
 let _notifyDirty
+let _loadTexImage
 let _updateStatus
 
 export function setHooks(h) {
@@ -26,6 +28,7 @@ export function setHooks(h) {
   if (h.get_hooks) _get_hooks = h.get_hooks
   if (h.draw) _draw = h.draw
   if (h.notifyDirty) _notifyDirty = h.notifyDirty
+  if (h.loadTexImage) _loadTexImage = h.loadTexImage
   if (h.updateStatus) _updateStatus = h.updateStatus
 }
 
@@ -40,7 +43,7 @@ export function applyCustomTexture(dataUrl, filename, texIndex, extra) {
   if (filename) tex.name = String(filename).replace(/\.[^.]+$/, '')
   _get_state().customTex.add(i)
   rebuildChips()
-  loadTexImage(dataUrl) /* 预载 → onload 后重绘 */
+  _loadTexImage(dataUrl) /* 预载 → onload 后重绘 */
   if (typeof _get_hooks().onTexture === 'function') {
     try {
       Promise.resolve(_get_hooks().onTexture(i, dataUrl, layout, extra)).catch(() => {})
