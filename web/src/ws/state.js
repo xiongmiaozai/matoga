@@ -9,7 +9,7 @@
 import { DEFAULT_PANEL_DEFS } from './panel-defs.js'
 
 export const S = {
-  layout: null,          // golden-layout 实例
+  layout: null, // golden-layout 实例
   layoutRoot: null,
   barEl: null,
   panelEls: null,
@@ -19,7 +19,7 @@ export const S = {
   saveTimer: null,
   glReady: false,
   suppressAutoSave: false,
-  panelDefs: DEFAULT_PANEL_DEFS,   // 运行时由 getPanelDefs() 覆盖
+  panelDefs: DEFAULT_PANEL_DEFS, // 运行时由 getPanelDefs() 覆盖
   allPanelIds: new Set(DEFAULT_PANEL_DEFS.map(d => d.id)),
-  panelHomes: new Map(),
+  panelHomes: new Map()
 }

@@ -7,7 +7,7 @@
  */
 
 export function showPrompt(message, defaultValue) {
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     const overlay = document.createElement('div')
     overlay.className = 'ws-dialog-overlay'
     const dlg = document.createElement('div')
@@ -36,19 +36,32 @@ export function showPrompt(message, defaultValue) {
     input.focus()
     input.select()
     let done = false
-    const finish = (val) => { if (done) return; done = true; overlay.remove(); resolve(val) }
+    const finish = val => {
+      if (done) return
+      done = true
+      overlay.remove()
+      resolve(val)
+    }
     okBtn.addEventListener('click', () => finish(input.value))
     cancelBtn.addEventListener('click', () => finish(null))
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') { e.preventDefault(); finish(input.value) }
-      if (e.key === 'Escape') { e.preventDefault(); finish(null) }
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        finish(input.value)
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        finish(null)
+      }
     })
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) finish(null) })
+    overlay.addEventListener('click', e => {
+      if (e.target === overlay) finish(null)
+    })
   })
 }
 
 export function showConfirm(message) {
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     const overlay = document.createElement('div')
     overlay.className = 'ws-dialog-overlay'
     const dlg = document.createElement('div')
@@ -72,14 +85,32 @@ export function showConfirm(message) {
     document.body.appendChild(overlay)
     okBtn.focus()
     let done = false
-    const finish = (val) => { if (done) return; done = true; overlay.remove(); resolve(val) }
+    const finish = val => {
+      if (done) return
+      done = true
+      overlay.remove()
+      resolve(val)
+    }
     okBtn.addEventListener('click', () => finish(true))
     cancelBtn.addEventListener('click', () => finish(false))
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) finish(false) })
+    overlay.addEventListener('click', e => {
+      if (e.target === overlay) finish(false)
+    })
     document.addEventListener('keydown', function onKey(e) {
-      if (done) { document.removeEventListener('keydown', onKey); return }
-      if (e.key === 'Escape') { e.preventDefault(); document.removeEventListener('keydown', onKey); finish(false) }
-      if (e.key === 'Enter') { e.preventDefault(); document.removeEventListener('keydown', onKey); finish(true) }
+      if (done) {
+        document.removeEventListener('keydown', onKey)
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        document.removeEventListener('keydown', onKey)
+        finish(false)
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        document.removeEventListener('keydown', onKey)
+        finish(true)
+      }
     })
   })
 }

@@ -10,19 +10,20 @@ import { S } from './state.js'
 export function getPreviewWorker() {
   if (S.previewWorker) return S.previewWorker
   S.previewWorker = new Worker(new URL('./hdr-preview-worker.js', import.meta.url), { type: 'module' })
-  S.previewWorker.onmessage = (e) => {
+  S.previewWorker.onmessage = e => {
     const cb = S.previewWorkerCallbacks.get(e.data.id)
-    if (cb) { S.previewWorkerCallbacks.delete(e.data.id); cb(e.data) }
+    if (cb) {
+      S.previewWorkerCallbacks.delete(e.data.id)
+      cb(e.data)
+    }
   }
   return S.previewWorker
 }
 
 export function workerParse(buffer, ext) {
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     const id = ++S.previewWorkerSeq
     S.previewWorkerCallbacks.set(id, resolve)
     getPreviewWorker().postMessage({ id, buffer, ext }, [buffer])
   })
 }
-
-

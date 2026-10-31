@@ -479,4 +479,3 @@ export function warpWidget(node) {
   box.appendChild(_labeledRow('增益', numWidget(node, 'gain', 0.4, 0.95, 0.05)))
   return box
 }
-

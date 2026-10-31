@@ -28,8 +28,10 @@ function cleanPath(p) {
   const INV = /^[\u200B-\u200D\u2060\u180E\uFEFF]+|[\u200B-\u200D\u2060\u180E\uFEFF]+$/g
   let s = p.replace(INV, '').trim()
   if (s.length >= 2) {
-    const a = s[0], b = s[s.length - 1]
-    if ((a === '"' && b === '"') || (a === "'" && b === "'") || (a === '`' && b === '`')) s = s.slice(1, -1).replace(INV, '').trim()
+    const a = s[0],
+      b = s[s.length - 1]
+    if ((a === '"' && b === '"') || (a === "'" && b === "'") || (a === '`' && b === '`'))
+      s = s.slice(1, -1).replace(INV, '').trim()
   }
   return s
 }

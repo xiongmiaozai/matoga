@@ -6,9 +6,47 @@
  * 从 index.html 的内联 <style> 抽出，规则未改。
  */
 
-.bb-launch { display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; height:100%; padding:24px; gap:10px; color:var(--text-muted); }
-.bb-launch-ico { width:56px; height:56px; opacity:.85; color:var(--primary); }
-.bb-launch-title { font-size:16px; font-weight:600; color:var(--text); }
-.bb-launch-desc { font-size:12.5px; line-height:1.6; max-width:320px; }
-.bb-launch-btn { display:inline-flex; align-items:center; gap:6px; margin-top:6px; padding:9px 20px; border:0; border-radius:6px; background:var(--primary); color:var(--text); font-size:13.5px; cursor:pointer; transition:background .15s; }
-.bb-launch-btn:hover { background:var(--primary-hover); }
+.bb-launch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  height: 100%;
+  padding: 24px;
+  gap: 10px;
+  color: var(--text-muted);
+}
+.bb-launch-ico {
+  width: 56px;
+  height: 56px;
+  opacity: 0.85;
+  color: var(--primary);
+}
+.bb-launch-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+.bb-launch-desc {
+  font-size: 12.5px;
+  line-height: 1.6;
+  max-width: 320px;
+}
+.bb-launch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 9px 20px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--primary);
+  color: var(--text);
+  font-size: 13.5px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.bb-launch-btn:hover {
+  background: var(--primary-hover);
+}

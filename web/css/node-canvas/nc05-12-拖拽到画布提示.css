@@ -1,2 +1,5 @@
 /* 拖拽到画布提示 */
-#nodeCanvasPanelWrap.drag-over .panel-body{ outline:2px dashed var(--primary); outline-offset:-4px }
+#nodeCanvasPanelWrap.drag-over .panel-body {
+  outline: 2px dashed var(--primary);
+  outline-offset: -4px;
+}

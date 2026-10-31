@@ -26,5 +26,5 @@ export const S = {
   previewCamera: null,
   previewMesh: null,
   previewAutoExposure: 1,
-  previewKeyBound: false,
+  previewKeyBound: false
 }

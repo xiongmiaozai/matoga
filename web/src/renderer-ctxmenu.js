@@ -15,7 +15,7 @@ export function initCtxMenu() {
   const menu = $('ctxMenu')
   const tbody = $('resultBody')
   if (!menu || !tbody) return
-  tbody.addEventListener('contextmenu', (ev) => {
+  tbody.addEventListener('contextmenu', ev => {
     const tr = ev.target.closest('tr')
     if (!tr || !tr._group) return
     ev.preventDefault()
@@ -29,7 +29,11 @@ export function initCtxMenu() {
     menu.style.top = my + 'px'
     menu.querySelectorAll('.ctx-item').forEach(item => {
       const act = item.dataset.act
-      const pickEntry = (side) => { const s = g[side]; if (!s) return null; return s.main || s.file || s.dir || s.normal || s.specular || null }
+      const pickEntry = side => {
+        const s = g[side]
+        if (!s) return null
+        return s.main || s.file || s.dir || s.normal || s.specular || null
+      }
       let enabled = true
       if (act === 'open-left' || act === 'loc-left') enabled = !!pickEntry('left')
       else if (act === 'open-right' || act === 'loc-right') enabled = !!pickEntry('right')
@@ -42,41 +46,60 @@ export function initCtxMenu() {
       else if (act === 'set-tag') enabled = true
       else if (act === 'clear-tag') enabled = !!state.customTags[g.key]
       item.classList.toggle('disabled', !enabled)
-      item.onclick = enabled ? () => {
-        if (act === 'hide') {
-          state.hiddenKeys.add(g.key)
-          saveOptions()
-          renderResult()
-        } else if (act === 'unhide') {
-          state.hiddenKeys.delete(g.key)
-          saveOptions()
-          renderResult()
-        } else if (act === 'set-tag') {
-          uiPrompt({ title: t('ctx.setTag'), label: t('ctx.setTagLabel'), value: state.customTags[g.key] || '', placeholder: t('ctx.setTagPh'), okText: t('common.confirm'), cancelText: t('common.cancel') }).then(tag => {
-            if (tag != null && tag.trim()) setGroupTag(g, tag.trim())
-          })
-        } else if (act === 'clear-tag') {
-          clearGroupTag(g)
-        } else if (act === 'copy-source') {
-          const side = g.left ? 'left' : 'right'
-          state.copySource = { key: g.key, side }
-          showToast(t('toast.copySourceSet', { name: g.key, dest: t('common.' + (side === 'left' ? 'right' : 'left')) }))
-        } else if (act === 'paste-source') {
-          const src = state.copySource
-          if (!src) { showToast(t('toast.noCopySource')); return }
-          const fresh = state.result.find(r => r.key === src.key)
-          if (!fresh) { showToast(t('toast.noCopySource')); return }
-          const destSide = src.side === 'left' ? 'right' : 'left'
-          handleAction(destSide === 'right' ? 'copy-to-right' : 'copy-to-left', fresh)
-        } else {
-          handleAction(act, g)
-        }
-        menu.style.display = 'none'
-      } : null
+      item.onclick = enabled
+        ? () => {
+            if (act === 'hide') {
+              state.hiddenKeys.add(g.key)
+              saveOptions()
+              renderResult()
+            } else if (act === 'unhide') {
+              state.hiddenKeys.delete(g.key)
+              saveOptions()
+              renderResult()
+            } else if (act === 'set-tag') {
+              uiPrompt({
+                title: t('ctx.setTag'),
+                label: t('ctx.setTagLabel'),
+                value: state.customTags[g.key] || '',
+                placeholder: t('ctx.setTagPh'),
+                okText: t('common.confirm'),
+                cancelText: t('common.cancel')
+              }).then(tag => {
+                if (tag != null && tag.trim()) setGroupTag(g, tag.trim())
+              })
+            } else if (act === 'clear-tag') {
+              clearGroupTag(g)
+            } else if (act === 'copy-source') {
+              const side = g.left ? 'left' : 'right'
+              state.copySource = { key: g.key, side }
+              showToast(
+                t('toast.copySourceSet', { name: g.key, dest: t('common.' + (side === 'left' ? 'right' : 'left')) })
+              )
+            } else if (act === 'paste-source') {
+              const src = state.copySource
+              if (!src) {
+                showToast(t('toast.noCopySource'))
+                return
+              }
+              const fresh = state.result.find(r => r.key === src.key)
+              if (!fresh) {
+                showToast(t('toast.noCopySource'))
+                return
+              }
+              const destSide = src.side === 'left' ? 'right' : 'left'
+              handleAction(destSide === 'right' ? 'copy-to-right' : 'copy-to-left', fresh)
+            } else {
+              handleAction(act, g)
+            }
+            menu.style.display = 'none'
+          }
+        : null
     })
   })
-  document.addEventListener('click', () => { menu.style.display = 'none' })
-  document.addEventListener('contextmenu', (ev) => {
+  document.addEventListener('click', () => {
+    menu.style.display = 'none'
+  })
+  document.addEventListener('contextmenu', ev => {
     if (!ev.target.closest('tr')) menu.style.display = 'none'
   })
 }

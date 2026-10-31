@@ -9,24 +9,62 @@
   border-radius: 0;
   box-shadow: none;
 }
-.lm_content > .panel-card { padding: 10px; display: flex; flex-direction: column; gap: 6px; }
-.lm_content > .center { display: flex; flex-direction: column; }
-.lm_content > .panel { display: flex; flex-direction: column; }
-.lm_content > .panel > .panel-body { position: relative; flex: 1; overflow: auto; min-height: 0; }
-.lm_content > .panel > .panel-head { display: none; }
-.lm_content > .panel > .panel-toolbar { flex-shrink: 0; }
-.lm_content > .folder-card { display: flex; flex-direction: column; }
+.lm_content > .panel-card {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lm_content > .center {
+  display: flex;
+  flex-direction: column;
+}
+.lm_content > .panel {
+  display: flex;
+  flex-direction: column;
+}
+.lm_content > .panel > .panel-body {
+  position: relative;
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+.lm_content > .panel > .panel-head {
+  display: none;
+}
+.lm_content > .panel > .panel-toolbar {
+  flex-shrink: 0;
+}
+.lm_content > .folder-card {
+  display: flex;
+  flex-direction: column;
+}
 
 /* 隐藏面板内重复标题（GL 标签栏已显示） */
-.lm_content > .panel-card > .panel-card-title { display: none; }
+.lm_content > .panel-card > .panel-card-title {
+  display: none;
+}
 
 /* center 面板内部布局 */
-.lm_content > .center > .center-head { flex-shrink: 0; }
-.lm_content > .center > .view-pane { flex: 1; overflow: auto; min-height: 0; }
-.lm_content > .center > .view-pane.active { display: flex; flex-direction: column; }
+.lm_content > .center > .center-head {
+  flex-shrink: 0;
+}
+.lm_content > .center > .view-pane {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+.lm_content > .center > .view-pane.active {
+  display: flex;
+  flex-direction: column;
+}
 
 /* 表格填充 */
-.lm_content .result-table-wrap { flex: 1; overflow: auto; min-height: 0; }
+.lm_content .result-table-wrap {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
 
 /* 3D 参数浮层在 GL 面板内用 absolute 定位 */
 .lm_content .m3d-params-overlay {

@@ -8,9 +8,9 @@
  */
 import { $ } from './core.js'
 
-export const hexToNum = (hex) => parseInt(hex.slice(1), 16)
+export const hexToNum = hex => parseInt(hex.slice(1), 16)
 
-export const numToHex = (n) => '#' + (n & 0xffffff).toString(16).padStart(6, '0')
+export const numToHex = n => '#' + (n & 0xffffff).toString(16).padStart(6, '0')
 
 /* 天空预设参数表（程序化天空与 HDR 预设共用） */
 export const SKY_PRESETS = {
@@ -21,7 +21,7 @@ export const SKY_PRESETS = {
   dusk: { elevation: 5, azimuth: 270, turbidity: 7, rayleigh: 2, mie: 0.01, mieG: 0.85, tint: '#ffb090' },
   night: { elevation: -5, azimuth: 180, turbidity: 3, rayleigh: 0.3, mie: 0.003, mieG: 0.7, tint: '#2a3a5a' },
   noon: { elevation: 75, azimuth: 180, turbidity: 2, rayleigh: 1.2, mie: 0.003, mieG: 0.75, tint: '#c0d8ff' },
-  sunset: { elevation: 4, azimuth: 270, turbidity: 8, rayleigh: 2, mie: 0.01, mieG: 0.85, tint: '#ffd0a0' },
+  sunset: { elevation: 4, azimuth: 270, turbidity: 8, rayleigh: 2, mie: 0.01, mieG: 0.85, tint: '#ffd0a0' }
 }
 
 /* 自定义材质预设收集的滑条 id 列表 */
@@ -33,11 +33,11 @@ export const MAT_PRESET_INPUTS = [
   'm3dOpacity',
   'm3dTransmission',
   'm3dIOR',
-  'm3dClearcoat',
+  'm3dClearcoat'
 ]
 
 /* 把某滑条 input 绑定到一个回调（回调收到值字符串与元素） */
 export const bindInput = (id, fn) => {
   const el = $(id)
-  if (el) el.addEventListener('input', (e) => fn(e.target.value, el))
+  if (el) el.addEventListener('input', e => fn(e.target.value, el))
 }

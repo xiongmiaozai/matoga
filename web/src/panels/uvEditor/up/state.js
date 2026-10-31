@@ -7,11 +7,11 @@
  * （对导入的 let 赋值会抛 "Assignment to constant variable"），故挂在 S 上。
  */
 export const S = {
-  editor: null,     // createUvEditor 返回的编辑器实例
-  sel: null,        // 当前选中的模型项
+  editor: null, // createUvEditor 返回的编辑器实例
+  sel: null, // 当前选中的模型项
   saveBtn: null,
   hintEl: null,
-  source: null,     // 模型来源描述
-  options: [],      // 可选模型列表
-  inited: false,
+  source: null, // 模型来源描述
+  options: [], // 可选模型列表
+  inited: false
 }

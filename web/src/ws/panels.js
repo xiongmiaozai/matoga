@@ -26,12 +26,11 @@ export function extractPanels() {
     nodeLibrary: $('nodeLibraryPanelWrap'),
     assetLibrary: $('assetLibraryPanelWrap'),
 
-    uvEditor: $('uvEditorPanelWrap'),
-
+    uvEditor: $('uvEditorPanelWrap')
   }
   S.panelHomes = Object.values(S.panelEls)
     .filter(Boolean)
-    .map((el) => ({ el, parent: el.parentElement, next: el.nextElementSibling }))
+    .map(el => ({ el, parent: el.parentElement, next: el.nextElementSibling }))
 }
 
 export function restorePanelsToClassic() {
@@ -74,7 +73,7 @@ export function createLayoutRoot() {
 
 export function registerComponents() {
   for (const def of S.panelDefs) {
-    S.layout.registerComponentFactoryFunction(def.id, (container) => {
+    S.layout.registerComponentFactoryFunction(def.id, container => {
       const original = S.panelEls[def.id]
       if (!original) return
       const inUse = original.isConnected && original.parentElement && original.parentElement.closest('.lm_content')
@@ -90,7 +89,6 @@ export function registerComponents() {
     })
   }
 }
-
 
 export function findComponentItem(item, id) {
   if (!item) return null
@@ -110,10 +108,13 @@ export function focusPanel(id) {
   let child = target
   let p = target.parent
   while (p) {
-    if (p.type === 'stack') { try { p.setActiveContentItem(child) } catch {} }
+    if (p.type === 'stack') {
+      try {
+        p.setActiveContentItem(child)
+      } catch {}
+    }
     child = p
     p = p.parent
   }
   return true
 }
-

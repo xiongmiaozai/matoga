@@ -22,12 +22,24 @@ export function makeChip(deps, p, isRecent) {
   const { t, shortName, browseTo, removeFavorite } = deps
   const chip = document.createElement('span')
   chip.className = 'mft-chip' + (isRecent ? ' rec' : '')
-  const name = document.createElement('span'); name.className = 'mft-name'; name.textContent = shortName(p); chip.appendChild(name)
+  const name = document.createElement('span')
+  name.className = 'mft-name'
+  name.textContent = shortName(p)
+  chip.appendChild(name)
   chip.title = p
-  chip.addEventListener('click', (e) => { if (e.target.classList.contains('mft-x')) return; browseTo(p) })
+  chip.addEventListener('click', e => {
+    if (e.target.classList.contains('mft-x')) return
+    browseTo(p)
+  })
   if (!isRecent) {
-    const x = document.createElement('span'); x.className = 'mft-x'; x.textContent = '×'; x.title = t('clear')
-    x.addEventListener('click', (e) => { e.stopPropagation(); removeFavorite(p) })
+    const x = document.createElement('span')
+    x.className = 'mft-x'
+    x.textContent = '×'
+    x.title = t('clear')
+    x.addEventListener('click', e => {
+      e.stopPropagation()
+      removeFavorite(p)
+    })
     chip.appendChild(x)
   }
   return chip
@@ -68,26 +80,49 @@ export function showNewRow(deps) {
   const currentPath = getCurrentPath()
   if (!currentPath) return
   if (listEl.querySelector('.mft-newrow')) return
-  const row = document.createElement('div'); row.className = 'mft-newrow'
+  const row = document.createElement('div')
+  row.className = 'mft-newrow'
   row.innerHTML = `<input type="text" class="input-text" placeholder="${t('newPh')}" /><button class="btn btn-primary btn-sm">✓</button><button class="btn btn-ghost btn-sm">✗</button>`
-  const inp = row.querySelector('input'); const okBtn = row.querySelector('.btn-primary'); const noBtn = row.querySelector('.btn-ghost')
+  const inp = row.querySelector('input')
+  const okBtn = row.querySelector('.btn-primary')
+  const noBtn = row.querySelector('.btn-ghost')
   const commit = async () => {
     const name = inp.value.trim()
-    if (!name) { row.remove(); return }
+    if (!name) {
+      row.remove()
+      return
+    }
     const sep = currentPath.includes('\\') && !currentPath.includes('/') ? '\\' : '/'
     const full = currentPath + sep + name
     okBtn.disabled = true
     try {
       const res = await window.api.createFolder(full)
-      if (res && res.success) { row.remove(); browseTo(currentPath) }
-      else { okBtn.disabled = false; inp.title = (res && res.error) || t('createErr'); inp.style.borderColor = 'var(--danger)' }
-    } catch (e) { okBtn.disabled = false; inp.title = e.message; inp.style.borderColor = 'var(--danger)' }
+      if (res && res.success) {
+        row.remove()
+        browseTo(currentPath)
+      } else {
+        okBtn.disabled = false
+        inp.title = (res && res.error) || t('createErr')
+        inp.style.borderColor = 'var(--danger)'
+      }
+    } catch (e) {
+      okBtn.disabled = false
+      inp.title = e.message
+      inp.style.borderColor = 'var(--danger)'
+    }
   }
   okBtn.addEventListener('click', commit)
   noBtn.addEventListener('click', () => row.remove())
-  inp.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); commit() }
-    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); row.remove() }
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      e.stopPropagation()
+      commit()
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      e.stopPropagation()
+      row.remove()
+    }
   })
   listEl.insertBefore(row, listEl.firstChild)
   inp.focus()

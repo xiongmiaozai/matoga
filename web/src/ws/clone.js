@@ -45,37 +45,57 @@ export function bindCloneDelegation(clone, original) {
     }
     return result
   }
-  const interactive = 'button, input, select, label, [data-act], th[data-key], .filter-btn, .view-tab, .sortable, .panel-card-title'
-  clone.addEventListener('click', (e) => {
-    const t = e.target.closest(interactive)
-    if (!t) return
-    const orig = getOrigEl(t)
-    if (orig && orig !== original) orig.click()
-  }, true)
-  clone.addEventListener('input', (e) => {
-    const orig = getOrigEl(e.target)
-    if (orig && orig !== original) {
-      orig.value = e.target.value
-      orig.dispatchEvent(new Event('input', { bubbles: true }))
-    }
-  }, true)
-  clone.addEventListener('change', (e) => {
-    const orig = getOrigEl(e.target)
-    if (orig && orig !== original) {
-      if (orig.type === 'checkbox' || orig.type === 'radio') orig.checked = e.target.checked
-      else orig.value = e.target.value
-      orig.dispatchEvent(new Event('change', { bubbles: true }))
-    }
-  }, true)
-  clone.addEventListener('dblclick', (e) => {
-    const orig = getOrigEl(e.target)
-    if (orig && orig !== original) orig.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
-  }, true)
+  const interactive =
+    'button, input, select, label, [data-act], th[data-key], .filter-btn, .view-tab, .sortable, .panel-card-title'
+  clone.addEventListener(
+    'click',
+    e => {
+      const t = e.target.closest(interactive)
+      if (!t) return
+      const orig = getOrigEl(t)
+      if (orig && orig !== original) orig.click()
+    },
+    true
+  )
+  clone.addEventListener(
+    'input',
+    e => {
+      const orig = getOrigEl(e.target)
+      if (orig && orig !== original) {
+        orig.value = e.target.value
+        orig.dispatchEvent(new Event('input', { bubbles: true }))
+      }
+    },
+    true
+  )
+  clone.addEventListener(
+    'change',
+    e => {
+      const orig = getOrigEl(e.target)
+      if (orig && orig !== original) {
+        if (orig.type === 'checkbox' || orig.type === 'radio') orig.checked = e.target.checked
+        else orig.value = e.target.value
+        orig.dispatchEvent(new Event('change', { bubbles: true }))
+      }
+    },
+    true
+  )
+  clone.addEventListener(
+    'dblclick',
+    e => {
+      const orig = getOrigEl(e.target)
+      if (orig && orig !== original) orig.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+    },
+    true
+  )
 }
 
 export function syncCloneFromOriginal(original, clone) {
   const observer = new MutationObserver(() => {
-    if (!clone.isConnected) { observer.disconnect(); return }
+    if (!clone.isConnected) {
+      observer.disconnect()
+      return
+    }
     const html = original.innerHTML
     if (clone._lastHtml !== html) {
       clone._lastHtml = html
@@ -87,4 +107,3 @@ export function syncCloneFromOriginal(original, clone) {
   observer.observe(original, { childList: true, subtree: true, characterData: true, attributes: true })
   S.cloneObservers.push(observer)
 }
-

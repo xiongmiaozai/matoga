@@ -1,16 +1,46 @@
 /* 分组头「打开本地位置」按钮（导入模型 / 自定义模型专属目录） */
-.asset-lib-group-head .asset-lib-group-btn{
-  display:inline-flex; align-items:center; justify-content:center; flex:none;
-  width:18px; height:18px; padding:0; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--panel-bg); color:var(--text-muted); cursor:pointer; transition:all .15s var(--ease);
+.asset-lib-group-head .asset-lib-group-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-xs);
+  background: var(--panel-bg);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s var(--ease);
 }
-.asset-lib-group-head .asset-lib-group-btn:hover{ border-color:var(--primary); color:var(--primary) }
-.asset-lib-group-head .asset-lib-group-btn .ico{ width:11px; height:11px }
-.asset-lib-group .asset-lib-grid{ padding:6px }
-.asset-lib-more{
-  grid-column:1/-1; font-size:10px; padding:4px 9px; border-radius:var(--r-xs); cursor:pointer;
-  border:1px dashed var(--border-soft); background:rgba(0,0,0,.2); color:var(--text-muted);
-  transition:all .15s var(--ease);
+.asset-lib-group-head .asset-lib-group-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
 }
-.asset-lib-more:hover{ border-color:var(--primary); color:var(--primary) }
-.asset-lib-grid.list-view .asset-lib-more{ align-self:center; width:fit-content }
+.asset-lib-group-head .asset-lib-group-btn .ico {
+  width: 11px;
+  height: 11px;
+}
+.asset-lib-group .asset-lib-grid {
+  padding: 6px;
+}
+.asset-lib-more {
+  grid-column: 1/-1;
+  font-size: 10px;
+  padding: 4px 9px;
+  border-radius: var(--r-xs);
+  cursor: pointer;
+  border: 1px dashed var(--border-soft);
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--text-muted);
+  transition: all 0.15s var(--ease);
+}
+.asset-lib-more:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.asset-lib-grid.list-view .asset-lib-more {
+  align-self: center;
+  width: fit-content;
+}

@@ -1,7 +1,7 @@
 import { IMG_EXTS } from '../core.js'
 
 /** 与主文件一致的 DOM 简写。本模块不需要跨模块共享状态，故本地定义。 */
-const $ = (sel) => document.querySelector(sel)
+const $ = sel => document.querySelector(sel)
 
 /**
  * matoga - 节点画布：导入贴图对话框
@@ -10,7 +10,6 @@ const $ = (sel) => document.querySelector(sel)
  *
  * 从 node-canvas.js 原样搬出（L2567-2791），逻辑未改。
  */
-
 
 /* 主文件注入：这些属于主文件状态机，注入以避免反向 import 形成循环 */
 let _canvasWrap = null
@@ -249,4 +248,3 @@ $('#importOk').addEventListener('click', doImport)
 importOverlay.addEventListener('click', e => {
   if (e.target === importOverlay) importOverlay.classList.remove('open')
 })
-

@@ -31,7 +31,7 @@ export function walkConfig(node, fn) {
  */
 export function collectComponentTypes(node, out) {
   const set = out instanceof Set ? out : new Set()
-  walkConfig(node, (n) => {
+  walkConfig(node, n => {
     if (n.type === 'component' && n.componentType) set.add(n.componentType)
   })
   return set
@@ -44,7 +44,7 @@ export function collectComponentTypes(node, out) {
  */
 export function countComponentTypes(node) {
   const counts = {}
-  walkConfig(node, (n) => {
+  walkConfig(node, n => {
     if (n.type === 'component' && n.componentType) {
       counts[n.componentType] = (counts[n.componentType] || 0) + 1
     }

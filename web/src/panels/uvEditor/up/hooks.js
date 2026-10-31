@@ -7,11 +7,18 @@
  */
 import { apiUrl } from '../../../utils.js'
 import {
-  buildMcLayout, buildBbLayout,
+  buildMcLayout,
+  buildBbLayout,
   getLastModelLayout,
-  updateModelFaceUv, updateModelFaceRotation, updateModelTexture, clearModelTexture,
-  highlightModelFace, exportActiveModelJson,
-  texUrlToRef, writeMcTexRef, texPathForRef,
+  updateModelFaceUv,
+  updateModelFaceRotation,
+  updateModelTexture,
+  clearModelTexture,
+  highlightModelFace,
+  exportActiveModelJson,
+  texUrlToRef,
+  writeMcTexRef,
+  texPathForRef
 } from '../../../mc-model-viewer.js'
 import { S } from './state.js'
 import { offlineWriteFace } from './context.js'
@@ -19,14 +26,18 @@ import { offlineWriteFace } from './context.js'
 export const hooks = {
   onFaceUv(el, key, uv) {
     if (S.source.mode === 'viewport') {
-      try { updateModelFaceUv(el, key, uv) } catch {}
+      try {
+        updateModelFaceUv(el, key, uv)
+      } catch {}
     } else {
       offlineWriteFace(el, key, 'uv', [...uv])
     }
   },
   onFaceRotation(el, key, rotation) {
     if (S.source.mode === 'viewport') {
-      try { updateModelFaceRotation(el, key, rotation) } catch {}
+      try {
+        updateModelFaceRotation(el, key, rotation)
+      } catch {}
     } else {
       offlineWriteFace(el, key, 'rotation', rotation)
     }
@@ -43,7 +54,7 @@ export const hooks = {
       const origin = layout && Array.isArray(layout.texOrigin) ? layout.texOrigin : null
       const jsonTextures = Array.isArray(S.source.json.textures) ? S.source.json.textures : null
       if (!origin || !jsonTextures) return Promise.resolve()
-      const writeBack = (val) => {
+      const writeBack = val => {
         for (let rawIdx = 0; rawIdx < origin.length; rawIdx++) {
           if (origin[rawIdx] === texIndex && jsonTextures[rawIdx]) jsonTextures[rawIdx].source = val
         }
@@ -61,19 +72,31 @@ export const hooks = {
       if (url.startsWith('/')) {
         return fetch(apiUrl(url))
           .then(r => (r.ok ? r.blob() : null))
-          .then(blob => (blob ? new Promise((resolve) => {
-            const rd = new FileReader()
-            rd.onload = () => resolve(String(rd.result))
-            rd.onerror = () => resolve(null)
-            rd.readAsDataURL(blob)
-          }) : null))
-          .then(dataUrl => { if (dataUrl) writeBack(dataUrl) })
+          .then(blob =>
+            blob
+              ? new Promise(resolve => {
+                  const rd = new FileReader()
+                  rd.onload = () => resolve(String(rd.result))
+                  rd.onerror = () => resolve(null)
+                  rd.readAsDataURL(blob)
+                })
+              : null
+          )
+          .then(dataUrl => {
+            if (dataUrl) writeBack(dataUrl)
+          })
           .catch(() => {})
       }
     }
     /* 离线：MC .json（im/cm）贴图引用写回（保存时持久化，重新打开自动加载）。
        无包上下文 → 一律扩展引用形式（data: 内嵌 / file: 磁盘路径 / 站内 URL） */
-    if (S.source.mode === 'offline' && !S.source.isBb && S.source.json && S.source.json.textures && typeof S.source.json.textures === 'object') {
+    if (
+      S.source.mode === 'offline' &&
+      !S.source.isBb &&
+      S.source.json &&
+      S.source.json.textures &&
+      typeof S.source.json.textures === 'object'
+    ) {
       const lay = layout || S.source.layout
       const oldPath = lay && Array.isArray(lay.texPaths) ? lay.texPaths[texIndex] : null
       if (typeof oldPath === 'string') {
@@ -88,16 +111,23 @@ export const hooks = {
   },
   highlightFace(el, key, on) {
     if (S.source.mode !== 'viewport') return false
-    try { return highlightModelFace(el, key, on) } catch { return false }
+    try {
+      return highlightModelFace(el, key, on)
+    } catch {
+      return false
+    }
   },
   exportJson() {
     if (S.source.mode === 'viewport') {
-      try { return exportActiveModelJson() } catch { return null }
+      try {
+        return exportActiveModelJson()
+      } catch {
+        return null
+      }
     }
     if (S.source.mode !== 'offline' || !S.source.json) return null
     return { json: S.source.json, filename: (S.source.id || 'model') + (S.source.isBb ? '.bbmodel' : '.json') }
-  },
+  }
 }
 
 /* ── 模型列表 ─────────────────────────────────── */
-

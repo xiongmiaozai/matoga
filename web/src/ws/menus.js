@@ -9,15 +9,24 @@ import { showToast } from '../core.js'
 import { showPrompt, showConfirm } from './dialogs.js'
 import { presetNames } from './preset-model.js'
 import {
-  activatePreset, createNewPreset, deletePreset, duplicatePreset,
-  exportAllPresets, exportPreset, importPreset, renamePresetDialog,
+  activatePreset,
+  createNewPreset,
+  deletePreset,
+  duplicatePreset,
+  exportAllPresets,
+  exportPreset,
+  importPreset,
+  renamePresetDialog
 } from './presets.js'
 import { focusPanel } from './panels.js'
 import { S } from './state.js'
 
 export function addWindowMenu() {
   const existing = document.getElementById('addWinMenu')
-  if (existing) { existing.remove(); return }
+  if (existing) {
+    existing.remove()
+    return
+  }
 
   const counts = {}
   try {
@@ -31,10 +40,17 @@ export function addWindowMenu() {
   } catch {}
 
   let stacks = []
-  try { stacks = S.layout.getAllStacks() } catch {}
+  try {
+    stacks = S.layout.getAllStacks()
+  } catch {}
   let activeStack = null
   for (const s of stacks) {
-    try { if (s.getActiveContentItem()) { activeStack = s; break } } catch {}
+    try {
+      if (s.getActiveContentItem()) {
+        activeStack = s
+        break
+      }
+    } catch {}
   }
 
   const menu = document.createElement('div')
@@ -51,11 +67,18 @@ export function addWindowMenu() {
     item.className = 'add-win-item'
     const cnt = counts[def.id] || 0
     item.innerHTML =
-      '<svg class="ico ico-sm aw-ico"><use href="#' + def.icon + '"/></svg>' +
-      '<span class="aw-name">' + def.title + '</span>' +
+      '<svg class="ico ico-sm aw-ico"><use href="#' +
+      def.icon +
+      '"/></svg>' +
+      '<span class="aw-name">' +
+      def.title +
+      '</span>' +
       (cnt > 0 ? '<span class="aw-count">已打开</span>' : '')
-    item.addEventListener('click', (e) => {
-      const closeMenu = () => { menu.remove(); document.removeEventListener('keydown', onKey) }
+    item.addEventListener('click', e => {
+      const closeMenu = () => {
+        menu.remove()
+        document.removeEventListener('keydown', onKey)
+      }
       if (counts[def.id] > 0) {
         const focused = focusPanel(def.id)
         showToast(focused ? '「' + def.title + '」已打开，已聚焦该面板' : '「' + def.title + '」已在布局中')
@@ -65,15 +88,20 @@ export function addWindowMenu() {
       const altNew = e.altKey
       try {
         if (altNew) {
-          try { S.layout.addComponentAtLocation(def.id, {}, def.title, [{ typeId: 3, index: undefined }]) }
-          catch { S.layout.addComponent(def.id, {}, def.title) }
+          try {
+            S.layout.addComponentAtLocation(def.id, {}, def.title, [{ typeId: 3, index: undefined }])
+          } catch {
+            S.layout.addComponent(def.id, {}, def.title)
+          }
         } else if (activeStack) {
           activeStack.addComponent(def.id, {}, def.title)
         } else {
           S.layout.addComponent(def.id, {}, def.title)
         }
         showToast('已添加「' + def.title + '」' + (altNew ? ' · 新标签组' : ''))
-      } catch (err) { showToast('添加失败: ' + err.message) }
+      } catch (err) {
+        showToast('添加失败: ' + err.message)
+      }
       closeMenu()
     })
     menu.appendChild(item)
@@ -89,26 +117,40 @@ export function addWindowMenu() {
   const btn = document.getElementById('addWinBtn')
   if (btn) {
     const r = btn.getBoundingClientRect()
-    const mw = menu.offsetWidth, mh = menu.offsetHeight
-    let left = r.left, top = r.bottom + 4
+    const mw = menu.offsetWidth,
+      mh = menu.offsetHeight
+    let left = r.left,
+      top = r.bottom + 4
     if (left + mw > window.innerWidth - 8) left = window.innerWidth - mw - 8
     if (top + mh > window.innerHeight - 8) top = Math.max(8, r.top - mh - 4)
     menu.style.left = left + 'px'
     menu.style.top = top + 'px'
   }
 
-  function onKey(e) { if (e.key === 'Escape') { menu.remove(); document.removeEventListener('keydown', onKey) } }
+  function onKey(e) {
+    if (e.key === 'Escape') {
+      menu.remove()
+      document.removeEventListener('keydown', onKey)
+    }
+  }
   document.addEventListener('keydown', onKey)
   setTimeout(() => {
     document.addEventListener('click', function onOutside(e) {
-      if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onOutside); document.removeEventListener('keydown', onKey) }
+      if (!menu.contains(e.target)) {
+        menu.remove()
+        document.removeEventListener('click', onOutside)
+        document.removeEventListener('keydown', onKey)
+      }
     })
   }, 0)
 }
 
 export function openPresetManager() {
   const existing = document.getElementById('presetMgrOverlay')
-  if (existing) { existing.remove(); return }
+  if (existing) {
+    existing.remove()
+    return
+  }
 
   const overlay = document.createElement('div')
   overlay.id = 'presetMgrOverlay'
@@ -160,13 +202,15 @@ export function openPresetManager() {
         acts.appendChild(mkBtn('export', '导出'))
       }
       item.appendChild(acts)
-      item.addEventListener('click', (e) => {
+      item.addEventListener('click', e => {
         const btn = e.target.closest('.pm-btn')
         if (!btn) return
         e.stopPropagation()
         const act = btn.dataset.act
-        if (act === 'activate') { activatePreset(name); renderList() }
-        else if (act === 'duplicate') duplicatePreset(name).then(renderList)
+        if (act === 'activate') {
+          activatePreset(name)
+          renderList()
+        } else if (act === 'duplicate') duplicatePreset(name).then(renderList)
         else if (act === 'rename') renamePresetDialog(name, renderList)
         else if (act === 'delete') deletePreset(name).then(renderList)
         else if (act === 'export') exportPreset(name)
@@ -190,11 +234,10 @@ export function openPresetManager() {
   overlay.appendChild(dlg)
   document.body.appendChild(overlay)
 
-  overlay.addEventListener('click', (e) => {
+  overlay.addEventListener('click', e => {
     if (e.target === overlay || e.target.id === 'presetMgrClose' || e.target.id === 'pmCloseBtn') overlay.remove()
   })
   document.getElementById('pmNew').addEventListener('click', () => createNewPreset(renderList))
   document.getElementById('pmImport').addEventListener('click', () => importPreset(renderList))
   document.getElementById('pmExportAll').addEventListener('click', exportAllPresets)
 }
-

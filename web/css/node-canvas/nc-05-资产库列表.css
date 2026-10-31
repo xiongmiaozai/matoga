@@ -1,51 +1,130 @@
 /* ════════════════════════════════════════════════════════════
    资产库列表
    ════════════════════════════════════════════════════════════ */
-.asset-lib-list{ flex:1; overflow-y:auto; padding:4px 0 }
-.asset-lib-section{ margin-bottom:4px }
-.asset-lib-section-head{
-  display:flex; align-items:center; gap:6px; padding:9px 12px 5px;
-  font-size:10px; text-transform:uppercase; letter-spacing:1.2px;
-  color:var(--text-dim); font-weight:600; cursor:pointer; user-select:none;
+.asset-lib-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
 }
-.asset-lib-section-head .caret{ transition:transform .2s var(--ease-out); display:inline-block }
-.asset-lib-section.collapsed:not(.search-open) .caret{ transform:rotate(-90deg) }
-.asset-lib-section.collapsed:not(.search-open) .asset-lib-grid{ display:none }
-.asset-lib-section.collapsed:not(.search-open) .asset-lib-sec-actions{ display:none }
-.asset-lib-section-head .cnt{
-  font-size:10px; color:var(--text-dim); background:rgba(0,0,0,.3);
-  padding:1px 7px; border:1px solid var(--border-soft); border-radius:10px; margin-left:auto;
+.asset-lib-section {
+  margin-bottom: 4px;
 }
-.asset-lib-section-btn{
-  display:inline-flex; align-items:center; gap:3px;
-  padding:2px 8px; margin-left:6px;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--panel-bg); color:var(--text-muted);
-  font-size:10px; text-transform:none; letter-spacing:0; font-weight:500;
-  cursor:pointer; transition:all .15s var(--ease);
+.asset-lib-section-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 12px 5px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--text-dim);
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
 }
-.asset-lib-section-btn:hover{ border-color:var(--primary); color:var(--primary); }
-.asset-lib-section-btn .ico{ width:12px; height:12px; }
-.asset-lib-grid{
-  display:grid; grid-template-columns:repeat(auto-fill,minmax(72px,1fr));
-  gap:6px; padding:4px 10px 10px;
+.asset-lib-section-head .caret {
+  transition: transform 0.2s var(--ease-out);
+  display: inline-block;
 }
-.asset-card{
-  background:rgba(0,0,0,.25); border:1px solid var(--border-soft); border-radius:var(--r-sm);
-  padding:4px; cursor:grab; transition:all .15s var(--ease);
-  display:flex; flex-direction:column; gap:3px; overflow:hidden;
+.asset-lib-section.collapsed:not(.search-open) .caret {
+  transform: rotate(-90deg);
 }
-.asset-card:hover{ border-color:var(--primary); box-shadow:0 0 0 1px var(--primary), var(--shadow-xs); transform:translateY(-1px) }
-.asset-card:active{ cursor:grabbing }
-.asset-card.dragging{ opacity:.5 }
-.asset-card.is-hidden{ display:none }
-.asset-lib-group.is-hidden,.asset-lib-section.is-hidden,.asset-lib-empty.is-hidden{ display:none }
-.asset-card .ac-thumb{
-  width:100%; aspect-ratio:1; background:rgba(0,0,0,.3); border-radius:var(--r-xs);
-  display:flex; align-items:center; justify-content:center; overflow:hidden;
-  image-rendering:pixelated;
+.asset-lib-section.collapsed:not(.search-open) .asset-lib-grid {
+  display: none;
 }
-.asset-card .ac-thumb img{ width:100%; height:100%; object-fit:cover; display:block }
+.asset-lib-section.collapsed:not(.search-open) .asset-lib-sec-actions {
+  display: none;
+}
+.asset-lib-section-head .cnt {
+  font-size: 10px;
+  color: var(--text-dim);
+  background: rgba(0, 0, 0, 0.3);
+  padding: 1px 7px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  margin-left: auto;
+}
+.asset-lib-section-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  margin-left: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-xs);
+  background: var(--panel-bg);
+  color: var(--text-muted);
+  font-size: 10px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s var(--ease);
+}
+.asset-lib-section-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.asset-lib-section-btn .ico {
+  width: 12px;
+  height: 12px;
+}
+.asset-lib-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 6px;
+  padding: 4px 10px 10px;
+}
+.asset-card {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-sm);
+  padding: 4px;
+  cursor: grab;
+  transition: all 0.15s var(--ease);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow: hidden;
+}
+.asset-card:hover {
+  border-color: var(--primary);
+  box-shadow:
+    0 0 0 1px var(--primary),
+    var(--shadow-xs);
+  transform: translateY(-1px);
+}
+.asset-card:active {
+  cursor: grabbing;
+}
+.asset-card.dragging {
+  opacity: 0.5;
+}
+.asset-card.is-hidden {
+  display: none;
+}
+.asset-lib-group.is-hidden,
+.asset-lib-section.is-hidden,
+.asset-lib-empty.is-hidden {
+  display: none;
+}
+.asset-card .ac-thumb {
+  width: 100%;
+  aspect-ratio: 1;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: var(--r-xs);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  image-rendering: pixelated;
+}
+.asset-card .ac-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
 /* 分片入口：顺序 = 原行号升序，层叠结果与拆分前等价 */
 @import './nc05-01-模型-3D-离屏渲染缩略图：抗锯齿插值-区别于像素风贴图缩略图-.css';
 @import './nc05-02-制作包-我的开发包-.css';

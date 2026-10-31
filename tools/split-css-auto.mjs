@@ -202,7 +202,7 @@ export function splitAuto(src, outDir, prefix, maxLines = 300) {
   const entry = [
     head || `/* ${prefix} — 分片入口 */`,
     '/* 分片入口：顺序 = 原行号升序，层叠结果与拆分前等价 */',
-    ...imports,
+    ...imports
   ].join(eol)
   fs.writeFileSync(src, entry + eol, 'utf8')
   return { total, headLines: skipLines, parts: parts.length, files: written, covered }

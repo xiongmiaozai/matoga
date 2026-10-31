@@ -10,11 +10,11 @@
  */
 export const S = {
   initialized: false,
-  dir: 'down',                 // 'down' 数据流向下游 | 'up' 构成关系向上游
-  collapsed: new Set(),        // 已折叠的节点 id
-  activeId: null,              // 当前选中（联动）节点 id
-  tree: null,                  // 最近一次构建的森林
-  graphMeta: null,             // 统计信息
+  dir: 'down', // 'down' 数据流向下游 | 'up' 构成关系向上游
+  collapsed: new Set(), // 已折叠的节点 id
+  activeId: null, // 当前选中（联动）节点 id
+  tree: null, // 最近一次构建的森林
+  graphMeta: null, // 统计信息
   view: { x: 0, y: 0, zoom: 1 },
-  refreshTimer: null,
+  refreshTimer: null
 }

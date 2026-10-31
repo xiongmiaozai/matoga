@@ -7,28 +7,54 @@
   font-family: 'Press Start 2P', 'Courier New', monospace;
   font-size: 10px;
   color: var(--mc-grass);
-  text-shadow: 1px 1px 0 rgba(0,0,0,.5);
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
   padding: 8px 12px;
 }
-th.sortable:hover { color: var(--mc-diamond); }
-th.asc::after { content: " ▼"; color: var(--mc-diamond); }
-th.desc::after { content: " ▲"; color: var(--mc-diamond); }
+th.sortable:hover {
+  color: var(--mc-diamond);
+}
+th.asc::after {
+  content: ' ▼';
+  color: var(--mc-diamond);
+}
+th.desc::after {
+  content: ' ▲';
+  color: var(--mc-diamond);
+}
 
 .result-table td {
   padding: 8px 12px;
   border-bottom: 1px solid var(--border-soft);
 }
-.result-table tbody tr:nth-child(even) td { background: var(--zebra); }
-.result-table tbody tr:hover td { background: var(--row-hover); }
-tr.row-selected td { background: var(--selected) !important; }
+.result-table tbody tr:nth-child(even) td {
+  background: var(--zebra);
+}
+.result-table tbody tr:hover td {
+  background: var(--row-hover);
+}
+tr.row-selected td {
+  background: var(--selected) !important;
+}
 
 /* Row status indicators — MC colored wool */
-.result-table tbody td:first-child { border-left: 4px solid transparent; }
-tr.row-have td:first-child { border-left-color: var(--mc-grass); }
-tr.row-diff td:first-child { border-left-color: var(--warn); }
-tr.row-partial td:first-child { border-left-color: var(--partial); }
-tr.row-miss td:first-child { border-left-color: var(--danger); }
-tr.row-extra td:first-child { border-left-color: var(--extra); }
+.result-table tbody td:first-child {
+  border-left: 4px solid transparent;
+}
+tr.row-have td:first-child {
+  border-left-color: var(--mc-grass);
+}
+tr.row-diff td:first-child {
+  border-left-color: var(--warn);
+}
+tr.row-partial td:first-child {
+  border-left-color: var(--partial);
+}
+tr.row-miss td:first-child {
+  border-left-color: var(--danger);
+}
+tr.row-extra td:first-child {
+  border-left-color: var(--extra);
+}
 
 /* Folder group rows */
 .folder-group-row td {
@@ -39,17 +65,36 @@ tr.row-extra td:first-child { border-left-color: var(--extra); }
 }
 
 /* Status badges — MC dot style */
-.status-badge::before { display: none; }
-.status-badge .ico { width: 14px; height: 14px; }
-.status-have .ico { color: var(--mc-grass); }
-.status-miss .ico { color: var(--danger); }
-.status-extra .ico { color: var(--extra); }
-.status-diff .ico { color: var(--warn); }
-.status-partial .ico { color: var(--partial); }
+.status-badge::before {
+  display: none;
+}
+.status-badge .ico {
+  width: 14px;
+  height: 14px;
+}
+.status-have .ico {
+  color: var(--mc-grass);
+}
+.status-miss .ico {
+  color: var(--danger);
+}
+.status-extra .ico {
+  color: var(--extra);
+}
+.status-diff .ico {
+  color: var(--warn);
+}
+.status-partial .ico {
+  color: var(--partial);
+}
 
 /* Type colors */
-.type-dir { color: var(--mc-diamond); }
-.type-mat { color: var(--extra); }
+.type-dir {
+  color: var(--mc-diamond);
+}
+.type-mat {
+  color: var(--extra);
+}
 
 /* Folder count chips */
 .fc {
@@ -58,27 +103,54 @@ tr.row-extra td:first-child { border-left-color: var(--extra); }
   font-size: 11px;
   box-shadow: inset 1px 1px 0 0 var(--mc-border-light);
 }
-.fc-have { background: var(--mc-grass-dark); color: #fff; }
-.fc-diff { background: var(--warn); color: #000; }
-.fc-partial { background: var(--partial); color: #000; }
-.fc-miss { background: var(--danger); color: #fff; }
-.fc-extra { background: var(--extra); color: #fff; }
+.fc-have {
+  background: var(--mc-grass-dark);
+  color: #fff;
+}
+.fc-diff {
+  background: var(--warn);
+  color: #000;
+}
+.fc-partial {
+  background: var(--partial);
+  color: #000;
+}
+.fc-miss {
+  background: var(--danger);
+  color: #fff;
+}
+.fc-extra {
+  background: var(--extra);
+  color: #fff;
+}
 
 /* Thumbnails — MC item slot */
 .thumb {
-  width: 38px; height: 38px;
+  width: 38px;
+  height: 38px;
   border: 2px solid #000;
-  box-shadow: inset 1px 1px 0 0 rgba(0,0,0,.4);
+  box-shadow: inset 1px 1px 0 0 rgba(0, 0, 0, 0.4);
 }
-.thumb-left { border-color: var(--mc-grass); }
-.thumb-right { border-color: var(--warn); }
+.thumb-left {
+  border-color: var(--mc-grass);
+}
+.thumb-right {
+  border-color: var(--warn);
+}
 .thumb-ph {
-  width: 38px; height: 38px;
+  width: 38px;
+  height: 38px;
   border: 2px solid #000;
-  box-shadow: inset 1px 1px 0 0 rgba(0,0,0,.4);
+  box-shadow: inset 1px 1px 0 0 rgba(0, 0, 0, 0.4);
 }
-.thumb-left-ph { border-color: var(--mc-grass); color: var(--mc-grass); }
-.thumb-right-ph { border-color: var(--warn); color: var(--warn); }
+.thumb-left-ph {
+  border-color: var(--mc-grass);
+  color: var(--mc-grass);
+}
+.thumb-right-ph {
+  border-color: var(--warn);
+  color: var(--warn);
+}
 
 /* Sub replace button */
 .sub-replace-btn {
@@ -86,10 +158,12 @@ tr.row-extra td:first-child { border-left-color: var(--extra); }
   border: 2px solid #000;
   background: var(--mc-grass);
   color: #fff;
-  text-shadow: 1px 1px 0 rgba(0,0,0,.4);
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.4);
   box-shadow: inset 1px 1px 0 0 var(--mc-border-light);
 }
-.sub-replace-btn:hover { background: var(--mc-grass-dark); }
+.sub-replace-btn:hover {
+  background: var(--mc-grass-dark);
+}
 
 /* ═══════════════════════════════════════════════
    PANELS — Right sidebar
@@ -97,10 +171,14 @@ tr.row-extra td:first-child { border-left-color: var(--extra); }
 .panel {
   background: var(--panel-bg);
   border: 2px solid #000;
-  box-shadow: inset 2px 2px 0 0 rgba(0,0,0,.4), inset -1px -1px 0 0 var(--mc-border-light);
+  box-shadow:
+    inset 2px 2px 0 0 rgba(0, 0, 0, 0.4),
+    inset -1px -1px 0 0 var(--mc-border-light);
 }
 .panel:hover {
-  box-shadow: inset 2px 2px 0 0 rgba(0,0,0,.4), inset -1px -1px 0 0 var(--mc-border-light);
+  box-shadow:
+    inset 2px 2px 0 0 rgba(0, 0, 0, 0.4),
+    inset -1px -1px 0 0 var(--mc-border-light);
 }
 .panel-head {
   border-bottom: 2px solid #000;
@@ -115,7 +193,10 @@ tr.row-extra td:first-child { border-left-color: var(--extra); }
   border: 2px solid #000;
   box-shadow: inset 1px 1px 0 0 var(--mc-border-light);
 }
-.panel-tool:hover { background: var(--panel-3); color: var(--mc-grass); }
+.panel-tool:hover {
+  background: var(--panel-3);
+  color: var(--mc-grass);
+}
 
 /* ═══════════════════════════════════════════════
    2D PREVIEW — MC display style
@@ -125,45 +206,78 @@ tr.row-extra td:first-child { border-left-color: var(--extra); }
   background: var(--mc-darker);
 }
 
-.preview-panel { background: var(--mc-darker); }
+.preview-panel {
+  background: var(--mc-darker);
+}
 
 .pv-cell {
   border: 2px solid #000;
-  box-shadow: inset 2px 2px 0 0 rgba(0,0,0,.6);
+  box-shadow: inset 2px 2px 0 0 rgba(0, 0, 0, 0.6);
 }
 
-.pv-role, .pv-tag, .pv-size {
+.pv-role,
+.pv-tag,
+.pv-size {
   background: var(--mc-darker);
   border: 1px solid #000;
   font-family: 'Courier New', monospace;
   font-size: 10px;
 }
 
-.pv-replace-btn, .pv-delete-btn {
+.pv-replace-btn,
+.pv-delete-btn {
   border: 2px solid #000;
-  text-shadow: 1px 1px 0 rgba(0,0,0,.4);
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.4);
   box-shadow: inset 1px 1px 0 0 var(--mc-border-light);
 }
-.pv-replace-btn { background: var(--mc-stone); }
-.pv-replace-btn:hover { background: var(--mc-grass); }
-.pv-delete-btn { background: var(--danger); }
-.pv-delete-btn:hover { background: var(--danger); }
+.pv-replace-btn {
+  background: var(--mc-stone);
+}
+.pv-replace-btn:hover {
+  background: var(--mc-grass);
+}
+.pv-delete-btn {
+  background: var(--danger);
+}
+.pv-delete-btn:hover {
+  background: var(--danger);
+}
 
-.pv-split-handle { background: var(--mc-grass); width: 6px; border: 2px solid #000; }
-.pv-split-handle:hover, .pv-split-handle.dragging { width: 8px; }
+.pv-split-handle {
+  background: var(--mc-grass);
+  width: 6px;
+  border: 2px solid #000;
+}
+.pv-split-handle:hover,
+.pv-split-handle.dragging {
+  width: 8px;
+}
 
-.pv-diff-btn { border: 2px solid #000; background: var(--mc-darker); }
-.pv-diff-btn:hover { background: var(--panel-3); }
+.pv-diff-btn {
+  border: 2px solid #000;
+  background: var(--mc-darker);
+}
+.pv-diff-btn:hover {
+  background: var(--panel-3);
+}
 
-.pv-diff-result { background: var(--mc-darker); border: 2px solid #000; }
+.pv-diff-result {
+  background: var(--mc-darker);
+  border: 2px solid #000;
+}
 
-.pv-tabs button { border: 1px solid transparent; }
-.pv-tabs button:hover { background: var(--panel-2); border-color: #000; }
+.pv-tabs button {
+  border: 1px solid transparent;
+}
+.pv-tabs button:hover {
+  background: var(--panel-2);
+  border-color: #000;
+}
 .pv-tabs button.active {
   background: var(--mc-grass-dark);
   color: #fff;
   border-color: #000;
-  text-shadow: 1px 1px 0 rgba(0,0,0,.4);
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.4);
 }
 
 /* ═══════════════════════════════════════════════
@@ -172,34 +286,51 @@ tr.row-extra td:first-child { border-left-color: var(--extra); }
 .material3d-container {
   background: var(--mc-darker);
   border: 2px solid #000;
-  box-shadow: inset 2px 2px 0 0 rgba(0,0,0,.6), inset -1px -1px 0 0 var(--mc-border-light);
+  box-shadow:
+    inset 2px 2px 0 0 rgba(0, 0, 0, 0.6),
+    inset -1px -1px 0 0 var(--mc-border-light);
 }
 
-
-.m3d-loading { background: rgba(14,14,18,.9); }
+.m3d-loading {
+  background: rgba(14, 14, 18, 0.9);
+}
 .m3d-loading-text {
   font-family: 'Press Start 2P', 'Courier New', monospace;
   font-size: 11px;
   color: var(--mc-grass);
-  text-shadow: 1px 1px 0 rgba(0,0,0,.5);
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
 }
-.m3d-loading-bar { background: var(--mc-darker); border: 1px solid #000; }
-.m3d-loading-fill { background: var(--mc-grass); }
+.m3d-loading-bar {
+  background: var(--mc-darker);
+  border: 1px solid #000;
+}
+.m3d-loading-fill {
+  background: var(--mc-grass);
+}
 
 /* 3D 视口区域统一现代毛玻璃风：不应用 MC 像素风覆盖，由 styles.css 定义 */
 
 /* HDR preset items */
 .hdri-preset-item {
   border: 2px solid #000;
-  box-shadow: inset 1px 1px 0 0 rgba(0,0,0,.4);
+  box-shadow: inset 1px 1px 0 0 rgba(0, 0, 0, 0.4);
 }
-.hdri-preset-item:hover { border-color: var(--mc-grass); transform: none; }
-.hdri-preset-item.active { border-color: var(--mc-grass); box-shadow: inset 1px 1px 0 0 rgba(0,0,0,.4), 0 0 0 2px var(--mc-grass); }
+.hdri-preset-item:hover {
+  border-color: var(--mc-grass);
+  transform: none;
+}
+.hdri-preset-item.active {
+  border-color: var(--mc-grass);
+  box-shadow:
+    inset 1px 1px 0 0 rgba(0, 0, 0, 0.4),
+    0 0 0 2px var(--mc-grass);
+}
 
 /* Color inputs */
-input[type="color"].m3d-color-input, #m3dSkyTint {
+input[type='color'].m3d-color-input,
+#m3dSkyTint {
   border: 2px solid #000;
-  box-shadow: inset 1px 1px 0 0 rgba(0,0,0,.4);
+  box-shadow: inset 1px 1px 0 0 rgba(0, 0, 0, 0.4);
 }
 
 /* ═══════════════════════════════════════════════
@@ -208,56 +339,98 @@ input[type="color"].m3d-color-input, #m3dSkyTint {
 .chart-card {
   background: var(--panel-bg);
   border: 2px solid #000;
-  box-shadow: inset 2px 2px 0 0 rgba(0,0,0,.4), inset -1px -1px 0 0 var(--mc-border-light);
+  box-shadow:
+    inset 2px 2px 0 0 rgba(0, 0, 0, 0.4),
+    inset -1px -1px 0 0 var(--mc-border-light);
 }
 .chart-card:hover {
   border-color: #000;
-  box-shadow: inset 2px 2px 0 0 rgba(0,0,0,.4), inset -1px -1px 0 0 var(--mc-border-light), 0 0 0 1px var(--mc-grass);
+  box-shadow:
+    inset 2px 2px 0 0 rgba(0, 0, 0, 0.4),
+    inset -1px -1px 0 0 var(--mc-border-light),
+    0 0 0 1px var(--mc-grass);
 }
 
-.chart-donut-num { font-family: 'Press Start 2P', 'Courier New', monospace; font-size: 20px; }
+.chart-donut-num {
+  font-family: 'Press Start 2P', 'Courier New', monospace;
+  font-size: 20px;
+}
 
-.bar-track { background: var(--mc-darker); border: 1px solid #000; }
-.bar-fill { border: none; }
-.bar-row:hover .bar-fill { filter: brightness(1.2); }
-.bar-row:hover .bar-val { color: var(--mc-grass); }
+.bar-track {
+  background: var(--mc-darker);
+  border: 1px solid #000;
+}
+.bar-fill {
+  border: none;
+}
+.bar-row:hover .bar-fill {
+  filter: brightness(1.2);
+}
+.bar-row:hover .bar-val {
+  color: var(--mc-grass);
+}
 
 .metric-card {
   background: var(--panel-2);
   border: 2px solid #000;
-  box-shadow: inset 2px 2px 0 0 rgba(0,0,0,.4), inset -1px -1px 0 0 var(--mc-border-light);
+  box-shadow:
+    inset 2px 2px 0 0 rgba(0, 0, 0, 0.4),
+    inset -1px -1px 0 0 var(--mc-border-light);
 }
 
+.stack-track {
+  background: var(--mc-darker);
+  border: 1px solid #000;
+}
 
-.stack-track { background: var(--mc-darker); border: 1px solid #000; }
+.heat-cell {
+  border: 1px solid #000;
+}
+.heat-bg {
+  border: none;
+}
+.heat-cell:hover span {
+  color: var(--mc-grass);
+}
 
-.heat-cell { border: 1px solid #000; }
-.heat-bg { border: none; }
-.heat-cell:hover span { color: var(--mc-grass); }
-
-.legend-drill:hover { color: var(--mc-grass); }
-.legend-drill:hover b { color: var(--mc-grass); }
+.legend-drill:hover {
+  color: var(--mc-grass);
+}
+.legend-drill:hover b {
+  color: var(--mc-grass);
+}
 
 /* ═══════════════════════════════════════════════
    INPUTS — MC text field
    ═══════════════════════════════════════════════ */
-.input-text, .input-select, .input-select-sm {
+.input-text,
+.input-select,
+.input-select-sm {
   border: 2px solid #000;
   background: var(--mc-darker);
-  box-shadow: inset 2px 2px 0 0 rgba(0,0,0,.5);
+  box-shadow: inset 2px 2px 0 0 rgba(0, 0, 0, 0.5);
   color: var(--text);
   padding: 7px 10px;
 }
-.input-text:focus, .input-select:focus {
+.input-text:focus,
+.input-select:focus {
   border-color: var(--mc-grass);
   background: var(--mc-darker);
-  box-shadow: inset 2px 2px 0 0 rgba(0,0,0,.5), 0 0 0 1px var(--mc-grass);
+  box-shadow:
+    inset 2px 2px 0 0 rgba(0, 0, 0, 0.5),
+    0 0 0 1px var(--mc-grass);
 }
 
 /* Checkboxes */
-.opt input, .m3d-checkbox input, .opt-row .opt input,
-.pv-zoom input, .pv-split-toggle input, .m3d-slider input,
-.opt-range input { accent-color: var(--mc-grass); }
+.opt input,
+.m3d-checkbox input,
+.opt-row .opt input,
+.pv-zoom input,
+.pv-split-toggle input,
+.m3d-slider input,
+.opt-range input {
+  accent-color: var(--mc-grass);
+}
 
 /* ═══════════════════════════════════════════════
    SETTINGS DRAWER — MC panel
@@ -265,7 +438,7 @@ input[type="color"].m3d-color-input, #m3dSkyTint {
 .settings-drawer {
   background: var(--panel-bg);
   border-left: 3px solid #000;
-  box-shadow: -6px 0 0 0 rgba(0,0,0,.4);
+  box-shadow: -6px 0 0 0 rgba(0, 0, 0, 0.4);
 }
 .settings-head {
   border-bottom: 3px solid #000;
@@ -275,7 +448,7 @@ input[type="color"].m3d-color-input, #m3dSkyTint {
   font-family: 'Press Start 2P', 'Courier New', monospace;
   font-size: 10px;
   color: var(--mc-grass);
-  text-shadow: 1px 1px 0 rgba(0,0,0,.5);
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
   text-transform: none;
   letter-spacing: 0;
 }
@@ -284,8 +457,10 @@ input[type="color"].m3d-color-input, #m3dSkyTint {
 #langSeg button {
   border: 2px solid #000 !important;
   background: var(--mc-stone-dark) !important;
-  box-shadow: inset 1px 1px 0 0 var(--mc-border-light), inset -1px -1px 0 0 var(--mc-border-dark);
-  text-shadow: 1px 1px 0 rgba(0,0,0,.4);
+  box-shadow:
+    inset 1px 1px 0 0 var(--mc-border-light),
+    inset -1px -1px 0 0 var(--mc-border-dark);
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.4);
 }
 #langSeg button.active {
   background: var(--mc-grass) !important;

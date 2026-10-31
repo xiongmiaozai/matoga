@@ -8,25 +8,39 @@
   gap: 2px;
 }
 .panel-float-tools button {
-  width: 20px; height: 20px;
-  border: none; background: transparent;
-  color: var(--text-muted); cursor: pointer;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
   border-radius: 3px;
-  display: inline-flex; align-items: center; justify-content: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
-.panel-float-tools button:hover { color: var(--text); background: var(--row-hover); }
+.panel-float-tools button:hover {
+  color: var(--text);
+  background: var(--row-hover);
+}
 
 /* 隐藏原 layout 的 resizer/collapse-btn（GL 接管） */
 body.gl-active .resizer,
 body.gl-active .collapse-btn,
 body.gl-active #collapseLeftBtn,
-body.gl-active #collapseRightBtn { display: none !important; }
+body.gl-active #collapseRightBtn {
+  display: none !important;
+}
 
 /* 原 workspace 隐藏（GL 接管后） */
-body.gl-active #workspace { display: none !important; }
+body.gl-active #workspace {
+  display: none !important;
+}
 
 /* 动态注入面板（mount:body，由 panel-loader 包裹在 .panel-host 中）位于 #workspace 之外：
    GL 激活但未被当前工作区布局收纳时隐藏，避免「默认」等不含该面板的工作区出现游离面板。
    被 GL 收纳时带 .gl-panel-content、经典浮动时带 .floating，均不受影响。
    通用规则覆盖所有动态注入面板，新增面板无需再维护 ID 白名单 */
-body.gl-active .panel-host > .panel:not(.gl-panel-content):not(.floating) { display: none !important; }
+body.gl-active .panel-host > .panel:not(.gl-panel-content):not(.floating) {
+  display: none !important;
+}

@@ -27,7 +27,10 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.workspace-tab:hover { color: var(--text); background: var(--row-hover); }
+.workspace-tab:hover {
+  color: var(--text);
+  background: var(--row-hover);
+}
 .workspace-tab.active {
   color: var(--text);
   background: var(--panel-bg);
@@ -40,9 +43,18 @@
   font-size: 14px;
   line-height: 1;
 }
-.workspace-tab:hover .ws-close { opacity: .5; }
-.workspace-tab .ws-close:hover { opacity: 1; color: var(--danger); }
-.workspace-bar-actions { margin-left: auto; display: flex; gap: 4px; }
+.workspace-tab:hover .ws-close {
+  opacity: 0.5;
+}
+.workspace-tab .ws-close:hover {
+  opacity: 1;
+  color: var(--danger);
+}
+.workspace-bar-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+}
 .workspace-bar-actions button {
   padding: 3px 8px;
   border: 1px solid var(--border);
@@ -52,4 +64,7 @@
   cursor: pointer;
   font-size: var(--fs-sm);
 }
-.workspace-bar-actions button:hover { color: var(--text); border-color: var(--primary); }
+.workspace-bar-actions button:hover {
+  color: var(--text);
+  border-color: var(--primary);
+}

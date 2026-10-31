@@ -1,6 +1,26 @@
 /* 资产库列表视图 */
-.asset-lib-grid.list-view{ display:flex; flex-direction:column; gap:2px; padding:2px 6px 6px }
-.asset-lib-grid.list-view .asset-card{ flex-direction:row; align-items:center; gap:8px; padding:4px 6px }
-.asset-lib-grid.list-view .ac-thumb{ width:28px; height:28px; aspect-ratio:auto; flex:none }
-.asset-lib-grid.list-view .ac-name{ flex:1; font-size:11px }
-.asset-lib-grid.list-view .ac-role{ flex:none }
+.asset-lib-grid.list-view {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 6px 6px;
+}
+.asset-lib-grid.list-view .asset-card {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+}
+.asset-lib-grid.list-view .ac-thumb {
+  width: 28px;
+  height: 28px;
+  aspect-ratio: auto;
+  flex: none;
+}
+.asset-lib-grid.list-view .ac-name {
+  flex: 1;
+  font-size: 11px;
+}
+.asset-lib-grid.list-view .ac-role {
+  flex: none;
+}

@@ -9,12 +9,7 @@ import { GoldenLayout, LayoutConfig } from 'golden-layout'
 import { $, showToast } from '../core.js'
 import { showPrompt, showConfirm } from './dialogs.js'
 import { DEFAULT_PANEL_DEFS, comp, stack, col, row } from './panel-defs.js'
-import {
-  collectComponentTypes,
-  countComponentTypes,
-  isConfigComplete,
-  getDefaultConfig,
-} from './layout-tree.js'
+import { collectComponentTypes, countComponentTypes, isConfigComplete, getDefaultConfig } from './layout-tree.js'
 import {
   presetNames,
   getPresetConfig,
@@ -25,7 +20,7 @@ import {
   presetExportFileName,
   buildAllPresetsExport,
   ALL_PRESETS_FILE_NAME,
-  parsePresetImport,
+  parsePresetImport
 } from './preset-model.js'
 import { S } from './state.js'
 import { applyConfig, flushAutoSave, notifyResize, sanitizeSavedConfig, suppressAutoSaveBriefly } from './layout.js'
@@ -71,38 +66,53 @@ export async function saveCurrentAs() {
   try {
     let cfg = S.layout.toConfig()
     if (LayoutConfig.isResolved(cfg)) cfg = LayoutConfig.fromResolved(cfg)
-    if (!isConfigComplete(cfg)) { showToast('当前布局不完整，无法保存'); return }
+    if (!isConfigComplete(cfg)) {
+      showToast('当前布局不完整，无法保存')
+      return
+    }
     await call('PUT', '/api/workspace/preset', { name, config: cfg })
     setPreset(S.userPresets, name, cfg)
     S.activePreset = name
     await call('PUT', '/api/workspace/active', { name })
     renderWorkspaceBarVia()
     showToast('已保存工作区「' + name + '」')
-  } catch (e) { showToast('保存失败: ' + e.message) }
+  } catch (e) {
+    showToast('保存失败: ' + e.message)
+  }
 }
 
 export async function saveCurrent() {
   try {
     let cfg = S.layout.toConfig()
     if (LayoutConfig.isResolved(cfg)) cfg = LayoutConfig.fromResolved(cfg)
-    if (!isConfigComplete(cfg)) { showToast('当前布局不完整，无法保存'); return }
+    if (!isConfigComplete(cfg)) {
+      showToast('当前布局不完整，无法保存')
+      return
+    }
     await call('PUT', '/api/workspace/preset', { name: S.activePreset, config: cfg })
     setPreset(S.userPresets, S.activePreset, cfg)
     renderWorkspaceBarVia()
     showToast('已保存当前工作区「' + S.activePreset + '」')
-  } catch (e) { showToast('保存失败: ' + e.message) }
+  } catch (e) {
+    showToast('保存失败: ' + e.message)
+  }
 }
 
 export async function deletePreset(name) {
-  if (!await showConfirm('删除工作区「' + name + '」？')) return
+  if (!(await showConfirm('删除工作区「' + name + '」？'))) return
   try {
     await call('DELETE', '/api/workspace/preset?name=' + encodeURIComponent(name))
     const wasActive = S.activePreset === name
     deletePresetEntry(S.userPresets, name)
-    if (wasActive) { await activatePreset('默认') }
-    else { renderWorkspaceBarVia() }
+    if (wasActive) {
+      await activatePreset('默认')
+    } else {
+      renderWorkspaceBarVia()
+    }
     showToast('已删除')
-  } catch (e) { showToast('删除失败: ' + e.message) }
+  } catch (e) {
+    showToast('删除失败: ' + e.message)
+  }
 }
 
 export async function activatePreset(name, force) {
@@ -112,7 +122,10 @@ export async function activatePreset(name, force) {
   let cfg = null
   if (S.userPresets[name] && S.userPresets[name].config) cfg = S.userPresets[name].config
 
-  if (!cfg) { S.activePreset = '默认'; cfg = getDefaultConfig() }
+  if (!cfg) {
+    S.activePreset = '默认'
+    cfg = getDefaultConfig()
+  }
   suppressAutoSaveBriefly()
   try {
     applyConfig(cfg)
@@ -120,20 +133,26 @@ export async function activatePreset(name, force) {
     notifyResize()
   } catch (e) {
     console.error('[workspace] activate failed', e)
-    try { applyConfig(getDefaultConfig()) } catch (e2) { console.error('[workspace] activate fallback failed', e2) }
+    try {
+      applyConfig(getDefaultConfig())
+    } catch (e2) {
+      console.error('[workspace] activate fallback failed', e2)
+    }
   }
   renderWorkspaceBarVia()
 }
 
 export async function resetCurrent() {
   if (S.userPresets[S.activePreset]) {
-    if (!await showConfirm('将工作区「' + S.activePreset + '」重置为默认布局？此操作不可撤销。')) return
+    if (!(await showConfirm('将工作区「' + S.activePreset + '」重置为默认布局？此操作不可撤销。'))) return
   }
   const cfg = getDefaultConfig()
   try {
     applyConfig(cfg)
     notifyResize()
-  } catch (e) { console.error('[workspace] reset failed', e) }
+  } catch (e) {
+    console.error('[workspace] reset failed', e)
+  }
   renderWorkspaceBarVia()
 }
 
@@ -151,7 +170,9 @@ export async function renamePresetDialog(name, onDone) {
     renderWorkspaceBarVia()
     if (onDone) onDone()
     showToast('已重命名为「' + newName + '」')
-  } catch (e) { showToast('重命名失败: ' + e.message) }
+  } catch (e) {
+    showToast('重命名失败: ' + e.message)
+  }
 }
 
 export async function duplicatePreset(name) {
@@ -164,7 +185,9 @@ export async function duplicatePreset(name) {
     setPreset(S.userPresets, newName, cfg)
     renderWorkspaceBarVia()
     showToast('已复制为「' + newName + '」')
-  } catch (e) { showToast('复制失败: ' + e.message) }
+  } catch (e) {
+    showToast('复制失败: ' + e.message)
+  }
 }
 
 export function exportPreset(name) {
@@ -199,7 +222,10 @@ export async function importPreset(onDone) {
     try {
       const text = await file.text()
       const parsed = parsePresetImport(text)
-      if (parsed.kind === 'invalid') { showToast(parsed.reason); return }
+      if (parsed.kind === 'invalid') {
+        showToast(parsed.reason)
+        return
+      }
       if (parsed.kind === 'batch') {
         for (const [n, p] of parsed.entries) {
           await call('PUT', '/api/workspace/preset', { name: n, config: p.config })
@@ -215,7 +241,9 @@ export async function importPreset(onDone) {
         if (onDone) onDone()
         showToast('已导入「' + parsed.name + '」')
       }
-    } catch (e) { showToast('导入失败: ' + e.message) }
+    } catch (e) {
+      showToast('导入失败: ' + e.message)
+    }
   })
   input.click()
 }
@@ -225,7 +253,12 @@ export async function createNewPreset(onDone) {
   let cfg = { root: row([stack([comp('compare', '贴图对比')])]) }
   let nameHint = '我的工作区'
   if (templates.length) {
-    const choice = await showPrompt('选择模板创建新工作区:\n' + templates.map((t, i) => (i + 1) + '. ' + t).join('\n') + '\n\n输入模板名或留空创建空白工作区', templates[0])
+    const choice = await showPrompt(
+      '选择模板创建新工作区:\n' +
+        templates.map((t, i) => i + 1 + '. ' + t).join('\n') +
+        '\n\n输入模板名或留空创建空白工作区',
+      templates[0]
+    )
     if (choice === null) return
     if (choice && S.userPresets[choice] && S.userPresets[choice].config) {
       cfg = S.userPresets[choice].config
@@ -243,6 +276,7 @@ export async function createNewPreset(onDone) {
     renderWorkspaceBarVia()
     if (onDone) onDone()
     showToast('已创建工作区「' + newName + '」')
-  } catch (e) { showToast('创建失败: ' + e.message) }
+  } catch (e) {
+    showToast('创建失败: ' + e.message)
+  }
 }
-

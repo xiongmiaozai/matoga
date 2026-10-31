@@ -27,16 +27,16 @@ const consoleErrors = []
 const pageErrors = []
 const failedRequests = []
 
-page.on('console', (msg) => {
+page.on('console', msg => {
   if (msg.type() === 'error') consoleErrors.push({ text: msg.text().slice(0, 300), url: page.url() })
 })
-page.on('pageerror', (err) => {
+page.on('pageerror', err => {
   pageErrors.push({ text: String(err.message || err).slice(0, 300), url: page.url() })
 })
-page.on('requestfailed', (req) => {
+page.on('requestfailed', req => {
   failedRequests.push({ url: req.url().slice(0, 200), why: req.failure()?.errorText })
 })
-page.on('response', async (res) => {
+page.on('response', async res => {
   if (res.status() >= 400 && !res.url().includes('favicon')) {
     failedRequests.push({ url: res.url().slice(0, 200), why: 'HTTP ' + res.status() })
   }
@@ -62,7 +62,7 @@ try {
     rightTree: '#rightTree, .tree-right, [data-side="right"]',
     compareBtn: '#compareBtn, .compare-btn, button:has-text("对比")',
     resultTable: '#resultTable',
-    statusbar: '.statusbar, #statusbar',
+    statusbar: '.statusbar, #statusbar'
   }
   const elPresence = {}
   for (const [k, sel] of Object.entries(keyEls)) {
@@ -76,7 +76,9 @@ try {
   record('停靠布局', page.url(), `root=${layoutRoot} panels=${panelCount}`)
 
   // ── 4. 资产库面板 ──
-  const assetBtn = page.locator('#assetLibraryBtn, .asset-library-btn, button:has-text("资产"), [title*="资产"]').first()
+  const assetBtn = page
+    .locator('#assetLibraryBtn, .asset-library-btn, button:has-text("资产"), [title*="资产"]')
+    .first()
   if (await assetBtn.count()) {
     await assetBtn.click({ timeout: 5000 }).catch(() => {})
     await page.waitForTimeout(1200)
@@ -110,11 +112,16 @@ try {
   await ready()
   // 尝试打开左侧目录选择
   const leftPick = page.locator('[data-side="left"] .pick-btn, #leftPickBtn, button:has-text("选择")').first()
-  const compareClicked = await page.evaluate(() => {
-    const b = document.querySelector('#compareBtn, .compare-btn')
-    if (b) { b.click(); return true }
-    return false
-  }).catch(() => false)
+  const compareClicked = await page
+    .evaluate(() => {
+      const b = document.querySelector('#compareBtn, .compare-btn')
+      if (b) {
+        b.click()
+        return true
+      }
+      return false
+    })
+    .catch(() => false)
   record('对比触发', page.url(), `compareBtn 触发=${compareClicked} leftPick 存在=${await leftPick.count()}`)
   await page.waitForTimeout(2000)
 
@@ -125,7 +132,9 @@ try {
       try {
         const r = await fetch(p)
         out[p] = r.status
-      } catch (e) { out[p] = 'ERR' }
+      } catch (e) {
+        out[p] = 'ERR'
+      }
     }
     return out
   })
@@ -155,9 +164,11 @@ const summary = {
   consoleErrors: consoleErrors.slice(0, 30),
   pageErrors: pageErrors.slice(0, 30),
   failedRequests: failedRequests.slice(0, 30),
-  issues,
+  issues
 }
 console.log(JSON.stringify(summary, null, 2))
 const totalErrors = consoleErrors.length + pageErrors.length
-console.log(`\n=== 汇总: ${steps.length} 步操作, 控制台错误 ${consoleErrors.length}, 页面异常 ${pageErrors.length}, 失败请求 ${failedRequests.length} ===`)
+console.log(
+  `\n=== 汇总: ${steps.length} 步操作, 控制台错误 ${consoleErrors.length}, 页面异常 ${pageErrors.length}, 失败请求 ${failedRequests.length} ===`
+)
 process.exit(totalErrors + failedRequests.length > 0 ? 1 : 0)

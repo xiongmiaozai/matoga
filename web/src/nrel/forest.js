@@ -8,7 +8,7 @@
 import { S } from '././state.js'
 
 /* ── 树构建 ─────────────────────────────── */
-export function buildForest(graph, dir){
+export function buildForest(graph, dir) {
   const { nodes, edges, defs } = graph
   const nodeById = new Map(nodes.map(n => [n.id, n]))
   const order = new Map(nodes.map((n, i) => [n.id, i]))
@@ -17,7 +17,10 @@ export function buildForest(graph, dir){
   // 邻接表：父 -> 子（附带挂载端口信息）
   const children = new Map()
   const asChild = new Map()
-  nodes.forEach(n => { children.set(n.id, []); asChild.set(n.id, 0) })
+  nodes.forEach(n => {
+    children.set(n.id, [])
+    asChild.set(n.id, 0)
+  })
   edges.forEach(e => {
     const p = dir === 'down' ? e.from.node : e.to.node
     const c = dir === 'down' ? e.to.node : e.from.node
@@ -27,25 +30,30 @@ export function buildForest(graph, dir){
   })
 
   const expanded = new Set()
-  function buildNode(id, depth, inPort, outPort){
+  function buildNode(id, depth, inPort, outPort) {
     const raw = nodeById.get(id)
     const def = defs[raw.type] || fallbackDef
-    const kids = (children.get(id) || []).slice()
+    const kids = (children.get(id) || [])
+      .slice()
       .sort((a, b) => (order.get(a.childId) || 0) - (order.get(b.childId) || 0))
     const ref = expanded.has(id)
     expanded.add(id)
     const childNodes = []
-    if (!ref && !S.collapsed.has(id)){
+    if (!ref && !S.collapsed.has(id)) {
       kids.forEach(k => childNodes.push(buildNode(k.childId, depth + 1, k.inPort, k.outPort)))
     }
     return {
-      id, depth, ref,
+      id,
+      depth,
+      ref,
       title: raw.title || def.title,
-      type: raw.type, def,
-      inPort, outPort,
+      type: raw.type,
+      def,
+      inPort,
+      outPort,
       children: childNodes,
       totalKids: kids.length,
-      descendantCount: null,
+      descendantCount: null
     }
   }
 
@@ -59,24 +67,28 @@ export function buildForest(graph, dir){
   })
 
   // 统计隐藏后代数（用于折叠徽章）
-  function countDesc(tn){
+  function countDesc(tn) {
     if (tn.descendantCount !== null) return tn.descendantCount
     let n = 0
-    tn.children.forEach(c => { n += 1 + countDesc(c) })
+    tn.children.forEach(c => {
+      n += 1 + countDesc(c)
+    })
     tn.descendantCount = n
     return n
   }
   forest.forEach(countDesc)
 
   let maxDepth = 0
-  const walk = (tn) => { maxDepth = Math.max(maxDepth, tn.depth); tn.children.forEach(walk) }
+  const walk = tn => {
+    maxDepth = Math.max(maxDepth, tn.depth)
+    tn.children.forEach(walk)
+  }
   forest.forEach(walk)
 
   return { forest, maxDepth, expandedCount: expanded.size }
 }
 
-
-export function maxDepthOf(tn){
+export function maxDepthOf(tn) {
   if (!tn.children.length) return tn.depth
   return Math.max(...tn.children.map(maxDepthOf))
 }

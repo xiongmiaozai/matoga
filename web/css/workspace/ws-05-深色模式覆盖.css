@@ -1,7 +1,23 @@
 /* ===== 深色模式覆盖 ===== */
-:root[data-theme="dark"] .lm_content { background: var(--panel-bg); }
-:root[data-theme="dark"] .lm_stack > .lm_header { background: var(--panel-2); border-bottom-color: var(--border); }
-:root[data-theme="dark"] .lm_tab.lm_active { background: var(--panel-bg); }
-:root[data-theme="dark"] .lm_drag_proxy { background: var(--panel-bg); border-color: var(--border); }
-:root[data-theme="dark"] .workspace-bar { background: var(--panel-2); border-bottom-color: var(--border); }
-:root[data-theme="dark"] .workspace-tab.active { background: var(--panel-bg); border-color: var(--border); }
+:root[data-theme='dark'] .lm_content {
+  background: var(--panel-bg);
+}
+:root[data-theme='dark'] .lm_stack > .lm_header {
+  background: var(--panel-2);
+  border-bottom-color: var(--border);
+}
+:root[data-theme='dark'] .lm_tab.lm_active {
+  background: var(--panel-bg);
+}
+:root[data-theme='dark'] .lm_drag_proxy {
+  background: var(--panel-bg);
+  border-color: var(--border);
+}
+:root[data-theme='dark'] .workspace-bar {
+  background: var(--panel-2);
+  border-bottom-color: var(--border);
+}
+:root[data-theme='dark'] .workspace-tab.active {
+  background: var(--panel-bg);
+  border-color: var(--border);
+}

@@ -18,33 +18,42 @@
 export function bindContextMenu(p) {
   const { mask, t, toast, browseTo, getCurrentPath } = p
 
-      const ctx = document.createElement('div')
-      ctx.className = 'mft-ctx'
-      ctx.innerHTML = `<button class="mft-ctx-item" data-act="copy-path">${t('copyPath')}</button><button class="mft-ctx-item" data-act="paste-path">${t('pastePath')}</button>`
-      mask.appendChild(ctx)
-      let ctxPath = ''
-      mask.addEventListener('contextmenu', (e) => {
-        e.preventDefault()
-        const item = e.target.closest('.mft-item')
-        ctxPath = (item && item.title) || getCurrentPath() || ''
-        ctx.classList.add('show')
-        ctx.style.left = Math.min(e.clientX, window.innerWidth - 150) + 'px'
-        ctx.style.top = Math.min(e.clientY, window.innerHeight - 90) + 'px'
-      })
-      ctx.addEventListener('click', (e) => {
-        const act = e.target.dataset && e.target.dataset.act
-        if (!act) return
-        ctx.classList.remove('show')
-        if (act === 'copy-path') {
-          if (!ctxPath) return
-          navigator.clipboard.writeText(ctxPath).then(() => toast(t('copiedPath'))).catch(() => toast(t('pasteFail')))
-        } else if (act === 'paste-path') {
-          navigator.clipboard.readText().then((text) => {
-            const p = String(text).trim()
-            if (!p) { toast(t('pasteEmpty')); return }
-            browseTo(p)
-          }).catch(() => toast(t('pasteFail')))
-        }
-      })
-      document.addEventListener('click', () => ctx.classList.remove('show'))
+  const ctx = document.createElement('div')
+  ctx.className = 'mft-ctx'
+  ctx.innerHTML = `<button class="mft-ctx-item" data-act="copy-path">${t('copyPath')}</button><button class="mft-ctx-item" data-act="paste-path">${t('pastePath')}</button>`
+  mask.appendChild(ctx)
+  let ctxPath = ''
+  mask.addEventListener('contextmenu', e => {
+    e.preventDefault()
+    const item = e.target.closest('.mft-item')
+    ctxPath = (item && item.title) || getCurrentPath() || ''
+    ctx.classList.add('show')
+    ctx.style.left = Math.min(e.clientX, window.innerWidth - 150) + 'px'
+    ctx.style.top = Math.min(e.clientY, window.innerHeight - 90) + 'px'
+  })
+  ctx.addEventListener('click', e => {
+    const act = e.target.dataset && e.target.dataset.act
+    if (!act) return
+    ctx.classList.remove('show')
+    if (act === 'copy-path') {
+      if (!ctxPath) return
+      navigator.clipboard
+        .writeText(ctxPath)
+        .then(() => toast(t('copiedPath')))
+        .catch(() => toast(t('pasteFail')))
+    } else if (act === 'paste-path') {
+      navigator.clipboard
+        .readText()
+        .then(text => {
+          const p = String(text).trim()
+          if (!p) {
+            toast(t('pasteEmpty'))
+            return
+          }
+          browseTo(p)
+        })
+        .catch(() => toast(t('pasteFail')))
+    }
+  })
+  document.addEventListener('click', () => ctx.classList.remove('show'))
 }

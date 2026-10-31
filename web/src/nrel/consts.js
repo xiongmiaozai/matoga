@@ -14,26 +14,26 @@ export const M = {
   rowGap: 12,
   colGap: 72,
   rootGap: 36,
-  pad: 28,
+  pad: 28
 }
 export const ROW = M.nodeH + M.rowGap
 export const COL = M.nodeW + M.colGap
 
-
-export function viewEl(){ return document.getElementById('nodeRelView') }
-
+export function viewEl() {
+  return document.getElementById('nodeRelView')
+}
 
 /* ── SVG 渲染 ────────────────────────────── */
-export function el(tag, attrs){
+export function el(tag, attrs) {
   const e = document.createElementNS(NS, tag)
   if (attrs) for (const k in attrs) e.setAttribute(k, attrs[k])
   return e
 }
-export function trunc(s, n){
+export function trunc(s, n) {
   const arr = Array.from(s || '')
-  return arr.length <= n ? (s || '') : arr.slice(0, n - 1).join('') + '…'
+  return arr.length <= n ? s || '' : arr.slice(0, n - 1).join('') + '…'
 }
 
-
-export function cssEsc(s){ return (window.CSS && CSS.escape) ? CSS.escape(s) : String(s).replace(/"/g, '\\"') }
-
+export function cssEsc(s) {
+  return window.CSS && CSS.escape ? CSS.escape(s) : String(s).replace(/"/g, '\\"')
+}

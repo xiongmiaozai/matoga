@@ -32,6 +32,3 @@ export function updateHint() {
 }
 
 /* ── 初始化（panel-loader 调用，幂等） ─────────────────────────────────── */
-
-
-

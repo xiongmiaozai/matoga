@@ -23,9 +23,16 @@ const browser = await chromium.launch({ headless: true })
 const ctx = await browser.newContext({ viewport: { width: 1600, height: 950 } })
 const page = await ctx.newPage()
 
-page.on('console', (m) => { if (m.type() === 'error') errors.push({ kind: 'console', text: m.text().slice(0, 200), url: page.url() }) })
-page.on('pageerror', (e) => errors.push({ kind: 'pageerror', text: String(e.message || e).slice(0, 200), url: page.url() }))
-page.on('response', (r) => { if (r.status() >= 400 && !r.url().includes('favicon')) errors.push({ kind: 'http', text: r.status() + ' ' + r.url().slice(0, 160), url: page.url() }) })
+page.on('console', m => {
+  if (m.type() === 'error') errors.push({ kind: 'console', text: m.text().slice(0, 200), url: page.url() })
+})
+page.on('pageerror', e =>
+  errors.push({ kind: 'pageerror', text: String(e.message || e).slice(0, 200), url: page.url() })
+)
+page.on('response', r => {
+  if (r.status() >= 400 && !r.url().includes('favicon'))
+    errors.push({ kind: 'http', text: r.status() + ' ' + r.url().slice(0, 160), url: page.url() })
+})
 
 async function shot(name) {
   const file = path.join(OUT, name + '.png')
@@ -93,7 +100,7 @@ const summary = {
   shots,
   panelCount,
   errorCount: errors.length,
-  errors: errors.slice(0, 20),
+  errors: errors.slice(0, 20)
 }
 console.log('\n' + JSON.stringify(summary, null, 2))
 console.log('\n=== 截图 ' + shots.length + ' 张，错误 ' + errors.length + ' 个 ===')

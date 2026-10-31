@@ -10,18 +10,31 @@
  */
 
 import { _psNode } from './ps-blend.js'
-import {
-  _noiseValue, _noisePvCache, _NOISE_TEX_SIZE, _noisePreviewUrl, _paletteRGB
-} from './noise.js'
-import {
-  _texAvgColor, _texAlpha, _rgbaIn, _rgbaMerge, _rgbaSplit, _rgbAlphaSplit
-} from './texture.js'
+import { _noiseValue, _noisePvCache, _NOISE_TEX_SIZE, _noisePreviewUrl, _paletteRGB } from './noise.js'
+import { _texAvgColor, _texAlpha, _rgbaIn, _rgbaMerge, _rgbaSplit, _rgbAlphaSplit } from './texture.js'
 import { num, clamp, _texUrl, col, _smoothstep, _lerp } from './math.js'
 import {
-  numWidget, colorWidget, vecWidget, textureWidget, rgbaMergeWidget, rgbaSplitWidget,
-  rgbAlphaSplitWidget, selectWidget, previewWidget, noiseWidget, voronoiWidget, whiteWidget,
-  cellWidget, pingpongWidget, voronoiseWidget, reactionWidget, lightningWidget, mandelWidget,
-  paletteWidget, gradientWidget, warpWidget
+  numWidget,
+  colorWidget,
+  vecWidget,
+  textureWidget,
+  rgbaMergeWidget,
+  rgbaSplitWidget,
+  rgbAlphaSplitWidget,
+  selectWidget,
+  previewWidget,
+  noiseWidget,
+  voronoiWidget,
+  whiteWidget,
+  cellWidget,
+  pingpongWidget,
+  voronoiseWidget,
+  reactionWidget,
+  lightningWidget,
+  mandelWidget,
+  paletteWidget,
+  gradientWidget,
+  warpWidget
 } from './widgets.js'
 
 /* 主文件注入：state 与 evaluate 属于主文件状态机 */
@@ -549,7 +562,6 @@ export const NODE_DEFS = {
     eval: i => ({ specTextureUrl: _texUrl(i.tex) })
   }
 }
-
 
 /* ── 噪波纹理输出（异步生成）────────────────
    eval 调用时不做 512² 采样+PNG 编码（~46ms 同步阻塞）：缓存命中或上次成功 URL 立即返回，

@@ -11,27 +11,29 @@ import { fitView } from './interact.js'
 import { buildForest } from './forest.js'
 import { layoutForest } from './layout.js'
 
-export function actToggleDir(){
+export function actToggleDir() {
   S.dir = S.dir === 'down' ? 'up' : 'down'
   S.collapsed.clear()
   render()
   fitView()
 }
-export function actExpandAll(){
+export function actExpandAll() {
   S.collapsed.clear()
   render()
 }
-export function actCollapseAll(){
+export function actCollapseAll() {
   const ids = new Set()
-  const walk = (tn) => { if (tn.totalKids > 0 && !tn.ref) ids.add(tn.id); tn.children.forEach(walk) }
+  const walk = tn => {
+    if (tn.totalKids > 0 && !tn.ref) ids.add(tn.id)
+    tn.children.forEach(walk)
+  }
   if (S.tree) S.tree.forest.forEach(walk)
   S.collapsed = ids
   render()
 }
-export function actFit(){
+export function actFit() {
   fitView()
 }
 
 /* ── 初始化 ─────────────────────────────── */
 export { buildForest, layoutForest }
-

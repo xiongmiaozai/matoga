@@ -244,4 +244,3 @@ export function updatePreview(node, inputs, results) {
     _renderPreviewVal(el, inputs[key])
   }
 }
-

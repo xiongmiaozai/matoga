@@ -1,14 +1,19 @@
 /* ===== Golden-Layout Adobe 风格覆盖 ===== */
 
 /* 根 */
-.lm_root { font-size: var(--fs-base); }
+.lm_root {
+  font-size: var(--fs-base);
+}
 
 /* 面板内容容器 — 让迁移进来的面板可滚动 */
 .lm_content {
   background: var(--panel-bg);
   overflow: auto;
 }
-.lm_content > * { width: 100%; height: 100%; }
+.lm_content > * {
+  width: 100%;
+  height: 100%;
+}
 
 /* 标签组标题栏 — Adobe 风格窄条 */
 .lm_stack > .lm_header {
@@ -21,7 +26,9 @@
   gap: 1px;
   box-shadow: none;
 }
-.lm_stack.lm_stack > .lm_header { box-shadow: none; }
+.lm_stack.lm_stack > .lm_header {
+  box-shadow: none;
+}
 
 /* 标签页 */
 .lm_tab {
@@ -40,7 +47,10 @@
   gap: 4px;
   max-width: 160px;
 }
-.lm_tab:hover { color: var(--text); background: var(--row-hover); }
+.lm_tab:hover {
+  color: var(--text);
+  background: var(--row-hover);
+}
 .lm_tab.lm_active {
   color: var(--text);
   background: var(--panel-bg);
@@ -56,7 +66,7 @@
   width: 20px;
   height: 20px;
   margin-left: 4px;
-  opacity: .7;
+  opacity: 0.7;
   border-radius: 4px;
   display: inline-flex;
   align-items: center;
@@ -64,15 +74,26 @@
   font-size: 15px;
   color: var(--text);
   background-image: none !important;
-  transition: opacity .12s ease, background .12s ease, color .12s ease;
+  transition:
+    opacity 0.12s ease,
+    background 0.12s ease,
+    color 0.12s ease;
 }
 .lm_tab .lm_close_tab::before {
-  content: "×";
+  content: '×';
   line-height: 1;
 }
-.lm_tab:hover .lm_close_tab { opacity: 1; }
-.lm_tab.lm_active .lm_close_tab { opacity: 1; }
-.lm_tab .lm_close_tab:hover { opacity: 1; color: var(--danger); background: var(--danger-soft); }
+.lm_tab:hover .lm_close_tab {
+  opacity: 1;
+}
+.lm_tab.lm_active .lm_close_tab {
+  opacity: 1;
+}
+.lm_tab .lm_close_tab:hover {
+  opacity: 1;
+  color: var(--danger);
+  background: var(--danger-soft);
+}
 
 /* 标签组工具按钮（最大化等） */
 .lm_stack > .lm_header > .lm_stack_controls {
@@ -102,7 +123,7 @@
   z-index: 5 !important;
   position: relative;
   opacity: 1 !important;
-  transition: background .15s ease;
+  transition: background 0.15s ease;
 }
 .lm_splitter.lm_vertical {
   width: 10px !important;
@@ -120,28 +141,47 @@
   cursor: inherit !important;
 }
 .lm_splitter::before {
-  content: ""; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
-  background: rgba(0,0,0,.18); border-radius: 2px; transition: background .15s ease;
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 2px;
+  transition: background 0.15s ease;
   pointer-events: none;
 }
-.lm_splitter.lm_vertical::before { width: 18px; height: 2px; }
-.lm_splitter.lm_horizontal::before { width: 2px; height: 18px; }
-.lm_splitter:hover::before, .lm_splitter.lm_dragging::before { background: #fff; }
-.lm_splitter:hover { background: var(--primary) !important; }
-.lm_splitter.lm_dragging { background: var(--primary) !important; }
+.lm_splitter.lm_vertical::before {
+  width: 18px;
+  height: 2px;
+}
+.lm_splitter.lm_horizontal::before {
+  width: 2px;
+  height: 18px;
+}
+.lm_splitter:hover::before,
+.lm_splitter.lm_dragging::before {
+  background: #fff;
+}
+.lm_splitter:hover {
+  background: var(--primary) !important;
+}
+.lm_splitter.lm_dragging {
+  background: var(--primary) !important;
+}
 
 /* 停靠指示器 — Adobe 风格蓝色高亮 */
 .lm_drop_target_indicator {
   background: var(--primary) !important;
-  opacity: .15;
+  opacity: 0.15;
   border: 2px solid var(--primary);
   border-radius: 4px;
   z-index: 1000;
-  transition: opacity .1s;
+  transition: opacity 0.1s;
 }
 .lm_drop_preview {
   background: var(--primary);
-  opacity: .25;
+  opacity: 0.25;
   border-radius: 4px;
 }
 
@@ -151,22 +191,45 @@
   border: 1px solid var(--border);
   border-radius: 6px;
   box-shadow: var(--shadow-3);
-  opacity: .9;
+  opacity: 0.9;
   z-index: 2000;
 }
-.lm_drag_proxy .lm_header { background: var(--panel-2); }
+.lm_drag_proxy .lm_header {
+  background: var(--panel-2);
+}
 
 /* 浮动面板（popout）阴影 */
-.lm_content:has(.panel.floating) { box-shadow: var(--shadow-3); }
+.lm_content:has(.panel.floating) {
+  box-shadow: var(--shadow-3);
+}
 
 /* 最大化面板 */
-.lm_maximised { z-index: 100; }
+.lm_maximised {
+  z-index: 100;
+}
 
 /* 行列容器 */
-.lm_row > .lm_item, .lm_column > .lm_item { float: none; }
-.lm_row { display: flex; flex-direction: row; }
-.lm_column { display: flex; flex-direction: column; }
-.lm_row > .lm_splitter { flex: 0 0 10px; }
-.lm_column > .lm_splitter { flex: 0 0 10px; }
-.lm_row > .lm_item { flex: 1 1 auto; }
-.lm_column > .lm_item { flex: 1 1 auto; }
+.lm_row > .lm_item,
+.lm_column > .lm_item {
+  float: none;
+}
+.lm_row {
+  display: flex;
+  flex-direction: row;
+}
+.lm_column {
+  display: flex;
+  flex-direction: column;
+}
+.lm_row > .lm_splitter {
+  flex: 0 0 10px;
+}
+.lm_column > .lm_splitter {
+  flex: 0 0 10px;
+}
+.lm_row > .lm_item {
+  flex: 1 1 auto;
+}
+.lm_column > .lm_item {
+  flex: 1 1 auto;
+}

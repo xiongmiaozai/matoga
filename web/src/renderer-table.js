@@ -11,11 +11,15 @@ export function initTableColumnResize() {
   const table = $('resultTable')
   if (!table) return
   const ths = table.querySelectorAll('thead th')
-  const COL_MIN = 40, COL_MAX = 600
-  const colKey = (th) => th.dataset.key || (th.className.match(/col-(\w+)/) || [])[1] || th.cellIndex
+  const COL_MIN = 40,
+    COL_MAX = 600
+  const colKey = th => th.dataset.key || (th.className.match(/col-(\w+)/) || [])[1] || th.cellIndex
   const saveWidths = async () => {
     const widths = {}
-    ths.forEach(th => { const k = colKey(th); if (k) widths[k] = th.offsetWidth })
+    ths.forEach(th => {
+      const k = colKey(th)
+      if (k) widths[k] = th.offsetWidth
+    })
     await window.api.setConfig({ tableColWidths: widths })
   }
   ths.forEach((th, i) => {
@@ -23,17 +27,25 @@ export function initTableColumnResize() {
     const handle = document.createElement('div')
     handle.className = 'col-resize-handle'
     th.appendChild(handle)
-    handle.addEventListener('mousedown', (e) => {
-      e.preventDefault(); e.stopPropagation()
-      const startX = e.clientX, startW = th.offsetWidth
-      handle.classList.add('dragging'); table.classList.add('resizing')
-      const onMove = (ev) => { th.style.width = Math.max(COL_MIN, Math.min(COL_MAX, startW + ev.clientX - startX)) + 'px' }
+    handle.addEventListener('mousedown', e => {
+      e.preventDefault()
+      e.stopPropagation()
+      const startX = e.clientX,
+        startW = th.offsetWidth
+      handle.classList.add('dragging')
+      table.classList.add('resizing')
+      const onMove = ev => {
+        th.style.width = Math.max(COL_MIN, Math.min(COL_MAX, startW + ev.clientX - startX)) + 'px'
+      }
       const onUp = () => {
-        handle.classList.remove('dragging'); table.classList.remove('resizing')
-        document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp)
+        handle.classList.remove('dragging')
+        table.classList.remove('resizing')
+        document.removeEventListener('mousemove', onMove)
+        document.removeEventListener('mouseup', onUp)
         saveWidths()
       }
-      document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp)
+      document.addEventListener('mousemove', onMove)
+      document.addEventListener('mouseup', onUp)
     })
     handle.addEventListener('dblclick', () => {
       const ci = i + 1
@@ -47,7 +59,9 @@ export function initTableColumnResize() {
   })
   window.api.getConfig().then(cfg => {
     if (!cfg.tableColWidths) return
-    ths.forEach(th => { const k = colKey(th); if (k && cfg.tableColWidths[k]) th.style.width = cfg.tableColWidths[k] + 'px' })
+    ths.forEach(th => {
+      const k = colKey(th)
+      if (k && cfg.tableColWidths[k]) th.style.width = cfg.tableColWidths[k] + 'px'
+    })
   })
-
 }

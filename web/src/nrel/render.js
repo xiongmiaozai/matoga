@@ -14,21 +14,21 @@ import { layoutForest } from './layout.js'
 import { renderSvg } from './svg.js'
 
 /* ── 主渲染 ─────────────────────────────── */
-export function render(){
+export function render() {
   const box = viewEl()
   if (!box) return
   const graph = getGraphInfo()
   S.tree = buildForest(graph, S.dir)
-  layoutForest(S.tree.forest)   // 布局赋坐标（x/y）
+  layoutForest(S.tree.forest) // 布局赋坐标（x/y）
   S.graphMeta = {
     nodes: graph.nodes.length,
     edges: graph.edges.length,
     depth: S.tree.maxDepth,
-    roots: S.tree.forest.length,
+    roots: S.tree.forest.length
   }
   box.innerHTML = ''
 
-  if (graph.nodes.length === 0){
+  if (graph.nodes.length === 0) {
     const empty = document.createElement('div')
     empty.className = 'nr-empty'
     empty.textContent = t('noderel.empty')
@@ -49,7 +49,7 @@ export function render(){
   updateStatusBar()
 }
 
-export function updateStatusBar(){
+export function updateStatusBar() {
   const s = document.getElementById('nrStatus')
   if (!s || !S.graphMeta) return
   const m = S.graphMeta
@@ -60,4 +60,3 @@ export function updateStatusBar(){
     `<span>${t('noderel.statRoots', { n: m.roots })}</span>` +
     `<span class="nr-dir">${t(S.dir === 'down' ? 'noderel.dirDown' : 'noderel.dirUp')}</span>`
 }
-

@@ -14,20 +14,21 @@ import { S } from '././state.js'
 import { layoutForest } from './layout.js'
 import { render } from './render.js'
 
-export function applyView(world){
+export function applyView(world) {
   world.setAttribute('transform', `translate(${S.view.x},${S.view.y}) scale(${S.view.zoom})`)
 }
 
-
 /* ── 视图操作 ────────────────────────────── */
-export function fitView(){
+export function fitView() {
   const svg = viewEl() && viewEl().querySelector('.nr-svg')
   if (!svg || !S.tree || !S.tree.forest.length) return
   const box = viewEl().querySelector('.nr-scroll')
   if (!box) return
   const { width, height } = layoutForest(S.tree.forest)
-  const w = width + M.pad * 2, h = height + M.pad * 2
-  const cw = box.clientWidth || 300, ch = box.clientHeight || 200
+  const w = width + M.pad * 2,
+    h = height + M.pad * 2
+  const cw = box.clientWidth || 300,
+    ch = box.clientHeight || 200
   const zoom = Math.min(Math.min(cw / w, ch / h), 1.2)
   S.view.zoom = Math.max(zoom, 0.15)
   S.view.x = (cw - w * S.view.zoom) / 2 + M.pad * S.view.zoom
@@ -36,11 +37,13 @@ export function fitView(){
   if (world) applyView(world)
 }
 
-export function zoomAt(svg, factor, cx, cy){
+export function zoomAt(svg, factor, cx, cy) {
   const r = svg.getBoundingClientRect()
-  const px = cx - r.left, py = cy - r.top
+  const px = cx - r.left,
+    py = cy - r.top
   const { x, y, zoom } = S.view
-  const wx = (px - x) / zoom, wy = (py - y) / zoom
+  const wx = (px - x) / zoom,
+    wy = (py - y) / zoom
   const nz = Math.min(2.5, Math.max(0.15, zoom * factor))
   S.view.zoom = nz
   S.view.x = px - wx * nz
@@ -50,9 +53,9 @@ export function zoomAt(svg, factor, cx, cy){
 }
 
 /* ── 交互 ───────────────────────────────── */
-export function onCanvasClick(e){
+export function onCanvasClick(e) {
   const toggle = e.target.closest('[data-act="toggle"]')
-  if (toggle){
+  if (toggle) {
     e.stopPropagation()
     const id = toggle.getAttribute('data-id')
     if (S.collapsed.has(id)) S.collapsed.delete(id)
@@ -61,7 +64,7 @@ export function onCanvasClick(e){
     return
   }
   const node = e.target.closest('[data-act="node"]')
-  if (node){
+  if (node) {
     const id = node.getAttribute('data-id')
     S.activeId = id
     focusNodeInCanvas(id)
@@ -69,37 +72,41 @@ export function onCanvasClick(e){
   }
 }
 
-export function bindInteractions(){
+export function bindInteractions() {
   const box = viewEl()
   if (!box) return
 
   box.addEventListener('click', onCanvasClick)
 
   // hover：高亮同 id 的所有副本（引用节点联动提示）
-  box.addEventListener('pointerover', (e) => {
+  box.addEventListener('pointerover', e => {
     const node = e.target.closest('[data-act="node"]')
     if (!node) return
     const id = node.getAttribute('data-id')
     box.querySelectorAll('.nr-node.hl').forEach(x => x.classList.remove('hl'))
     box.querySelectorAll(`.nr-node[data-id="${cssEsc(id)}"]`).forEach(x => x.classList.add('hl'))
   })
-  box.addEventListener('pointerout', (e) => {
+  box.addEventListener('pointerout', e => {
     if (e.target.closest('[data-act="node"]')) {
       box.querySelectorAll('.nr-node.hl').forEach(x => x.classList.remove('hl'))
     }
   })
 
   // 滚轮缩放（以指针为锚）
-  box.addEventListener('wheel', (e) => {
-    const svg = e.target.closest('.nr-svg')
-    if (!svg) return
-    e.preventDefault()
-    zoomAt(svg, e.deltaY < 0 ? 1.12 : 1 / 1.12, e.clientX, e.clientY)
-  }, { passive: false })
+  box.addEventListener(
+    'wheel',
+    e => {
+      const svg = e.target.closest('.nr-svg')
+      if (!svg) return
+      e.preventDefault()
+      zoomAt(svg, e.deltaY < 0 ? 1.12 : 1 / 1.12, e.clientX, e.clientY)
+    },
+    { passive: false }
+  )
 
   // 空白拖拽平移
   let pan = null
-  box.addEventListener('pointerdown', (e) => {
+  box.addEventListener('pointerdown', e => {
     const svg = e.target.closest('.nr-svg')
     if (!svg) return
     if (e.target.closest('[data-act="node"],[data-act="toggle"]')) return
@@ -107,7 +114,7 @@ export function bindInteractions(){
     svg.classList.add('grabbing')
     svg.setPointerCapture && svg.setPointerCapture(e.pointerId)
   })
-  box.addEventListener('pointermove', (e) => {
+  box.addEventListener('pointermove', e => {
     if (!pan) return
     S.view.x = pan.vx + (e.clientX - pan.sx)
     S.view.y = pan.vy + (e.clientY - pan.sy)
@@ -120,4 +127,3 @@ export function bindInteractions(){
   box.addEventListener('pointerup', endPan)
   box.addEventListener('pointercancel', endPan)
 }
-

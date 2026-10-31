@@ -16,4 +16,6 @@ export function setWorkspaceBarRenderer(fn) {
   if (typeof fn === 'function') _renderBar = fn
 }
 
-export function renderWorkspaceBarVia() { _renderBar() }
+export function renderWorkspaceBarVia() {
+  _renderBar()
+}

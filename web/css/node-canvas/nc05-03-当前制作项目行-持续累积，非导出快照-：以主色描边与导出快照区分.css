@@ -1,2 +1,5 @@
 /* 当前制作项目行（持续累积，非导出快照）：以主色描边与导出快照区分 */
-.craft-current-row{ border-color:var(--accent, #4f8cff); background:rgba(79,140,255,.08) }
+.craft-current-row {
+  border-color: var(--accent, #4f8cff);
+  background: rgba(79, 140, 255, 0.08);
+}

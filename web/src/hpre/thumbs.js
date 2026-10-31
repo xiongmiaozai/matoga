@@ -6,7 +6,6 @@
  * 从 hdri-preset.js 按职责搬出，逻辑未改。
  */
 
-
 import { $, showToast } from '../core.js'
 import { fileUrl } from '../utils.js'
 import { loadHDREnv } from '../material3d.js'
@@ -15,12 +14,6 @@ import { t } from '../i18n.js'
 import { S } from './state.js'
 
 export const THUMB_CONCURRENCY = 4
-
-
-
-
-
-
 
 export function updateThumbProgress() {
   const bar = $('m3dHdrThumbProgress')
@@ -36,7 +29,6 @@ export function updateThumbProgress() {
   if (fill) fill.style.width = pct + '%'
   if (text) text.textContent = S.thumbLoaded + '/' + S.thumbTotal
 }
-
 
 export function enqueueThumb(entry, img, spinner) {
   S.thumbQueue.push({ entry, img, spinner })
@@ -60,23 +52,31 @@ export function nextThumb() {
 
 export async function loadThumb(entry, img, spinner) {
   const fallbackUrl = '/api/hdri/thumb?path=' + encodeURIComponent(entry.fullPath)
-  const finish = (url) => {
-    img.onload = () => { if (spinner.parentNode) spinner.remove(); img.style.backgroundImage = '' }
-    img.onerror = () => { spinner.classList.add('error'); spinner.textContent = '!' }
+  const finish = url => {
+    img.onload = () => {
+      if (spinner.parentNode) spinner.remove()
+      img.style.backgroundImage = ''
+    }
+    img.onerror = () => {
+      spinner.classList.add('error')
+      spinner.textContent = '!'
+    }
     img.src = url
   }
   try {
     const info = await window.api.hdrThumbInfo(entry.fullPath)
     if (info && info.blurhash) {
       const ph = blurhashToDataUrl(info.blurhash, 32, 16)
-      if (ph) { img.style.backgroundImage = 'url(' + ph + ')'; img.style.backgroundSize = 'cover' }
+      if (ph) {
+        img.style.backgroundImage = 'url(' + ph + ')'
+        img.style.backgroundSize = 'cover'
+      }
     }
     finish((info && info.thumbUrl) || fallbackUrl)
   } catch {
     finish(fallbackUrl)
   }
 }
-
 
 export function selectPreset(fullPath, item) {
   const grid = $('m3dHdrPresetGrid')
@@ -87,8 +87,9 @@ export function selectPreset(fullPath, item) {
   const seg = $('m3dEnvModeSeg')
   if (seg) {
     seg.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.envmode === 'hdri'))
-    document.querySelectorAll('.m3d-env-subpane').forEach(p => p.classList.toggle('active', p.dataset.envpane === 'hdri'))
+    document
+      .querySelectorAll('.m3d-env-subpane')
+      .forEach(p => p.classList.toggle('active', p.dataset.envpane === 'hdri'))
   }
   showToast(t('toast.loadedHdr', { name: item.title }))
 }
-
