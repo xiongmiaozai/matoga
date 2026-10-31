@@ -31,6 +31,7 @@
 import { t, onLocaleChange } from './i18n.js'
 import { parseAnimMeta, animFrameIndexAt, defaultFaceUv } from './mc-model-viewer.js'
 import { getTexDragData } from './utils.js'
+import { readAsDataURL, isUsableTexUrl } from './uvc/tex-utils.js'
 
 const ZOOM_STEPS = ['fit', 1, 2, 4, 8, 16]
 const IMG_CACHE_MAX = 48
@@ -891,19 +892,6 @@ export function createUvEditor(opts) {
      多文件：从当前选中贴图槽位起按顺序替换（画师一次导出多张贴图逐槽位对应）；
      超出贴图槽数的文件忽略——新增空槽位无意义（无 face 引用的贴图不会显示） */
 
-  function readAsDataURL(file) {
-    return new Promise((resolve, reject) => {
-      try {
-        const reader = new FileReader()
-        reader.onload = () => resolve(String(reader.result))
-        reader.onerror = () => reject(new Error('read fail'))
-        reader.readAsDataURL(file)
-      } catch (e) {
-        reject(e)
-      }
-    })
-  }
-
   async function handleTextureFiles(files) {
     const list = Array.from(files || []).filter(f => f && /^image\//.test(String(f.type || '')))
     if (!list.length || !state.layout) return
@@ -941,11 +929,6 @@ export function createUvEditor(opts) {
     updateStatus()
     draw()
     notifyDirty()
-  }
-
-  /* 可用作贴图的 URL：dataURL / http(s) / 站内相对路径（/api/...） */
-  function isUsableTexUrl(url) {
-    return typeof url === 'string' && (url.startsWith('data:') || /^https?:\/\//i.test(url) || url.startsWith('/'))
   }
 
   /* 移除材质：清空贴图槽位引用（face.tex 索引保持不变，不删除槽位本身）；
