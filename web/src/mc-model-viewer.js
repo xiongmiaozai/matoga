@@ -34,7 +34,7 @@ import { fileUrl, apiUrl, joinPath } from './url-utils.js'
 import { defaultFaceUv, resolveItemDefRefs, MAX_ITEM_DEF_DEPTH } from './mcv/geometry.js'
 import { rawUrl, texCacheKey, fetchJson, fetchOkData, parentModelPath, setHooks as setMcvPathsHooks } from './mcv/paths.js'
 import { applyItemTransformation, getOfficialPack, parseAnimMeta, animFrameIndexAt, setHooks as setMcvGeoToolsHooks } from './mcv/geo-tools.js'
-import { clamp01, colormapRel, loadColormapData, sampleColormap, resolveTintColor, infer2dTintType, sampleTintForTexture, textureAssetPath, loadTextureCached, setHooks as setHooks } from './mcv/tex-tools.js'
+import { clamp01, colormapRel, loadColormapData, sampleColormap, resolveTintColor, infer2dTintType, sampleTintForTexture, textureAssetPath, loadTextureCached, setHooks as setTexToolsHooks } from './mcv/tex-tools.js'
 /* 门面 re-export（§2.3） */
 export { clamp01, colormapRel, loadColormapData, sampleColormap, resolveTintColor, infer2dTintType, sampleTintForTexture, textureAssetPath, loadTextureCached } from './mcv/tex-tools.js'
 /* 门面 re-export（文档 §2.3） */
@@ -1816,7 +1816,7 @@ setMcvGeoToolsHooks({
 })
 
 /* 贴图与着色工具 常量注入 */
-setHooks({
+setTexToolsHooks({
   get_colormapCache: () => colormapCache,
   get_CONSTANT_TINTS: () => CONSTANT_TINTS,
   get_currentBiome: () => currentBiome,
