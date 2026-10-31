@@ -120,6 +120,14 @@
       {
         "from": "data",
         "to": "data"
+      },
+      {
+        "from": "dist-go",
+        "to": ".",
+        "filter": [
+          "matoga-backend",
+          "matoga-backend.exe"
+        ]
       }
     ],
     "win": {

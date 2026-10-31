@@ -38,15 +38,76 @@ function seedBuiltinData(srcRoot, dataRoot) {
   }
 }
 
+/**
+ * 解析 Go 后端二进制的路径。
+ *
+ * 候选顺序（先打包态、后开发态）：
+ *   1. <resources>/matoga-backend(.exe)          打包后由 extraResources 放置
+ *   2. <projectRoot>/backend/matoga-backend(.exe) 本地构建产物
+ *   3. <projectRoot>/dist-go/matoga-backend(.exe) 构建脚本默认输出目录
+ *
+ * 返回存在的第一个路径；都不存在返回 null（调用方回退到 Node 服务）。
+ */
+function resolveGoBackend() {
+  const exe = process.platform === 'win32' ? 'matoga-backend.exe' : 'matoga-backend'
+  const roots = []
+  if (app.isPackaged) roots.push(process.resourcesPath)
+  roots.push(path.join(__dirname, '..', 'backend'))
+  roots.push(path.join(__dirname, '..', 'dist-go'))
+  for (const r of roots) {
+    const p = path.join(r, exe)
+    try {
+      if (fs.existsSync(p)) return p
+    } catch { /* 忽略不可读目录 */ }
+  }
+  return null
+}
+
+/**
+ * 启动后端服务。
+ *
+ * 优先使用 Go 二进制；不存在或启动失败时回退到 Node 服务 —— 回退是为了让
+ * 开发机与增量发布不必每台都先构建 Go 二进制，避免「打不开」的硬失败。
+ *
+ * 两种后端都按同一协议报告就绪：stdout 输出 `MATOGA_LISTENING:<port>`。
+ */
 function startServer() {
-  return new Promise((resolve, reject) => {
-    const serverEntry = path.join(__dirname, '..', 'server', 'index.js')
-    const env = {
+  const goBin = resolveGoBackend()
+  if (goBin) {
+    console.log('[main] 启动 Go 后端:', goBin)
+    return startWithError(goBin, ['-port', String(PREFERRED_PORT)], {
       ...process.env,
-      ELECTRON_RUN_AS_NODE: '1',
       MATOGA_SPAWNED: '1'
-    }
-    const child = spawn(process.execPath, [serverEntry, '--port', String(PREFERRED_PORT)], {
+    }).catch((e) => {
+      console.error('[main] Go 后端启动失败，回退到 Node:', e.message)
+      return startNodeServer()
+    })
+  }
+  console.log('[main] 未找到 Go 后端，使用 Node 服务')
+  return startNodeServer()
+}
+
+// 启动 Node 服务（原有实现，作为 Go 不可用时的回退路径）。
+function startNodeServer() {
+  const serverEntry = path.join(__dirname, '..', 'server', 'index.js')
+  const env = {
+    ...process.env,
+    ELECTRON_RUN_AS_NODE: '1',
+    MATOGA_SPAWNED: '1'
+  }
+  return startWithError(process.execPath, [serverEntry, '--port', String(PREFERRED_PORT)], env)
+}
+
+/**
+ * 通用启动器：spawn 子进程并等待 MATOGA_LISTENING 就绪行。
+ *
+ * @param {string} cmd 可执行文件
+ * @param {string[]} args 参数
+ * @param {object} env 环境变量
+ */
+function startWithError(cmd, args, env) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(cmd, args, {
       env,
       stdio: ['pipe', 'pipe', 'pipe']
     })
