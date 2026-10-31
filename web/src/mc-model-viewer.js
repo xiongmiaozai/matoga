@@ -35,7 +35,10 @@ import { defaultFaceUv, resolveItemDefRefs, MAX_ITEM_DEF_DEPTH } from './mcv/geo
 import { rawUrl, texCacheKey, fetchJson, fetchOkData, parentModelPath, setHooks as setMcvPathsHooks } from './mcv/paths.js'
 import { applyItemTransformation, getOfficialPack, parseAnimMeta, animFrameIndexAt, setHooks as setMcvGeoToolsHooks } from './mcv/geo-tools.js'
 import { clamp01, colormapRel, loadColormapData, sampleColormap, resolveTintColor, infer2dTintType, sampleTintForTexture, textureAssetPath, loadTextureCached, setHooks as setTexToolsHooks } from './mcv/tex-tools.js'
-import { packRelToMcRef, texUrlToRef, resolveMcModelRaw, borrowTemplateTextures, parseUv, applyFaceUvs, setHooks as setHooks } from './mcv/tex-ref-tools.js'
+import { packRelToMcRef, texUrlToRef, resolveMcModelRaw, borrowTemplateTextures, parseUv, applyFaceUvs, setHooks as setTexRefToolsHooks } from './mcv/tex-ref-tools.js'
+import { isSpecialTexPath, texPathForRef, writeMcTexRef, resolveTextureRef, expandTextureAliases, resolveMcModel, isItemDefPath, texturesHasConcreteRef, hasUnresolvedTexRefs, shulkerBoxEntityTexRef, resolveMcModelAsset, setHooks as setAssetResolveHooks } from './mcv/asset-resolve.js'
+/* 门面 re-export（§2.3） */
+export { isSpecialTexPath, texPathForRef, writeMcTexRef, resolveTextureRef, expandTextureAliases, resolveMcModel, isItemDefPath, texturesHasConcreteRef, hasUnresolvedTexRefs, shulkerBoxEntityTexRef, resolveMcModelAsset } from './mcv/asset-resolve.js'
 /* 门面 re-export（§2.3） */
 export { packRelToMcRef, texUrlToRef, resolveMcModelRaw, borrowTemplateTextures, parseUv, applyFaceUvs } from './mcv/tex-ref-tools.js'
 /* 门面 re-export（§2.3） */
@@ -134,17 +137,7 @@ const TEX_REF_EXT_RE = /\.(png|jpe?g|webp|gif|bmp|tiff?|avif)$/i
     UV 编辑器替换的任意来源贴图以此形式持久化到模型 JSON，重新打开自动加载 */
 const SPECIAL_TEX_RE = /^(data:|file:|https?:\/\/|\/)/i
 
-function isSpecialTexPath(p) {
-  return typeof p === 'string' && SPECIAL_TEX_RE.test(p)
-}
-
 /* 引用值 → 贴图路径（扩展引用原样；标准引用走命名空间解析） */
-export function texPathForRef(ref) {
-  if (typeof ref !== 'string') return null
-  if (isSpecialTexPath(ref)) return ref
-  return textureAssetPath(ref) || ref
-}
-
 /* 包内贴图路径 → 标准 MC 引用（assets/<ns>/textures/<rest>.png → <ns>:<rest>） */
 /* 替换贴图 URL → 模型贴图引用（智能引用）：
     '' → 移除；dataURL → data: 内嵌；外部 http(s) → 原样；
@@ -153,35 +146,6 @@ export function texPathForRef(ref) {
     跨包保留站内 URL（重新打开可直接加载） */
 /* 模型 textures 表贴图引用写回：解析命中 oldTexPath 的键改写为 newRef。
     直接持有该路径的键（含 #互引链命中）统一改写到新值；oldTexPath = '' 匹配被移除的空键 */
-export function writeMcTexRef(textures, oldTexPath, newRef) {
-  if (!textures || typeof textures !== 'object' || typeof oldTexPath !== 'string' || typeof newRef !== 'string')
-    return 0
-  let n = 0
-  for (const k in textures) {
-    const val = textures[k]
-    if (typeof val !== 'string') continue
-    if (oldTexPath === '') {
-      if (val === '') {
-        textures[k] = newRef
-        n++
-      }
-      continue
-    }
-    if (!val) continue
-    const hit = isSpecialTexPath(val) ? val === oldTexPath : val === oldTexPath || textureAssetPath(val) === oldTexPath
-    if (hit) {
-      textures[k] = newRef
-      n++
-      continue
-    }
-    if (val.startsWith('#') && resolveTextureRef(textures, '#' + k) === oldTexPath) {
-      textures[k] = newRef
-      n++
-    }
-  }
-  return n
-}
-
 /* #引用键未定义时的方向别名回退（社区模型常见断链：faces 引用 #up/#north 而
    textures 表内仅有 top/bottom 等非标键，或反向命名）。仅补原本解析失败
    （灰色占位 / UV 面跳过）的场景，已定义键不受影响；防环 guard 贯穿回退链 */
@@ -199,41 +163,8 @@ const TEX_REF_FALLBACK = {
 }
 
 /* 解析 "#side" 引用链（textures 表内互引，防环）到最终贴图路径 */
-export function resolveTextureRef(textures, ref, seen) {
-  if (typeof ref !== 'string' || !ref) return null
-  const guard = seen || new Set()
-  if (guard.has(ref)) return null
-  guard.add(ref)
-  if (ref.startsWith('#')) {
-    const key = ref.slice(1)
-    const val = textures && typeof textures === 'object' ? textures[key] : undefined
-    if (typeof val === 'string' && val) return resolveTextureRef(textures, val, guard)
-    if (val && typeof val === 'object' && typeof val.sprite === 'string' && val.sprite)
-      return resolveTextureRef(textures, val.sprite, guard)
-    for (const alt of TEX_REF_FALLBACK[key] || []) {
-      const hit = resolveTextureRef(textures, '#' + alt, guard)
-      if (hit) return hit
-    }
-    return null
-  }
-  /* 扩展引用（data:/file:/URL）直接作为贴图路径，不走命名空间解析 */
-  if (isSpecialTexPath(ref)) return ref
-  return textureAssetPath(ref)
-}
-
 /* 旧版/社区包的贴图别名展开（vanilla Deserializer 行为）：
    all → 六方向，side → 四水平方向（putIfAbsent 语义；保留原键以便 "#all" 引用仍可解析） */
-export function expandTextureAliases(textures) {
-  const out = { ...(textures && typeof textures === 'object' ? textures : {}) }
-  const fill = (src, keys) => {
-    if (typeof src !== 'string' || !src) return
-    for (const k of keys) if (out[k] == null) out[k] = src
-  }
-  fill(out.all, ['down', 'up', 'north', 'south', 'east', 'west'])
-  fill(out.side, ['north', 'south', 'east', 'west'])
-  return out
-}
-
 /* ── 内置 vanilla 基础模型（parent 断链兜底）────────────────
     普通资源包不含 vanilla 基类文件（block/cube 等），模型 parent 链指向它们时
     fetch 404 → 旧实现静默吞掉 → elements/textures 丢失 → 空模型或贴图全灰。
@@ -277,11 +208,6 @@ const BUILTIN_PARENT_MODELS = {
     最外层解析完成后统一展开一次——若逐层先展开再合并，子层的 side 展开键
     （north/south/east/west）会错误覆盖父层的显式方向键（command_block 的
     north=#front / south=#back 被覆盖成 #side → front/back 贴图丢失）。 */
-export async function resolveMcModel(api, packName, rel, depth = 0, fileRoot) {
-  const { elements, textures } = await resolveMcModelRaw(api, packName, rel, depth, fileRoot)
-  return { elements, textures: expandTextureAliases(textures) }
-}
-
 /* ── 1.21.4+ 物品模型定义（assets/<ns>/items/*.json）────────
    结构：{ model: <节点> }，节点按 type 递归解析出要渲染的普通模型引用：
      model          → 引用 models/ 路径（可带 transformation / tints）
@@ -291,10 +217,6 @@ export async function resolveMcModel(api, packName, rel, depth = 0, fileRoot) {
      special        → base 引用（盾/旗等内置实体渲染之外的基础形状）
    未知类型忽略；tints（染色）不影响几何，跳过 */
 /* item 定义路径判定（assets/<ns>/items/*.json，与 models/ 路径区分） */
-export function isItemDefPath(rel) {
-  return typeof rel === 'string' && /^assets\/[^/]+\/items\/[^/]+\.json$/.test(rel)
-}
-
 /* 模板模型文件名判定（template_*）：vanilla 约定模板自身不定义 textures，由子模型注入 */
 export function isTemplateModelName(rel) {
   if (typeof rel !== 'string') return false
@@ -305,33 +227,10 @@ export function isTemplateModelName(rel) {
 /* textures 表是否含至少一个具体贴图引用（非空、非 # 变量引用）。
    全为 # 变量引用或空表 → false：此类模型（template_*、coral_fan、coral_wall_fan 等
    父模板）自身无法解析出贴图，需借用子模型 textures 才能预览 */
-export function texturesHasConcreteRef(textures) {
-  if (!textures || typeof textures !== 'object') return false
-  for (const v of Object.values(textures)) {
-    if (typeof v === 'string' && v && v[0] !== '#') return true
-  }
-  return false
-}
-
 /* elements 中是否存在 textures 表未定义的 #变量 引用（混合模板场景）。
    flower_pot_cross 等模板既有具体引用（flowerpot/dirt）又有未定义变量引用（plant）：
    texturesHasConcreteRef 误判为已就绪 → plant 面灰色占位。此处检测 elements 各面
    引用的 #key 是否在 textures 表中有对应键，缺键 → true，需借用子模型 textures 补全 */
-export function hasUnresolvedTexRefs(elements, textures) {
-  if (!Array.isArray(elements) || !elements.length) return false
-  const tex = textures && typeof textures === 'object' ? textures : null
-  for (const el of elements) {
-    const faces = el && typeof el === 'object' && el.faces && typeof el.faces === 'object' ? el.faces : null
-    if (!faces) continue
-    for (const f of Object.values(faces)) {
-      const t = f && typeof f === 'object' && typeof f.texture === 'string' ? f.texture : ''
-      if (t[0] !== '#') continue
-      if (!tex || !(t.slice(1) in tex)) return true
-    }
-  }
-  return false
-}
-
 /* 模板模型（template_* 及 coral_fan/coral_wall_fan 等无具体贴图的父模板）直接预览时
    textures 全空或仅含 # 变量引用 → 所有面回退灰色占位。借用同级目录下引用该模板为
    parent 的子模型的 textures，让模板也能显示真实贴图。包模式走 entries 接口列目录，
@@ -339,78 +238,9 @@ export function hasUnresolvedTexRefs(elements, textures) {
    命中首个含贴图的子模型即止 */
 /* shulker_box 内嵌渲染器贴图引用 → 实体贴图引用：
    minecraft:shulker_yellow → minecraft:entity/shulker/shulker_yellow */
-function shulkerBoxEntityTexRef(ref) {
-  let ns = 'minecraft',
-    rest = ref
-  const ci = ref.indexOf(':')
-  if (ci >= 0) {
-    ns = ref.slice(0, ci)
-    rest = ref.slice(ci + 1)
-  }
-  return `${ns}:entity/shulker/${rest}`
-}
-
 /* 统一模型资产解析入口：rel 为 models/ 路径或 items/ 定义路径。
     返回 { parts: [{ elements, textures, transform }] }（多 parts 仅出现在 composite）；
     模型文件不存在 / 非法 → parts 空（shown:false 语义） */
-export async function resolveMcModelAsset(api, packName, rel, fileRoot) {
-  if (!isItemDefPath(rel)) {
-    try {
-      let { elements, textures } = await resolveMcModel(api, packName, rel, 0, fileRoot)
-      /* 模板贴图借用：有几何体且 textures 无任何具体贴图引用（空表或全 # 变量引用），
-         或 elements 引用了 textures 表未定义的 #变量（混合模板如 flower_pot_cross：
-         有 flowerpot/dirt 具体引用但 #plant 未定义）→ 借子模型 textures 补全。
-         合并而非替换：当前 textures 的具体引用保留，借来的子模型 textures 补缺失键 */
-      if (elements.length && (!texturesHasConcreteRef(textures) || hasUnresolvedTexRefs(elements, textures))) {
-        const borrowed = await borrowTemplateTextures(api, packName, rel, fileRoot)
-        if (borrowed) textures = expandTextureAliases({ ...borrowed, ...textures })
-      }
-      return { parts: [{ elements, textures, transform: null, tints: null }] }
-    } catch {
-      return { parts: [] }
-    }
-  }
-  const url = rawUrl(api, packName, rel, fileRoot, true)
-  let def = null
-  try {
-    def = await fetchJson(url)
-  } catch {}
-  const refs = resolveItemDefRefs(def && def.model).slice(0, MAX_ITEM_DEF_REFS)
-  const parts = []
-  for (const r of refs) {
-    if (r.shulkerBox) {
-      const entityRef = shulkerBoxEntityTexRef(r.shulkerBox)
-      parts.push({
-        elements: [
-          {
-            from: [0, 0, 0],
-            to: [16, 16, 16],
-            faces: {
-              down: { texture: '#all' },
-              up: { texture: '#all' },
-              north: { texture: '#all' },
-              south: { texture: '#all' },
-              west: { texture: '#all' },
-              east: { texture: '#all' }
-            }
-          }
-        ],
-        textures: { all: entityRef, particle: entityRef },
-        transform: r.transformation || null,
-        tints: null
-      })
-      continue
-    }
-    const mp = parentModelPath(r.model)
-    if (!mp) continue
-    try {
-      const { elements, textures } = await resolveMcModel(api, packName, mp, 0, fileRoot)
-      parts.push({ elements, textures, transform: r.transformation || null, tints: r.tints || null })
-    } catch {}
-  }
-  return { parts }
-}
-
 /* 判定 parts 是否为"空模型"：模型文件存在且合法，但所有 part 既无 elements 也无 textures
    （如 air / structure_void / barrier 等空方块）。用于在视口叠加友好提示而非留白。
    parts 为空数组（文件不存在/非法）不算空模型，返回 false */
@@ -1670,11 +1500,18 @@ setTexToolsHooks({
 })
 
 /* 贴图引用与模型解析工具 常量注入 */
-setHooks({
+setTexRefToolsHooks({
   get_modelJsonCache: () => modelJsonCache,
   get_BUILTIN_PARENT_MODELS: () => BUILTIN_PARENT_MODELS,
   get_MAX_PARENT_DEPTH: () => MAX_PARENT_DEPTH,
   get_FACE_KEYS: () => FACE_KEYS,
   get_FACE_ROT_ORDER: () => FACE_ROT_ORDER,
   get_MAT_INDEX: () => MAT_INDEX
+})
+
+/* 模型资产解析 常量注入 */
+setAssetResolveHooks({
+  get_SPECIAL_TEX_RE: () => SPECIAL_TEX_RE,
+  get_TEX_REF_FALLBACK: () => TEX_REF_FALLBACK,
+  get_MAX_ITEM_DEF_REFS: () => MAX_ITEM_DEF_REFS
 })
