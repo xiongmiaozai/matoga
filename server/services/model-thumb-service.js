@@ -166,9 +166,16 @@ async function sendThumb(res, key, frame = 0) {
 
 function invalidate(key) {
   if (!key) return
+  /* 用同步 unlink：原实现是 fs.promises.unlink(...).catch() 但未 await，
+     调用方（路由）不等待、测试紧接断言文件已消失——在 Windows 上偶发失败。
+     缓存失效必须"返回即已生效"，否则失效后立刻读缩略图仍会命中待删除的旧文件。 */
+  for (let i = 0; i < MAX_FRAMES; i++) {
+    try {
+      fs.unlinkSync(pngPathFor(key, i))
+    } catch {}
+  }
   try {
-    for (let i = 0; i < MAX_FRAMES; i++) fs.promises.unlink(pngPathFor(key, i)).catch(() => {})
-    fs.promises.unlink(metaPathFor(key)).catch(() => {})
+    fs.unlinkSync(metaPathFor(key))
   } catch {}
 }
 

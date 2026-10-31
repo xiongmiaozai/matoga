@@ -111,7 +111,7 @@ function randomDag(n, edgeProb, seed) {
           from: 'N' + i,
           to: 'N' + j,
           fromPort: 'out',
-          toPort: 'in',
+          toPort: 'in'
         })
       }
     }
@@ -132,7 +132,7 @@ test('拓扑排序：线性链一致', () => {
   const edges = [
     { from: 'A', to: 'B' },
     { from: 'B', to: 'C' },
-    { from: 'C', to: 'D' },
+    { from: 'C', to: 'D' }
   ]
   assert.deepEqual(topoOriginal(nodes, edges), topoAdj(nodes, edges))
 })
@@ -143,7 +143,7 @@ test('拓扑排序：菱形依赖一致', () => {
     { from: 'A', to: 'B' },
     { from: 'A', to: 'C' },
     { from: 'B', to: 'D' },
-    { from: 'C', to: 'D' },
+    { from: 'C', to: 'D' }
   ]
   assert.deepEqual(topoOriginal(nodes, edges), topoAdj(nodes, edges))
 })
@@ -153,7 +153,7 @@ test('拓扑排序：含悬空边（指向不存在节点）一致', () => {
   const edges = [
     { from: 'A', to: 'B' },
     { from: 'A', to: 'GHOST' },
-    { from: 'GHOST', to: 'B' },
+    { from: 'GHOST', to: 'B' }
   ]
   assert.deepEqual(topoOriginal(nodes, edges), topoAdj(nodes, edges))
 })
@@ -202,16 +202,16 @@ test('求值输入查找：多条边连入同一端口，后者覆盖前者，�
   const nodes = ['A', 'B', 'C']
   const edges = [
     { from: 'A', to: 'C', fromPort: 'out', toPort: 'in' },
-    { from: 'B', to: 'C', fromPort: 'out', toPort: 'in' },
+    { from: 'B', to: 'C', fromPort: 'out', toPort: 'in' }
   ]
   const results = new Map([
     ['A', { out: 'VA' }],
-    ['B', { out: 'VB' }],
+    ['B', { out: 'VB' }]
   ])
   const incoming = new Map([
     ['A', []],
     ['B', []],
-    ['C', [edges[0], edges[1]]],
+    ['C', [edges[0], edges[1]]]
   ])
   const a = inputsOriginal('C', 'in', edges, results)
   const b = inputsAdj('C', 'in', incoming, results)
