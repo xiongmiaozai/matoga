@@ -43,12 +43,7 @@ console.log(`运行 ${files.length} 个单测文件\n`)
 
 // 串行执行：并行时多个测试文件会争用真实 data/config.json，
 // 报 EPERM rename .tmp（本项目已知的 flaky 模式）。
-const args = [
-  '--test',
-  '--test-concurrency=1',
-  '--test-timeout=30000',
-  ...files,
-]
+const args = ['--test', '--test-concurrency=1', '--test-timeout=30000', ...files]
 
 const r = spawnSync(process.execPath, args, { stdio: 'inherit' })
 process.exit(r.status ?? 1)
