@@ -22,4 +22,15 @@ function atomicWriteJson(file, obj) {
   atomicWrite(file, JSON.stringify(obj, null, 2))
 }
 
-module.exports = { atomicWrite, atomicWriteJson }
+async function atomicWriteAsync(file, data) {
+  await fs.promises.mkdir(path.dirname(file), { recursive: true })
+  const tmp = file + '.' + crypto.randomUUID() + '.tmp'
+  await fs.promises.writeFile(tmp, data)
+  await fs.promises.rename(tmp, file)
+}
+
+async function atomicWriteJsonAsync(file, obj) {
+  await atomicWriteAsync(file, JSON.stringify(obj, null, 2))
+}
+
+module.exports = { atomicWrite, atomicWriteJson, atomicWriteAsync, atomicWriteJsonAsync }

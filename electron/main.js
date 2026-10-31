@@ -27,7 +27,7 @@ async function configurePaths() {
   process.env.MATOGA_RES_ROOT = resRoot
   process.env.MATOGA_DATA_ROOT = dataRoot
   process.env.MATOGA_PRESET_ROOT = presetRoot
-  await seedBuiltinData(resRoot, dataRoot)
+  return seedBuiltinData(resRoot, dataRoot)
 }
 
 async function seedBuiltinData(srcRoot, dataRoot) {
@@ -240,7 +240,9 @@ function debounceSaveWindowBounds() {
 }
 
 app.whenReady().then(async () => {
-  await configurePaths()
+  // configurePaths 同步设置 env 并返回 seed promise；seed 与 server 启动并行，
+  // server 启动（子进程）通常更慢，seed 在等待期间完成，不增加总启动时间。
+  const seedPromise = configurePaths()
   try {
     currentPort = await startServer()
   } catch (e) {
@@ -248,6 +250,7 @@ app.whenReady().then(async () => {
     app.quit()
     return
   }
+  await seedPromise
   await createWindow(currentPort)
 })
 

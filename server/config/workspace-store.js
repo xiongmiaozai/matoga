@@ -7,7 +7,8 @@
 const fs = require('fs')
 const path = require('path')
 const { logger } = require('../middleware/logger')
-const { atomicWriteJson } = require('./atomic-write')
+const { atomicWriteJson, atomicWriteJsonAsync } = require('./atomic-write')
+const { readJsonMtu } = require('./json-cache')
 const { DATA_ROOT } = require('../paths')
 
 const DATA_DIR = path.join(DATA_ROOT, 'data')
@@ -41,7 +42,7 @@ function allocFilename(name, items, excludeName) {
 
 function readIndex() {
   try {
-    const idx = JSON.parse(fs.readFileSync(INDEX_FILE, 'utf8'))
+    const idx = readJsonMtu(INDEX_FILE)
     return {
       version: idx.version || 1,
       active: idx.active || null,
@@ -61,9 +62,17 @@ function writePresetFileAtomic(filename, payload) {
   atomicWriteJson(path.join(DIR, filename), payload)
 }
 
+async function writeIndexAtomicAsync(idx) {
+  await atomicWriteJsonAsync(INDEX_FILE, idx)
+}
+
+async function writePresetFileAtomicAsync(filename, payload) {
+  await atomicWriteJsonAsync(path.join(DIR, filename), payload)
+}
+
 function readPresetFile(filename) {
   try {
-    return JSON.parse(fs.readFileSync(path.join(DIR, filename), 'utf8'))
+    return readJsonMtu(path.join(DIR, filename))
   } catch (e) {
     if (e.code !== 'ENOENT') logger.warn('workspace', 'bad preset file ' + filename + ': ' + e.message)
     return null
@@ -117,13 +126,13 @@ function savePreset(name, config) {
     throw e
   }
   migrateIfNeeded()
-  writeQueue = writeQueue.then(() => {
+  writeQueue = writeQueue.then(async () => {
     try {
       const idx = readIndex()
       const filename = allocFilename(name, idx.items, name)
-      writePresetFileAtomic(filename, { name, config, updatedAt: Date.now() })
+      await writePresetFileAtomicAsync(filename, { name, config, updatedAt: Date.now() })
       idx.items[name] = filename
-      writeIndexAtomic(idx)
+      await writeIndexAtomicAsync(idx)
     } catch (e) { logger.error('workspace', 'savePreset failed: ' + e.message) }
   })
   return writeQueue
@@ -131,16 +140,16 @@ function savePreset(name, config) {
 
 function deletePreset(name) {
   migrateIfNeeded()
-  writeQueue = writeQueue.then(() => {
+  writeQueue = writeQueue.then(async () => {
     try {
       const idx = readIndex()
       const filename = idx.items[name]
       if (!filename) return
 
-      try { fs.rmSync(path.join(DIR, filename), { force: true }) } catch {}
+      await fs.promises.rm(path.join(DIR, filename), { force: true }).catch(() => {})
       delete idx.items[name]
       if (idx.active === name) idx.active = null
-      writeIndexAtomic(idx)
+      await writeIndexAtomicAsync(idx)
     } catch (e) { logger.error('workspace', 'deletePreset failed: ' + e.message) }
   })
   return writeQueue
@@ -153,7 +162,7 @@ function renamePreset(oldName, newName) {
     throw e
   }
   migrateIfNeeded()
-  writeQueue = writeQueue.then(() => {
+  writeQueue = writeQueue.then(async () => {
     try {
       const idx = readIndex()
       const oldFilename = idx.items[oldName]
@@ -162,21 +171,21 @@ function renamePreset(oldName, newName) {
       if (!oldPreset) return
       const newFilename = allocFilename(newName, idx.items, oldName)
       if (idx.items[newName] && newName !== oldName && idx.items[newName] !== newFilename) {
-        try { fs.rmSync(path.join(DIR, idx.items[newName]), { force: true }) } catch {}
+        await fs.promises.rm(path.join(DIR, idx.items[newName]), { force: true }).catch(() => {})
       }
-      writePresetFileAtomic(newFilename, {
+      await writePresetFileAtomicAsync(newFilename, {
         name: newName,
         config: oldPreset.config,
 
         updatedAt: oldPreset.updatedAt || Date.now()
       })
       if (newFilename !== oldFilename) {
-        try { fs.rmSync(path.join(DIR, oldFilename), { force: true }) } catch {}
+        await fs.promises.rm(path.join(DIR, oldFilename), { force: true }).catch(() => {})
       }
       delete idx.items[oldName]
       idx.items[newName] = newFilename
       if (idx.active === oldName) idx.active = newName
-      writeIndexAtomic(idx)
+      await writeIndexAtomicAsync(idx)
     } catch (e) { logger.error('workspace', 'renamePreset failed: ' + e.message) }
   })
   return writeQueue
@@ -184,11 +193,11 @@ function renamePreset(oldName, newName) {
 
 function setActive(name) {
   migrateIfNeeded()
-  writeQueue = writeQueue.then(() => {
+  writeQueue = writeQueue.then(async () => {
     try {
       const idx = readIndex()
       idx.active = name || null
-      writeIndexAtomic(idx)
+      await writeIndexAtomicAsync(idx)
     } catch (e) { logger.error('workspace', 'setActive failed: ' + e.message) }
   })
   return writeQueue

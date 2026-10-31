@@ -1,4 +1,4 @@
-<!-- 独立模型分类面板（工作区可拼装窗口） -->
+<!-- 独立模型分类面板（工作区可拼装窗口），复用贴图对比的表格渲染 -->
 <div class="panel model-category-panel" id="modelCategoryPanelWrap" data-panel="modelCategory">
   <div class="panel-head">
     <div class="panel-title"><svg class="ico ico-sm"><use href="#i-cube"/></svg> <span data-i18n="center.model">模型分类</span></div>
@@ -8,6 +8,24 @@
     </div>
   </div>
   <div class="panel-body" style="padding:0">
-    <div id="modelGridBody" class="model-grid-body"></div>
+    <div class="result-table-wrap">
+      <table class="result-table">
+        <thead>
+          <tr>
+            <th class="col-status" data-i18n="common.status">状态</th>
+            <th class="col-preview" data-i18n="center.colPreview">预览</th>
+            <th class="col-name" data-i18n="common.name">名称</th>
+            <th class="col-type" data-i18n="common.type">类型</th>
+            <th class="col-size" data-i18n="common.size">大小</th>
+            <th class="col-mtime" data-i18n="center.colMtime">修改时间</th>
+            <th class="col-left" data-i18n="center.colLeft">左</th>
+            <th class="col-right" data-i18n="center.colRight">右</th>
+          </tr>
+        </thead>
+        <tbody id="modelResultBody">
+          <tr class="empty-row"><td colspan="8"><span data-i18n="render.noModel">没有模型</span></td></tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>

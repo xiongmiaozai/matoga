@@ -3,8 +3,9 @@
 set -e
 
 APP_PATH="dist-electron/mac-arm64/matoga.app"
-DMG_PATH="dist-electron/matoga-3.2.0-arm64.dmg"
-VOL_NAME="matoga 3.2.0"
+VERSION=$(node -p "require('./package.json').version")
+DMG_PATH="dist-electron/matoga-${VERSION}-arm64.dmg"
+VOL_NAME="matoga ${VERSION}"
 TMP_DMG="/tmp/matoga-tmp.dmg"
 MOUNT="/Volumes/$VOL_NAME"
 
@@ -13,9 +14,12 @@ if [ ! -d "$APP_PATH" ]; then
   exit 1
 fi
 
-echo "1. 创建临时读写 dmg..."
+APP_SIZE_MB=$(du -sm "$APP_PATH" | awk '{print $1}')
+TMP_SIZE_MB=$((APP_SIZE_MB * 2 + 100))
+
+echo "1. 创建临时读写 dmg（app=${APP_SIZE_MB}MB，临时 dmg=${TMP_SIZE_MB}MB）..."
 rm -f "$TMP_DMG"
-hdiutil create -size 600m -volname "$VOL_NAME" -fs HFS+ -ov "$TMP_DMG"
+hdiutil create -size ${TMP_SIZE_MB}m -volname "$VOL_NAME" -fs HFS+ -ov "$TMP_DMG"
 
 echo "2. 挂载（读写模式）..."
 hdiutil attach "$TMP_DMG" -nobrowse -readwrite -mountpoint "$MOUNT" -quiet

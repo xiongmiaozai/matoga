@@ -482,7 +482,8 @@ export function blankTexDataUrl(role) {
   c.width = 16
   c.height = 16
   const ctx = c.getContext('2d')
-  ctx.fillStyle = role === 'normal' ? '#8080ff' : '#000000'
+  const colors = { main: '#ffffff', normal: '#8080ff', specular: '#000000' }
+  ctx.fillStyle = colors[role] || '#000000'
   ctx.fillRect(0, 0, 16, 16)
   return c.toDataURL('image/png')
 }
@@ -517,6 +518,45 @@ export async function createBlankTextureToRight(g, role) {
     showToast(t('toast.createdBlankTex'))
     await reloadAndCompare()
   } else showToast(t('toast.replaceFail', { msg: r.error }))
+}
+
+const BLANK_SET_ROLES = [
+  { role: 'main', suffix: '' },
+  { role: 'normal', suffix: '_n' },
+  { role: 'specular', suffix: '_s' }
+]
+
+export async function createBlankTextureSetToRight(g) {
+  if (!state.rightPath) {
+    showToast(t('toast.destNotSelected'))
+    return
+  }
+  const mainEntry = (g.right && g.right.main) || (g.left && g.left.main)
+  const dot = mainEntry ? mainEntry.name.lastIndexOf('.') : -1
+  const ext = dot >= 0 ? mainEntry.name.slice(dot) : '.png'
+  const history = []
+  for (const { role, suffix } of BLANK_SET_ROLES) {
+    const destPath = joinPath(state.rightPath, g.key + suffix + ext)
+    const re = g.right && g.right[role]
+    let bkPath = null
+    if (re && !re.isDirectory) {
+      const bk = await window.api.backupFile(re.fullPath)
+      if (!bk.success) {
+        showToast(t('toast.backupFailCancel2'))
+        return
+      }
+      bkPath = bk.backupPath
+    }
+    const r = await window.api.writeFile(destPath, blankTexDataUrl(role))
+    if (!r.success) {
+      showToast(t('toast.replaceFail', { msg: r.error }))
+      return
+    }
+    history.push({ destPath, backupPath: bkPath })
+  }
+  pushHistory(history)
+  showToast(t('toast.createdBlankTexSet', { n: history.length }))
+  await reloadAndCompare()
 }
 
 export async function batchCopyToSide(destSide) {

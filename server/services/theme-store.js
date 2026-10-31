@@ -97,6 +97,8 @@ const BUILTIN = [
 
 const BUILTIN_IDS = new Set(BUILTIN.map(t => t.id))
 
+let _customCache = null // { sig, items }
+
 function sanitizeTokens(raw) {
   const out = {}
   if (!raw || typeof raw !== 'object') return out
@@ -111,19 +113,32 @@ function sanitizeId(id) {
 }
 
 function readCustomFiles() {
-  const out = []
   let entries = []
   try {
     entries = fs.readdirSync(THEMES_DIR, { withFileTypes: true })
   } catch {
-    return out
+    return []
   }
+  const files = []
   for (const ent of entries) {
-    if (!ent.isFile() || !ent.name.endsWith('.json')) continue
+    if (ent.isFile() && ent.name.endsWith('.json')) files.push(ent.name)
+  }
+  // mtime 签名：文件集或任一 mtime 变化时重新解析，否则返回缓存
+  let sig = ''
+  try {
+    sig = files.map((n) => {
+      const st = fs.statSync(path.join(THEMES_DIR, n))
+      return `${n}:${st.mtimeMs}`
+    }).join('|')
+  } catch { sig = '' }
+  if (_customCache && _customCache.sig === sig) return _customCache.items
+
+  const out = []
+  for (const n of files) {
     try {
-      const raw = JSON.parse(fs.readFileSync(path.join(THEMES_DIR, ent.name), 'utf8'))
+      const raw = JSON.parse(fs.readFileSync(path.join(THEMES_DIR, n), 'utf8'))
       if (!raw || typeof raw !== 'object') continue
-      const id = sanitizeId(raw.id || ent.name.slice(0, -5))
+      const id = sanitizeId(raw.id || n.slice(0, -5))
       if (!id || BUILTIN_IDS.has(id)) continue
       out.push({
         id,
@@ -134,9 +149,10 @@ function readCustomFiles() {
         tokens: sanitizeTokens(raw.tokens)
       })
     } catch (e) {
-      logger.warn('themes', 'skip bad file ' + ent.name + ': ' + e.message)
+      logger.warn('themes', 'skip bad file ' + n + ': ' + e.message)
     }
   }
+  _customCache = { sig, items: out }
   return out
 }
 

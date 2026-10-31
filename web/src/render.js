@@ -57,17 +57,18 @@ import {
   copySingleToRight,
   addTextureToRight,
   createBlankTextureToRight,
+  createBlankTextureSetToRight,
   saveOptions
 } from './actions.js'
 import { initMaterial3D, updateMaterial3D, clearCustomModel, setModelEmptyHint } from './material3d.js'
 import { enhancePreview } from './preview2d.js'
 import { observeThumbs } from './thumb-loader.js'
-import { observeModelThumbs, prefetchModelThumbs } from './model-thumb.js'
+import { observeModelThumbs } from './model-thumb.js'
 import { parseModelText, buildModelSummary, diffLines, escHtml, isModelEntry, checkTexRefs } from './model-diff.js'
 import { modelBaseNameOf } from './model-group-dims.js'
 import {
   viewMcModelPairInViewport,
-  viewMcModelTexCompareInViewport,
+
   isViewportVisible,
   resolveModelTexList,
   textureAssetPath
@@ -351,23 +352,10 @@ export function appendSubRows(frag, g) {
   }
 }
 
-function modelTexRoleThumbs(grp, role) {
-  const lEntry = grp && grp.left && grp.left[role]
-  const rReal = grp && grp.right && grp.right[role]
-  const rEntry = rReal || lEntry
-  if (!lEntry && !rEntry) return ''
-  const thumbL = lEntry
-    ? `<img class="thumb thumb-left" src="${escAttr(fileUrl(lEntry.fullPath))}" alt="" />`
-    : '<span class="thumb-ph thumb-left-ph">L</span>'
-  const thumbR = rEntry
-    ? `<img class="thumb thumb-right" src="${escAttr(fileUrl(rEntry.fullPath))}" alt="" />`
-    : '<span class="thumb-ph thumb-right-ph">R</span>'
-  return `<div class="model-tex-thumbs${!rReal && lEntry ? ' model-tex-role-fallback' : ''}">${thumbL}${thumbR}</div>`
-}
 
 
 export function renderModelTypeResult() {
-  const body = $('modelGridBody')
+  const body = $('modelResultBody')
   if (!body) return
   const result = state.result
   let models = result.filter(g => g.isModel)
@@ -395,7 +383,7 @@ export function renderModelTypeResult() {
       )
       msg = baseModels.length ? t('categoryFilter.noMatch', { q: state.resultSearchTerm.trim() }) : t('render.noModel')
     } else msg = t('render.noModel')
-    body.innerHTML = `<div class="model-grid-empty">${msg}</div>`
+    body.innerHTML = `<tr class="empty-row"><td colspan="8">${msg}</td></tr>`
     return
   }
   const catMap = new Map()
@@ -444,24 +432,6 @@ export function renderModelTypeResult() {
     if (fc.extra) sp.push(`<span class="fc fc-extra">＋${fc.extra}</span>`)
     return sp.join(' ')
   }
-  const grid = state.modelViewMode !== 'list'
-
-
-  const toolbar = document.createElement('div')
-  toolbar.className = 'mc-toolbar'
-  toolbar.innerHTML =
-    `<div class="mc-view-seg">` +
-    `<button class="mc-view-btn${grid ? ' on' : ''}" data-mc-view="grid">${t('render.viewModelGrid')}</button>` +
-    `<button class="mc-view-btn${!grid ? ' on' : ''}" data-mc-view="list">${t('render.viewModelList')}</button>` +
-    `</div>`
-  toolbar.querySelectorAll('[data-mc-view]').forEach(b =>
-    b.addEventListener('click', () => {
-      state.modelViewMode = b.dataset.mcView
-      renderModelTypeResult()
-    })
-  )
-
-  frag.appendChild(toolbar)
   for (const cat of catOrder) {
     const items = catMap.get(cat)
     if (!items || !items.length) continue
@@ -481,206 +451,62 @@ export function renderModelTypeResult() {
             : groupBy === 'custom' && cat === '__ungrouped__'
               ? t('category.untagged')
               : cat
-    const grp = document.createElement('div')
-    grp.className = 'mc-grp' + (collapsed ? ' collapsed' : '')
-    grp.dataset.cat = cat
-    grp.innerHTML = `<div class="mc-grp-head"><span class="mc-arrow">${collapsed ? '▸' : '▾'}</span><svg class="ico ico-sm"><use href="#i-cube"/></svg><span class="mc-grp-lbl">${escHtml(catLabel)}</span><span class="mc-grp-cnt">${t('render.modelTypeCount', { n: items.length })}</span><span class="mc-grp-sum">${buildSummary(items)}</span></div><div class="mc-grp-body"></div>`
-    grp.querySelector('.mc-grp-head').addEventListener('click', () => {
+    const ftr = document.createElement('tr')
+    ftr.className = 'folder-group-row'
+    ftr.innerHTML = `<td colspan="8"><span class="folder-arrow">${collapsed ? '▸' : '▾'}</span><svg class="ico ico-sm"><use href="#i-cube"/></svg><span class="folder-name">${escHtml(catLabel)}</span><span class="folder-count">${t('render.modelTypeCount', { n: items.length })}</span><span class="folder-summary">${buildSummary(items)}</span></td>`
+    ftr.addEventListener('click', () => {
       if (state.collapsedFolders.has(catKey)) state.collapsedFolders.delete(catKey)
       else state.collapsedFolders.add(catKey)
       renderModelTypeResult()
     })
-    if (!collapsed) {
-      const grpBody = grp.querySelector('.mc-grp-body')
-      const wrap = document.createElement('div')
-      wrap.className = grid ? 'mc-cards' : 'mc-rows'
-      for (const g of items) {
-        if (rendered >= limit) {
-          truncated = true
-          break
-        }
-        if (grid) appendModelGridCard(wrap, g)
-        else appendModelCompareRow(wrap, g)
-        rendered++
+    frag.appendChild(ftr)
+    if (collapsed) continue
+    for (const g of items) {
+      if (rendered >= limit) {
+        truncated = true
+        break
       }
-      grpBody.appendChild(wrap)
+      appendGroupRows(frag, g)
+      rendered++
     }
-    frag.appendChild(grp)
   }
   if (truncated) {
-    const more = document.createElement('div')
-    more.className = 'model-show-more'
-    more.innerHTML = `<button class="btn btn-ghost btn-sm">${t('render.showMore', { rendered, total: models.length })}</button>`
-    more.querySelector('button').addEventListener('click', () => {
+    const moreRow = document.createElement('tr')
+    moreRow.className = 'show-more-row'
+    moreRow.innerHTML = `<td colspan="8" style="text-align:center;padding:8px;"><button class="btn btn-ghost btn-sm">${t('render.showMore', { rendered, total: models.length })}</button></td>`
+    moreRow.querySelector('button').addEventListener('click', () => {
       state.renderLimit += 200
       renderModelTypeResult()
     })
-    frag.appendChild(more)
-  }
-  if (grid && state.selected && state.selected.isModel && models.includes(state.selected)) {
-    frag.appendChild(buildModelDetailPanel(state.selected))
+    frag.appendChild(moreRow)
   }
   body.innerHTML = ''
   body.appendChild(frag)
+  for (const tr of body.children) {
+    const g = tr._group
+    if (!g || !g.isModel) continue
+    const nameCell = tr.children[2]
+    if (nameCell && !nameCell.querySelector('.expand-arrow')) {
+      const arrow = document.createElement('span')
+      arrow.className = 'expand-arrow'
+      arrow.textContent = state.expandedKeys.has(g.key) ? '▾' : '▸'
+      nameCell.prepend(arrow)
+    }
+    tr.addEventListener('click', () => {
+      if (state.expandedKeys.has(g.key)) state.expandedKeys.delete(g.key)
+      else state.expandedKeys.add(g.key)
+      renderModelTypeResult()
+    })
+    if (state.expandedKeys.has(g.key)) {
+      const sub = document.createElement('tr')
+      sub.className = 'mc-tex-sub-row'
+      sub.innerHTML = `<td colspan="8"><div class="mc-tex-wrap"></div></td>`
+      tr.after(sub)
+      loadModelTexComparePanel(sub, g)
+    }
+  }
   observeThumbs(body)
   observeModelThumbs(body)
-  prefetchModelThumbs(body)
-}
-
-function appendModelGridCard(container, g) {
-  const mainLeft = g.left && (g.left.file || g.left.dir)
-  const mainRight = g.right && (g.right.file || g.right.dir)
-  const shortName = g.key
-    .replace(/^assets\/[^/]+\/models\//, '')
-    .replace(/^assets\/[^/]+\/items\//, '')
-    .replace(/\.json$/, '')
-  const useLeftForRight = !mainRight && !!mainLeft
-  const previewHtml = renderModelThumbPair(
-    mainLeft,
-    mainRight || mainLeft,
-    state.leftPath,
-    mainRight ? state.rightPath : state.leftPath,
-    useLeftForRight,
-    mainRight ? undefined : state.rightPath
-  )
-  const card = document.createElement('div')
-  card.className = 'mc-card row-' + g.kind
-  if (state.selected && state.selected.key === g.key) card.classList.add('selected')
-  card._group = g
-  card.innerHTML =
-    `<div class="mc-card-preview">${previewHtml}</div>` +
-    `<div class="mc-card-foot">${statusBadge(g.kind)}<span class="mc-card-nm" title="${escAttr(g.key)}">${escHtml(shortName)}</span></div>`
-  card.querySelectorAll('.ac-thumb[data-mrel]').forEach(th => {
-    th._modelThumbItem = {
-      modelThumb: modelThumbSpec(
-        { name: th.dataset.mrel, mtime: +th.dataset.mtime || 0 },
-        th.dataset.mroot,
-        th.dataset.mtexroot || undefined
-      )
-    }
-  })
-  card.addEventListener('click', () => {
-    state.selected = g
-    renderSidebar()
-    renderModelTypeResult()
-  })
-  container.appendChild(card)
-}
-
-function buildModelDetailPanel(g) {
-  const panel = document.createElement('div')
-  panel.className = 'mc-detail'
-  panel.innerHTML =
-    `<div class="mc-detail-head"><span class="mc-detail-title" title="${escAttr(g.key)}">${escHtml(g.key)}</span><button class="mc-detail-close" title="${t('common.close')}">✕</button></div>` +
-    `<div class="mc-detail-body">` +
-    `<div class="mc-model-acts">` +
-    `<span class="mc-acts-lab">${t('render.modelActs')}</span>` +
-    `<button class="btn btn-ghost btn-sm" data-mc-act="show">${t('render.modelShowInFolder')}</button>` +
-    `<button class="btn btn-ghost btn-sm" data-mc-act="select">${t('render.modelSelectDetail')}</button>` +
-    `</div>` +
-    `<div class="mc-model-preview"></div>` +
-    `<div class="mc-tex-wrap"><span class="mc-tex-loading">${t('render.modelTexLoading')}</span></div>` +
-    `</div>`
-  panel.querySelector('.mc-detail-close').addEventListener('click', () => {
-    state.selected = null
-    renderSidebar()
-    renderModelTypeResult()
-  })
-  panel.querySelector('[data-mc-act="show"]').addEventListener('click', e => {
-    e.stopPropagation()
-    const ent = mainEntryOf(g)
-    if (ent) window.api.showInFolder(ent.fullPath)
-  })
-  panel.querySelector('[data-mc-act="select"]').addEventListener('click', e => {
-    e.stopPropagation()
-    selectGroup(g)
-  })
-  fillModelPreview(panel, g)
-  loadModelTexComparePanel(panel, g)
-  return panel
-}
-
-function appendModelCompareRow(container, g) {
-  const mainLeft = g.left && (g.left.file || g.left.dir)
-  const mainRight = g.right && (g.right.file || g.right.dir)
-  const shortName = g.key
-    .replace(/^assets\/[^/]+\/models\//, '')
-    .replace(/^assets\/[^/]+\/items\//, '')
-    .replace(/\.json$/, '')
-  const expanded = state.expandedKeys.has(g.key)
-  const row = document.createElement('div')
-  row.className = 'mc-model' + (expanded ? ' open' : '')
-  if (state.selected && state.selected.key === g.key) row.classList.add('selected')
-  row.dataset.key = g.key
-  row._group = g
-  row.innerHTML =
-    `<div class="mc-model-head">` +
-    `<span class="mc-arrow">${expanded ? '▾' : '▸'}</span>` +
-    statusBadge(g.kind) +
-    `<span class="mc-model-nm" title="${escAttr(g.key)}">${escHtml(shortName)}</span>` +
-    `<span class="mc-model-path">${escHtml(g.key)}</span>` +
-    `<span class="mc-model-mini">` +
-    `<span class="mc-mini-l${mainLeft ? ' on' : ''}" title="${t('common.left')}">L</span>` +
-    `<span class="mc-mini-r${mainRight ? ' on' : ''}" title="${t('common.right')}">R</span>` +
-    `</span>` +
-    `</div>` +
-    `<div class="mc-model-body">` +
-    `<div class="mc-model-acts">` +
-    `<span class="mc-acts-lab">${t('render.modelActs')}</span>` +
-    `<button class="btn btn-ghost btn-sm" data-mc-act="show">${t('render.modelShowInFolder')}</button>` +
-    `<button class="btn btn-ghost btn-sm" data-mc-act="select">${t('render.modelSelectDetail')}</button>` +
-    `</div>` +
-    `<div class="mc-model-preview"></div>` +
-    `<div class="mc-tex-wrap"><span class="mc-tex-loading">${t('render.modelTexLoading')}</span></div>` +
-    `</div>`
-  row.querySelector('.mc-model-head').addEventListener('click', () => {
-    selectGroup(g, false)
-    if (state.expandedKeys.has(g.key)) state.expandedKeys.delete(g.key)
-    else state.expandedKeys.add(g.key)
-    renderModelTypeResult()
-  })
-  row.querySelector('[data-mc-act="show"]').addEventListener('click', e => {
-    e.stopPropagation()
-    const ent = mainEntryOf(g)
-    if (ent) window.api.showInFolder(ent.fullPath)
-  })
-  row.querySelector('[data-mc-act="select"]').addEventListener('click', e => {
-    e.stopPropagation()
-    selectGroup(g)
-  })
-  container.appendChild(row)
-  if (expanded) {
-    fillModelPreview(row, g)
-    loadModelTexComparePanel(row, g)
-  }
-}
-
-function fillModelPreview(row, g) {
-  const box = row.querySelector('.mc-model-preview')
-  if (!box) return
-  const mainLeft = g.left && (g.left.file || g.left.dir)
-  const mainRight = g.right && (g.right.file || g.right.dir)
-  if (!mainLeft && !mainRight) {
-    box.innerHTML = `<span class="mc-preview-lab">${t('render.modelPreview')}</span><span class="mc-tex-none">${t('render.modelTexNone')}</span>`
-    return
-  }
-  const tab = state.modelPreviewTab === 'tex2d' ? 'tex2d' : 'model'
-  box.innerHTML =
-    `<div class="mc-preview-tabs">` +
-    `<button class="mc-preview-tab${tab === 'model' ? ' on' : ''}" data-mc-ptab="model">${t('render.previewTabModel')}</button>` +
-    `<button class="mc-preview-tab${tab === 'tex2d' ? ' on' : ''}" data-mc-ptab="tex2d">${t('render.previewTabTex2d')}</button>` +
-    `</div>` +
-    `<div class="mc-preview-content"></div>`
-  box.querySelectorAll('[data-mc-ptab]').forEach(b =>
-    b.addEventListener('click', e => {
-      e.stopPropagation()
-      state.modelPreviewTab = b.dataset.mcPtab
-      fillModelPreview(row, g)
-    })
-  )
-  const content = box.querySelector('.mc-preview-content')
-  if (tab === 'model') renderPreviewModel(content, g)
-  else renderPreviewTex2d(content, g)
 }
 
 function renderPreviewModel(content, g) {
@@ -712,44 +538,6 @@ function renderPreviewModel(content, g) {
     })
   })
   observeModelThumbs(content)
-}
-
-async function renderPreviewTex2d(content, g) {
-  content.innerHTML = `<span class="mc-tex-loading">${t('render.modelTexLoading')}</span>`
-  const le = g.left && g.left.file,
-    re = g.right && g.right.file
-  const leftList =
-    le && isModelEntry(le)
-      ? await resolveModelTexList({ fileRoot: state.leftPath, rel: le.name }).catch(() => null)
-      : null
-  const rightList =
-    re && isModelEntry(re)
-      ? await resolveModelTexList({ fileRoot: state.rightPath, rel: re.name }).catch(() => null)
-      : null
-  if (!content.isConnected) return
-  const col = (list, side) => {
-    const tag = `<span class="mc-pv2-tag mc-pv2-tag-${side}">${side === 'left' ? t('common.left') : t('common.right')}</span>`
-    if (!list || !list.length)
-      return `<div class="mc-pv2-col">${tag}<span class="mc-tex-none">${t('render.texNone')}</span></div>`
-    const items = list
-      .map(
-        tx =>
-          `<div class="mc-pv2-item">` +
-          `<img class="thumb thumb-${side}" src="${escAttr(tx.url)}" data-name="${escAttr(tx.name)}" alt="" />` +
-          `<span class="mc-pv2-name" title="${escAttr(tx.name)}">${escHtml(tx.name.replace(/^minecraft:/, ''))}</span>` +
-          `</div>`
-      )
-      .join('')
-    return `<div class="mc-pv2-col">${tag}${items}</div>`
-  }
-  content.innerHTML = `<div class="mc-pv2">${col(leftList, 'left')}${col(rightList, 'right')}</div>`
-  content.querySelectorAll('img.thumb').forEach(img => {
-    img.addEventListener('click', e => {
-      e.stopPropagation()
-      openPreview(img.src, img.dataset.name || '')
-    })
-  })
-  observeThumbs(content)
 }
 
 async function loadModelTexComparePanel(row, g) {
@@ -807,7 +595,7 @@ async function loadModelTexComparePanel(row, g) {
     catEl.className = 'mc-tex-cat' + (items.length ? '' : ' empty')
     catEl.innerHTML = `<div class="mc-tex-cat-head"><span class="mc-tex-tag">${t('category.' + bk)}</span><span class="mc-tex-cat-cnt">${items.length ? items.length + ' ' + t('render.texCount') : t('render.texNone')}</span></div><div class="mc-tex-cat-body"></div>`
     const bodyEl = catEl.querySelector('.mc-tex-cat-body')
-    for (const it of items) bodyEl.appendChild(buildTexCompareRow(it))
+    for (const it of items) bodyEl.appendChild(buildTexCompareRow(it, g))
     frag.appendChild(catEl)
   }
   wrap.innerHTML = ''
@@ -819,10 +607,10 @@ function buildTexCompareRow(it) {
   const row = document.createElement('div')
   row.className = 'mc-tex-row row-' + it.kind
   const thumbL = it.leftUrl
-    ? `<img class="thumb thumb-left" src="${escAttr(it.leftUrl)}" alt="" />`
+    ? `<img class="thumb thumb-left" src="${escAttr(it.leftUrl)}" loading="lazy" alt="" />`
     : `<span class="thumb-ph thumb-left-ph">L</span>`
   const thumbR = it.rightUrl
-    ? `<img class="thumb thumb-right" src="${escAttr(it.rightUrl)}" alt="" />`
+    ? `<img class="thumb thumb-right" src="${escAttr(it.rightUrl)}" loading="lazy" alt="" />`
     : `<span class="thumb-ph thumb-right-ph">R</span>`
   row.innerHTML =
     `<div class="mc-tex-cell left">${thumbL}</div>` +
@@ -1331,7 +1119,8 @@ function bindEmptyCellActions(panel, g) {
     else le = g.left && (g.left.file || g.left.dir)
     const hasLeft = le && !le.isDirectory
     const canBlank = g.isMaterial && (role === 'normal' || role === 'specular')
-    if (!hasLeft && !canBlank) return
+    const canBlankSet = g.isMaterial && role === 'main'
+    if (!hasLeft && !canBlank && !canBlankSet) return
     const empty = rightCell.querySelector('.pv-empty')
     if (empty) empty.remove()
     const actions = document.createElement('div')
@@ -1368,6 +1157,17 @@ function bindEmptyCellActions(panel, g) {
         createBlankTextureToRight(g, role)
       })
       actions.appendChild(createBtn)
+    }
+    if (canBlankSet) {
+      const setBtn = document.createElement('button')
+      setBtn.className = 'pv-empty-btn pv-empty-create'
+      setBtn.textContent = t('preview.createBlankSet')
+      setBtn.title = t('preview.createBlankSetTitle')
+      setBtn.addEventListener('click', e => {
+        e.stopPropagation()
+        createBlankTextureSetToRight(g)
+      })
+      actions.appendChild(setBtn)
     }
     rightCell.appendChild(actions)
   })
@@ -1587,41 +1387,28 @@ async function loadModelPreview(g) {
     re = g.right && g.right.file
   const left = le && isModelEntry(le) ? { fileRoot: state.leftPath, rel: le.name } : null
   const right = re && isModelEntry(re) ? { fileRoot: state.rightPath, rel: re.name } : null
-  if (!left && !right) return
-  if (!tryActivateCompareModelViewport()) return
+  if (!left && !right) {
+    setModelEmptyHint(t('m3d.modelNotFound'))
+    clearCustomModel()
+    return
+  }
+  if (!tryActivateCompareModelViewport(true)) return
   try {
-    await viewMcModelPairInViewport({
+    const res = await viewMcModelPairInViewport({
       left,
       right,
       rightRoot: state.rightPath,
       isStale: () => state.modelLoadSeq !== mySeq
     })
-    if (state.selected !== g) clearCustomModel()
-  } catch {}
+    if (state.selected !== g || (res && res.shown === false)) clearCustomModel()
+  } catch {
+    setModelEmptyHint(t('m3d.modelLoadFailed'))
+    clearCustomModel()
+  }
 }
 
 /* 点击模型卡片下方的贴图条目：3D 视口贴图效果对比。
    左=左模型+左贴图，右=右模型+右贴图（模型或贴图缺失均回退左侧），展示替换后模型的贴图渲染效果 */
-async function loadModelTexEffectPreview(g, leftTexUrl, rightTexUrl) {
-  const mySeq = ++state.modelLoadSeq
-  const le = g.left && g.left.file,
-    re = g.right && g.right.file
-  const left = le && isModelEntry(le) ? { fileRoot: state.leftPath, rel: le.name } : null
-  const right = re && isModelEntry(re) ? { fileRoot: state.rightPath, rel: re.name } : null
-  if (!left && !right) return
-  if (!tryActivateCompareModelViewport(true)) return
-  try {
-    await viewMcModelTexCompareInViewport({
-      left,
-      right,
-      rightRoot: state.rightPath,
-      leftTexUrl,
-      rightTexUrl,
-      isStale: () => state.modelLoadSeq !== mySeq
-    })
-  } catch {}
-}
-
 export function renderSidebar() {
   const g = state.selected
   const panel = $('previewPanel')
@@ -1729,6 +1516,7 @@ export function renderSidebar() {
   if (diffBtn) diffBtn.addEventListener('click', () => showPixelDiff(diffPairs, panel))
   if (g.isModel) {
     loadModelDiffView(g, panel)
+    clearCustomModel()
     loadModelPreview(g)
     const tab = state.modelPreviewTab === 'tex2d' ? 'tex2d' : 'model'
     if (tab === 'model') {

@@ -642,26 +642,50 @@ function imgH(img) {
   return img.naturalHeight || img.height
 }
 
-function extractChannel(image, channelIndex, invert) {
-  const canvas = document.createElement('canvas')
-  canvas.width = image.naturalWidth
-  canvas.height = image.naturalHeight
-  const ctx = canvas.getContext('2d', { willReadFrequently: true })
-  ctx.drawImage(image, 0, 0)
-  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
-  const data = imageData.data
-  for (let i = 0; i < data.length; i += 4) {
-    let v = data[i + channelIndex]
-    if (invert) v = 255 - v
-    data[i] = v
-    data[i + 1] = v
-    data[i + 2] = v
-    data[i + 3] = 255
+// 像素处理 Worker：通道提取等重像素遍历移出主线程，避免 4K 贴图处理时卡顿 UI
+let m3dWorker = null
+let m3dWorkerSeq = 0
+const m3dWorkerPending = new Map()
+
+function getM3dWorker() {
+  if (m3dWorker) return m3dWorker
+  m3dWorker = new Worker(new URL('./material3d-worker.js', import.meta.url), { type: 'module' })
+  m3dWorker.onmessage = (e) => {
+    const { id, bitmap } = e.data
+    const resolve = m3dWorkerPending.get(id)
+    if (resolve) {
+      m3dWorkerPending.delete(id)
+      resolve(bitmap)
+    }
   }
-  ctx.putImageData(imageData, 0, 0)
+  return m3dWorker
+}
+
+async function runPixelOp(op, image, params) {
+  const bitmap = await createImageBitmap(image)
+  const id = ++m3dWorkerSeq
+  const w = getM3dWorker()
+  return new Promise((resolve) => {
+    m3dWorkerPending.set(id, resolve)
+    w.postMessage({ id, op, bitmap, params }, [bitmap])
+  })
+}
+
+function bitmapToTexture(bitmap) {
+  const canvas = document.createElement('canvas')
+  canvas.width = bitmap.width
+  canvas.height = bitmap.height
+  const ctx = canvas.getContext('2d')
+  ctx.drawImage(bitmap, 0, 0)
+  bitmap.close()
   const tex = new THREE.CanvasTexture(canvas)
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping
   return tex
+}
+
+async function extractChannel(image, channelIndex, invert) {
+  const bitmap = await runPixelOp('extractChannel', image, { channelIndex, invert })
+  return bitmapToTexture(bitmap)
 }
 
 function applyChannelViewToMaterial(material) {
@@ -748,47 +772,16 @@ function detectFormat(image) {
   return 'old'
 }
 
-function extractRoughness(image) {
-  const c = document.createElement('canvas')
-  c.width = image.naturalWidth
-  c.height = image.naturalHeight
-  const ctx = c.getContext('2d', { willReadFrequently: true })
-  ctx.drawImage(image, 0, 0)
-  const imageData = ctx.getImageData(0, 0, c.width, c.height),
-    d = imageData.data
-  for (let i = 0; i < d.length; i += 4) {
-    const r = 255 - d[i]
-    d[i] = r
-    d[i + 1] = r
-    d[i + 2] = r
-    d[i + 3] = 255
-  }
-  ctx.putImageData(imageData, 0, 0)
-  const tex = new THREE.CanvasTexture(c)
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping
-  return tex
+async function extractRoughness(image) {
+  const bitmap = await runPixelOp('extractRoughness', image, {})
+  return bitmapToTexture(bitmap)
 }
 
-function extractMetalness(image) {
-  const c = document.createElement('canvas')
-  c.width = image.naturalWidth
-  c.height = image.naturalHeight
-  const ctx = c.getContext('2d', { willReadFrequently: true })
-  ctx.drawImage(image, 0, 0)
-  const imageData = ctx.getImageData(0, 0, c.width, c.height),
-    d = imageData.data
-  for (let i = 0; i < d.length; i += 4) {
-    const v = d[i + 1]
-    d[i] = v
-    d[i + 1] = v
-    d[i + 2] = v
-    d[i + 3] = 255
-  }
-  ctx.putImageData(imageData, 0, 0)
-  const tex = new THREE.CanvasTexture(c)
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping
-  return tex
+async function extractMetalness(image) {
+  const bitmap = await runPixelOp('extractMetalness', image, {})
+  return bitmapToTexture(bitmap)
 }
+
 
 function extractEmissive(specImage, mainImage) {
   const w = specImage.naturalWidth,
@@ -1094,6 +1087,7 @@ export function makeMaterial() {
   mat.userData.pendingHeightMap = null
   mat.onBeforeCompile = shader => {
     const prev = mat.userData.shaderRefs
+
     shader.uniforms.heightMap = { value: prev ? prev.heightMap.value : mat.userData.pendingHeightMap }
     shader.uniforms.hasHeightMap = {
       value: prev ? prev.hasHeightMap.value : mat.userData.pendingHeightMap && parallaxEnabled ? 1.0 : 0.0
@@ -1172,12 +1166,10 @@ export function makeMaterial() {
           P = tView.xy / max(abs(tView.z), 0.05) * parallaxScale;
           float Plen = length(P);
           P *= 1.0 / (1.0 + max(Plen - 0.1, 0.0) * 4.0);
-          float uvFade = 1.0;
-          ${isWebGL2 ? 'uvFade = 1.0 - smoothstep(0.15, 0.45, length(fwidth(parallaxUv)));' : ''}
-          P *= uvFade;
+
           P *= smoothstep(0.0, 0.2, viewDotN);
           float hMip = 0.0;
-          ${isWebGL2 ? 'hMip = log2(max(max(fwidth(parallaxUv.x) * uHeightTexSize.x, fwidth(parallaxUv.y) * uHeightTexSize.y), 1.0));' : ''}
+
           if (parallaxMode < 0.5) {
             float height = ${isWebGL2 ? 'textureLod( heightMap, parallaxUv, hMip )' : 'texture2D( heightMap, parallaxUv )'}.r;
             parallaxUv = parallaxUv - P * height;
@@ -1785,6 +1777,9 @@ export function setParallaxAdaptive(val) {
     }
   }
 }
+export function isParallaxEnabled() {
+  return parallaxEnabled
+}
 export function setParallaxEnabled(on) {
   parallaxEnabled = on
   if (initialized) {
@@ -2353,7 +2348,7 @@ function applyTexturesToMesh(mesh, group, side) {
 
   if (specEntry) {
     const specImg = new Image()
-    specImg.onload = () => {
+    specImg.onload = async () => {
       if (material.userData.loadVer !== myVer) return
       let fmt = materialFormat
       if (fmt === 'auto') {
@@ -2364,9 +2359,11 @@ function applyTexturesToMesh(mesh, group, side) {
       disposeTexture(material.metalnessMap)
       disposeTexture(material.emissiveMap)
       if (fmt === 'old') {
-        material.roughnessMap = extractChannel(specImg, 0, true)
-        material.metalnessMap = extractChannel(specImg, 1, false)
-        material.emissiveMap = extractChannel(specImg, 2, false)
+        ;[material.roughnessMap, material.metalnessMap, material.emissiveMap] = await Promise.all([
+          extractChannel(specImg, 0, true),
+          extractChannel(specImg, 1, false),
+          extractChannel(specImg, 2, false),
+        ])
         applyTextureFilter(material.roughnessMap)
         applyTextureFilter(material.metalnessMap)
         applyTextureFilter(material.emissiveMap)
@@ -2374,8 +2371,10 @@ function applyTexturesToMesh(mesh, group, side) {
         material.emissiveIntensity = emissiveIntensity
         material.needsUpdate = true
       } else {
-        material.roughnessMap = extractRoughness(specImg)
-        material.metalnessMap = extractMetalness(specImg)
+        ;[material.roughnessMap, material.metalnessMap] = await Promise.all([
+          extractRoughness(specImg),
+          extractMetalness(specImg),
+        ])
         applyTextureFilter(material.roughnessMap)
         applyTextureFilter(material.metalnessMap)
         if (mainEntry) {
@@ -2619,11 +2618,13 @@ function applySpecTextureToMaterial(mat, url) {
   if (!mat || !url) return
   const specImg = new Image()
   specImg.crossOrigin = 'anonymous'
-  specImg.onload = () => {
+  specImg.onload = async () => {
     disposeTexture(mat.roughnessMap)
     disposeTexture(mat.metalnessMap)
-    mat.roughnessMap = extractRoughness(specImg)
-    mat.metalnessMap = extractMetalness(specImg)
+    ;[mat.roughnessMap, mat.metalnessMap] = await Promise.all([
+      extractRoughness(specImg),
+      extractMetalness(specImg),
+    ])
     applyTextureFilter(mat.roughnessMap)
     applyTextureFilter(mat.metalnessMap)
     mat.needsUpdate = true
@@ -2647,12 +2648,37 @@ export function clearSpecularTexture() {
   for (const m of [meshLeft, meshRight]) clearSpecTexture(m.material)
 }
 
+/* 从法线贴图提取高度并写入视差 uniform（模型通道回退）。
+     仅在视差材质（有 shaderRefs 或 pendingHeightMap 机制）且未成功加载显式 _h 贴图时生效。
+     shaderRefs 未就绪（onBeforeCompile 尚未调用）时存入 pendingHeightMap，由 makeMaterial 的 onBeforeCompile 接管。 */
+function applyHeightFromNormalFallback(mat, image) {
+  if (!mat.userData) return
+  if (mat.userData.explicitHeightLoaded) return
+  if (mat.userData.shaderRefs == null && mat.userData.pendingHeightMap === undefined) return
+  let hTex = extractHeight(image)
+  if (!hTex) hTex = extractHeightFromNormal(image)
+  if (!hTex) return
+  if (mat.userData.shaderRefs) {
+    disposeTexture(mat.userData.shaderRefs.heightMap.value)
+    mat.userData.shaderRefs.heightMap.value = hTex
+    mat.userData.shaderRefs.hasHeightMap.value = parallaxEnabled ? 1.0 : 0.0
+    mat.userData.shaderRefs.uHeightTexSize.value.set(hTex.image.width, hTex.image.height)
+  } else {
+    disposeTexture(mat.userData.pendingHeightMap)
+    mat.userData.pendingHeightMap = hTex
+  }
+  mat.needsUpdate = true
+}
+
 /* 应用 PBR 贴图到模型面材质（法线/高光）。
      normalUrl/specUrl：非空字符串 → 加载应用；空串 → 清除对应 map；null/undefined → 不动。
      force=true 跳过 replaced 守卫（编辑器替换主图后强制覆盖旧 PBR；模型加载流程保持 replaced 守卫阻断竞态） */
 export function applyPbrMapsToModelMaterial(mat, normalUrl, specUrl, force, heightUrl) {
   if (!mat) return
+
   const blocked = () => !force && mat.userData && mat.userData.replaced
+  let normalImgLoaded = null
+  let heightFallbackPending = false
   if (normalUrl != null) {
     if (normalUrl === '') {
       disposeTexture(mat.normalMap)
@@ -2670,6 +2696,9 @@ export function applyPbrMapsToModelMaterial(mat, normalUrl, specUrl, force, heig
         mat.normalMap = nTex
         if (mat.normalScale) mat.normalScale.set(1.0, 1.0)
         mat.needsUpdate = true
+        normalImgLoaded = img
+        if (heightUrl == null) applyHeightFromNormalFallback(mat, img)
+        else if (heightFallbackPending) applyHeightFromNormalFallback(mat, img)
       }
       img.src = normalUrl
     }
@@ -2684,12 +2713,11 @@ export function applyPbrMapsToModelMaterial(mat, normalUrl, specUrl, force, heig
     } else {
       const img = new Image()
       img.crossOrigin = 'anonymous'
-      img.onload = () => {
+      img.onload = async () => {
         if (blocked()) return
         disposeTexture(mat.roughnessMap)
         disposeTexture(mat.metalnessMap)
-        const rTex = extractRoughness(img)
-        const mTex = extractMetalness(img)
+        const [rTex, mTex] = await Promise.all([extractRoughness(img), extractMetalness(img)])
         rTex.magFilter = THREE.NearestFilter
         rTex.minFilter = THREE.NearestFilter
         mTex.magFilter = THREE.NearestFilter
@@ -2733,6 +2761,7 @@ export function applyPbrMapsToModelMaterial(mat, normalUrl, specUrl, force, heig
         hTex.colorSpace = THREE.NoColorSpace
         hTex.wrapS = hTex.wrapT = THREE.RepeatWrapping
         applyHeightFilter(hTex)
+        if (mat.userData) mat.userData.explicitHeightLoaded = true
         if (mat.userData.shaderRefs) {
           disposeTexture(mat.userData.shaderRefs.heightMap.value)
           mat.userData.shaderRefs.heightMap.value = hTex
@@ -2743,6 +2772,12 @@ export function applyPbrMapsToModelMaterial(mat, normalUrl, specUrl, force, heig
           mat.userData.pendingHeightMap = hTex
         }
         mat.needsUpdate = true
+      }
+      img.onerror = () => {
+
+        if (blocked()) return
+        if (normalImgLoaded) applyHeightFromNormalFallback(mat, normalImgLoaded)
+        else heightFallbackPending = true
       }
       img.src = heightUrl
     }

@@ -114,26 +114,31 @@ async function listModels() {
   await ensureDir(importedDir())
   await migrateLegacy()
   const entries = await fs.promises.readdir(importedDir(), { withFileTypes: true })
-  const out = []
+  const dirs = []
   for (const e of entries) {
     if (!e.isDirectory()) continue
     const p = modelFileIn(path.join(importedDir(), e.name))
-    if (!p) continue
-    const st = await fs.promises.stat(p)
-    let meta = {}
-    try {
-      const j = JSON.parse(await fs.promises.readFile(p, 'utf8'))
-      meta = { name: j.name, format: j.meta && j.meta.format, model_format: j.meta && j.meta.model_format }
-    } catch {}
-    out.push({
-      id: e.name,
-      file: path.basename(p),
-      ext: path.extname(p).slice(1),
-      size: st.size,
-      mtime: st.mtimeMs,
-      ...meta
-    })
+    if (p) dirs.push({ name: e.name, p })
   }
+  // 各目录独立，并行 stat + readFile
+  const out = await Promise.all(
+    dirs.map(async ({ name, p }) => {
+      const st = await fs.promises.stat(p)
+      let meta = {}
+      try {
+        const j = JSON.parse(await fs.promises.readFile(p, 'utf8'))
+        meta = { name: j.name, format: j.meta && j.meta.format, model_format: j.meta && j.meta.model_format }
+      } catch {}
+      return {
+        id: name,
+        file: path.basename(p),
+        ext: path.extname(p).slice(1),
+        size: st.size,
+        mtime: st.mtimeMs,
+        ...meta
+      }
+    })
+  )
   out.sort((a, b) => b.mtime - a.mtime)
   return out
 }

@@ -6,6 +6,7 @@
 
 const express = require('express')
 const path = require('path')
+const compression = require('compression')
 const { middleware: auth } = require('./middleware/auth')
 const { fail } = require('./middleware/errors')
 const configStore = require('./config/config-store')
@@ -13,6 +14,9 @@ const { trust } = require('./middleware/validate')
 const { WEB_ROOT } = require('./paths')
 
 const ROOT = path.join(__dirname, '..')
+
+const VENDOR_CACHE = 'public, max-age=604800'
+const HTML_CACHE = 'no-cache, must-revalidate'
 
 function createApp() {
   const app = express()
@@ -25,6 +29,8 @@ function createApp() {
     if (req.method === 'OPTIONS') return res.status(204).end()
     next()
   })
+
+  app.use(compression({ level: 6, threshold: 1024 }))
 
   app.use(express.json({ limit: '20mb' }))
 
@@ -60,31 +66,36 @@ function createApp() {
   api.use('/themes', require('./routes/themes'))
   app.use('/api', api)
 
-  app.use('/vendor/three', express.static(path.join(ROOT, 'node_modules', 'three', 'build')))
+  app.use(
+    '/vendor/three',
+    express.static(path.join(ROOT, 'node_modules', 'three', 'build'), {
+      setHeaders: res => res.set('Cache-Control', VENDOR_CACHE)
+    })
+  )
   app.use(
     '/vendor/golden-layout',
     express.static(path.join(ROOT, 'node_modules', 'golden-layout', 'dist', 'esm'), {
       extensions: ['js'],
-      setHeaders: res => res.set('Cache-Control', 'no-store')
+      setHeaders: res => res.set('Cache-Control', VENDOR_CACHE)
     })
   )
   app.use(
     '/vendor/golden-layout-css',
     express.static(path.join(ROOT, 'node_modules', 'golden-layout', 'dist', 'css'), {
-      setHeaders: res => res.set('Cache-Control', 'no-store')
+      setHeaders: res => res.set('Cache-Control', VENDOR_CACHE)
     })
   )
   app.use(
     '/vendor/img',
     express.static(path.join(ROOT, 'node_modules', 'golden-layout', 'dist', 'img'), {
-      setHeaders: res => res.set('Cache-Control', 'no-store')
+      setHeaders: res => res.set('Cache-Control', VENDOR_CACHE)
     })
   )
 
   app.use(
     express.static(WEB_ROOT, {
       index: 'index.html',
-      setHeaders: res => res.set('Cache-Control', 'no-cache, must-revalidate')
+      setHeaders: res => res.set('Cache-Control', HTML_CACHE)
     })
   )
 

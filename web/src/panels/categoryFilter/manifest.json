@@ -4,5 +4,7 @@
   "icon": "i-filter",
   "html": "panel.html",
   "mount": "#workspace",
-  "order": 3
+  "order": 3,
+  "level": 0,
+  "group": "workspace"
 }

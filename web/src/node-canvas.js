@@ -1818,35 +1818,42 @@ function cleanupEdgeDrag() {
 
 /* ── 求值引擎 ───────────────────────────────── */
 function evaluate() {
-  // 拓扑排序
+  // 拓扑排序（邻接表，O(V+E)）
   const ids = [...state.nodes.keys()]
   const indeg = new Map()
   const deps = new Map() // nodeId -> [inputNodeIds]
+  const outgoing = new Map() // nodeId -> [edges from this node]
+  const incoming = new Map() // nodeId -> [edges into this node]
   ids.forEach(id => {
     indeg.set(id, 0)
     deps.set(id, [])
+    outgoing.set(id, [])
+    incoming.set(id, [])
   })
   state.edges.forEach(e => {
     if (state.nodes.has(e.from.node) && state.nodes.has(e.to.node)) {
       indeg.set(e.to.node, indeg.get(e.to.node) + 1)
       deps.get(e.to.node).push(e.from.node)
+      outgoing.get(e.from.node).push(e)
+      incoming.get(e.to.node).push(e)
     }
   })
   const queue = ids.filter(id => indeg.get(id) === 0)
   const order = []
   const seen = new Set()
-  while (queue.length) {
-    const id = queue.shift()
+  let qHead = 0
+  while (qHead < queue.length) {
+    const id = queue[qHead++]
     if (seen.has(id)) continue
     seen.add(id)
     order.push(id)
-    // 找出以此节点为输入的边
-    state.edges.forEach(e => {
-      if (e.from.node === id) {
-        indeg.set(e.to.node, indeg.get(e.to.node) - 1)
-        if (indeg.get(e.to.node) === 0) queue.push(e.to.node)
-      }
-    })
+    const outs = outgoing.get(id)
+    for (let i = 0; i < outs.length; i++) {
+      const e = outs[i]
+      const d = indeg.get(e.to.node) - 1
+      indeg.set(e.to.node, d)
+      if (d === 0) queue.push(e.to.node)
+    }
   }
   // 计算
   const results = new Map() // nodeId -> {portName: value}
@@ -1854,11 +1861,13 @@ function evaluate() {
     const node = state.nodes.get(id)
     const def = NODE_DEFS[node.type]
     const inputs = {}
+    const ins = incoming.get(id)
     def.inputs.forEach(p => {
       // 找到连入此端口的边
       let val = undefined
-      for (const e of state.edges.values()) {
-        if (e.to.node === id && e.to.port === p.n) {
+      for (let i = 0; i < ins.length; i++) {
+        const e = ins[i]
+        if (e.to.port === p.n) {
           const r = results.get(e.from.node)
           if (r) val = r[e.from.port]
         }

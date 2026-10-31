@@ -90,9 +90,10 @@ async function getMaps(roots) {
   for (const r of roots || []) {
     for (const f of await collectLangFiles(r)) files.push(f)
   }
-  let merged = {}
-  for (const f of files) {
-    const j = await loadLangFile(f)
+  // 并行加载所有语言文件，再按原顺序合并（靠后的覆盖靠前的）
+  const loaded = await Promise.all(files.map((f) => loadLangFile(f).catch(() => null)))
+  const merged = {}
+  for (const j of loaded) {
     if (j && typeof j === 'object') Object.assign(merged, j)
   }
   const maps = buildMaps(merged)

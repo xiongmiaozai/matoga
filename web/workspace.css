@@ -127,7 +127,7 @@
   line-height: 1;
 }
 .ws-dropdown {
-  position: absolute;
+  position: fixed;
   top: 28px;
   min-width: 200px;
   background: rgba(40, 40, 40, 0.96);
@@ -136,7 +136,7 @@
   border-radius: 6px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
   padding: 4px;
-  z-index: 100;
+  z-index: 9999;
   font-size: 13px;
   color: #fff;
 }

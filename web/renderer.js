@@ -509,21 +509,30 @@ function initCtxMenu() {
     showShortcuts: () => showToast(t('menu.shortcutsHint', { dflt: 'Ctrl+1 表格 · Ctrl+2 模型 · Alt+R 节点关系' }))
   }
 
-  await step('initI18n', initI18n)
-  await step('initThemes', () => initThemes())
-  await step('initPanelLoader', initPanelLoader)
-  await step('initSettings', () => initSettings())
-  await step('initHeader', () => initHeader())
+  // 阶段 A：i18n / themes / viewTabs 无相互依赖，并行重叠 async I/O（各含 getConfig）
+  await Promise.all([
+    step('initI18n', initI18n),
+    step('initThemes', () => initThemes()),
+    step('initViewTabs', () => initViewTabs()),
+  ])
+
+  // 阶段 B：panelLoader（重 I/O，决定阶段 C）与同步 init 并行
+  await Promise.all([
+    step('initPanelLoader', initPanelLoader),
+    step('initSettings', () => initSettings()),
+    step('initHeader', () => initHeader()),
+    step('initPackPickers', () => initPackPickers()),
+    step('initCtxMenu', () => initCtxMenu()),
+  ])
+
+  // 阶段 C：workspace 先迁移面板 DOM（extractPanels + GoldenLayout），再并行其余面板 init
   await step('initWorkspace', initWorkspace)
-  await step('initPreview2D', () => initPreview2D())
-  await step('initPreviewPanel', () => initPreviewPanel())
-  await step('initNodeCanvas', () => initNodeCanvas())
-
-  await step('initAssetLibrary', () => initAssetLibrary())
-  await step('initPackPickers', () => initPackPickers())
-
-  await step('initViewTabs', () => initViewTabs())
-  await step('initCtxMenu', () => initCtxMenu())
+  await Promise.all([
+    step('initPreview2D', () => initPreview2D()),
+    step('initPreviewPanel', () => initPreviewPanel()),
+    step('initNodeCanvas', () => initNodeCanvas()),
+    step('initAssetLibrary', () => initAssetLibrary()),
+  ])
 
   const cfg = (await step('getConfig', () => window.api.getConfig())) || {}
 

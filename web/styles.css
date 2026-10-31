@@ -6132,3 +6132,22 @@ input[type='color'].m3d-color-input:hover,
 .mc-tex-row.row-diff .mc-tex-name {
   color: var(--warn);
 }
+/* 大列表渲染优化：content-visibility:auto 让浏览器跳过屏幕外行的 paint/layout，
+   显著降低大列表的重排重绘开销。contain-intrinsic-size 提供占位尺寸避免滚动条跳动。
+   不支持的浏览器自动忽略，无副作用。 */
+.asset-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 220px;
+}
+.model-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 220px;
+}
+.mc-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 220px;
+}
+.mc-tex-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 40px;
+}
