@@ -12,11 +12,19 @@ let _imgW = (...a) => undefined
 let _imgH = (...a) => undefined
 
 /* 模块状态：只读用 getter；可写用 get/set 成对（§2.2） */
+let _get_labelRight = () => undefined
+let _get_labelLeft = () => undefined
+let _get_meshRight = () => undefined
+let _get_meshLeft = () => undefined
 let _get_initialized = () => undefined
 let _get_customModelGroup = () => undefined
 let _get_sourceSide = () => undefined
 
 export function setHooks(h) {
+  if (h.get_labelRight) _get_labelRight = h.get_labelRight
+  if (h.get_labelLeft) _get_labelLeft = h.get_labelLeft
+  if (h.get_meshRight) _get_meshRight = h.get_meshRight
+  if (h.get_meshLeft) _get_meshLeft = h.get_meshLeft
   if (h.imgW) _imgW = h.imgW
   if (h.imgH) _imgH = h.imgH
   if (h.get_initialized) _get_initialized = h.get_initialized
@@ -118,29 +126,29 @@ export function applySourceSide() {
   if (_get_customModelGroup()) return
 
   if (_get_sourceSide() === 'dual') {
-    meshLeft.visible = true
-    meshRight.visible = true
-    meshLeft.position.x = -1.1
-    meshRight.position.x = 1.1
-    meshLeft.scale.setScalar(0.75)
-    meshRight.scale.setScalar(0.75)
-    labelLeft.visible = true
-    labelRight.visible = true
-    labelLeft.position.set(-1.1, -0.95, 0)
-    labelRight.position.set(1.1, -0.95, 0)
+    _get_meshLeft().visible = true
+    _get_meshRight().visible = true
+    _get_meshLeft().position.x = -1.1
+    _get_meshRight().position.x = 1.1
+    _get_meshLeft().scale.setScalar(0.75)
+    _get_meshRight().scale.setScalar(0.75)
+    _get_labelLeft().visible = true
+    _get_labelRight().visible = true
+    _get_labelLeft().position.set(-1.1, -0.95, 0)
+    _get_labelRight().position.set(1.1, -0.95, 0)
   } else if (_get_sourceSide() === 'left') {
-    meshLeft.visible = true
-    meshRight.visible = false
-    meshLeft.position.x = 0
-    meshLeft.scale.setScalar(1.0)
-    labelLeft.visible = false
-    labelRight.visible = false
+    _get_meshLeft().visible = true
+    _get_meshRight().visible = false
+    _get_meshLeft().position.x = 0
+    _get_meshLeft().scale.setScalar(1.0)
+    _get_labelLeft().visible = false
+    _get_labelRight().visible = false
   } else {
-    meshLeft.visible = false
-    meshRight.visible = true
-    meshRight.position.x = 0
-    meshRight.scale.setScalar(1.0)
-    labelLeft.visible = false
-    labelRight.visible = false
+    _get_meshLeft().visible = false
+    _get_meshRight().visible = true
+    _get_meshRight().position.x = 0
+    _get_meshRight().scale.setScalar(1.0)
+    _get_labelLeft().visible = false
+    _get_labelRight().visible = false
   }
 }

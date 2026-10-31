@@ -2648,5 +2648,9 @@ setGeoUtilsHooks({
   imgH: imgH,
   get_initialized: () => initialized,
   get_customModelGroup: () => customModelGroup,
-  get_sourceSide: () => sourceSide
+  get_sourceSide: () => sourceSide,
+  get_meshLeft: () => meshLeft,
+  get_meshRight: () => meshRight,
+  get_labelLeft: () => labelLeft,
+  get_labelRight: () => labelRight
 })
