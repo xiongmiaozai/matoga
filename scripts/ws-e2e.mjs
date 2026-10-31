@@ -39,7 +39,7 @@ function makePair(n) {
 }
 
 function runCase(name, fn) {
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     const ws = new WebSocket(URL)
     const events = []
     let done = false
@@ -52,17 +52,24 @@ function runCase(name, fn) {
     }, 15000)
 
     ws.on('open', () => fn(ws, events))
-    ws.on('message', (raw) => {
+    ws.on('message', raw => {
       let m
-      try { m = JSON.parse(raw) } catch { return }
+      try {
+        m = JSON.parse(raw)
+      } catch {
+        return
+      }
       events.push(m)
       if (m.type === 'done') {
         done = true
         clearTimeout(timer)
-        setTimeout(() => { ws.close(); resolve({ name, events }) }, 100)
+        setTimeout(() => {
+          ws.close()
+          resolve({ name, events })
+        }, 100)
       }
     })
-    ws.on('error', (e) => {
+    ws.on('error', e => {
       clearTimeout(timer)
       console.log(`  [${name}] 连接错误: ${e.message}`)
       resolve({ name, events })
@@ -74,21 +81,23 @@ function runCase(name, fn) {
   console.log(`  临时目录: ${tmp}\n`)
 
   // 1. 正常批量复制
-  const r1 = await runCase('正常复制', (ws) => {
+  const r1 = await runCase('正常复制', ws => {
     ws.send(JSON.stringify({ type: 'sync', jobId: 'j1', pairs: [makePair(1), makePair(2), makePair(3)] }))
   })
-  const prog1 = r1.events.filter((e) => e.type === 'progress')
-  const done1 = r1.events.find((e) => e.type === 'done')
+  const prog1 = r1.events.filter(e => e.type === 'progress')
+  const done1 = r1.events.find(e => e.type === 'done')
   console.log(`  1) 正常复制: progress=${prog1.length} done.ok=${done1 && done1.ok} done.fail=${done1 && done1.fail}`)
-  console.log(`     进度序列: ${prog1.map((p) => `${p.current}/${p.total}:${p.status}${p.error ? '(' + p.error + ')' : ''}`).join(' → ')}`)
-  const filesOk = [1, 2, 3].every((n) => fs.existsSync(path.join(tmp, `dst${n}.txt`)))
+  console.log(
+    `     进度序列: ${prog1.map(p => `${p.current}/${p.total}:${p.status}${p.error ? '(' + p.error + ')' : ''}`).join(' → ')}`
+  )
+  const filesOk = [1, 2, 3].every(n => fs.existsSync(path.join(tmp, `dst${n}.txt`)))
   console.log(`     目标文件全部生成: ${filesOk ? '是 ✓' : '否 ✗'}`)
 
   // 2. 空 pairs
-  const r2 = await runCase('空pairs', (ws) => {
+  const r2 = await runCase('空pairs', ws => {
     ws.send(JSON.stringify({ type: 'sync', jobId: 'j2', pairs: [] }))
   })
-  const d2 = r2.events.find((e) => e.type === 'done')
+  const d2 = r2.events.find(e => e.type === 'done')
   console.log(`  2) 空 pairs: error=${d2 && d2.error}`)
 
   // 3. 取消：任务必须够慢才能观察到中断。
@@ -105,34 +114,38 @@ function runCase(name, fn) {
     ws.send(JSON.stringify({ type: 'sync', jobId: 'j3', pairs }))
     // 第一条 progress 到达就取消
     const iv = setInterval(() => {
-      if (events.some((e) => e.type === 'progress')) {
+      if (events.some(e => e.type === 'progress')) {
         clearInterval(iv)
         ws.send(JSON.stringify({ type: 'cancel', jobId: 'j3' }))
       }
     }, 2)
   })
-  const d3 = r3.events.find((e) => e.type === 'done')
-  const p3 = r3.events.filter((e) => e.type === 'progress')
+  const d3 = r3.events.find(e => e.type === 'done')
+  const p3 = r3.events.filter(e => e.type === 'progress')
   console.log(`  3) 取消: cancelled=${d3 && d3.cancelled} 已处理=${d3 && d3.ok} 共200项`)
-  console.log(`     取消生效判据: cancelled=true 且 已处理 < 200 → ${d3 && d3.cancelled && d3.ok < 200 ? '通过 ✓' : '未通过'}`)
+  console.log(
+    `     取消生效判据: cancelled=true 且 已处理 < 200 → ${d3 && d3.cancelled && d3.ok < 200 ? '通过 ✓' : '未通过'}`
+  )
 
   // 4. 坏 JSON 后仍能正常通信
-  const r4 = await runCase('坏JSON', (ws) => {
+  const r4 = await runCase('坏JSON', ws => {
     ws.send('这不是 JSON{{{')
     setTimeout(() => ws.send(JSON.stringify({ type: 'sync', jobId: 'j4', pairs: [makePair(99)] })), 100)
   })
-  const d4 = r4.events.find((e) => e.type === 'done')
+  const d4 = r4.events.find(e => e.type === 'done')
   console.log(`  4) 坏JSON后续仍工作: done.ok=${d4 && d4.ok}`)
 
   // 5. 备份
-  const r5 = await runCase('带备份', (ws) => {
+  const r5 = await runCase('带备份', ws => {
     const p = makePair(50)
     fs.writeFileSync(p.dest, 'old-content')
     p.backup = p.dest
     ws.send(JSON.stringify({ type: 'sync', jobId: 'j5', pairs: [p] }))
   })
-  const prog5 = r5.events.filter((e) => e.type === 'progress')
-  console.log(`  5) 带备份: status=${prog5[0] && prog5[0].status} backupPath=${prog5[0] && prog5[0].backupPath ? '有 ✓' : '无'}`)
+  const prog5 = r5.events.filter(e => e.type === 'progress')
+  console.log(
+    `  5) 带备份: status=${prog5[0] && prog5[0].status} backupPath=${prog5[0] && prog5[0].backupPath ? '有 ✓' : '无'}`
+  )
 
   fs.rmSync(tmp, { recursive: true, force: true })
   console.log('\n  测试完成')
