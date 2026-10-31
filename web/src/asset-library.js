@@ -45,6 +45,9 @@ import { splitGroupsByPrefix } from './model-prefix.js'
 import { openCreateModelDialog, previewCustomModel } from './create-model-dialog.js'
 import { openCreatePackDialog } from './create-pack-dialog.js'
 import { openImportPackDialog } from './import-pack-dialog.js'
+import { packEntryRawUrl, isAddableAssetPath, isModelBrowsePath, pbLoadView, pbSaveView, openPackBrowser, browseTo, browseUp, exitBrowse, browseCrumbs, buildBrowseHead, buildBrowseCrumbsBar, buildBrowseToolbar, setBrowseStatus, browseEntryPath, buildBrowseFolderCard, buildBrowseFileRow, fillBrowseError, fillBrowseView, renderBrowse, setHooks as setAssetBrowseHooks } from './asset-lib/browse.js'
+/* 门面 re-export（§2.3） */
+export { packEntryRawUrl, isAddableAssetPath, isModelBrowsePath, pbLoadView, pbSaveView, openPackBrowser, browseTo, browseUp, exitBrowse, browseCrumbs, buildBrowseHead, buildBrowseCrumbsBar, buildBrowseToolbar, setBrowseStatus, browseEntryPath, buildBrowseFolderCard, buildBrowseFileRow, fillBrowseError, fillBrowseView, renderBrowse } from './asset-lib/browse.js'
 
 const PRESETS = [
   { id: 'metal', color: '#c8c8d0' },
@@ -1685,380 +1688,7 @@ async function renameOfficialAsset(item, byVersion) {
 
 /* ── 包内容浏览（文件管理器式，在总资产库面板内切换视图） ──── */
 
-function packEntryRawUrl(packName, relPath) {
-  return packRawUrl(browse ? browse.api : MC_OFFICIAL_API, packName, relPath)
-}
-
-function isAddableAssetPath(p) {
-  return p === 'pack.png' || p.startsWith('assets/')
-}
-
 /* 包浏览中的模型文件判定：assets/<ns>/models/** 下的 .json */
-function isModelBrowsePath(rel) {
-  return typeof rel === 'string' && MODEL_DIR_PATH_RE.test(rel) && MODEL_JSON_RE.test(rel)
-}
-
-function pbLoadView() {
-  try {
-    const v = localStorage.getItem('matoga:pbView')
-    return v === 'grid' || v === 'list' ? v : 'list'
-  } catch {
-    return 'list'
-  }
-}
-
-function pbSaveView(v) {
-  try {
-    localStorage.setItem('matoga:pbView', v)
-  } catch {}
-}
-
-function openPackBrowser(item) {
-  const list = item.type === 'mc' ? mcEntries : item.type === 'official' ? officialEntries : null
-  const pack = item.pack || (list || []).find(p => p.fullPath === item.path) || null
-  browse = { item, pack, dir: null, view: pbLoadView(), filter: '', data: null, api: packApiFor(item.type) }
-  renderBrowse()
-}
-
-function browseTo(dir) {
-  if (!browse) return
-  browse.dir = dir
-  browse.filter = ''
-  browse.data = null
-  renderBrowse()
-}
-
-function browseUp() {
-  if (!browse || !browse.dir) return
-  const idx = browse.dir.lastIndexOf('/')
-  browse.dir = idx >= 0 ? browse.dir.slice(0, idx) : null
-  browse.filter = ''
-  browse.data = null
-  renderBrowse()
-}
-
-function exitBrowse() {
-  browse = null
-  browseSeq++
-  const search = document.getElementById('assetLibSearch')
-  if (search) search.disabled = false
-  const toolbar = document.getElementById('assetLibToolbar')
-  if (toolbar) toolbar.classList.remove('pb-off')
-  rebuild()
-}
-
-function browseCrumbs() {
-  const crumbs = [{ name: browse.item.name, dir: null }]
-  if (browse.dir) {
-    const segs = browse.dir.split('/')
-    segs.forEach((s, i) => crumbs.push({ name: s, dir: segs.slice(0, i + 1).join('/') }))
-  }
-  return crumbs
-}
-
-function buildBrowseHead(item, pack, kind) {
-  const head = el('div', 'pb-top')
-  const back = el('button', 'pb-back', '<svg class="ico"><use href="#i-chevron-left"/></svg>')
-  back.title = t('asset.browseBack')
-  back.addEventListener('click', exitBrowse)
-  head.appendChild(back)
-
-  const logo = el('div', 'pb-logo')
-  const logoImg = el('img')
-  logoImg.alt = ''
-  logoImg.loading = 'lazy'
-  logoImg.src = packEntryRawUrl(item.name, 'pack.png')
-  logoImg.addEventListener('error', () => {
-    logo.innerHTML = '<svg class="ico"><use href="#i-box"/></svg>'
-  })
-  logo.appendChild(logoImg)
-  logo.title = item.name
-  head.appendChild(logo)
-
-  const title = el('div', 'pb-title')
-  title.appendChild(el('span', 'pb-name', item.name))
-  if (item.badge || (pack && officialBadge(pack))) {
-    title.appendChild(el('span', 'pb-badge', item.badge || officialBadge(pack)))
-  }
-  head.appendChild(title)
-  head.appendChild(el('span', 'pb-kind', kind === 'zip' ? 'ZIP' : kind === 'dir' ? t('asset.officialKindDir') : ''))
-
-  const meta = el('div', 'pb-meta')
-  if (pack) {
-    if (pack.description) meta.appendChild(el('div', 'pb-desc', pack.description))
-    const stats = el('div', 'pb-stats')
-    const stat = (label, value) => {
-      if (value == null || value === '') return
-      stats.appendChild(el('span', 's', `<b>${label}</b> ${value}`))
-    }
-    stat(t('asset.detailMcVersion'), pack.formatRange || (pack.format != null ? 'pack_format ' + pack.format : null))
-    stat(t('asset.detailPackFormat'), pack.formatLabel || (pack.format != null ? String(pack.format) : null))
-    stat(t('asset.detailPackTexCount'), pack.textureCount != null ? String(pack.textureCount) : null)
-    if (stats.childNodes.length) meta.appendChild(stats)
-  }
-  head.appendChild(meta)
-  return head
-}
-
-function buildBrowseCrumbsBar() {
-  const bar = el('div', 'pb-crumbs')
-  const crumbs = browseCrumbs()
-  crumbs.forEach((c, i) => {
-    if (i > 0) bar.appendChild(el('span', 'pb-sep', '›'))
-    const cur = i === crumbs.length - 1
-    const btn = el('button', 'pb-crumb' + (cur ? ' cur' : ''), c.name)
-    btn.title = c.dir || browse.item.name
-    if (!cur) btn.addEventListener('click', () => browseTo(c.dir))
-    bar.appendChild(btn)
-  })
-  return bar
-}
-
-function buildBrowseToolbar() {
-  const bar = el('div', 'pb-toolbar')
-  const up = el('button', 'pb-up', '<svg class="ico"><use href="#i-arrow-up"/></svg>')
-  up.title = t('asset.browseUp')
-  if (!browse || !browse.dir) up.disabled = true
-  else up.addEventListener('click', browseUp)
-  bar.appendChild(up)
-  bar.appendChild(buildBrowseCrumbsBar())
-
-  const tools = el('div', 'pb-tools')
-  const filterWrap = el('div', 'pb-filter-wrap')
-  filterWrap.innerHTML = '<svg class="ico"><use href="#i-search"/></svg>'
-  const filter = el('input', 'pb-filter')
-  filter.type = 'search'
-  filter.placeholder = t('asset.browseFilterPh')
-  filter.value = browse ? browse.filter : ''
-  filter.addEventListener('input', () => {
-    if (!browse) return
-    browse.filter = filter.value
-    if (browse.data) fillBrowseView(browse.item, browse.pack, browse.data)
-  })
-  filterWrap.appendChild(filter)
-  tools.appendChild(filterWrap)
-
-  const seg = el('div', 'pb-viewseg')
-  const mkViewBtn = (mode, icon, titleKey) => {
-    const b = el(
-      'button',
-      'pb-vbtn' + (browse && browse.view === mode ? ' active' : ''),
-      `<svg class="ico"><use href="#i-${icon}"/></svg>`
-    )
-    b.title = t(titleKey)
-    b.dataset.view = mode
-    b.addEventListener('click', () => {
-      if (!browse || browse.view === mode) return
-      browse.view = mode
-      pbSaveView(mode)
-      seg.querySelectorAll('.pb-vbtn').forEach(x => x.classList.toggle('active', x.dataset.view === mode))
-      if (browse.data) fillBrowseView(browse.item, browse.pack, browse.data)
-    })
-    return b
-  }
-  seg.appendChild(mkViewBtn('list', 'list', 'asset.browseViewList'))
-  seg.appendChild(mkViewBtn('grid', 'grid', 'asset.browseViewGrid'))
-  tools.appendChild(seg)
-  bar.appendChild(tools)
-  return bar
-}
-
-function setBrowseStatus(text) {
-  const st = document.querySelector('.pack-browser .pb-status')
-  if (st) st.textContent = text
-}
-
-function browseEntryPath(name) {
-  return browse && browse.dir ? browse.dir + '/' + name : name
-}
-
-function buildBrowseFolderCard(d) {
-  const f = el('div', 'pb-folder')
-  f.innerHTML = '<svg class="ico"><use href="#i-folder"/></svg>'
-  f.appendChild(el('span', 'fn', d.name))
-  f.appendChild(el('span', 'pb-farrow', '<svg class="ico"><use href="#i-chevron-right"/></svg>'))
-  const dir = browseEntryPath(d.name)
-  f.title = dir
-  f.addEventListener('dblclick', e => {
-    e.preventDefault()
-    browseTo(dir)
-  })
-  f.addEventListener('click', () => {
-    document.querySelectorAll('.pack-browser .pb-folder.sel').forEach(x => x.classList.remove('sel'))
-    document.querySelectorAll('.pack-browser .pb-file.sel').forEach(x => x.classList.remove('sel'))
-    f.classList.add('sel')
-    setBrowseStatus(dir + ' · ' + t('asset.officialKindDir'))
-  })
-  return f
-}
-
-function buildBrowseFileRow(item, pack, file, grid) {
-  const rel = browseEntryPath(file.name)
-  const isImgFile = IMG_EXTS.has((file.name.split('.').pop() || '').toLowerCase())
-  const isModelFile = isModelBrowsePath(rel)
-  const addable = (isImgFile || isModelFile) && isAddableAssetPath(rel)
-  const row = el('div', 'pb-file' + (grid ? ' card' : ''))
-  const th = el('div', 'pf-thumb')
-  if (isImgFile) {
-    const img = el('img')
-    img.loading = 'lazy'
-    img.alt = ''
-    img.src = packEntryRawUrl(item.name, rel)
-    img.addEventListener('error', () => {
-      th.innerHTML = '<svg class="ico"><use href="#i-file"/></svg>'
-    })
-    th.appendChild(img)
-  } else if (isModelFile) {
-    th.classList.add('model')
-    th.innerHTML = '<svg class="ico"><use href="#i-cube"/></svg>'
-  } else {
-    th.innerHTML = '<svg class="ico"><use href="#i-file"/></svg>'
-  }
-  row.appendChild(th)
-  row.appendChild(el('span', 'fn', file.name))
-  row.appendChild(el('span', 'fs', file.size ? formatSize(file.size) : ''))
-  const addHint = isModelFile ? t('asset.browseAddModel') : t('asset.browseAddTex')
-  row.title = rel + (file.size ? ' · ' + formatSize(file.size) : '') + (addable ? ' · ' + addHint : '')
-
-  if (addable) {
-    const add = el('button', 'pf-add', '<svg class="ico"><use href="#i-plus"/></svg>')
-    add.title = addHint
-    add.addEventListener('click', e => {
-      e.stopPropagation()
-      if (isModelFile) {
-        pushRecent(item)
-        viewMcModelAsset(item.type, item.name, rel, file.name)
-        return
-      }
-      const p = pack || { name: item.name }
-      pushRecent(item)
-      addPackTextureToCanvas(item, p, { path: rel, name: file.name })
-    })
-    row.appendChild(add)
-  }
-  row.addEventListener('click', () => {
-    document.querySelectorAll('.pack-browser .pb-folder.sel').forEach(x => x.classList.remove('sel'))
-    document.querySelectorAll('.pack-browser .pb-file.sel').forEach(x => x.classList.remove('sel'))
-    row.classList.add('sel')
-    setBrowseStatus(row.title)
-  })
-  row.addEventListener('dblclick', e => {
-    e.preventDefault()
-    if (isModelFile && isAddableAssetPath(rel)) {
-      pushRecent(item)
-      viewMcModelAsset(item.type, item.name, rel, file.name)
-      return
-    }
-    if (!isImgFile || !isAddableAssetPath(rel)) {
-      showToast(t('asset.toastFileNotAddable'))
-      return
-    }
-    const p = pack || { name: item.name }
-    pushRecent(item)
-    addPackTextureToCanvas(item, p, { path: rel, name: file.name })
-  })
-  return row
-}
-
-function fillBrowseError(item, pack, msg) {
-  const list = document.querySelector('.pack-browser .pb-list')
-  if (!list) return
-  list.innerHTML = ''
-  const hint = el('div', 'asset-lib-hint error', t('asset.loadFailed', { msg }))
-  const retry = el('button', 'asset-lib-sec-btn', t('asset.browseRetry'))
-  retry.addEventListener('click', () => renderBrowse())
-  hint.appendChild(document.createElement('br'))
-  hint.appendChild(retry)
-  list.appendChild(hint)
-  setBrowseStatus(t('asset.loadFailed', { msg }))
-}
-
-function fillBrowseView(item, pack, data) {
-  const list = document.querySelector('.pack-browser .pb-list')
-  if (!list) return
-  list.innerHTML = ''
-  const kindEl = document.querySelector('.pack-browser .pb-kind')
-  if (kindEl) kindEl.textContent = data.kind === 'zip' ? 'ZIP' : t('asset.officialKindDir')
-
-  const term = browse && browse.filter ? browse.filter.trim() : ''
-  const enCands = term ? enCandidatesOfZh(term) : []
-  const match = (name, zh, pinyin) =>
-    assetSearchMatch(String(name).toLowerCase(), (zh || '').toLowerCase(), (pinyin || '').toLowerCase(), enCands, term)
-  const dirs = (data.dirs || []).filter(d => match(d.name))
-  const files = (data.files || []).filter(f => {
-    const item = { path: f.path, name: f.name }
-    return match(f.name, zhOfItem(item), pinyinOfItem(item))
-  })
-  const total = dirs.length + files.length
-  const unfiltered = (data.dirs || []).length + (data.files || []).length
-
-  if (!total) {
-    list.appendChild(el('div', 'pb-empty', term ? t('asset.browseNoMatch') : t('asset.browseEmptyDir')))
-  } else {
-    if (dirs.length) {
-      const fg = el('div', 'pb-folders')
-      for (const d of dirs) fg.appendChild(buildBrowseFolderCard(d))
-      list.appendChild(fg)
-    }
-    if (files.length) {
-      const grid = browse && browse.view === 'grid'
-      const fl = el('div', grid ? 'pb-tex-grid' : 'pb-files')
-      for (const f of files) fl.appendChild(buildBrowseFileRow(item, pack, f, grid))
-      list.appendChild(fl)
-    }
-    if (data.truncated) {
-      const more = el('div', 'pb-empty', t('asset.browseTruncated', { n: String(data.total) }))
-      list.appendChild(more)
-    }
-  }
-  const stat = document.querySelector('.asset-lib-stat')
-  if (stat) stat.textContent = t('asset.statTotal', { n: String(total) })
-
-  const parts = []
-  if (dirs.length) parts.push(t('asset.browseStatDirs', { n: String(dirs.length) }))
-  if (files.length) parts.push(t('asset.browseStatFiles', { n: String(files.length) }))
-  let status = parts.join(' · ') || t('asset.browseEmptyDir')
-  if (term && total !== unfiltered) {
-    status += ' · ' + t('asset.browseFiltered', { n: String(total), total: String(unfiltered) })
-  }
-  status += ' — ' + t('asset.browseHint')
-  setBrowseStatus(status)
-}
-
-async function renderBrowse() {
-  const body = document.getElementById('assetLibraryBody')
-  if (!body || !browse) return
-  const search = document.getElementById('assetLibSearch')
-  if (search) search.disabled = true
-  const toolbar = document.getElementById('assetLibToolbar')
-  if (toolbar) toolbar.classList.add('pb-off')
-  const seq = ++browseSeq
-  const { item, pack, dir, api } = browse
-
-  body.scrollTop = 0
-  body.innerHTML = ''
-  const view = el('div', 'pack-browser')
-  view.appendChild(buildBrowseHead(item, pack, null))
-  view.appendChild(buildBrowseToolbar())
-  const list = el('div', 'pb-list')
-  list.appendChild(el('div', 'pb-loading', t('asset.browseLoading')))
-  view.appendChild(list)
-  view.appendChild(el('div', 'pb-status', t('asset.browseLoading')))
-  body.appendChild(view)
-
-  let data
-  try {
-    const q = dir ? '?dir=' + encodeURIComponent(dir) : ''
-    data = await assetApiCall('GET', api + '/' + encodeURIComponent(item.name) + '/entries' + q)
-  } catch (e) {
-    if (seq === browseSeq && browse) fillBrowseError(item, pack, e.message)
-    return
-  }
-  if (seq !== browseSeq || !browse) return
-  browse.data = data
-  fillBrowseView(item, pack, data)
-}
-
 async function loadProjects() {
   try {
     const data = await assetApiCall('GET', PROJECTS_API)
@@ -3014,3 +2644,26 @@ export function initAssetLibrary() {
   refreshAssetLibrary()
   startPoll()
 }
+
+
+/* AssetBrowse 依赖注入 */
+setAssetBrowseHooks({
+  packRawUrl: packRawUrl,
+  packApiFor: packApiFor,
+  rebuild: rebuild,
+  el: el,
+  officialBadge: officialBadge,
+  pushRecent: pushRecent,
+  viewMcModelAsset: viewMcModelAsset,
+  addPackTextureToCanvas: addPackTextureToCanvas,
+  assetApiCall: assetApiCall,
+  get_MC_OFFICIAL_API: () => MC_OFFICIAL_API,
+  get_MODEL_DIR_PATH_RE: () => MODEL_DIR_PATH_RE,
+  get_MODEL_JSON_RE: () => MODEL_JSON_RE,
+  get_mcEntries: () => mcEntries,
+  get_officialEntries: () => officialEntries,
+  get_browse: () => browse,
+  set_browse: v => { browse = v },
+  get_browseSeq: () => browseSeq,
+  set_browseSeq: v => { browseSeq = v }
+})
