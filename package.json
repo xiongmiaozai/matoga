@@ -1,6 +1,6 @@
 {
   "name": "matoga",
-  "version": "3.2.0",
+  "version": "3.3.0",
   "description": "材质贴图对比工具 - 本地 Web 服务版（B/S 架构）",
   "main": "electron/main.js",
   "workspaces": [
