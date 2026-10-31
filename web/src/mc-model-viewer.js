@@ -32,6 +32,9 @@ import {
 import { t as _t } from './i18n.js'
 import { fileUrl, apiUrl, joinPath } from './url-utils.js'
 import { defaultFaceUv, resolveItemDefRefs, MAX_ITEM_DEF_DEPTH } from './mcv/geometry.js'
+import { rawUrl, texCacheKey, fetchJson, fetchOkData, parentModelPath, setHooks as setMcvPathsHooks } from './mcv/paths.js'
+/* 门面 re-export：这些函数原为本地 export，搬走后仍须从本文件对外可见 */
+export { rawUrl, texCacheKey, fetchJson, fetchOkData, parentModelPath } from './mcv/paths.js'
 
 /* 门面 re-export：这两个函数原为本地导出，搬到 mcv/geometry.js 后仍须从本模块
    对外可见，否则外部 import 拿到 undefined（曾导致 5 个单测失败）。 */
@@ -224,53 +227,8 @@ let lastRenderFn = null /* 供生物群系切换后重渲染（单模型/对比�
 /* 资源 raw URL 构造：包模式走 /api/pack/<name>/raw?path=<rel>（any=1 放行 .mcmeta 等扩展）；
     文件根模式（对比结果等任意文件夹）走 /api/file/raw?path=<join(root,rel)>（file 接口直接读任意路径，无需 any）；
     扩展引用（data:/file:/URL）直接可加载，原样返回 */
-function rawUrl(api, packName, rel, fileRoot, any) {
-  if (isSpecialTexPath(rel)) {
-    if (/^file:/i.test(rel)) return fileUrl(rel.replace(/^file:/i, ''))
-    return rel
-  }
-  if (fileRoot) return fileUrl(joinPath(fileRoot, rel))
-  const q = any ? '&any=1' : ''
-  return apiUrl(`${api}/${encodeURIComponent(packName)}/raw?path=${encodeURIComponent(rel)}${q}`)
-}
-
 /* 贴图缓存键：包模式与文件根模式命名空间隔离，避免对比场景与包场景贴图混缓存 */
-function texCacheKey(api, packName, texPath, fileRoot) {
-  if (isSpecialTexPath(texPath)) return 'sp:' + texPath
-  return fileRoot ? `file:${fileRoot}:${texPath}` : `${api}:${packName}:${texPath}`
-}
-
-async function fetchJson(url) {
-  const res = await fetch(url)
-  if (!res.ok) throw new Error('HTTP ' + res.status)
-  const j = await res.json()
-  /* raw 接口失败响应为 200 + {ok:false} 包裹（fail() 不改状态码）：显式判定失败，
-     否则错误对象被当作模型 JSON 使用 → parent 链静默丢失 elements/textures */
-  if (j && j.ok === false) throw new Error((j && j.msg) || 'bad response')
-  return j
-}
-
-async function fetchOkData(path) {
-  const res = await fetch(apiUrl(path))
-  const j = await res.json()
-  if (!j || !j.ok) throw new Error((j && j.msg) || 'bad response')
-  return j.data
-}
-
 /* parent 引用 → 包内模型路径："minecraft:block/cube" / "block/cube" → assets/minecraft/models/block/cube.json */
-export function parentModelPath(parent) {
-  if (typeof parent !== 'string' || !parent) return null
-  let ns = 'minecraft',
-    rest = parent
-  const ci = parent.indexOf(':')
-  if (ci >= 0) {
-    ns = parent.slice(0, ci)
-    rest = parent.slice(ci + 1)
-  }
-  if (!rest) return null
-  return `assets/${ns}/models/${rest}.json`
-}
-
 /* 贴图引用 → 包内贴图路径："minecraft:block/stone" → assets/minecraft/textures/block/stone.png；
     引用已带图片扩展名（社区包写法）不再追加，防 stone.png.png */
 const TEX_REF_EXT_RE = /\.(png|jpe?g|webp|gif|bmp|tiff?|avif)$/i
@@ -2077,3 +2035,6 @@ export async function viewCustomModelInViewport({ id, api, packName }) {
 export function isViewportVisible() {
   return hasVisibleViewport()
 }
+
+/* 路径工具模块的依赖注入 */
+setMcvPathsHooks({ isSpecialTexPath })
