@@ -37,6 +37,9 @@ import { applyItemTransformation, getOfficialPack, parseAnimMeta, animFrameIndex
 import { clamp01, colormapRel, loadColormapData, sampleColormap, resolveTintColor, infer2dTintType, sampleTintForTexture, textureAssetPath, loadTextureCached, setHooks as setTexToolsHooks } from './mcv/tex-tools.js'
 import { packRelToMcRef, texUrlToRef, resolveMcModelRaw, borrowTemplateTextures, parseUv, applyFaceUvs, setHooks as setTexRefToolsHooks } from './mcv/tex-ref-tools.js'
 import { isSpecialTexPath, texPathForRef, writeMcTexRef, resolveTextureRef, expandTextureAliases, resolveMcModel, isItemDefPath, texturesHasConcreteRef, hasUnresolvedTexRefs, shulkerBoxEntityTexRef, resolveMcModelAsset, setHooks as setAssetResolveHooks } from './mcv/asset-resolve.js'
+import { parseVec3, expandElementFaces, packMcmetaUrl, normFaceRotation, texDisplayName, buildMcLayout, buildBbLayout, setHooks as setLayoutBuildHooks } from './mcv/layout-build.js'
+/* 门面 re-export（§2.3） */
+export { parseVec3, expandElementFaces, packMcmetaUrl, normFaceRotation, texDisplayName, buildMcLayout, buildBbLayout } from './mcv/layout-build.js'
 /* 门面 re-export（§2.3） */
 export { isSpecialTexPath, texPathForRef, writeMcTexRef, resolveTextureRef, expandTextureAliases, resolveMcModel, isItemDefPath, texturesHasConcreteRef, hasUnresolvedTexRefs, shulkerBoxEntityTexRef, resolveMcModelAsset } from './mcv/asset-resolve.js'
 /* 门面 re-export（§2.3） */
@@ -255,15 +258,6 @@ export function isPartsEmptyModel(parts) {
    顶点变换 T + L*(S*(R*v))——外层 position/quaternion 承载 T/L，scale 承载 S，
    right_rotation 非单位四元数时经内层 Group 承载 R（保持与 vanilla 组合顺序一致）。
    负 scale（镜像）翻转三角绕序，材质置 DoubleSide 防背面剔除消失 */
-function parseVec3(v, fallback) {
-  if (Array.isArray(v) && v.length >= 3 && v.every(n => Number.isFinite(+n))) return [+v[0], +v[1], +v[2]]
-  if (typeof v === 'string') {
-    const a = v.split(',').map(s => +s.trim())
-    if (a.length >= 3 && a.every(n => Number.isFinite(n))) return a.slice(0, 3)
-  }
-  return fallback
-}
-
 /* face.rotation（0/90/180/270，顺时针）：几何四角 [TL,TR,BL,BR] 的采样角随之轮转
    （贴图顺时针转 90° 后，原 BL 像素显示在几何 TL 位置：TL←BL, TR←TL, BL←BR, BR←TR） */
 const FACE_ROT_ORDER = {
@@ -308,15 +302,6 @@ function applyElementTransform(mesh, el, center) {
 }
 
 /* faces "all" 简写展开（bbmodel / 社区模型）：复制到未定义的方向面（不改原对象） */
-function expandElementFaces(el) {
-  let faces = el && el.faces && typeof el.faces === 'object' ? el.faces : {}
-  if (faces.all && typeof faces.all === 'object') {
-    faces = { ...faces }
-    for (const k of FACE_KEYS) if (!faces[k]) faces[k] = faces.all
-  }
-  return faces
-}
-
 /* 通用构建：elements（MC 或 bbmodel Cube）→ THREE.Group
     matFor(faceKey, faceDef, el) 返回该面材质（null/undefined → 隐藏面） */
 export function buildModelGroup(elements, matFor, uvScale = 16) {
@@ -535,11 +520,6 @@ export function unloadTextureAnim(tex) {
 }
 
 /* 贴图同目录动画元数据 URL（raw 接口 any=1 放行 .mcmeta 扩展名）；扩展引用无动画元数据 */
-function packMcmetaUrl(api, packName, texPath, fileRoot) {
-  if (isSpecialTexPath(texPath)) return null
-  return rawUrl(api, packName, texPath + '.mcmeta', fileRoot, true)
-}
-
 /* MC 面材质：faces[key].texture（"#ref" / "ns:path"）→ 包内贴图；引用缺失用占位材质。
     贴图异步加载完成后写入 mat.map（mcmeta 请求与贴图并行，动画贴图先配好帧采样再挂载）；
     失败置 mat.userData.texFailed。
@@ -742,65 +722,9 @@ export function bbMatFor(bbTextures, cachePrefix, withParallax = false) {
      elements: [{ faces: { [face]: { tex, uv:[x1,y1,x2,y2], rotation, mirror } } }]
    }  uv 为贴图像素坐标（v 自顶向下），mirror = uv[2] < uv[0] 水平镜像采样 */
 
-function normFaceRotation(rot) {
-  return Number.isFinite(+rot) ? (((Math.round(+rot / 90) * 90) % 360) + 360) % 360 : 0
-}
-
-function texDisplayName(texPath) {
-  if (isSpecialTexPath(texPath)) {
-    /* 扩展引用显示名：data: → data / file: 与 URL → 取文件名去扩展 */
-    if (/^data:/i.test(texPath)) return 'data'
-    let raw = texPath
-    try {
-      if (/^file:/i.test(texPath)) raw = texPath.replace(/^file:/i, '')
-      else if (/^https?:\/\//i.test(texPath)) raw = new URL(texPath).pathname
-      else raw = decodeURIComponent(new URL(texPath, 'http://matoga.local').searchParams.get('path') || texPath)
-    } catch {}
-    return (String(raw).split('/').pop() || 'texture').replace(TEX_REF_EXT_RE, '')
-  }
-  return texPath.replace(/^assets\/[^/]+\/textures\//, '').replace(TEX_REF_EXT_RE, '')
-}
-
 /* MC elements + textures 表 → 布局（贴图去重：texPath → 索引）。
     texPaths：布局贴图索引 → 解析出的贴图路径（含扩展引用），供 UV 编辑器
     替换贴图时把新引用写回模型 textures 表（保存/导出持久化） */
-export function buildMcLayout(elements, textures, api, packName, fileRoot) {
-  const texList = []
-  const texPaths = []
-  const texIndex = new Map()
-  const texIndexOf = texPath => {
-    if (!texIndex.has(texPath)) {
-      texIndex.set(texPath, texList.length)
-      texList.push({
-        name: texDisplayName(texPath),
-        url: rawUrl(api, packName, texPath, fileRoot, false),
-        mcmetaUrl: packMcmetaUrl(api, packName, texPath, fileRoot)
-      })
-      texPaths.push(texPath)
-    }
-    return texIndex.get(texPath)
-  }
-  const outElements = []
-  const list = (Array.isArray(elements) ? elements : []).slice(0, MAX_ELEMENTS)
-  for (const el of list) {
-    if (!el || typeof el !== 'object') continue
-    const faces = expandElementFaces(el)
-    const from = parseVec3(el.from, [0, 0, 0])
-    const to = parseVec3(el.to, [16, 16, 16])
-    const out = {}
-    for (const key of FACE_KEYS) {
-      const face = faces[key]
-      if (!face || typeof face !== 'object' || typeof face.texture !== 'string') continue
-      const texPath = resolveTextureRef(textures, face.texture)
-      if (!texPath) continue
-      const uv = parseUv(face.uv) || defaultFaceUv(key, from, to) || [0, 0, 16, 16]
-      out[key] = { tex: texIndexOf(texPath), uv, rotation: normFaceRotation(face.rotation), mirror: uv[2] < uv[0] }
-    }
-    if (Object.keys(out).length) outElements.push({ faces: out, el })
-  }
-  return { type: 'mc', uvScale: 16, textures: texList, texPaths, elements: outElements }
-}
-
 /* item/generated sprite 回退布局：layer0 整幅贴图单面（spriteEl 为合成 element 引用，供贴图替换联动） */
 export function buildSpriteLayout(textures, api, packName, spriteEl, fileRoot) {
   textures = textures && typeof textures === 'object' ? textures : {}
@@ -825,39 +749,6 @@ export function buildSpriteLayout(textures, api, packName, spriteEl, fileRoot) {
 /* bbmodel → 布局（无效贴图项过滤但保持索引对齐：faces.texture 引用原始数组下标）。
     texOrigin：原始 json.textures 下标 → 布局贴图索引（-1 无效项），供 UV 编辑器
     把替换后的内嵌贴图（dataURL）写回原始 bbmodel JSON 保存 */
-export function buildBbLayout(json) {
-  json = json && typeof json === 'object' ? json : {}
-  const uvScale = Number.isFinite(+json.resolution) && +json.resolution > 0 ? +json.resolution : 16
-  const raw = Array.isArray(json.textures) ? json.textures : []
-  const texList = []
-  const texOrigin = raw.map(tex => {
-    if (tex && typeof tex.source === 'string' && tex.source.startsWith('data:')) {
-      texList.push({ name: tex.name || 'texture ' + texList.length, url: tex.source })
-      return texList.length - 1
-    }
-    return -1
-  })
-  const outElements = []
-  const list = (Array.isArray(json.elements) ? json.elements : []).slice(0, MAX_ELEMENTS)
-  for (const el of list) {
-    if (!el || typeof el !== 'object') continue
-    const faces = expandElementFaces(el)
-    const from = parseVec3(el.from, [0, 0, 0])
-    const to = parseVec3(el.to, [16, 16, 16])
-    const out = {}
-    for (const key of FACE_KEYS) {
-      const face = faces[key]
-      if (!face || typeof face !== 'object' || face.texture == null) continue
-      const ti = texOrigin[+face.texture]
-      if (ti == null || ti < 0) continue
-      const uv = parseUv(face.uv) || defaultFaceUv(key, from, to, uvScale) || [0, 0, uvScale, uvScale]
-      out[key] = { tex: ti, uv, rotation: normFaceRotation(face.rotation), mirror: uv[2] < uv[0] }
-    }
-    if (Object.keys(out).length) outElements.push({ faces: out, el })
-  }
-  return { type: 'bb', uvScale, textures: texList, texOrigin, elements: outElements }
-}
-
 /* ── 模型编辑联动（uv-view 编辑 → 3D 实时更新 + 导出）──────────
    layout.elements[i].el 持有原始 element 引用（与 parts / bbmodel json 中的对象同一引用），
    编辑写回原始 element 后按引用从 activeElementMeshes 定位 mesh 重映射几何 UV；
@@ -1514,4 +1405,11 @@ setAssetResolveHooks({
   get_SPECIAL_TEX_RE: () => SPECIAL_TEX_RE,
   get_TEX_REF_FALLBACK: () => TEX_REF_FALLBACK,
   get_MAX_ITEM_DEF_REFS: () => MAX_ITEM_DEF_REFS
+})
+
+/* 模型布局构建 常量注入 */
+setLayoutBuildHooks({
+  get_FACE_KEYS: () => FACE_KEYS,
+  get_TEX_REF_EXT_RE: () => TEX_REF_EXT_RE,
+  get_MAX_ELEMENTS: () => MAX_ELEMENTS
 })
