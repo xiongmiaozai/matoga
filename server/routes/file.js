@@ -20,9 +20,12 @@ const router = express.Router()
 const TEX_VARIANTS = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'tif', 'tiff', 'avif']
 const TEX_FUZZY_RE = /^(.+\/textures\/.+)\.(png|jpe?g|webp|gif|bmp|tiff?|avif)$/i
 function tryFuzzyTexPath(p) {
-  const m = TEX_FUZZY_RE.exec(p)
+  /* 分隔符归一：Windows 下 path.join 产出反斜杠，而正则只认正斜杠。
+     \ → / 是一对一替换、长度不变，因此可用同一长度在原始路径上切出 stem，
+     后续拼候选路径时仍保留原分隔符。 */
+  const m = TEX_FUZZY_RE.exec(p.replace(/\\/g, '/'))
   if (!m) return null
-  const stem = m[1]
+  const stem = p.slice(0, m[1].length)
   const curExt = p.slice(stem.length + 1).toLowerCase()
   for (const ext of TEX_VARIANTS) {
     if (ext === curExt) continue
