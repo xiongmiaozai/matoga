@@ -1,0 +1,205 @@
+/* ── 卡片 ── */
+.folder-card,
+.panel-card {
+  background: var(--panel-bg);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  transition: border-color 0.18s var(--ease);
+}
+.folder-card {
+  overflow: hidden;
+  container-type: inline-size;
+}
+.folder-card:hover,
+.panel-card:hover {
+  border-color: var(--border);
+}
+.folder-card-head {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: stretch;
+  column-gap: 8px;
+  padding: 8px 10px 7px;
+  background: linear-gradient(180deg, var(--panel-2), transparent 130%);
+}
+.folder-card-head::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--tag-left-fg) 0%, transparent 42%, transparent 58%, var(--tag-right-fg) 100%);
+  opacity: 0.5;
+}
+.head-side {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.tag {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  padding: 3px 8px 3px 17px;
+  border-radius: var(--radius-sm);
+  transition: filter 0.18s var(--ease);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tag::before {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: 50%;
+  width: 4px;
+  height: 11px;
+  border-radius: 2px;
+  background: currentColor;
+  opacity: 0.9;
+  transform: translateY(-50%) scaleY(0.82);
+  transition: transform 0.22s var(--ease);
+}
+.tag:hover {
+  filter: brightness(1.05);
+}
+.tag:hover::before {
+  transform: translateY(-50%) scaleY(1);
+}
+.tag-left {
+  background: var(--tag-left-bg);
+  color: var(--tag-left-fg);
+  box-shadow: inset 0 0 0 1px var(--tag-left-ring);
+}
+.tag-right {
+  background: var(--tag-right-bg);
+  color: var(--tag-right-fg);
+  box-shadow: inset 0 0 0 1px var(--tag-right-ring);
+}
+.side-actions {
+  display: flex;
+  min-width: 0;
+  border-radius: var(--radius-sm);
+  transition:
+    box-shadow 0.18s var(--ease),
+    transform 0.15s var(--ease);
+}
+.side-actions:hover {
+  box-shadow: 0 3px 10px var(--primary-glow);
+}
+.side-actions:active {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+.side-actions .btn-sm {
+  font-size: 12px;
+  padding: 6px 8px;
+}
+.side-actions .side-select-btn {
+  flex: 1;
+  min-width: 0;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  border-right-color: transparent;
+  background: linear-gradient(180deg, var(--primary-hover), var(--primary));
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.side-actions .side-select-btn:hover:not(:disabled) {
+  background: linear-gradient(180deg, var(--primary-hover), var(--primary-hover));
+  border-color: var(--primary-hover);
+  border-right-color: transparent;
+}
+.side-actions .pack-btn {
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: 6px 7px;
+  gap: 3px;
+  background: var(--primary);
+  border-color: var(--primary);
+  border-left: 1px solid rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.82);
+}
+.side-actions .pack-btn:hover:not(:disabled),
+.side-actions .pack-btn.active {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
+  color: #fff;
+}
+.vs-divider {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+}
+.vs-divider::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: calc(50% - 0.5px);
+  width: 1px;
+  background: linear-gradient(180deg, transparent, var(--border) 32%, var(--border) 68%, transparent);
+}
+.vs-badge {
+  position: relative;
+  z-index: 1;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  box-shadow: var(--shadow-1);
+  transition:
+    color 0.18s var(--ease),
+    border-color 0.18s var(--ease);
+}
+.folder-card-head:hover .vs-badge {
+  color: var(--primary);
+  border-color: var(--primary);
+}
+.path-box {
+  margin: 0 10px 4px;
+  padding: 4px 8px;
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--panel-2);
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.path-box:last-child {
+  margin-bottom: 8px;
+}
+.path-box.drag-over {
+  color: var(--text);
+  background: rgba(10, 89, 247, 0.08);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.folder-card-section {
+  padding: 2px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid var(--border-soft);
+  margin-top: 2px;
+}
+.folder-card-section .panel-card-title {
+  margin-top: 4px;
+}
+.folder-card-section .panel-card-title:first-child {
+  margin-top: 0;
+}

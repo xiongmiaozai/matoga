@@ -58,3 +58,12 @@ hdri-presets/
 
 # Go 后端构建产物（由 scripts/build-go.sh 生成，不入库）
 dist-go/
+# 浏览器实测截图（本地产物，不入库）
+scripts/.e2e-*.png
+docs/verification/
+
+# ArchSide 本地历史与布局
+.archside/
+
+# 会话临时粘贴
+pastes/

@@ -1,0 +1,439 @@
+/* ═══════════════════════════════════════════════
+   TABLE — MC grid style
+   ═══════════════════════════════════════════════ */
+.result-table th {
+  background: var(--mc-darker);
+  border-bottom: 3px solid #000;
+  font-family: 'Press Start 2P', 'Courier New', monospace;
+  font-size: 10px;
+  color: var(--mc-grass);
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
+  padding: 8px 12px;
+}
+th.sortable:hover {
+  color: var(--mc-diamond);
+}
+th.asc::after {
+  content: ' ▼';
+  color: var(--mc-diamond);
+}
+th.desc::after {
+  content: ' ▲';
+  color: var(--mc-diamond);
+}
+
+.result-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.result-table tbody tr:nth-child(even) td {
+  background: var(--zebra);
+}
+.result-table tbody tr:hover td {
+  background: var(--row-hover);
+}
+tr.row-selected td {
+  background: var(--selected) !important;
+}
+
+/* Row status indicators — MC colored wool */
+.result-table tbody td:first-child {
+  border-left: 4px solid transparent;
+}
+tr.row-have td:first-child {
+  border-left-color: var(--mc-grass);
+}
+tr.row-diff td:first-child {
+  border-left-color: var(--warn);
+}
+tr.row-partial td:first-child {
+  border-left-color: var(--partial);
+}
+tr.row-miss td:first-child {
+  border-left-color: var(--danger);
+}
+tr.row-extra td:first-child {
+  border-left-color: var(--extra);
+}
+
+/* Folder group rows */
+.folder-group-row td {
+  background: var(--mc-darker) !important;
+  font-weight: 700;
+  border-bottom: 2px solid #000 !important;
+  border-top: 1px solid var(--border-soft);
+}
+
+/* Status badges — MC dot style */
+.status-badge::before {
+  display: none;
+}
+.status-badge .ico {
+  width: 14px;
+  height: 14px;
+}
+.status-have .ico {
+  color: var(--mc-grass);
+}
+.status-miss .ico {
+  color: var(--danger);
+}
+.status-extra .ico {
+  color: var(--extra);
+}
+.status-diff .ico {
+  color: var(--warn);
+}
+.status-partial .ico {
+  color: var(--partial);
+}
+
+/* Type colors */
+.type-dir {
+  color: var(--mc-diamond);
+}
+.type-mat {
+  color: var(--extra);
+}
+
+/* Folder count chips */
+.fc {
+  padding: 1px 6px;
+  border: 1px solid #000;
+  font-size: 11px;
+  box-shadow: inset 1px 1px 0 0 var(--mc-border-light);
+}
+.fc-have {
+  background: var(--mc-grass-dark);
+  color: #fff;
+}
+.fc-diff {
+  background: var(--warn);
+  color: #000;
+}
+.fc-partial {
+  background: var(--partial);
+  color: #000;
+}
+.fc-miss {
+  background: var(--danger);
+  color: #fff;
+}
+.fc-extra {
+  background: var(--extra);
+  color: #fff;
+}
+
+/* Thumbnails — MC item slot */
+.thumb {
+  width: 38px;
+  height: 38px;
+  border: 2px solid #000;
+  box-shadow: inset 1px 1px 0 0 rgba(0, 0, 0, 0.4);
+}
+.thumb-left {
+  border-color: var(--mc-grass);
+}
+.thumb-right {
+  border-color: var(--warn);
+}
+.thumb-ph {
+  width: 38px;
+  height: 38px;
+  border: 2px solid #000;
+  box-shadow: inset 1px 1px 0 0 rgba(0, 0, 0, 0.4);
+}
+.thumb-left-ph {
+  border-color: var(--mc-grass);
+  color: var(--mc-grass);
+}
+.thumb-right-ph {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+/* Sub replace button */
+.sub-replace-btn {
+  padding: 2px 8px;
+  border: 2px solid #000;
+  background: var(--mc-grass);
+  color: #fff;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.4);
+  box-shadow: inset 1px 1px 0 0 var(--mc-border-light);
+}
+.sub-replace-btn:hover {
+  background: var(--mc-grass-dark);
+}
+
+/* ═══════════════════════════════════════════════
+   PANELS — Right sidebar
+   ═══════════════════════════════════════════════ */
+.panel {
+  background: var(--panel-bg);
+  border: 2px solid #000;
+  box-shadow:
+    inset 2px 2px 0 0 rgba(0, 0, 0, 0.4),
+    inset -1px -1px 0 0 var(--mc-border-light);
+}
+.panel:hover {
+  box-shadow:
+    inset 2px 2px 0 0 rgba(0, 0, 0, 0.4),
+    inset -1px -1px 0 0 var(--mc-border-light);
+}
+.panel-head {
+  border-bottom: 2px solid #000;
+  background: var(--mc-darker);
+}
+.panel-toolbar {
+  border-bottom: 2px solid #000;
+  background: var(--mc-darker);
+}
+
+.panel-tool {
+  border: 2px solid #000;
+  box-shadow: inset 1px 1px 0 0 var(--mc-border-light);
+}
+.panel-tool:hover {
+  background: var(--panel-3);
+  color: var(--mc-grass);
+}
+
+/* ═══════════════════════════════════════════════
+   2D PREVIEW — MC display style
+   ═══════════════════════════════════════════════ */
+.pv-toolbar {
+  border-bottom: 2px solid #000;
+  background: var(--mc-darker);
+}
+
+.preview-panel {
+  background: var(--mc-darker);
+}
+
+.pv-cell {
+  border: 2px solid #000;
+  box-shadow: inset 2px 2px 0 0 rgba(0, 0, 0, 0.6);
+}
+
+.pv-role,
+.pv-tag,
+.pv-size {
+  background: var(--mc-darker);
+  border: 1px solid #000;
+  font-family: 'Courier New', monospace;
+  font-size: 10px;
+}
+
+.pv-replace-btn,
+.pv-delete-btn {
+  border: 2px solid #000;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.4);
+  box-shadow: inset 1px 1px 0 0 var(--mc-border-light);
+}
+.pv-replace-btn {
+  background: var(--mc-stone);
+}
+.pv-replace-btn:hover {
+  background: var(--mc-grass);
+}
+.pv-delete-btn {
+  background: var(--danger);
+}
+.pv-delete-btn:hover {
+  background: var(--danger);
+}
+
+.pv-split-handle {
+  background: var(--mc-grass);
+  width: 6px;
+  border: 2px solid #000;
+}
+.pv-split-handle:hover,
+.pv-split-handle.dragging {
+  width: 8px;
+}
+
+.pv-diff-btn {
+  border: 2px solid #000;
+  background: var(--mc-darker);
+}
+.pv-diff-btn:hover {
+  background: var(--panel-3);
+}
+
+.pv-diff-result {
+  background: var(--mc-darker);
+  border: 2px solid #000;
+}
+
+.pv-tabs button {
+  border: 1px solid transparent;
+}
+.pv-tabs button:hover {
+  background: var(--panel-2);
+  border-color: #000;
+}
+.pv-tabs button.active {
+  background: var(--mc-grass-dark);
+  color: #fff;
+  border-color: #000;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.4);
+}
+
+/* ═══════════════════════════════════════════════
+   3D PANEL — MC dark stone
+   ═══════════════════════════════════════════════ */
+.material3d-container {
+  background: var(--mc-darker);
+  border: 2px solid #000;
+  box-shadow:
+    inset 2px 2px 0 0 rgba(0, 0, 0, 0.6),
+    inset -1px -1px 0 0 var(--mc-border-light);
+}
+
+.m3d-loading {
+  background: rgba(14, 14, 18, 0.9);
+}
+.m3d-loading-text {
+  font-family: 'Press Start 2P', 'Courier New', monospace;
+  font-size: 11px;
+  color: var(--mc-grass);
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
+}
+.m3d-loading-bar {
+  background: var(--mc-darker);
+  border: 1px solid #000;
+}
+.m3d-loading-fill {
+  background: var(--mc-grass);
+}
+
+/* 3D controls */
+.m3d-segment {
+  background: var(--mc-darker);
+  border: 2px solid #000;
+  padding: 2px;
+  box-shadow: inset 2px 2px 0 0 rgba(0, 0, 0, 0.5);
+}
+.m3d-segment button {
+  border: 1px solid transparent;
+  color: var(--text-muted);
+}
+.m3d-segment button:hover {
+  color: #fff;
+  background: var(--panel-3);
+}
+.m3d-segment button.active {
+  background: var(--mc-grass);
+  color: #fff;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.4);
+  box-shadow: inset 1px 1px 0 0 var(--mc-border-light);
+}
+
+.m3d-action-btn {
+  border: 2px solid #000;
+  background: var(--mc-stone);
+  box-shadow:
+    inset 1px 1px 0 0 var(--mc-border-light),
+    inset -1px -1px 0 0 var(--mc-border-dark);
+}
+.m3d-action-btn:hover {
+  background: var(--mc-grass);
+  color: #fff;
+}
+
+.m3d-hud-bar {
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.3) 60%, transparent);
+}
+.m3d-hud-bar .m3d-segment {
+  background: rgba(0, 0, 0, 0.4);
+  border-color: #000;
+}
+.m3d-hud-bar .m3d-segment button.active {
+  background: var(--mc-grass);
+}
+
+.m3d-hud-btn {
+  border: 2px solid #000;
+  background: var(--panel-3);
+  box-shadow: inset 1px 1px 0 0 var(--mc-border-light);
+}
+.m3d-hud-btn:hover {
+  background: var(--panel-bg);
+}
+.m3d-hud-btn.active {
+  background: var(--mc-grass);
+}
+
+.m3d-params-overlay {
+  background: var(--panel-bg);
+  border: 2px solid #000;
+  box-shadow:
+    0 6px 0 0 rgba(0, 0, 0, 0.6),
+    inset 2px 2px 0 0 rgba(0, 0, 0, 0.4);
+}
+
+.m3d-params-close {
+  border: 2px solid #000;
+  background: var(--danger);
+  box-shadow: inset 1px 1px 0 0 var(--mc-border-light);
+}
+.m3d-params-close:hover {
+  background: var(--danger);
+}
+
+.m3d-tabs button {
+  border: 1px solid transparent;
+}
+.m3d-tabs button:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: #000;
+}
+.m3d-tabs button.active {
+  background: var(--mc-grass-dark);
+  border-color: #000;
+}
+
+.m3d-env-subpane {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid #000;
+}
+
+/* HDR preset items */
+.hdri-preset-item {
+  border: 2px solid #000;
+  box-shadow: inset 1px 1px 0 0 rgba(0, 0, 0, 0.4);
+}
+.hdri-preset-item:hover {
+  border-color: var(--mc-grass);
+  transform: none;
+}
+.hdri-preset-item.active {
+  border-color: var(--mc-grass);
+  box-shadow:
+    inset 1px 1px 0 0 rgba(0, 0, 0, 0.4),
+    0 0 0 2px var(--mc-grass);
+}
+
+.m3d-presets button {
+  border: 2px solid #000;
+  background: var(--mc-stone-dark);
+  box-shadow:
+    inset 1px 1px 0 0 var(--mc-border-light),
+    inset -1px -1px 0 0 var(--mc-border-dark);
+}
+.m3d-presets button:hover {
+  background: var(--panel-3);
+  border-color: #000;
+}
+.m3d-presets button.active {
+  background: var(--mc-grass);
+  border-color: #000;
+}
+
+/* Color inputs */
+input[type='color'].m3d-color-input,
+#m3dSkyTint {
+  border: 2px solid #000;
+  box-shadow: inset 1px 1px 0 0 rgba(0, 0, 0, 0.4);
+}

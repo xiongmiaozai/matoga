@@ -39,11 +39,24 @@ import { uiPrompt, uiConfirm } from './ui-dialog.js'
 import { viewMcModelInViewport, viewImportedModelInViewport, isViewportVisible } from './mc-model-viewer.js'
 import { activateMaterial3DHost } from './material3d.js'
 import { ensureModelThumb, observeModelThumbs } from './model-thumb.js'
+import { doDownloadZip, openExportDialog } from './asset-lib/export-dialog.js'
 
 import { splitGroupsByPrefix } from './model-prefix.js'
 import { openCreateModelDialog, previewCustomModel } from './create-model-dialog.js'
 import { openCreatePackDialog } from './create-pack-dialog.js'
 import { openImportPackDialog } from './import-pack-dialog.js'
+import { packEntryRawUrl, isAddableAssetPath, isModelBrowsePath, pbLoadView, pbSaveView, openPackBrowser, browseTo, browseUp, exitBrowse, browseCrumbs, buildBrowseHead, buildBrowseCrumbsBar, buildBrowseToolbar, setBrowseStatus, browseEntryPath, buildBrowseFolderCard, buildBrowseFileRow, fillBrowseError, fillBrowseView, renderBrowse, setHooks as setAssetBrowseHooks } from './asset-lib/browse.js'
+import { collectTexGroups, buildAssetGroup, buildTexGroup, buildTexSection, collectModelGroups, texRefToAssetPath, collectModelTexturePaths, matchTexturesToPaths, buildModelSection, setHooks as setAssetCollectHooks } from './asset-lib/collect.js'
+import { applyFilter, updateStat, sigEntries, startPoll, buildToolbar, setHooks as setAssetToolbarHooks } from './asset-lib/toolbar.js'
+import { modelMetaRows, bbModelMetaRows, fetchModelMetaRows, openDetail, showModelDetail, showDetail, refreshDetailFav, hideDetail, setHooks as setAssetDetailHooks } from './asset-lib/detail.js'
+/* 门面 re-export（§2.3） */
+export { modelMetaRows, bbModelMetaRows, fetchModelMetaRows, openDetail, showModelDetail, showDetail, refreshDetailFav, hideDetail } from './asset-lib/detail.js'
+/* 门面 re-export（§2.3） */
+export { applyFilter, updateStat, sigEntries, startPoll, buildToolbar } from './asset-lib/toolbar.js'
+/* 门面 re-export（§2.3） */
+export { collectTexGroups, buildAssetGroup, buildTexGroup, buildTexSection, collectModelGroups, texRefToAssetPath, collectModelTexturePaths, matchTexturesToPaths, buildModelSection } from './asset-lib/collect.js'
+/* 门面 re-export（§2.3） */
+export { packEntryRawUrl, isAddableAssetPath, isModelBrowsePath, pbLoadView, pbSaveView, openPackBrowser, browseTo, browseUp, exitBrowse, browseCrumbs, buildBrowseHead, buildBrowseCrumbsBar, buildBrowseToolbar, setBrowseStatus, browseEntryPath, buildBrowseFolderCard, buildBrowseFileRow, fillBrowseError, fillBrowseView, renderBrowse } from './asset-lib/browse.js'
 
 const PRESETS = [
   { id: 'metal', color: '#c8c8d0' },
@@ -892,196 +905,6 @@ function buildPresetSection() {
 
 /* ── 材质贴图节：聚合左右目录 + MC 材质包 + 官方包全部贴图，按文件夹/包类别分组 ── */
 
-function collectTexGroups() {
-  const groups = []
-  const byKey = new Map()
-  const seen = new Set()
-  const addGroup = (key, label) => {
-    let g = byKey.get(key)
-    if (!g) {
-      g = { key, label, items: [] }
-      byKey.set(key, g)
-      groups.push(g)
-    }
-    return g
-  }
-
-  /* 左右已选对比目录：按相对父目录分组（根级文件归目录名组） */
-  for (const side of ['left', 'right']) {
-    const root = side === 'left' ? state.leftPath : state.rightPath
-    const entries = side === 'left' ? state.leftEntries : state.rightEntries
-    if (!entries) continue
-    const rootName = root ? String(root).replace(/\/+$/, '').split('/').pop() : ''
-    for (const e of entries) {
-      if (!isImg(e) || seen.has(e.fullPath)) continue
-      seen.add(e.fullPath)
-      let rel = e.name
-      if (root && e.fullPath && e.fullPath.startsWith(root + '/')) rel = e.fullPath.slice(root.length + 1)
-      const si = rel.lastIndexOf('/')
-      const dirRel = si >= 0 ? rel.slice(0, si) : ''
-      const gk = 'dir:' + (root ? root + '/' + dirRel : dirRel || 'root')
-      const label = root ? (dirRel ? rootName + ' · ' + dirRel : rootName) : dirRel || t('asset.texRootDir')
-      addGroup(gk, label).items.push({
-        key: 'tex:' + e.fullPath,
-        name: e.name,
-        thumb: thumbUrl(e.fullPath),
-        type: 'tex',
-        path: e.fullPath,
-        mtime: e.mtime || 0,
-        role: classifyByRole(e.name),
-        onAdd: () => addTextureAt(e.fullPath, e.name)
-      })
-    }
-  }
-
-  /* MC 材质包 + 官方包（/api/asset/tex）：每包按 textures/ 第一级类别分组；
-     dir 包有磁盘绝对路径（可直接引用），zip 包走包媒体 raw 接口 */
-  for (const p of texPacks || []) {
-    for (const g of p.groups || []) {
-      const gk = 'pack:' + p.source + ':' + p.name + '/' + g.key
-      const label = g.key ? p.name + ' · ' + g.key : p.name
-      const grp = addGroup(gk, label)
-      for (const f of g.files || []) {
-        /* 防御：仅图片扩展名（png/jpg 等）才作为贴图展示，mcmeta/json 排除 */
-        if (!IMG_EXTS.has((f.name.split('.').pop() || '').toLowerCase())) continue
-        if (p.kind === 'dir' && p.root) {
-          const fp = p.root + '/' + f.path
-          if (seen.has(fp)) continue
-          seen.add(fp)
-          grp.items.push({
-            key: 'tex:' + fp,
-            name: f.name,
-            thumb: thumbUrl(fp),
-            type: 'tex',
-            path: fp,
-            mtime: f.mtime || 0,
-            role: classifyByRole(f.name),
-            onAdd: () => addTextureAt(fp, f.name)
-          })
-        } else {
-          const packPath = 'pack:' + p.source + ':' + p.name + '/' + f.path
-          grp.items.push({
-            key: 'tex:' + packPath,
-            name: f.name,
-            thumb: packTexThumbUrl(p.source, p.name, f.path),
-            type: 'tex',
-            path: packPath,
-            mtime: 0,
-            role: classifyByRole(f.name),
-            onAdd: () => addPackTextureToCanvas({ type: p.source }, { name: p.name }, { path: f.path, name: f.name })
-          })
-        }
-      }
-    }
-  }
-
-  const dirGroups = groups.filter(g => g.key.startsWith('dir:')).sort((a, b) => a.label.localeCompare(b.label, 'zh'))
-  const packGroups = groups.filter(g => !g.key.startsWith('dir:'))
-  return [...dirGroups, ...packGroups]
-}
-
-function buildAssetGroup(g, collapsedSet, saveFn) {
-  const grp = el('div', 'asset-lib-group')
-  grp.dataset.group = g.key
-  if (collapsedSet.has(g.key)) grp.classList.add('collapsed')
-  const head = el(
-    'div',
-    'asset-lib-group-head',
-    `<span class="caret">▾</span><span class="gl" title="${escAttr(g.label)}">${escAttr(g.label)}</span><span class="cnt">${g.items.length}</span>`
-  )
-  if (typeof g.openDir === 'function') {
-    const locBtn = el('button', 'asset-lib-group-btn')
-    locBtn.type = 'button'
-    locBtn.title = t('asset.openLocalDir')
-    locBtn.innerHTML = '<svg class="ico ico-sm"><use href="#i-folder"/></svg>'
-    locBtn.addEventListener('click', e => {
-      e.stopPropagation()
-      g.openDir()
-    })
-    head.appendChild(locBtn)
-  }
-  head.addEventListener('click', () => {
-    grp.classList.toggle('collapsed')
-    if (grp.classList.contains('collapsed')) {
-      collapsedSet.add(g.key)
-      saveFn(collapsedSet)
-    } else {
-      collapsedSet.delete(g.key)
-      saveFn(collapsedSet)
-    }
-  })
-  grp.appendChild(head)
-
-  const grid = el('div', 'asset-lib-grid')
-  if (viewMode === 'list') grid.classList.add('list-view')
-  const sorted = sortItems(g.items)
-  const shown = sorted.slice(0, TEX_GROUP_PAGE)
-  for (const it of shown) grid.appendChild(makeCard(it))
-  if (sorted.length > shown.length) {
-    const more = el('button', 'asset-lib-more', t('asset.texShowMore', { n: String(sorted.length - shown.length) }))
-    more.addEventListener('click', () => {
-      more.remove()
-      for (const it of sorted.slice(TEX_GROUP_PAGE)) grid.appendChild(makeCard(it))
-      observeModelThumbs(grid)
-      applyFilter()
-    })
-    grid.appendChild(more)
-  }
-  grp.appendChild(grid)
-  return grp
-}
-
-function buildTexGroup(g) {
-  return buildAssetGroup(g, texCollapsedSet, saveTexCollapsed)
-}
-
-function buildTexSection() {
-  const groups = collectTexGroups()
-  const total = groups.reduce((s, g) => s + g.items.length, 0)
-  const loading = texPacks === null
-
-  const sec = el('div', 'asset-lib-section')
-  sec.dataset.cat = 'tex'
-  if (collapsedSet.has('tex')) sec.classList.add('collapsed')
-  const head = el(
-    'div',
-    'asset-lib-section-head',
-    `<span class="caret">▾</span><span>${t('asset.texSection')}</span><span class="cnt">${total}</span>`
-  )
-  head.addEventListener('click', () => {
-    sec.classList.toggle('collapsed')
-    if (sec.classList.contains('collapsed')) {
-      collapsedSet.add('tex')
-      saveCollapsed(collapsedSet)
-    } else {
-      collapsedSet.delete('tex')
-      saveCollapsed(collapsedSet)
-    }
-  })
-  sec.appendChild(head)
-
-  if (!total && loading) {
-    const grid = el('div', 'asset-lib-grid')
-    grid.appendChild(el('div', 'asset-lib-hint', t('asset.loading')))
-    sec.appendChild(grid)
-    return sec
-  }
-  if (!total && loadErrors.tex) {
-    const grid = el('div', 'asset-lib-grid')
-    grid.appendChild(el('div', 'asset-lib-hint error', t('asset.loadFailed', { msg: loadErrors.tex })))
-    sec.appendChild(grid)
-    return sec
-  }
-  if (!total) return null
-
-  const wrap = el('div', 'asset-lib-groups')
-  for (const g of groups) wrap.appendChild(buildTexGroup(g))
-  if (loadErrors.tex)
-    wrap.appendChild(el('div', 'asset-lib-hint error', t('asset.loadFailed', { msg: loadErrors.tex })))
-  sec.appendChild(wrap)
-  return sec
-}
-
 /* ── 模型节：MC 材质包/官方包内 assets/<ns>/models/*.json，按来源/包类别/名称前缀分组 ── */
 
 /* 在系统文件管理器中打开某类模型的专属本地目录（imported / custom） */
@@ -1096,171 +919,10 @@ function openModelDir(kind) {
   })
 }
 
-function collectModelGroups() {
-  const groups = []
-  const byKey = new Map()
-  const addGroup = (key, label) => {
-    let g = byKey.get(key)
-    if (!g) {
-      g = { key, label, items: [] }
-      byKey.set(key, g)
-      groups.push(g)
-    }
-    return g
-  }
-
-  /* 导入模型（data/imported-models，用户主动上传的 .bbmodel / MC .json，专属目录） */
-  const imGroup = addGroup('im', t('asset.importedModelGroup'))
-  imGroup.openDir = () => openModelDir('imported')
-  for (const m of importedModels || []) {
-    if (!m || !m.id) continue
-    imGroup.items.push({
-      key: 'model:im:' + m.id,
-      name: m.name || m.id,
-      thumb: null,
-      icon: 'i-cube',
-      color: '#e8993c',
-      type: 'model',
-      path: 'im:' + m.id,
-      mtime: m.mtime || 0,
-      role: 'model',
-      badge: m.model_format || m.format || m.ext || null,
-      modelThumb: { kind: 'im', id: m.id, path: 'im:' + m.id, mtime: m.mtime || 0 },
-      modelFile: userModelFilePath(modelDirs.imported, m),
-      modelDelete: { api: IMPORT_API, id: m.id },
-      onAdd: () => viewImportedModelAsset(m.id, m.name || m.id)
-    })
-  }
-
-  /* 自定义模型（data/custom-models，从模板创建，专属目录） */
-  const cmGroup = addGroup('cm', t('asset.cmModelGroup'))
-  cmGroup.openDir = () => openModelDir('custom')
-  for (const m of customModels || []) {
-    if (!m || !m.id) continue
-    cmGroup.items.push({
-      key: 'model:cm:' + m.id,
-      name: m.name || m.id,
-      thumb: null,
-      icon: 'i-cube',
-      color: '#5fd0a0',
-      type: 'model',
-      path: 'cm:' + m.id,
-      mtime: m.mtime || 0,
-      role: 'model',
-      badge: m.template || null,
-      modelFile: userModelFilePath(modelDirs.custom, m),
-      modelDelete: { api: CUSTOM_API, id: m.id },
-      onAdd: () => previewCustomModel(m.id, m.name || m.id)
-    })
-  }
-
-  /* MC 材质包 + 官方包（/api/asset/model）：每包按 models/ 第一级类别分组 */
-  for (const p of modelPacks || []) {
-    for (const g of p.groups || []) {
-      const gk = 'modelpack:' + p.source + ':' + p.name + '/' + g.key
-      const label = g.key ? p.name + ' · ' + g.key : p.name
-      const grp = addGroup(gk, label)
-      for (const f of g.files || []) {
-        /* 防御：仅 .json 扩展名才作为模型展示 */
-        if (!f.name || !MODEL_JSON_RE.test(f.name)) continue
-        const modelPath = 'packmodel:' + p.source + ':' + p.name + '/' + f.path
-        grp.items.push({
-          key: 'model:' + modelPath,
-          name: f.name,
-          thumb: null,
-          icon: 'i-cube',
-          color: '#6f9ff0',
-          type: 'model',
-          path: modelPath,
-          mtime: f.mtime || 0,
-          role: 'model',
-          badge: g.key || null,
-          modelThumb: {
-            kind: 'mc',
-            api: packApiFor(p.source),
-            packName: p.name,
-            rel: f.path,
-            path: modelPath,
-            mtime: f.mtime || 0
-          },
-          onAdd: () => viewMcModelAsset(p.source, p.name, f.path, f.name)
-        })
-      }
-    }
-  }
-
-  const pinOrder = ['im', 'cm']
-  const pinned = groups
-    .filter(g => pinOrder.includes(g.key))
-    .sort((a, b) => pinOrder.indexOf(a.key) - pinOrder.indexOf(b.key))
-  const rest = groups.filter(g => !pinOrder.includes(g.key)).sort((a, b) => a.label.localeCompare(b.label, 'zh'))
-  /* 每组内按名称前缀进一步细分（区分 oak/stone 等不同系列；全部同桶时保持原组） */
-  const out = []
-  for (const g of [...pinned, ...rest]) {
-    if (!g.items.length) continue
-    out.push(...splitGroupsByPrefix(g.key, g.label, g.items, t('asset.modelUngrouped')))
-  }
-  return out
-}
-
 /* MC 贴图引用 → 资产相对路径："minecraft:block/stone" → assets/minecraft/textures/block/stone.png
    与 mc-model-viewer.textureAssetPath 同语义（前端独立实现避免循环依赖） */
-function texRefToAssetPath(ref) {
-  if (typeof ref !== 'string' || !ref) return null
-  if (/^(data:|file:|https?:\/\/|\/)/i.test(ref)) return null
-  let ns = 'minecraft',
-    rest = ref
-  const ci = ref.indexOf(':')
-  if (ci >= 0) {
-    ns = ref.slice(0, ci)
-    rest = ref.slice(ci + 1)
-  }
-  if (!rest) return null
-  const hasExt = /\.(png|jpe?g|webp|gif|bmp|tiff?|avif)$/i.test(rest)
-  return `assets/${ns}/textures/${hasExt ? rest : rest + '.png'}`
-}
-
 /* 从模型 JSON 收集所有贴图引用需要的资产路径（含 #别名解析） */
-function collectModelTexturePaths(json) {
-  if (!json || typeof json !== 'object') return []
-  const textures = json.textures && typeof json.textures === 'object' ? json.textures : {}
-  const seen = new Set()
-  const out = []
-  const resolve = ref => {
-    if (typeof ref !== 'string' || !ref) return
-    if (ref.startsWith('#')) {
-      resolve(textures[ref.slice(1)])
-      return
-    }
-    const p = texRefToAssetPath(ref)
-    if (p && !seen.has(p)) {
-      seen.add(p)
-      out.push(p)
-    }
-  }
-  for (const k in textures) resolve(textures[k])
-  return out
-}
-
 /* 按文件名匹配贴图到资产路径：文件名去扩展名 === 资产路径末段去扩展名 */
-function matchTexturesToPaths(files, neededPaths) {
-  const map = {}
-  const byBasename = {}
-  for (const f of files) {
-    const name = f.name.replace(/\.[^.]+$/, '')
-    if (!byBasename[name]) byBasename[name] = f
-  }
-  for (const p of neededPaths) {
-    const base = p
-      .split('/')
-      .pop()
-      .replace(/\.[^.]+$/, '')
-    const f = byBasename[base]
-    if (f) map[p] = f
-  }
-  return map
-}
-
 async function fileToDataUrl(f) {
   const buf = await f.arrayBuffer()
   const bytes = new Uint8Array(buf)
@@ -1343,72 +1005,6 @@ async function deleteUserModel(item) {
   } catch (e) {
     showToast(t('asset.toastModelDeleteFail', { msg: e.message || '' }))
   }
-}
-
-function buildModelSection() {
-  const groups = collectModelGroups()
-  const total = groups.reduce((s, g) => s + g.items.length, 0)
-  const loading = modelPacks === null
-
-  const sec = el('div', 'asset-lib-section')
-  sec.dataset.cat = 'model'
-  if (collapsedSet.has('model')) sec.classList.add('collapsed')
-  const head = el(
-    'div',
-    'asset-lib-section-head',
-    `<span class="caret">▾</span><span>${t('asset.modelSection')}</span><span class="cnt">${total}</span>`
-  )
-  const uploadBtn = el('button', 'asset-lib-section-btn')
-  uploadBtn.type = 'button'
-  uploadBtn.title = t('asset.uploadModelTitle')
-  uploadBtn.innerHTML = `<svg class="ico ico-sm"><use href="#i-plus"/></svg><span>${t('asset.uploadModel')}</span>`
-  uploadBtn.addEventListener('click', e => {
-    e.stopPropagation()
-    uploadModelToLibrary()
-  })
-  head.appendChild(uploadBtn)
-  const newBtn = el('button', 'asset-lib-section-btn')
-  newBtn.type = 'button'
-  newBtn.title = t('asset.newModelTitle')
-  newBtn.innerHTML = `<svg class="ico ico-sm"><use href="#i-cube"/></svg><span>${t('asset.newModel')}</span>`
-  newBtn.addEventListener('click', e => {
-    e.stopPropagation()
-    openCreateModelDialog({ onCreated: () => refreshAssetLibrary() })
-  })
-  head.appendChild(newBtn)
-  head.addEventListener('click', () => {
-    sec.classList.toggle('collapsed')
-    if (sec.classList.contains('collapsed')) {
-      collapsedSet.add('model')
-      saveCollapsed(collapsedSet)
-    } else {
-      collapsedSet.delete('model')
-      saveCollapsed(collapsedSet)
-    }
-  })
-  sec.appendChild(head)
-
-  if (!total && loading) {
-    const grid = el('div', 'asset-lib-grid')
-    grid.appendChild(el('div', 'asset-lib-hint', t('asset.loading')))
-    sec.appendChild(grid)
-    return sec
-  }
-  if (!total && loadErrors.model) {
-    const grid = el('div', 'asset-lib-grid')
-    grid.appendChild(el('div', 'asset-lib-hint error', t('asset.loadFailed', { msg: loadErrors.model })))
-    sec.appendChild(grid)
-    return sec
-  }
-  if (!total) return null
-
-  const wrap = el('div', 'asset-lib-groups')
-  for (const g of groups) wrap.appendChild(buildAssetGroup(g, modelCollapsedSet, saveModelCollapsed))
-  if (loadErrors.model)
-    wrap.appendChild(el('div', 'asset-lib-hint error', t('asset.loadFailed', { msg: loadErrors.model })))
-  observeModelThumbs(wrap)
-  sec.appendChild(wrap)
-  return sec
 }
 
 function buildHdriSection() {
@@ -1684,380 +1280,7 @@ async function renameOfficialAsset(item, byVersion) {
 
 /* ── 包内容浏览（文件管理器式，在总资产库面板内切换视图） ──── */
 
-function packEntryRawUrl(packName, relPath) {
-  return packRawUrl(browse ? browse.api : MC_OFFICIAL_API, packName, relPath)
-}
-
-function isAddableAssetPath(p) {
-  return p === 'pack.png' || p.startsWith('assets/')
-}
-
 /* 包浏览中的模型文件判定：assets/<ns>/models/** 下的 .json */
-function isModelBrowsePath(rel) {
-  return typeof rel === 'string' && MODEL_DIR_PATH_RE.test(rel) && MODEL_JSON_RE.test(rel)
-}
-
-function pbLoadView() {
-  try {
-    const v = localStorage.getItem('matoga:pbView')
-    return v === 'grid' || v === 'list' ? v : 'list'
-  } catch {
-    return 'list'
-  }
-}
-
-function pbSaveView(v) {
-  try {
-    localStorage.setItem('matoga:pbView', v)
-  } catch {}
-}
-
-function openPackBrowser(item) {
-  const list = item.type === 'mc' ? mcEntries : item.type === 'official' ? officialEntries : null
-  const pack = item.pack || (list || []).find(p => p.fullPath === item.path) || null
-  browse = { item, pack, dir: null, view: pbLoadView(), filter: '', data: null, api: packApiFor(item.type) }
-  renderBrowse()
-}
-
-function browseTo(dir) {
-  if (!browse) return
-  browse.dir = dir
-  browse.filter = ''
-  browse.data = null
-  renderBrowse()
-}
-
-function browseUp() {
-  if (!browse || !browse.dir) return
-  const idx = browse.dir.lastIndexOf('/')
-  browse.dir = idx >= 0 ? browse.dir.slice(0, idx) : null
-  browse.filter = ''
-  browse.data = null
-  renderBrowse()
-}
-
-function exitBrowse() {
-  browse = null
-  browseSeq++
-  const search = document.getElementById('assetLibSearch')
-  if (search) search.disabled = false
-  const toolbar = document.getElementById('assetLibToolbar')
-  if (toolbar) toolbar.classList.remove('pb-off')
-  rebuild()
-}
-
-function browseCrumbs() {
-  const crumbs = [{ name: browse.item.name, dir: null }]
-  if (browse.dir) {
-    const segs = browse.dir.split('/')
-    segs.forEach((s, i) => crumbs.push({ name: s, dir: segs.slice(0, i + 1).join('/') }))
-  }
-  return crumbs
-}
-
-function buildBrowseHead(item, pack, kind) {
-  const head = el('div', 'pb-top')
-  const back = el('button', 'pb-back', '<svg class="ico"><use href="#i-chevron-left"/></svg>')
-  back.title = t('asset.browseBack')
-  back.addEventListener('click', exitBrowse)
-  head.appendChild(back)
-
-  const logo = el('div', 'pb-logo')
-  const logoImg = el('img')
-  logoImg.alt = ''
-  logoImg.loading = 'lazy'
-  logoImg.src = packEntryRawUrl(item.name, 'pack.png')
-  logoImg.addEventListener('error', () => {
-    logo.innerHTML = '<svg class="ico"><use href="#i-box"/></svg>'
-  })
-  logo.appendChild(logoImg)
-  logo.title = item.name
-  head.appendChild(logo)
-
-  const title = el('div', 'pb-title')
-  title.appendChild(el('span', 'pb-name', item.name))
-  if (item.badge || (pack && officialBadge(pack))) {
-    title.appendChild(el('span', 'pb-badge', item.badge || officialBadge(pack)))
-  }
-  head.appendChild(title)
-  head.appendChild(el('span', 'pb-kind', kind === 'zip' ? 'ZIP' : kind === 'dir' ? t('asset.officialKindDir') : ''))
-
-  const meta = el('div', 'pb-meta')
-  if (pack) {
-    if (pack.description) meta.appendChild(el('div', 'pb-desc', pack.description))
-    const stats = el('div', 'pb-stats')
-    const stat = (label, value) => {
-      if (value == null || value === '') return
-      stats.appendChild(el('span', 's', `<b>${label}</b> ${value}`))
-    }
-    stat(t('asset.detailMcVersion'), pack.formatRange || (pack.format != null ? 'pack_format ' + pack.format : null))
-    stat(t('asset.detailPackFormat'), pack.formatLabel || (pack.format != null ? String(pack.format) : null))
-    stat(t('asset.detailPackTexCount'), pack.textureCount != null ? String(pack.textureCount) : null)
-    if (stats.childNodes.length) meta.appendChild(stats)
-  }
-  head.appendChild(meta)
-  return head
-}
-
-function buildBrowseCrumbsBar() {
-  const bar = el('div', 'pb-crumbs')
-  const crumbs = browseCrumbs()
-  crumbs.forEach((c, i) => {
-    if (i > 0) bar.appendChild(el('span', 'pb-sep', '›'))
-    const cur = i === crumbs.length - 1
-    const btn = el('button', 'pb-crumb' + (cur ? ' cur' : ''), c.name)
-    btn.title = c.dir || browse.item.name
-    if (!cur) btn.addEventListener('click', () => browseTo(c.dir))
-    bar.appendChild(btn)
-  })
-  return bar
-}
-
-function buildBrowseToolbar() {
-  const bar = el('div', 'pb-toolbar')
-  const up = el('button', 'pb-up', '<svg class="ico"><use href="#i-arrow-up"/></svg>')
-  up.title = t('asset.browseUp')
-  if (!browse || !browse.dir) up.disabled = true
-  else up.addEventListener('click', browseUp)
-  bar.appendChild(up)
-  bar.appendChild(buildBrowseCrumbsBar())
-
-  const tools = el('div', 'pb-tools')
-  const filterWrap = el('div', 'pb-filter-wrap')
-  filterWrap.innerHTML = '<svg class="ico"><use href="#i-search"/></svg>'
-  const filter = el('input', 'pb-filter')
-  filter.type = 'search'
-  filter.placeholder = t('asset.browseFilterPh')
-  filter.value = browse ? browse.filter : ''
-  filter.addEventListener('input', () => {
-    if (!browse) return
-    browse.filter = filter.value
-    if (browse.data) fillBrowseView(browse.item, browse.pack, browse.data)
-  })
-  filterWrap.appendChild(filter)
-  tools.appendChild(filterWrap)
-
-  const seg = el('div', 'pb-viewseg')
-  const mkViewBtn = (mode, icon, titleKey) => {
-    const b = el(
-      'button',
-      'pb-vbtn' + (browse && browse.view === mode ? ' active' : ''),
-      `<svg class="ico"><use href="#i-${icon}"/></svg>`
-    )
-    b.title = t(titleKey)
-    b.dataset.view = mode
-    b.addEventListener('click', () => {
-      if (!browse || browse.view === mode) return
-      browse.view = mode
-      pbSaveView(mode)
-      seg.querySelectorAll('.pb-vbtn').forEach(x => x.classList.toggle('active', x.dataset.view === mode))
-      if (browse.data) fillBrowseView(browse.item, browse.pack, browse.data)
-    })
-    return b
-  }
-  seg.appendChild(mkViewBtn('list', 'list', 'asset.browseViewList'))
-  seg.appendChild(mkViewBtn('grid', 'grid', 'asset.browseViewGrid'))
-  tools.appendChild(seg)
-  bar.appendChild(tools)
-  return bar
-}
-
-function setBrowseStatus(text) {
-  const st = document.querySelector('.pack-browser .pb-status')
-  if (st) st.textContent = text
-}
-
-function browseEntryPath(name) {
-  return browse && browse.dir ? browse.dir + '/' + name : name
-}
-
-function buildBrowseFolderCard(d) {
-  const f = el('div', 'pb-folder')
-  f.innerHTML = '<svg class="ico"><use href="#i-folder"/></svg>'
-  f.appendChild(el('span', 'fn', d.name))
-  f.appendChild(el('span', 'pb-farrow', '<svg class="ico"><use href="#i-chevron-right"/></svg>'))
-  const dir = browseEntryPath(d.name)
-  f.title = dir
-  f.addEventListener('dblclick', e => {
-    e.preventDefault()
-    browseTo(dir)
-  })
-  f.addEventListener('click', () => {
-    document.querySelectorAll('.pack-browser .pb-folder.sel').forEach(x => x.classList.remove('sel'))
-    document.querySelectorAll('.pack-browser .pb-file.sel').forEach(x => x.classList.remove('sel'))
-    f.classList.add('sel')
-    setBrowseStatus(dir + ' · ' + t('asset.officialKindDir'))
-  })
-  return f
-}
-
-function buildBrowseFileRow(item, pack, file, grid) {
-  const rel = browseEntryPath(file.name)
-  const isImgFile = IMG_EXTS.has((file.name.split('.').pop() || '').toLowerCase())
-  const isModelFile = isModelBrowsePath(rel)
-  const addable = (isImgFile || isModelFile) && isAddableAssetPath(rel)
-  const row = el('div', 'pb-file' + (grid ? ' card' : ''))
-  const th = el('div', 'pf-thumb')
-  if (isImgFile) {
-    const img = el('img')
-    img.loading = 'lazy'
-    img.alt = ''
-    img.src = packEntryRawUrl(item.name, rel)
-    img.addEventListener('error', () => {
-      th.innerHTML = '<svg class="ico"><use href="#i-file"/></svg>'
-    })
-    th.appendChild(img)
-  } else if (isModelFile) {
-    th.classList.add('model')
-    th.innerHTML = '<svg class="ico"><use href="#i-cube"/></svg>'
-  } else {
-    th.innerHTML = '<svg class="ico"><use href="#i-file"/></svg>'
-  }
-  row.appendChild(th)
-  row.appendChild(el('span', 'fn', file.name))
-  row.appendChild(el('span', 'fs', file.size ? formatSize(file.size) : ''))
-  const addHint = isModelFile ? t('asset.browseAddModel') : t('asset.browseAddTex')
-  row.title = rel + (file.size ? ' · ' + formatSize(file.size) : '') + (addable ? ' · ' + addHint : '')
-
-  if (addable) {
-    const add = el('button', 'pf-add', '<svg class="ico"><use href="#i-plus"/></svg>')
-    add.title = addHint
-    add.addEventListener('click', e => {
-      e.stopPropagation()
-      if (isModelFile) {
-        pushRecent(item)
-        viewMcModelAsset(item.type, item.name, rel, file.name)
-        return
-      }
-      const p = pack || { name: item.name }
-      pushRecent(item)
-      addPackTextureToCanvas(item, p, { path: rel, name: file.name })
-    })
-    row.appendChild(add)
-  }
-  row.addEventListener('click', () => {
-    document.querySelectorAll('.pack-browser .pb-folder.sel').forEach(x => x.classList.remove('sel'))
-    document.querySelectorAll('.pack-browser .pb-file.sel').forEach(x => x.classList.remove('sel'))
-    row.classList.add('sel')
-    setBrowseStatus(row.title)
-  })
-  row.addEventListener('dblclick', e => {
-    e.preventDefault()
-    if (isModelFile && isAddableAssetPath(rel)) {
-      pushRecent(item)
-      viewMcModelAsset(item.type, item.name, rel, file.name)
-      return
-    }
-    if (!isImgFile || !isAddableAssetPath(rel)) {
-      showToast(t('asset.toastFileNotAddable'))
-      return
-    }
-    const p = pack || { name: item.name }
-    pushRecent(item)
-    addPackTextureToCanvas(item, p, { path: rel, name: file.name })
-  })
-  return row
-}
-
-function fillBrowseError(item, pack, msg) {
-  const list = document.querySelector('.pack-browser .pb-list')
-  if (!list) return
-  list.innerHTML = ''
-  const hint = el('div', 'asset-lib-hint error', t('asset.loadFailed', { msg }))
-  const retry = el('button', 'asset-lib-sec-btn', t('asset.browseRetry'))
-  retry.addEventListener('click', () => renderBrowse())
-  hint.appendChild(document.createElement('br'))
-  hint.appendChild(retry)
-  list.appendChild(hint)
-  setBrowseStatus(t('asset.loadFailed', { msg }))
-}
-
-function fillBrowseView(item, pack, data) {
-  const list = document.querySelector('.pack-browser .pb-list')
-  if (!list) return
-  list.innerHTML = ''
-  const kindEl = document.querySelector('.pack-browser .pb-kind')
-  if (kindEl) kindEl.textContent = data.kind === 'zip' ? 'ZIP' : t('asset.officialKindDir')
-
-  const term = browse && browse.filter ? browse.filter.trim() : ''
-  const enCands = term ? enCandidatesOfZh(term) : []
-  const match = (name, zh, pinyin) =>
-    assetSearchMatch(String(name).toLowerCase(), (zh || '').toLowerCase(), (pinyin || '').toLowerCase(), enCands, term)
-  const dirs = (data.dirs || []).filter(d => match(d.name))
-  const files = (data.files || []).filter(f => {
-    const item = { path: f.path, name: f.name }
-    return match(f.name, zhOfItem(item), pinyinOfItem(item))
-  })
-  const total = dirs.length + files.length
-  const unfiltered = (data.dirs || []).length + (data.files || []).length
-
-  if (!total) {
-    list.appendChild(el('div', 'pb-empty', term ? t('asset.browseNoMatch') : t('asset.browseEmptyDir')))
-  } else {
-    if (dirs.length) {
-      const fg = el('div', 'pb-folders')
-      for (const d of dirs) fg.appendChild(buildBrowseFolderCard(d))
-      list.appendChild(fg)
-    }
-    if (files.length) {
-      const grid = browse && browse.view === 'grid'
-      const fl = el('div', grid ? 'pb-tex-grid' : 'pb-files')
-      for (const f of files) fl.appendChild(buildBrowseFileRow(item, pack, f, grid))
-      list.appendChild(fl)
-    }
-    if (data.truncated) {
-      const more = el('div', 'pb-empty', t('asset.browseTruncated', { n: String(data.total) }))
-      list.appendChild(more)
-    }
-  }
-  const stat = document.querySelector('.asset-lib-stat')
-  if (stat) stat.textContent = t('asset.statTotal', { n: String(total) })
-
-  const parts = []
-  if (dirs.length) parts.push(t('asset.browseStatDirs', { n: String(dirs.length) }))
-  if (files.length) parts.push(t('asset.browseStatFiles', { n: String(files.length) }))
-  let status = parts.join(' · ') || t('asset.browseEmptyDir')
-  if (term && total !== unfiltered) {
-    status += ' · ' + t('asset.browseFiltered', { n: String(total), total: String(unfiltered) })
-  }
-  status += ' — ' + t('asset.browseHint')
-  setBrowseStatus(status)
-}
-
-async function renderBrowse() {
-  const body = document.getElementById('assetLibraryBody')
-  if (!body || !browse) return
-  const search = document.getElementById('assetLibSearch')
-  if (search) search.disabled = true
-  const toolbar = document.getElementById('assetLibToolbar')
-  if (toolbar) toolbar.classList.add('pb-off')
-  const seq = ++browseSeq
-  const { item, pack, dir, api } = browse
-
-  body.scrollTop = 0
-  body.innerHTML = ''
-  const view = el('div', 'pack-browser')
-  view.appendChild(buildBrowseHead(item, pack, null))
-  view.appendChild(buildBrowseToolbar())
-  const list = el('div', 'pb-list')
-  list.appendChild(el('div', 'pb-loading', t('asset.browseLoading')))
-  view.appendChild(list)
-  view.appendChild(el('div', 'pb-status', t('asset.browseLoading')))
-  body.appendChild(view)
-
-  let data
-  try {
-    const q = dir ? '?dir=' + encodeURIComponent(dir) : ''
-    data = await assetApiCall('GET', api + '/' + encodeURIComponent(item.name) + '/entries' + q)
-  } catch (e) {
-    if (seq === browseSeq && browse) fillBrowseError(item, pack, e.message)
-    return
-  }
-  if (seq !== browseSeq || !browse) return
-  browse.data = data
-  fillBrowseView(item, pack, data)
-}
-
 async function loadProjects() {
   try {
     const data = await assetApiCall('GET', PROJECTS_API)
@@ -2254,91 +1477,6 @@ function rebuild() {
   applyFilter()
 }
 
-function applyFilter() {
-  const body = document.getElementById('assetLibraryBody')
-  if (!body) return
-  if (browse) return
-  const term = searchTerm.trim()
-  const searching = !!term
-  const termLower = term.toLowerCase()
-  const enCands = searching ? enCandidatesOfZh(term) : []
-  const kind = contentKindFilter
-
-  const groupVisible = new Set()
-  const secVisible = new Set()
-  const secCount = new Map()
-
-  /* 卡片：单次遍历，命中名称（搜索词）且符合方块/物品过滤才显示；同时累加组/分区可见计数 */
-  const cards = body.querySelectorAll('.asset-card')
-  for (let i = 0; i < cards.length; i++) {
-    const card = cards[i]
-    const name = (card.dataset.name || '').toLowerCase()
-    const zh = (card.dataset.zhName || '').toLowerCase()
-    const py = (card.dataset.pinyin || '').toLowerCase()
-    const nameOk = !searching || assetSearchMatch(name, zh, py, enCands, termLower)
-    const kindOk = kind === 'all' || card.dataset.kind === kind
-    const show = nameOk && kindOk
-    card.classList.toggle('is-hidden', !show)
-    if (!show) continue
-    const grp = card.closest('.asset-lib-group')
-    if (grp) groupVisible.add(grp)
-    const sec = card.closest('.asset-lib-section')
-    if (sec) { secVisible.add(sec); secCount.set(sec, (secCount.get(sec) || 0) + 1) }
-  }
-
-  /* 分组：组内无可见卡片则整组隐藏；搜索命中时临时展开折叠分组 */
-  const groups = body.querySelectorAll('.asset-lib-group')
-  for (let i = 0; i < groups.length; i++) {
-    const grp = groups[i]
-    const hit = groupVisible.has(grp)
-    grp.classList.toggle('is-hidden', !hit)
-    grp.classList.toggle('search-open', searching && hit)
-  }
-
-  /* 分区：非搜索时按当前分类标签过滤；搜索时跨分类展示 */
-  let visible = 0
-  const sections = body.querySelectorAll('.asset-lib-section')
-  for (let i = 0; i < sections.length; i++) {
-    const sec = sections[i]
-    const cat = sec.dataset.cat
-    const catOk = searching
-      ? !QUICK_CATS.has(cat)
-      : categoryFilter === 'all'
-        ? SECTION_CATS.includes(cat)
-        : cat === categoryFilter
-    const hit = secVisible.has(sec)
-    const hint = !!sec.querySelector('.asset-lib-hint')
-    sec.classList.toggle('is-hidden', !catOk || (!hit && !hint))
-    sec.classList.toggle('search-open', searching && hit)
-    if (catOk && hit) visible += secCount.get(sec) || 0
-  }
-
-  updateStat(visible)
-  const hasVisibleHint = !!body.querySelector('.asset-lib-section:not(.is-hidden) .asset-lib-hint')
-  let empty = body.querySelector('.asset-lib-empty')
-  if (visible === 0 && !hasVisibleHint) {
-    if (!empty) {
-      empty = el('div', 'asset-lib-empty')
-      body.appendChild(empty)
-    }
-    let msg
-    if (term) msg = t('asset.emptyFiltered')
-    else if (contentKindFilter !== 'all')
-      msg = t('asset.emptyKind', { kind: t(contentKindFilter === 'block' ? 'asset.kindBlock' : 'asset.kindItem') })
-    else if (categoryFilter !== 'all') msg = t('asset.emptyCategory', { cat: categoryLabel(categoryFilter) })
-    else msg = t('asset.empty')
-    empty.textContent = msg
-    empty.style.display = ''
-  } else if (empty) {
-    empty.style.display = 'none'
-  }
-}
-
-function updateStat(n) {
-  const stat = document.querySelector('.asset-lib-stat')
-  if (stat) stat.textContent = t('asset.statTotal', { n })
-}
-
 async function deleteMcPack(item) {
   const name = item.pack && item.pack.name
   if (!name) return
@@ -2357,136 +1495,6 @@ async function deleteMcPack(item) {
   } catch (e) {
     showToast('删除失败：' + (e.message || e))
   }
-}
-
-async function doDownloadZip(url, body, loadingMsg, successPrefix) {
-  try {
-    showToast(loadingMsg)
-    const res = await fetch(apiUrl(url), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    })
-    if (!res.ok) throw new Error('HTTP ' + res.status)
-    const blob = await res.blob()
-    const cd = res.headers.get('Content-Disposition') || ''
-    let fileName = 'export.zip'
-    const m = cd.match(/filename="?([^"]+)"?/)
-    if (m) {
-      try {
-        fileName = decodeURIComponent(m[1])
-      } catch {}
-    }
-    const u = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = u
-    a.download = fileName
-    a.click()
-    URL.revokeObjectURL(u)
-    showToast(successPrefix + fileName)
-  } catch (e) {
-    showToast('导出失败：' + (e.message || e))
-  }
-}
-
-function openExportDialog({ packs, isBatch }) {
-  return new Promise(resolve => {
-    const bd = document.createElement('div')
-    bd.style.cssText =
-      'position:fixed;inset:0;z-index:92001;background:rgba(0,0,0,.5);' +
-      'display:flex;align-items:center;justify-content:center;font-family:inherit;'
-    const c = document.createElement('div')
-    c.style.cssText =
-      'width:min(480px,calc(100vw - 48px));border-radius:10px;' +
-      'background:var(--bg2,#1c1f26);color:var(--text,#e8e8e8);border:1px solid var(--border,#333);' +
-      'box-shadow:0 12px 40px rgba(0,0,0,.5);padding:16px 18px;box-sizing:border-box;'
-    const h = document.createElement('div')
-    h.style.cssText = 'font-size:13px;font-weight:600;margin-bottom:10px;'
-    h.textContent = isBatch ? '批量导出为 zip' : '导出为 zip'
-    c.appendChild(h)
-
-    const selected = new Set(packs.map(p => p.name))
-    if (isBatch) {
-      const hint = document.createElement('div')
-      hint.style.cssText = 'font-size:11px;opacity:.6;margin-bottom:8px;'
-      hint.textContent = '勾选要导出的资源包（' + packs.length + ' 个）'
-      c.appendChild(hint)
-      const list = document.createElement('div')
-      list.style.cssText =
-        'max-height:200px;overflow:auto;margin-bottom:10px;border:1px solid var(--border,#333);' +
-        'border-radius:6px;padding:6px;background:var(--bg,#12141a);'
-      for (const p of packs) {
-        const row = document.createElement('label')
-        row.style.cssText = 'display:flex;align-items:center;gap:6px;padding:3px 0;font-size:11px;cursor:pointer;'
-        const cb = document.createElement('input')
-        cb.type = 'checkbox'
-        cb.checked = true
-        cb.addEventListener('change', () => {
-          cb.checked ? selected.add(p.name) : selected.delete(p.name)
-        })
-        row.appendChild(cb)
-        row.appendChild(document.createTextNode(p.name))
-        list.appendChild(row)
-      }
-      c.appendChild(list)
-    }
-
-    const pngLabel = document.createElement('label')
-    pngLabel.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:6px;cursor:pointer;'
-    const pngCb = document.createElement('input')
-    pngCb.type = 'checkbox'
-    pngCb.checked = true
-    pngLabel.appendChild(pngCb)
-    pngLabel.appendChild(document.createTextNode('包含 pack.png 缩略图'))
-    c.appendChild(pngLabel)
-
-    const cmpLabel = document.createElement('label')
-    cmpLabel.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:12px;cursor:pointer;'
-    const cmpCb = document.createElement('input')
-    cmpCb.type = 'checkbox'
-    cmpCb.checked = true
-    cmpLabel.appendChild(cmpCb)
-    cmpLabel.appendChild(document.createTextNode('压缩文件（deflate，取消则为 store 直存）'))
-    c.appendChild(cmpLabel)
-
-    const btnRow = document.createElement('div')
-    btnRow.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;'
-    const cancelBtn = document.createElement('button')
-    cancelBtn.textContent = '取消'
-    cancelBtn.style.cssText =
-      'padding:6px 18px;border-radius:6px;font-size:12px;cursor:pointer;' +
-      'border:1px solid var(--border,#333);background:var(--bg,#12141a);color:var(--text,#e8e8e8);'
-    const exportBtn = document.createElement('button')
-    exportBtn.textContent = '导出'
-    exportBtn.style.cssText =
-      'padding:6px 18px;border-radius:6px;font-size:12px;cursor:pointer;' +
-      'border:1px solid var(--primary,#2b6cff);background:var(--primary,#2b6cff);color:#fff;'
-    btnRow.appendChild(cancelBtn)
-    btnRow.appendChild(exportBtn)
-    c.appendChild(btnRow)
-    bd.appendChild(c)
-
-    let done = false
-    function finish(v) {
-      if (done) return
-      done = true
-      bd.remove()
-      resolve(v)
-    }
-    cancelBtn.addEventListener('click', () => finish(null))
-    bd.addEventListener('pointerdown', e => {
-      if (e.target === bd) finish(null)
-    })
-    exportBtn.addEventListener('click', () => {
-      const names = isBatch ? [...selected] : [packs[0].name]
-      if (!names.length) {
-        showToast('请至少选择一个资源包')
-        return
-      }
-      finish({ names, skipPackPng: !pngCb.checked, noCompress: !cmpCb.checked })
-    })
-    document.body.appendChild(bd)
-  })
 }
 
 async function exportMcPackZip(item) {
@@ -2601,7 +1609,9 @@ async function copyText(s) {
 async function loadHdri() {
   try {
     const data = await assetApiCall('GET', '/api/hdri/list')
-    hdriEntries = (data && data.entries) || []
+    /* /api/hdri/list 的 data 本身就是数组（{ok:true,data:[...]}）。
+       兼容旧的 {entries:[...]} 形状，避免 hdriEntries 为 undefined 后 .map 抛错。 */
+    hdriEntries = Array.isArray(data) ? data : ((data && data.entries) || [])
     loadErrors.hdri = null
   } catch (e) {
     loadErrors.hdri = e.message || '未知错误'
@@ -2683,394 +1693,9 @@ export async function refreshAssetLibrary() {
   rebuild()
 }
 
-function sigEntries() {
-  let s = 0
-  for (const e of state.leftEntries || []) s += e.mtime || 0
-  for (const e of state.rightEntries || []) s += e.mtime || 0
-  return (state.leftEntries?.length || 0) + ':' + (state.rightEntries?.length || 0) + ':' + s
-}
-
-function startPoll() {
-  if (pollTimer) return
-  pollTimer = setInterval(() => {
-    const sig = sigEntries()
-    if (sig !== lastTexSig) {
-      lastTexSig = sig
-      rebuild()
-    }
-  }, 1500)
-}
-
-function buildToolbar() {
-  const bar = document.getElementById('assetLibToolbar')
-  if (!bar) return
-  bar.innerHTML = ''
-
-  const quickCats = [
-    ['fav', 'i-star', t('asset.catFav')],
-    ['recent', 'i-clock', t('asset.catRecent')]
-  ]
-  const fullCats = [
-    ['all', 'i-folder', t('asset.catAll')],
-    ['project', 'i-layers', t('asset.catProject')],
-    ['preset', 'i-sliders', t('asset.catPreset')],
-    ['tex', 'i-image', t('asset.catTex')],
-    ['model', 'i-cube', t('asset.catModel')],
-    ['hdri', 'i-palette', t('asset.catHdri')],
-    ['mc', 'i-box', t('asset.catMc')],
-    ['official', 'i-box', t('asset.catOfficial')]
-  ]
-  const catLabel = v => [...quickCats, ...fullCats].find(c => c[0] === v)?.[2] || v
-
-  const sortLabel = v => sortOptions.find(s => s[0] === v)?.[2] || v
-  const sortOptions = [
-    ['name', 'i-arrow-down', t('asset.sortName')],
-    ['mtime', 'i-clock', t('asset.sortMtime')],
-
-    ['fav', 'i-star', t('asset.sortFav')]
-  ]
-
-  const quickGroup = el('div', 'asset-lib-tags')
-  for (const [v, icon, label] of quickCats) {
-    const btn = el('button', 'asset-lib-tag icon-only' + (categoryFilter === v ? ' active' : ''))
-    btn.innerHTML = `<svg class="ico ico-sm"><use href="#${icon}"/></svg>`
-    btn.title = label
-    btn.dataset.cat = v
-    btn.addEventListener('click', () => {
-      categoryFilter = v
-      syncFilterChip()
-      rebuild()
-    })
-    quickGroup.appendChild(btn)
-  }
-  bar.appendChild(quickGroup)
-
-  const filterChip = el(
-    'button',
-    'asset-lib-chip' + (categoryFilter !== 'all' || contentKindFilter !== 'all' ? ' active' : '')
-  )
-  filterChip.innerHTML = `<svg class="ico ico-sm"><use href="#i-filter"/></svg><span class="chip-label">${catLabel(categoryFilter)}</span><svg class="ico ico-sm chip-caret"><use href="#i-chevron-down"/></svg>`
-  filterChip.title = t('asset.filterTitle')
-  filterChip.setAttribute('aria-haspopup', 'true')
-  filterChip.setAttribute('aria-expanded', 'false')
-
-  const popover = el('div', 'asset-lib-popover')
-  popover.setAttribute('role', 'menu')
-  const popCats = el('div', 'asset-lib-pop-cats')
-  for (const [v, icon, label] of fullCats) {
-    const btn = el('button', 'asset-lib-pop-tag' + (categoryFilter === v ? ' active' : ''))
-    btn.innerHTML = `<svg class="ico ico-sm"><use href="#${icon}"/></svg><span>${label}</span>`
-    btn.dataset.cat = v
-    btn.addEventListener('click', () => {
-      categoryFilter = v
-      popCats.querySelectorAll('.asset-lib-pop-tag').forEach(b => b.classList.toggle('active', b.dataset.cat === v))
-      syncFilterChip()
-      rebuild()
-    })
-    popCats.appendChild(btn)
-  }
-  popover.appendChild(popCats)
-
-  popover.appendChild(el('div', 'asset-lib-pop-sep'))
-
-  const kindGroup = el('div', 'asset-lib-pop-kind')
-  for (const [v, icon, label] of [
-    ['block', 'i-box', t('asset.kindBlock')],
-    ['item', 'i-cube', t('asset.kindItem')]
-  ]) {
-    const btn = el('button', 'asset-lib-pop-tag' + (contentKindFilter === v ? ' active' : ''))
-    btn.innerHTML = `<svg class="ico ico-sm"><use href="#${icon}"/></svg><span>${label}</span>`
-    btn.dataset.kind = v
-    btn.title = t('asset.kindFilterTitle')
-    btn.addEventListener('click', () => {
-      contentKindFilter = contentKindFilter === v ? 'all' : v
-      kindGroup
-        .querySelectorAll('.asset-lib-pop-tag')
-        .forEach(b => b.classList.toggle('active', b.dataset.kind === contentKindFilter))
-      syncFilterChip()
-      applyFilter()
-    })
-    kindGroup.appendChild(btn)
-  }
-  popover.appendChild(kindGroup)
-
-  popover.appendChild(el('div', 'asset-lib-pop-sep'))
-
-  const sortGroup = el('div', 'asset-lib-pop-sort')
-  const sortTags = el('div', 'asset-lib-pop-sort-tags')
-  for (const [v, icon, label] of sortOptions) {
-    const btn = el('button', 'asset-lib-pop-tag' + (sortKey === v ? ' active' : ''))
-    btn.innerHTML = `<svg class="ico ico-sm"><use href="#${icon}"/></svg><span>${label}</span>`
-    btn.dataset.sort = v
-    btn.addEventListener('click', () => {
-      sortKey = v
-      sortTags.querySelectorAll('.asset-lib-pop-tag').forEach(b => b.classList.toggle('active', b.dataset.sort === v))
-      syncFilterChip()
-      rebuild()
-    })
-    sortTags.appendChild(btn)
-  }
-  sortGroup.appendChild(sortTags)
-  const dirBtn = el('button', 'asset-lib-pop-dir' + (sortDir === 'desc' ? ' desc' : ''))
-  dirBtn.title = t('asset.sortDirTitle')
-  dirBtn.innerHTML = '<svg class="ico ico-sm"><use href="#i-arrow-up"/></svg>'
-  dirBtn.addEventListener('click', () => {
-    sortDir = sortDir === 'asc' ? 'desc' : 'asc'
-    dirBtn.classList.toggle('desc', sortDir === 'desc')
-    syncFilterChip()
-    rebuild()
-  })
-  sortGroup.appendChild(dirBtn)
-  popover.appendChild(sortGroup)
-
-  for (const stale of document.querySelectorAll('body > .asset-lib-popover')) stale.remove()
-  const chipWrap = el('div', 'asset-lib-chip-wrap')
-  chipWrap.appendChild(filterChip)
-  document.body.appendChild(popover)
-  bar.appendChild(chipWrap)
-
-  const placePopover = () => {
-    const r = filterChip.getBoundingClientRect()
-    popover.style.top = r.bottom + 4 + 'px'
-    popover.style.left = r.left + 'px'
-  }
-  const togglePopover = open => {
-    const isOpen = open === undefined ? !popover.classList.contains('open') : open
-    popover.classList.toggle('open', isOpen)
-    filterChip.classList.toggle('open', isOpen)
-    filterChip.setAttribute('aria-expanded', String(isOpen))
-    if (isOpen) {
-      placePopover()
-      document.addEventListener('mousedown', onOutside)
-      window.addEventListener('resize', placePopover)
-      window.addEventListener('scroll', placePopover, true)
-    } else {
-      document.removeEventListener('mousedown', onOutside)
-      window.removeEventListener('resize', placePopover)
-      window.removeEventListener('scroll', placePopover, true)
-    }
-  }
-  const onOutside = e => {
-    if (!chipWrap.contains(e.target) && !popover.contains(e.target)) togglePopover(false)
-  }
-  filterChip.addEventListener('click', e => {
-    e.stopPropagation()
-    togglePopover()
-  })
-
-  function syncFilterChip() {
-    const lbl = filterChip.querySelector('.chip-label')
-    if (lbl) lbl.textContent = catLabel(categoryFilter)
-    const hasActive = categoryFilter !== 'all' || contentKindFilter !== 'all' || sortKey !== 'name' || sortDir !== 'asc'
-    filterChip.classList.toggle('active', hasActive)
-  }
-
-  const right = el('div', 'asset-lib-toolbar-right')
-  const btnGroup = el('div', 'asset-lib-btn-group')
-  const viewBtn = el('button', 'asset-lib-btn')
-  viewBtn.title = t('asset.viewToggleTitle')
-  viewBtn.innerHTML = '<svg class="ico ico-sm"><use href="#i-' + (viewMode === 'grid' ? 'grid' : 'list') + '"/></svg>'
-  viewBtn.addEventListener('click', () => {
-    viewMode = viewMode === 'grid' ? 'list' : 'grid'
-    viewBtn.querySelector('use').setAttribute('href', '#i-' + (viewMode === 'grid' ? 'grid' : 'list'))
-    rebuild()
-  })
-  btnGroup.appendChild(viewBtn)
-  btnGroup.appendChild(el('span', 'asset-lib-stat', ''))
-  right.appendChild(btnGroup)
-
-  bar.appendChild(right)
-}
-
-
 /* 模型详情元信息：MC .json 模型（parent / 贴图引用 / 元素数） */
-function modelMetaRows(j) {
-  if (!j || typeof j !== 'object') return []
-  const rows = []
-  if (typeof j.parent === 'string' && j.parent) rows.push([t('asset.detailModelParent'), j.parent])
-  const texRefs = j.textures && typeof j.textures === 'object' ? Object.entries(j.textures) : []
-  if (texRefs.length) {
-    const shown = texRefs
-      .slice(0, 8)
-      .map(([k, v]) => k + ': ' + v)
-      .join(' · ')
-    rows.push([t('asset.detailModelTexRefs'), shown + (texRefs.length > 8 ? ' …' : '')])
-  }
-  if (Array.isArray(j.elements)) rows.push([t('asset.detailModelElements'), String(j.elements.length)])
-  return rows
-}
-
 /* 模型详情元信息：.bbmodel（格式 / 分辨率 / 元素与贴图数） */
-function bbModelMetaRows(j) {
-  if (!j || typeof j !== 'object') return []
-  const rows = []
-  const fmt = j.meta && (j.meta.model_format || j.meta.format)
-  if (fmt) rows.push([t('asset.detailModelFormat'), fmt])
-  if (typeof j.resolution === 'number') rows.push([t('asset.detailModelResolution'), String(j.resolution)])
-  if (Array.isArray(j.elements)) rows.push([t('asset.detailModelElements'), String(j.elements.length)])
-  if (Array.isArray(j.textures)) rows.push([t('asset.detailTextures'), String(j.textures.length)])
-  return rows
-}
-
-async function fetchModelMetaRows(item) {
-  const pm = parsePackModelPath(item.path)
-  if (pm) {
-    const res = await fetch(packRawUrl(packApiFor(pm.source), pm.packName, pm.rel) + '&any=1')
-    if (!res.ok) throw new Error('HTTP ' + res.status)
-    return modelMetaRows(await res.json())
-  }
-
-  if (typeof item.path === 'string' && item.path.startsWith('im:')) {
-    const data = await assetApiCall('GET', IMPORT_API + '/' + encodeURIComponent(item.path.slice(3)))
-    return bbModelMetaRows(data && data.json)
-  }
-  return []
-}
-
 /* 卡片点击入口：模型详情需先拉取 JSON 元信息（parent / 贴图引用等），其余直接展示 */
-function openDetail(item) {
-  if (item && item.type === 'model') showModelDetail(item)
-  else showDetail(item)
-}
-
-async function showModelDetail(item) {
-  if (!Array.isArray(item._metaRows)) {
-    try {
-      item._metaRows = await fetchModelMetaRows(item)
-    } catch {
-      item._metaRows = []
-    }
-  }
-  showDetail(item, item._metaRows)
-  /* 详情大图：懒加载 3D 缩略图，就绪后刷新详情面板（stage 直接显示渲染结果） */
-  if (item.modelThumb && !item.thumb) {
-    ensureModelThumb(item)
-      .then(url => {
-        if (url && detailCurrent === item) showDetail(item, item._metaRows)
-      })
-      .catch(() => {})
-  }
-}
-
-function showDetail(item, extraMetaRows) {
-  // 原「资产详情」抽屉窗口已移除：详情在「节点预览」浮动窗中展示
-  const typeKeys = {
-    tex: 'asset.typeTex',
-    model: 'asset.typeModel',
-    hdri: 'asset.typeHdri',
-    mc: 'asset.typeMc',
-    official: 'asset.typeOfficial',
-    preset: 'asset.typePreset',
-    project: 'asset.typeProject',
-    craft: 'asset.catCraft'
-  }
-  const virtual = isVirtualAssetPath(item)
-  const locatePath = resolveLocatePath(item)
-  const payload = {
-    kind: 'asset',
-    name: item.name,
-    type: item.type,
-    typeLabel: t(typeKeys[item.type] || item.type),
-    roleLabel: item.role ? roleText(item.role) : item.badge || null,
-    color: item.color || null,
-    color2: item.color ? shade(item.color, -30) : null,
-    thumb: item.thumb || null,
-    path: item.path || null,
-    nodeCount: item.nodeCount ?? null,
-    textureCount: item.textureCount ?? null,
-    mtimeLabel: item.mtime ? formatDate(item.mtime) : '—',
-    fav: isFav(item),
-    onAdd: () => {
-      pushRecent(item)
-      item.onAdd()
-    },
-    onFav: () => {
-      toggleFav(item)
-    },
-    /* 定位：优先 craftPath/locatePath，虚拟路径经包列表解析回退 */
-    onLocate: locatePath ? () => window.api.showInFolder(locatePath) : null,
-    onCopyPath: locatePath ? () => copyText(locatePath) : null,
-    onCopyName: () => copyText(item.name),
-    fetchInfo:
-      item.path && item.type !== 'preset' && !virtual
-        ? cb => {
-            assetApiCall('GET', '/api/asset/info?path=' + encodeURIComponent(item.path))
-              .then(info => {
-                cb(
-                  info && info.exists
-                    ? { sizeLabel: formatSize(info.size), mtimeLabel: info.mtime ? formatDate(info.mtime) : null }
-                    : { exists: false }
-                )
-              })
-              .catch(() => cb(null))
-          }
-        : null
-  }
-  if (Array.isArray(extraMetaRows) && extraMetaRows.length) {
-    payload.metaRows = extraMetaRows
-  }
-
-  if (item.type === 'model' && item.modelDelete) {
-    payload.onDelete = () => deleteUserModel(item)
-  }
-  if ((item.type === 'official' || item.type === 'mc') && item.pack) {
-    const p = item.pack
-    payload.metaRows = [
-      [t('asset.detailMcVersion'), p.formatRange || (p.format != null ? 'pack_format ' + p.format : '—')],
-      [t('asset.detailPackFormat'), p.formatLabel || (p.format != null ? String(p.format) : '—')],
-      [t('asset.detailPackKind'), p.kind === 'zip' ? 'ZIP' : p.kind === 'dir' ? t('asset.officialKindDir') : '—'],
-      [t('asset.detailDescription'), p.description || '—'],
-      p.namespaces && p.namespaces.length ? [t('asset.detailNamespaces'), p.namespaces.join(', ')] : null,
-      [t('asset.detailPackTexCount'), String(p.textureCount ?? 0)],
-      p.valid ? null : [t('asset.detailAnalyze'), p.error || '—']
-    ].filter(Boolean)
-    if (item.type === 'official') payload.onRename = () => renameOfficialAsset(item, false)
-    const texApi = packApiFor(item.type)
-    payload.fetchTextures = (params, cb) => {
-      const q = new URLSearchParams()
-      if (params && params.dir) q.set('dir', params.dir)
-      if (params && params.offset != null) q.set('offset', String(params.offset))
-      if (params && params.limit != null) q.set('limit', String(params.limit))
-      const qs = q.toString()
-      assetApiCall('GET', texApi + '/' + encodeURIComponent(p.name) + '/textures' + (qs ? '?' + qs : ''))
-        .then(d => {
-          const files = (d && d.files) || []
-          files.forEach(f => {
-            f.rawUrl = packRawUrl(texApi, p.name, f.path)
-          })
-          cb({
-            dir: (d && d.dir) || null,
-            parent: (d && d.parent) || null,
-            categories: (d && d.categories) || [],
-            dirs: (d && d.dirs) || [],
-            breadcrumbs: (d && d.breadcrumbs) || [{ name: 'root', dir: null }],
-            files,
-            filesTotal: (d && d.filesTotal) || 0,
-            total: (d && d.total) || 0,
-            offset: (d && d.offset) || 0
-          })
-        })
-        .catch(e => cb({ error: e.message }))
-    }
-    payload.onTextureAdd = tex => {
-      pushRecent(item)
-      addPackTextureToCanvas(item, p, tex)
-    }
-  }
-  document.dispatchEvent(new CustomEvent('nodepreview:show-asset', { detail: payload }))
-  detailCurrent = item
-}
-
-function refreshDetailFav() {
-  if (!detailCurrent) return
-  openDetail(detailCurrent)
-}
-
-function hideDetail() {
-  document.dispatchEvent(new CustomEvent('nodepreview:hide-asset'))
-  detailCurrent = null
-}
-
 let _initialized = false
 export function initAssetLibrary() {
   if (_initialized) return
@@ -3141,3 +1766,114 @@ export function initAssetLibrary() {
   refreshAssetLibrary()
   startPoll()
 }
+
+
+/* AssetBrowse 依赖注入 */
+setAssetBrowseHooks({
+  packRawUrl: packRawUrl,
+  packApiFor: packApiFor,
+  rebuild: rebuild,
+  el: el,
+  officialBadge: officialBadge,
+  pushRecent: pushRecent,
+  viewMcModelAsset: viewMcModelAsset,
+  addPackTextureToCanvas: addPackTextureToCanvas,
+  assetApiCall: assetApiCall,
+  get_MC_OFFICIAL_API: () => MC_OFFICIAL_API,
+  get_MODEL_DIR_PATH_RE: () => MODEL_DIR_PATH_RE,
+  get_MODEL_JSON_RE: () => MODEL_JSON_RE,
+  get_mcEntries: () => mcEntries,
+  get_officialEntries: () => officialEntries,
+  get_browse: () => browse,
+  set_browse: v => { browse = v },
+  get_browseSeq: () => browseSeq,
+  set_browseSeq: v => { browseSeq = v }
+})
+
+/* AssetCollect 依赖注入 */
+setAssetCollectHooks({
+  isImg: isImg,
+  thumbUrl: thumbUrl,
+  classifyByRole: classifyByRole,
+  packTexThumbUrl: packTexThumbUrl,
+  addPackTextureToCanvas: addPackTextureToCanvas,
+  el: el,
+  sortItems: sortItems,
+  makeCard: makeCard,
+  applyFilter: applyFilter,
+  saveTexCollapsed: saveTexCollapsed,
+  saveCollapsed: saveCollapsed,
+  openModelDir: openModelDir,
+  userModelFilePath: userModelFilePath,
+  viewImportedModelAsset: viewImportedModelAsset,
+  packApiFor: packApiFor,
+  viewMcModelAsset: viewMcModelAsset,
+  uploadModelToLibrary: uploadModelToLibrary,
+  refreshAssetLibrary: refreshAssetLibrary,
+  saveModelCollapsed: saveModelCollapsed,
+  get_collapsedSet: () => collapsedSet,
+  get_TEX_GROUP_PAGE: () => TEX_GROUP_PAGE,
+  get_texCollapsedSet: () => texCollapsedSet,
+  get_loadErrors: () => loadErrors,
+  get_importedModels: () => importedModels,
+  get_modelDirs: () => modelDirs,
+  get_IMPORT_API: () => IMPORT_API,
+  get_customModels: () => customModels,
+  get_CUSTOM_API: () => CUSTOM_API,
+  get_MODEL_JSON_RE: () => MODEL_JSON_RE,
+  get_modelCollapsedSet: () => modelCollapsedSet,
+  get_texPacks: () => texPacks,
+  set_texPacks: v => { texPacks = v },
+  get_viewMode: () => viewMode,
+  set_viewMode: v => { viewMode = v },
+  get_modelPacks: () => modelPacks,
+  set_modelPacks: v => { modelPacks = v }
+})
+
+/* AssetToolbar 依赖注入 */
+setAssetToolbarHooks({
+  el: el,
+  categoryLabel: categoryLabel,
+  rebuild: rebuild,
+  get_browse: () => browse,
+  get_searchTerm: () => searchTerm,
+  get_QUICK_CATS: () => QUICK_CATS,
+  get_SECTION_CATS: () => SECTION_CATS,
+  get_recent: () => recent,
+  get_contentKindFilter: () => contentKindFilter,
+  set_contentKindFilter: v => { contentKindFilter = v },
+  get_categoryFilter: () => categoryFilter,
+  set_categoryFilter: v => { categoryFilter = v },
+  get_pollTimer: () => pollTimer,
+  set_pollTimer: v => { pollTimer = v },
+  get_lastTexSig: () => lastTexSig,
+  set_lastTexSig: v => { lastTexSig = v },
+  get_sortKey: () => sortKey,
+  set_sortKey: v => { sortKey = v },
+  get_sortDir: () => sortDir,
+  set_sortDir: v => { sortDir = v },
+  get_viewMode: () => viewMode,
+  set_viewMode: v => { viewMode = v }
+})
+
+/* AssetDetail 依赖注入 */
+setAssetDetailHooks({
+  parsePackModelPath: parsePackModelPath,
+  packRawUrl: packRawUrl,
+  packApiFor: packApiFor,
+  assetApiCall: assetApiCall,
+  isVirtualAssetPath: isVirtualAssetPath,
+  resolveLocatePath: resolveLocatePath,
+  roleText: roleText,
+  shade: shade,
+  isFav: isFav,
+  pushRecent: pushRecent,
+  toggleFav: toggleFav,
+  copyText: copyText,
+  deleteUserModel: deleteUserModel,
+  renameOfficialAsset: renameOfficialAsset,
+  addPackTextureToCanvas: addPackTextureToCanvas,
+  get_IMPORT_API: () => IMPORT_API,
+  get_detailCurrent: () => detailCurrent,
+  set_detailCurrent: v => { detailCurrent = v }
+})

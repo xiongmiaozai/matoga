@@ -1,0 +1,239 @@
+/* ═══════════════════════════════════════════════
+   SKEUOMORPHISM 增强 — 触感深度 + 机械弹簧动画
+   ═══════════════════════════════════════════════ */
+:root {
+  --bounce: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* 空状态：像素网格 + 浮动图标 + bounce 入场 */
+.empty-row td {
+  padding: 56px 20px !important;
+  background-image:
+    linear-gradient(rgba(124, 189, 86, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(124, 189, 86, 0.04) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+.empty-row .ico-empty {
+  width: 56px;
+  height: 56px;
+  color: var(--mc-grass) !important;
+  opacity: 0.6 !important;
+  animation: mc-float 2.4s var(--spring) infinite;
+  filter: drop-shadow(3px 3px 0 rgba(0, 0, 0, 0.4));
+}
+.empty-row td span {
+  display: inline-block;
+  margin-top: 16px;
+  font-family: 'Courier New', Consolas, monospace;
+  font-weight: 700;
+  letter-spacing: 1px;
+  font-size: 13px;
+  color: var(--text-muted);
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.3);
+  animation: mc-bounce-in 0.5s var(--bounce);
+}
+.empty-row td::after {
+  content: '◆  ◇  ◆';
+  display: block;
+  margin-top: 10px;
+  font-size: 10px;
+  letter-spacing: 6px;
+  color: var(--text-dim);
+  opacity: 0.5;
+  animation: mc-pulse 2s steps(2) infinite;
+}
+@keyframes mc-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+@keyframes mc-bounce-in {
+  0% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes mc-pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* 预览占位：棋盘格 + 像素提示 */
+.pv-hint {
+  padding: 48px 10px !important;
+  font-family: 'Courier New', Consolas, monospace !important;
+  font-weight: 700 !important;
+  letter-spacing: 1px;
+  font-size: 12px !important;
+  color: var(--text-muted) !important;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.3);
+  background-color: var(--checker);
+  background-image:
+    linear-gradient(45deg, var(--checker-2) 25%, transparent 25%, transparent 75%, var(--checker-2) 75%),
+    linear-gradient(45deg, var(--checker-2) 25%, transparent 25%, transparent 75%, var(--checker-2) 75%);
+  background-size: 16px 16px;
+  background-position:
+    0 0,
+    8px 8px;
+}
+.pv-hint::before {
+  content: '◈';
+  display: block;
+  font-size: 28px;
+  color: var(--mc-stone);
+  margin-bottom: 12px;
+  animation: mc-pulse 2s steps(2) infinite;
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.4);
+}
+
+/* 加载条像素风 */
+.m3d-loading-text {
+  font-family: 'Courier New', Consolas, monospace !important;
+  font-weight: 700 !important;
+  letter-spacing: 1px;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.4);
+  animation: mc-blink 0.8s steps(2) infinite;
+}
+.m3d-loading-bar {
+  height: 8px !important;
+  border: 2px solid #000 !important;
+  box-shadow:
+    inset 1px 1px 0 0 rgba(0, 0, 0, 0.5),
+    inset -1px -1px 0 0 var(--mc-border-light) !important;
+}
+.m3d-loading-fill {
+  background: var(--mc-grass) !important;
+  box-shadow:
+    inset 1px 1px 0 0 rgba(255, 255, 255, 0.3),
+    inset -1px -1px 0 0 rgba(0, 0, 0, 0.4);
+  transition: width 0.2s var(--spring) !important;
+}
+
+/* 按钮 bounce 微交互 */
+.btn,
+.icon-btn,
+.filter-btn,
+.view-tab,
+.panel-tool {
+  transition:
+    transform 0.15s var(--bounce),
+    background 0.08s steps(2),
+    box-shadow 0.08s steps(2) !important;
+}
+.btn:hover:not(:disabled),
+.icon-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+.btn:active:not(:disabled),
+.icon-btn:active:not(:disabled) {
+  transform: translate(1px, 2px);
+}
+
+/* 卡片 Skeuomorphism 深度 */
+.folder-card,
+.panel-card {
+  border: 2px solid #000;
+  box-shadow:
+    0 4px 0 0 rgba(0, 0, 0, 0.5),
+    inset 1px 1px 0 0 var(--mc-border-light),
+    inset -1px -1px 0 0 rgba(0, 0, 0, 0.3);
+  transition:
+    transform 0.2s var(--spring),
+    box-shadow 0.2s var(--spring) !important;
+}
+.folder-card:hover,
+.panel-card:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 6px 0 0 rgba(0, 0, 0, 0.5),
+    0 0 0 1px var(--mc-grass),
+    inset 1px 1px 0 0 var(--mc-border-light),
+    inset -1px -1px 0 0 rgba(0, 0, 0, 0.3);
+}
+
+/* LED 状态指示 */
+.tag-left::before,
+.tag-right::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 5px;
+  vertical-align: middle;
+  animation: mc-led 1.6s steps(2) infinite;
+}
+.tag-left::before {
+  background: var(--mc-grass);
+  box-shadow: 0 0 6px 1px rgba(124, 189, 86, 0.7);
+}
+.tag-right::before {
+  background: var(--mc-dirt);
+  box-shadow: 0 0 6px 1px rgba(139, 111, 71, 0.7);
+}
+@keyframes mc-led {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* 浅色主题适配 */
+:root:not([data-theme='dark']) .empty-row .ico-empty {
+  color: var(--mc-grass-dark) !important;
+  filter: drop-shadow(2px 2px 0 rgba(0, 0, 0, 0.2));
+}
+:root:not([data-theme='dark']) .empty-row td span {
+  text-shadow: 1px 1px 0 rgba(255, 255, 255, 0.4);
+}
+:root:not([data-theme='dark']) .pv-hint::before {
+  color: #8a8a8a;
+  text-shadow: 2px 2px 0 rgba(255, 255, 255, 0.3);
+}
+:root:not([data-theme='dark']) .folder-card,
+:root:not([data-theme='dark']) .panel-card {
+  box-shadow:
+    0 4px 0 0 rgba(0, 0, 0, 0.25),
+    inset 1px 1px 0 0 rgba(255, 255, 255, 0.5),
+    inset -1px -1px 0 0 rgba(0, 0, 0, 0.15);
+}
+:root:not([data-theme='dark']) .folder-card:hover,
+:root:not([data-theme='dark']) .panel-card:hover {
+  box-shadow:
+    0 6px 0 0 rgba(0, 0, 0, 0.25),
+    0 0 0 1px var(--mc-grass-dark),
+    inset 1px 1px 0 0 rgba(255, 255, 255, 0.5),
+    inset -1px -1px 0 0 rgba(0, 0, 0, 0.15);
+}
+/* —— 3D Logo（matoga-logo.png）—— */
+.app-logo {
+  height: 40px;
+  width: auto;
+  vertical-align: middle;
+  image-rendering: auto;
+  image-rendering: -webkit-optimize-contrast;
+  filter: contrast(1.08) drop-shadow(2px 2px 0 rgba(0, 0, 0, 0.5));
+  transition: filter 0.2s steps(2);
+}
+.app-logo:hover {
+  filter: contrast(1.12) drop-shadow(2px 2px 0 rgba(0, 0, 0, 0.5)) brightness(1.1);
+}
+:root:not([data-theme='dark']) .app-logo {
+  filter: contrast(1.05) drop-shadow(1px 1px 0 rgba(0, 0, 0, 0.25));
+}

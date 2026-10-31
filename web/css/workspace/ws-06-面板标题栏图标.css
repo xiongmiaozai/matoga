@@ -1,0 +1,6 @@
+/* ===== 面板标题栏图标 ===== */
+.lm_tab .lm_icon {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}

@@ -12,117 +12,14 @@ import { sanitizeLayoutConfig, migrateLayoutConfig, LAYOUT_VERSION } from './lay
 import { getPanelDefs } from './panel-loader.js'
 import { computeSplitRatio } from './splitter-ratio.js'
 import { responsive } from './responsive.js'
+import { renderWorkspaceBar, setHooks as setWorkspaceBarHooks } from './ws/workspace-bar.js'
+import { addWindowMenu, openPresetManager, setHooks as setWsMenusHooks } from './ws/menus.js'
+import { showPrompt, showConfirm } from './ws/dialogs.js'
+import { bindSplitterDragTip } from './ws/splitter-bind.js'
+import { bindCloneDelegation } from './ws/clone-bind.js'
+import { importPreset, setHooks as setPresetIoHooks } from './ws/preset-io.js'
 
 const call = (m, p, b) => window.matogaCore.call(m, p, b)
-
-function showPrompt(message, defaultValue) {
-  return new Promise(resolve => {
-    const overlay = document.createElement('div')
-    overlay.className = 'ws-dialog-overlay'
-    const dlg = document.createElement('div')
-    dlg.className = 'ws-dialog'
-    const msg = document.createElement('div')
-    msg.className = 'ws-dialog-msg'
-    msg.textContent = message
-    dlg.appendChild(msg)
-    const input = document.createElement('input')
-    input.className = 'ws-dialog-input'
-    input.value = defaultValue || ''
-    dlg.appendChild(input)
-    const btns = document.createElement('div')
-    btns.className = 'ws-dialog-btns'
-    const cancelBtn = document.createElement('button')
-    cancelBtn.className = 'ws-dialog-btn'
-    cancelBtn.textContent = '取消'
-    const okBtn = document.createElement('button')
-    okBtn.className = 'ws-dialog-btn primary'
-    okBtn.textContent = '确定'
-    btns.appendChild(cancelBtn)
-    btns.appendChild(okBtn)
-    dlg.appendChild(btns)
-    overlay.appendChild(dlg)
-    document.body.appendChild(overlay)
-    input.focus()
-    input.select()
-    let done = false
-    const finish = val => {
-      if (done) return
-      done = true
-      overlay.remove()
-      resolve(val)
-    }
-    okBtn.addEventListener('click', () => finish(input.value))
-    cancelBtn.addEventListener('click', () => finish(null))
-    input.addEventListener('keydown', e => {
-      if (e.key === 'Enter') {
-        e.preventDefault()
-        finish(input.value)
-      }
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        finish(null)
-      }
-    })
-    overlay.addEventListener('click', e => {
-      if (e.target === overlay) finish(null)
-    })
-  })
-}
-
-function showConfirm(message) {
-  return new Promise(resolve => {
-    const overlay = document.createElement('div')
-    overlay.className = 'ws-dialog-overlay'
-    const dlg = document.createElement('div')
-    dlg.className = 'ws-dialog'
-    const msg = document.createElement('div')
-    msg.className = 'ws-dialog-msg'
-    msg.textContent = message
-    dlg.appendChild(msg)
-    const btns = document.createElement('div')
-    btns.className = 'ws-dialog-btns'
-    const cancelBtn = document.createElement('button')
-    cancelBtn.className = 'ws-dialog-btn'
-    cancelBtn.textContent = '取消'
-    const okBtn = document.createElement('button')
-    okBtn.className = 'ws-dialog-btn primary'
-    okBtn.textContent = '确定'
-    btns.appendChild(cancelBtn)
-    btns.appendChild(okBtn)
-    dlg.appendChild(btns)
-    overlay.appendChild(dlg)
-    document.body.appendChild(overlay)
-    okBtn.focus()
-    let done = false
-    const finish = val => {
-      if (done) return
-      done = true
-      overlay.remove()
-      resolve(val)
-    }
-    okBtn.addEventListener('click', () => finish(true))
-    cancelBtn.addEventListener('click', () => finish(false))
-    overlay.addEventListener('click', e => {
-      if (e.target === overlay) finish(false)
-    })
-    document.addEventListener('keydown', function onKey(e) {
-      if (done) {
-        document.removeEventListener('keydown', onKey)
-        return
-      }
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        document.removeEventListener('keydown', onKey)
-        finish(false)
-      }
-      if (e.key === 'Enter') {
-        e.preventDefault()
-        document.removeEventListener('keydown', onKey)
-        finish(true)
-      }
-    })
-  })
-}
 
 let PANEL_DEFS = [
   { id: 'folderCard', title: '文件夹选择', icon: 'i-folder' },
@@ -334,69 +231,6 @@ function stripCloneViewport(clone) {
   })
 }
 
-function bindCloneDelegation(clone, original) {
-  function getOrigEl(target) {
-    const path = []
-    let node = target
-    while (node && node !== clone) {
-      const parent = node.parentElement
-      if (!parent) return null
-      path.unshift(Array.from(parent.children).indexOf(node))
-      node = parent
-    }
-    if (node !== clone) return null
-    let result = original
-    for (const i of path) {
-      result = result.children[i]
-      if (!result) return null
-    }
-    return result
-  }
-  const interactive =
-    'button, input, select, label, [data-act], th[data-key], .filter-btn, .view-tab, .sortable, .panel-card-title'
-  clone.addEventListener(
-    'click',
-    e => {
-      const t = e.target.closest(interactive)
-      if (!t) return
-      const orig = getOrigEl(t)
-      if (orig && orig !== original) orig.click()
-    },
-    true
-  )
-  clone.addEventListener(
-    'input',
-    e => {
-      const orig = getOrigEl(e.target)
-      if (orig && orig !== original) {
-        orig.value = e.target.value
-        orig.dispatchEvent(new Event('input', { bubbles: true }))
-      }
-    },
-    true
-  )
-  clone.addEventListener(
-    'change',
-    e => {
-      const orig = getOrigEl(e.target)
-      if (orig && orig !== original) {
-        if (orig.type === 'checkbox' || orig.type === 'radio') orig.checked = e.target.checked
-        else orig.value = e.target.value
-        orig.dispatchEvent(new Event('change', { bubbles: true }))
-      }
-    },
-    true
-  )
-  clone.addEventListener(
-    'dblclick',
-    e => {
-      const orig = getOrigEl(e.target)
-      if (orig && orig !== original) orig.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
-    },
-    true
-  )
-}
-
 function syncCloneFromOriginal(original, clone) {
   const observer = new MutationObserver(() => {
     if (!clone.isConnected) {
@@ -578,73 +412,6 @@ function bindSplitterKeyboard() {
   })
 }
 
-function bindSplitterDragTip(splitter) {
-  if (splitter.dataset.wsTipBound) return
-  splitter.dataset.wsTipBound = '1'
-  let tip = null
-  let raf = 0
-  let tipTimer = 0
-  const neighbours = () => {
-    const prev = splitter.previousElementSibling
-    const next = splitter.nextElementSibling
-    return prev && next ? [prev, next] : null
-  }
-  const doUpdate = () => {
-    const pair = neighbours()
-    if (!pair) return
-    const [prev, next] = pair
-    const pr = prev.getBoundingClientRect()
-    const nr = next.getBoundingClientRect()
-    if (pr.width === 0 && pr.height === 0) return
-    const sr = splitter.getBoundingClientRect()
-    const { a, b } = computeSplitRatio(pr, nr)
-    if (!tip) {
-      tip = document.createElement('div')
-      tip.className = 'lm-splitter-tip'
-      document.body.appendChild(tip)
-      requestAnimationFrame(() => tip && tip.classList.add('lm-show'))
-    }
-    tip.textContent = a + ' : ' + b
-    tip.style.left = sr.left + sr.width / 2 + 'px'
-    tip.style.top = sr.top + sr.height / 2 + 'px'
-    window.dispatchEvent(new Event('resize'))
-  }
-  const update = () => {
-    if (raf) return
-    raf = requestAnimationFrame(() => {
-      raf = 0
-      doUpdate()
-    })
-  }
-  const end = () => {
-    splitter.removeEventListener('pointermove', update)
-    if (raf) {
-      cancelAnimationFrame(raf)
-      raf = 0
-    }
-    const pair = neighbours()
-    if (pair) pair.forEach(el => el.classList.remove('lm-split-active'))
-
-    window.dispatchEvent(new Event('resize'))
-    if (tip) {
-      tip.classList.remove('lm-show')
-      const old = tip
-      clearTimeout(tipTimer)
-      tipTimer = setTimeout(() => old.remove(), 130)
-      tip = null
-    }
-  }
-  splitter.addEventListener('pointerdown', () => {
-    const pair = neighbours()
-    if (pair) pair.forEach(el => el.classList.add('lm-split-active'))
-
-    doUpdate()
-    splitter.addEventListener('pointermove', update)
-    splitter.addEventListener('pointerup', end, { once: true })
-    document.addEventListener('pointerup', end, { once: true })
-  })
-}
-
 function onSplitterKey(e) {
   const splitter = e.currentTarget
   const horizontal = splitter.classList.contains('lm_horizontal')
@@ -774,288 +541,6 @@ function bindWorkspaceKeyboard() {
   })
 }
 
-function renderWorkspaceBar() {
-  if (!barEl) return
-  const allNames = [...new Set([activePreset, ...Object.keys(userPresets)])].filter(Boolean)
-  barEl.innerHTML = ''
-  const inHeader = barEl.classList.contains('in-header')
-  if (!inHeader) {
-    const label = document.createElement('span')
-    label.className = 'workspace-bar-label'
-    label.textContent = '工作区'
-    barEl.appendChild(label)
-
-    for (const name of allNames) {
-      const tab = document.createElement('div')
-      tab.className = 'workspace-tab' + (name === activePreset ? ' active' : '')
-      const nameSpan = document.createElement('span')
-      nameSpan.className = 'ws-name'
-      nameSpan.textContent = name
-      tab.appendChild(nameSpan)
-      if (userPresets[name]) {
-        const close = document.createElement('span')
-        close.className = 'ws-close'
-        close.title = '删除'
-        close.textContent = '×'
-        tab.appendChild(close)
-      }
-      tab.addEventListener('click', e => {
-        if (e.target.classList.contains('ws-close')) {
-          e.stopPropagation()
-          deletePreset(name)
-          return
-        }
-        activatePreset(name)
-      })
-      barEl.appendChild(tab)
-    }
-  }
-
-  const actions = document.createElement('div')
-  actions.className = 'workspace-bar-actions'
-  if (inHeader) {
-    const btn = document.createElement('button')
-    btn.className = 'ws-btn'
-    const btnLabel = document.createElement('span')
-    btnLabel.className = 'ws-btn-label'
-    btnLabel.textContent = activePreset || '工作区'
-    const caret = document.createElement('span')
-    caret.className = 'ws-btn-caret'
-    caret.textContent = '▾'
-    btn.appendChild(btnLabel)
-    btn.appendChild(caret)
-    if (saveError) {
-      const errBtn = document.createElement('button')
-      errBtn.className = 'ws-save-error-btn'
-      errBtn.title = '布局保存失败：' + saveError + '（点击重试）'
-      errBtn.textContent = '⚠'
-      errBtn.setAttribute('data-ws-action', 'retry-save')
-      errBtn.addEventListener('click', () => {
-        flushAutoSave()
-      })
-      actions.appendChild(errBtn)
-    }
-    actions.appendChild(btn)
-    barEl.appendChild(actions)
-
-    const dd = document.createElement('div')
-    dd.className = 'ws-dropdown'
-    dd.hidden = true
-    barEl.appendChild(dd)
-
-    let ddOpen = false
-    function closeDd() {
-      dd.hidden = true
-      btn.classList.remove('open')
-      ddOpen = false
-    }
-    function openDd() {
-      dd.innerHTML = ''
-      for (const name of allNames) {
-        const item = document.createElement('div')
-        item.className = 'ws-dd-item' + (name === activePreset ? ' active' : '')
-        const labelEl = document.createElement('span')
-        labelEl.className = 'ws-dd-label'
-        labelEl.textContent = name
-        item.appendChild(labelEl)
-        if (name === activePreset) {
-          const check = document.createElement('span')
-          check.className = 'ws-dd-check'
-          check.textContent = '✓'
-          item.appendChild(check)
-        }
-        item.addEventListener('click', e => {
-          e.stopPropagation()
-          closeDd()
-          activatePreset(name)
-        })
-        dd.appendChild(item)
-      }
-      const sep1 = document.createElement('div')
-      sep1.className = 'ws-dd-sep'
-      dd.appendChild(sep1)
-      const acts = [
-        { fn: createNewPreset, label: '新建工作区…' },
-        { fn: saveCurrent, label: '保存' },
-        { fn: saveCurrentAs, label: '另存为…' },
-        { fn: resetCurrent, label: '重置为默认布局' }
-      ]
-      for (const act of acts) {
-        const aItem = document.createElement('div')
-        aItem.className = 'ws-dd-item'
-        const aLabel = document.createElement('span')
-        aLabel.className = 'ws-dd-label'
-        aLabel.textContent = act.label
-        aItem.appendChild(aLabel)
-        aItem.addEventListener('click', e => {
-          e.stopPropagation()
-          closeDd()
-          act.fn()
-        })
-        dd.appendChild(aItem)
-      }
-      const sep2 = document.createElement('div')
-      sep2.className = 'ws-dd-sep'
-      dd.appendChild(sep2)
-      const mgrItem = document.createElement('div')
-      mgrItem.className = 'ws-dd-item'
-      const mgrLabel = document.createElement('span')
-      mgrLabel.className = 'ws-dd-label'
-      mgrLabel.textContent = '管理工作区…'
-      mgrItem.appendChild(mgrLabel)
-      mgrItem.addEventListener('click', e => {
-        e.stopPropagation()
-        closeDd()
-        openPresetManager()
-      })
-      dd.appendChild(mgrItem)
-
-      const panelSep = document.createElement('div')
-      panelSep.className = 'ws-dd-sep'
-      dd.appendChild(panelSep)
-
-      const panelHeader = document.createElement('div')
-      panelHeader.className = 'ws-dd-group-label'
-      panelHeader.textContent = '面板'
-      dd.appendChild(panelHeader)
-
-      const panelCounts = {}
-      try {
-        const cfg = layout.toConfig()
-        const root = cfg.root || cfg
-        ;(function walk(n) {
-          if (!n || typeof n !== 'object') return
-          if (n.type === 'component' && n.componentType)
-            panelCounts[n.componentType] = (panelCounts[n.componentType] || 0) + 1
-          if (Array.isArray(n.content)) n.content.forEach(walk)
-        })(root)
-      } catch {}
-
-      let panelStack = null
-      try {
-        for (const s of layout.getAllStacks()) {
-          if (s.getActiveContentItem()) {
-            panelStack = s
-            break
-          }
-        }
-      } catch {}
-
-      for (const def of PANEL_DEFS) {
-        const pItem = document.createElement('div')
-        pItem.className = 'ws-dd-item ws-dd-panel'
-        const left = document.createElement('span')
-        left.className = 'ws-dd-label'
-        left.innerHTML =
-          '<svg class="ico ico-sm ws-dd-ico"><use href="#' +
-          def.icon +
-          '"/></svg>' +
-          '<span class="ws-dd-name">' +
-          def.title +
-          '</span>'
-        pItem.appendChild(left)
-        if (panelCounts[def.id] > 0) {
-          const tag = document.createElement('span')
-          tag.className = 'ws-dd-tag'
-          tag.textContent = '已开'
-          pItem.appendChild(tag)
-        }
-        pItem.addEventListener('click', e => {
-          e.stopPropagation()
-          if (panelCounts[def.id] > 0) {
-            focusPanel(def.id)
-            showToast('「' + def.title + '」已打开，已聚焦')
-          } else {
-            try {
-              if (e.altKey) {
-                try {
-                  layout.addComponentAtLocation(def.id, {}, def.title, [
-                    { typeId: 3, index: undefined }
-                  ])
-                } catch {
-                  layout.addComponent(def.id, {}, def.title)
-                }
-              } else if (panelStack) {
-                panelStack.addComponent(def.id, {}, def.title)
-              } else {
-                layout.addComponent(def.id, {}, def.title)
-              }
-              showToast('已添加「' + def.title + '」' + (e.altKey ? ' · 新标签组' : ''))
-            } catch (err) {
-              showToast('添加失败: ' + err.message)
-            }
-          }
-          closeDd()
-        })
-        dd.appendChild(pItem)
-      }
-
-      const panelHint = document.createElement('div')
-      panelHint.className = 'ws-dd-hint'
-      panelHint.textContent = '点击 → 添加 / 聚焦 · Alt+点击 → 新建标签组'
-      dd.appendChild(panelHint)
-
-      const rect = btn.getBoundingClientRect()
-      dd.style.left = rect.left + 'px'
-      dd.style.top = rect.bottom + 'px'
-      dd.hidden = false
-      btn.classList.add('open')
-      ddOpen = true
-    }
-    btn.addEventListener('click', e => {
-      e.stopPropagation()
-      if (ddOpen) closeDd()
-      else openDd()
-    })
-    document.addEventListener('click', e => {
-      if (ddOpen && !dd.contains(e.target) && e.target !== btn && !btn.contains(e.target)) closeDd()
-    })
-    return
-  }
-  const addWinBtn = document.createElement('button')
-  addWinBtn.id = 'addWinBtn'
-  addWinBtn.textContent = '+ 面板'
-  addWinBtn.title = '添加新面板到当前工作区'
-  addWinBtn.setAttribute('data-ws-action', 'add')
-  addWinBtn.addEventListener('click', addWindowMenu)
-  const manageBtn = document.createElement('button')
-  manageBtn.textContent = '管理'
-  manageBtn.title = '管理工作区预设'
-  manageBtn.setAttribute('data-ws-action', 'manage')
-  manageBtn.addEventListener('click', openPresetManager)
-  const saveBtn = document.createElement('button')
-  saveBtn.textContent = '保存'
-  saveBtn.title = '覆盖保存当前工作区布局'
-  saveBtn.setAttribute('data-ws-action', 'save')
-  saveBtn.addEventListener('click', saveCurrent)
-  const saveAsBtn = document.createElement('button')
-  saveAsBtn.textContent = '另存为…'
-  saveAsBtn.title = '将当前布局保存为新工作区'
-  saveAsBtn.setAttribute('data-ws-action', 'saveas')
-  saveAsBtn.addEventListener('click', saveCurrentAs)
-  const resetBtn = document.createElement('button')
-  resetBtn.textContent = '重置'
-  resetBtn.title = '重置当前工作区到默认布局'
-  resetBtn.setAttribute('data-ws-action', 'reset')
-  resetBtn.addEventListener('click', resetCurrent)
-  if (saveError) {
-    const errBtn = document.createElement('button')
-    errBtn.className = 'ws-save-error-btn'
-    errBtn.title = '布局保存失败：' + saveError + '（点击重试）'
-    errBtn.textContent = '⚠'
-    errBtn.setAttribute('data-ws-action', 'retry-save')
-    errBtn.addEventListener('click', () => {
-      flushAutoSave()
-    })
-    actions.appendChild(errBtn)
-  }
-  actions.appendChild(addWinBtn)
-  actions.appendChild(manageBtn)
-  actions.appendChild(saveBtn)
-  actions.appendChild(saveAsBtn)
-  actions.appendChild(resetBtn)
-  barEl.appendChild(actions)
-}
 
 function sanitizeSavedConfig(config, presetName) {
   const fixed = sanitizeConfig(config)
@@ -1269,44 +754,6 @@ function exportAllPresets() {
   showToast('已导出全部预设')
 }
 
-async function importPreset(onDone) {
-  const input = document.createElement('input')
-  input.type = 'file'
-  input.accept = '.json'
-  input.addEventListener('change', async () => {
-    const file = input.files[0]
-    if (!file) return
-    try {
-      const text = await file.text()
-      const data = JSON.parse(text)
-      if (data.presets) {
-        for (const [n, p] of Object.entries(data.presets)) {
-          if (p && p.config) {
-            await call('PUT', '/api/workspace/preset', { name: n, config: p.config })
-            userPresets[n] = { config: p.config }
-          }
-        }
-        renderWorkspaceBar()
-        if (onDone) onDone()
-        showToast('已批量导入预设')
-      } else {
-        if (!data.name || !data.config) {
-          showToast('无效的预设文件')
-          return
-        }
-        await call('PUT', '/api/workspace/preset', { name: data.name, config: data.config })
-        userPresets[data.name] = { config: data.config }
-        renderWorkspaceBar()
-        if (onDone) onDone()
-        showToast('已导入「' + data.name + '」')
-      }
-    } catch (e) {
-      showToast('导入失败: ' + e.message)
-    }
-  })
-  input.click()
-}
-
 async function createNewPreset(onDone) {
   const templates = Object.keys(userPresets)
   let cfg = { root: row([stack([comp('compare', '贴图对比')])]) }
@@ -1393,227 +840,6 @@ function togglePanel(id) {
   } catch (err) {
     console.error('[workspace] togglePanel add failed', err)
   }
-}
-
-function addWindowMenu() {
-  const existing = document.getElementById('addWinMenu')
-  if (existing) {
-    existing.remove()
-    return
-  }
-
-  const counts = {}
-  try {
-    const cfg = layout.toConfig()
-    const root = cfg.root || cfg
-    ;(function walk(n) {
-      if (!n || typeof n !== 'object') return
-      if (n.type === 'component' && n.componentType) counts[n.componentType] = (counts[n.componentType] || 0) + 1
-      if (Array.isArray(n.content)) n.content.forEach(walk)
-    })(root)
-  } catch {}
-
-  let stacks = []
-  try {
-    stacks = layout.getAllStacks()
-  } catch {}
-  let activeStack = null
-  for (const s of stacks) {
-    try {
-      if (s.getActiveContentItem()) {
-        activeStack = s
-        break
-      }
-    } catch {}
-  }
-
-  const menu = document.createElement('div')
-  menu.id = 'addWinMenu'
-  menu.className = 'add-win-menu'
-
-  const header = document.createElement('div')
-  header.className = 'add-win-header'
-  header.textContent = '选择要添加的面板'
-  menu.appendChild(header)
-
-  for (const def of PANEL_DEFS) {
-    const item = document.createElement('div')
-    item.className = 'add-win-item'
-    const cnt = counts[def.id] || 0
-    item.innerHTML =
-      '<svg class="ico ico-sm aw-ico"><use href="#' +
-      def.icon +
-      '"/></svg>' +
-      '<span class="aw-name">' +
-      def.title +
-      '</span>' +
-      (cnt > 0 ? '<span class="aw-count">已打开</span>' : '')
-    item.addEventListener('click', e => {
-      const closeMenu = () => {
-        menu.remove()
-        document.removeEventListener('keydown', onKey)
-      }
-      if (counts[def.id] > 0) {
-        const focused = focusPanel(def.id)
-        showToast(focused ? '「' + def.title + '」已打开，已聚焦该面板' : '「' + def.title + '」已在布局中')
-        closeMenu()
-        return
-      }
-      const altNew = e.altKey
-      try {
-        if (altNew) {
-          try {
-            layout.addComponentAtLocation(def.id, {}, def.title, [{ typeId: 3, index: undefined }])
-          } catch {
-            layout.addComponent(def.id, {}, def.title)
-          }
-        } else if (activeStack) {
-          activeStack.addComponent(def.id, {}, def.title)
-        } else {
-          layout.addComponent(def.id, {}, def.title)
-        }
-        showToast('已添加「' + def.title + '」' + (altNew ? ' · 新标签组' : ''))
-      } catch (err) {
-        showToast('添加失败: ' + err.message)
-      }
-      closeMenu()
-    })
-    menu.appendChild(item)
-  }
-
-  const hint = document.createElement('div')
-  hint.className = 'add-win-hint'
-  hint.textContent = activeStack ? '点击 → 添加 / 聚焦面板 · Alt+点击 → 新建标签组' : '点击 → 添加 / 聚焦面板'
-  menu.appendChild(hint)
-
-  document.body.appendChild(menu)
-
-  const btn = document.getElementById('addWinBtn')
-  if (btn) {
-    const r = btn.getBoundingClientRect()
-    const mw = menu.offsetWidth,
-      mh = menu.offsetHeight
-    let left = r.left,
-      top = r.bottom + 4
-    if (left + mw > window.innerWidth - 8) left = window.innerWidth - mw - 8
-    if (top + mh > window.innerHeight - 8) top = Math.max(8, r.top - mh - 4)
-    menu.style.left = left + 'px'
-    menu.style.top = top + 'px'
-  }
-
-  function onKey(e) {
-    if (e.key === 'Escape') {
-      menu.remove()
-      document.removeEventListener('keydown', onKey)
-    }
-  }
-  document.addEventListener('keydown', onKey)
-  setTimeout(() => {
-    document.addEventListener('click', function onOutside(e) {
-      if (!menu.contains(e.target)) {
-        menu.remove()
-        document.removeEventListener('click', onOutside)
-        document.removeEventListener('keydown', onKey)
-      }
-    })
-  }, 0)
-}
-
-function openPresetManager() {
-  const existing = document.getElementById('presetMgrOverlay')
-  if (existing) {
-    existing.remove()
-    return
-  }
-
-  const overlay = document.createElement('div')
-  overlay.id = 'presetMgrOverlay'
-  overlay.className = 'preset-mgr-overlay'
-
-  const dlg = document.createElement('div')
-  dlg.className = 'preset-mgr-dlg'
-
-  const head = document.createElement('div')
-  head.className = 'preset-mgr-head'
-  head.innerHTML = '<span class="pm-title">工作区预设管理</span><span class="pm-x" id="presetMgrClose">✕</span>'
-  dlg.appendChild(head)
-
-  const body = document.createElement('div')
-  body.className = 'preset-mgr-body'
-
-  const list = document.createElement('div')
-  list.className = 'preset-mgr-list'
-
-  function renderList() {
-    list.innerHTML = ''
-    const allNames = [...new Set([activePreset, ...Object.keys(userPresets)])].filter(Boolean)
-    for (const name of allNames) {
-      const isSaved = !!userPresets[name]
-      const item = document.createElement('div')
-      item.className = 'preset-mgr-item' + (name === activePreset ? ' active' : '')
-      const nameSpan = document.createElement('span')
-      nameSpan.className = 'pm-name'
-      nameSpan.textContent = name
-      item.appendChild(nameSpan)
-      const tag = document.createElement('span')
-      tag.className = 'pm-tag'
-      tag.textContent = isSaved ? '自定义' : '未保存'
-      item.appendChild(tag)
-      const acts = document.createElement('div')
-      acts.className = 'pm-actions'
-      const mkBtn = (act, text, cls) => {
-        const b = document.createElement('button')
-        b.className = cls || 'pm-btn'
-        b.dataset.act = act
-        b.textContent = text
-        return b
-      }
-      acts.appendChild(mkBtn('activate', '激活'))
-      if (isSaved) {
-        acts.appendChild(mkBtn('duplicate', '复制'))
-        acts.appendChild(mkBtn('rename', '重命名'))
-        acts.appendChild(mkBtn('delete', '删除', 'pm-btn pm-danger'))
-        acts.appendChild(mkBtn('export', '导出'))
-      }
-      item.appendChild(acts)
-      item.addEventListener('click', e => {
-        const btn = e.target.closest('.pm-btn')
-        if (!btn) return
-        e.stopPropagation()
-        const act = btn.dataset.act
-        if (act === 'activate') {
-          activatePreset(name)
-          renderList()
-        } else if (act === 'duplicate') duplicatePreset(name).then(renderList)
-        else if (act === 'rename') renamePresetDialog(name, renderList)
-        else if (act === 'delete') deletePreset(name).then(renderList)
-        else if (act === 'export') exportPreset(name)
-      })
-      list.appendChild(item)
-    }
-  }
-  renderList()
-  body.appendChild(list)
-  dlg.appendChild(body)
-
-  const foot = document.createElement('div')
-  foot.className = 'preset-mgr-foot'
-  foot.innerHTML =
-    '<button class="pm-foot-btn" id="pmNew">新建工作区</button>' +
-    '<button class="pm-foot-btn" id="pmImport">导入预设</button>' +
-    '<button class="pm-foot-btn" id="pmExportAll">导出全部</button>' +
-    '<div class="pm-foot-spacer"></div>' +
-    '<button class="pm-foot-btn pm-primary" id="pmCloseBtn">关闭</button>'
-  dlg.appendChild(foot)
-  overlay.appendChild(dlg)
-  document.body.appendChild(overlay)
-
-  overlay.addEventListener('click', e => {
-    if (e.target === overlay || e.target.id === 'presetMgrClose' || e.target.id === 'pmCloseBtn') overlay.remove()
-  })
-  document.getElementById('pmNew').addEventListener('click', () => createNewPreset(renderList))
-  document.getElementById('pmImport').addEventListener('click', () => importPreset(renderList))
-  document.getElementById('pmExportAll').addEventListener('click', exportAllPresets)
 }
 
 export async function initWorkspace() {
@@ -1793,3 +1019,49 @@ function initSidebarInteractions() {
   bindResizer(resizerLeft, left, 'left')
   bindResizer(resizerRight, right, 'right')
 }
+
+
+/* 工作区栏模块的段外依赖注入（状态只读，用 getter 转发） */
+setWorkspaceBarHooks({
+  get_barEl: () => barEl,
+  get_activePreset: () => activePreset,
+  get_userPresets: () => userPresets,
+  get_saveError: () => saveError,
+  get_layout: () => layout,
+  get_PANEL_DEFS: () => PANEL_DEFS,
+  deletePreset: deletePreset,
+  activatePreset: activatePreset,
+  flushAutoSave: flushAutoSave,
+  createNewPreset: createNewPreset,
+  saveCurrent: saveCurrent,
+  saveCurrentAs: saveCurrentAs,
+  resetCurrent: resetCurrent,
+  openPresetManager: openPresetManager,
+  focusPanel: focusPanel,
+  addWindowMenu: addWindowMenu
+})
+
+
+/* 窗口菜单与预设管理模块的段外依赖注入（状态只读，getter 转发） */
+setWsMenusHooks({
+  get_layout: () => layout,
+  get_PANEL_DEFS: () => PANEL_DEFS,
+  get_activePreset: () => activePreset,
+  get_userPresets: () => userPresets,
+  focusPanel: focusPanel,
+  activatePreset: activatePreset,
+  duplicatePreset: duplicatePreset,
+  renamePresetDialog: renamePresetDialog,
+  deletePreset: deletePreset,
+  exportPreset: exportPreset,
+  createNewPreset: createNewPreset,
+  importPreset: importPreset,
+  exportAllPresets: exportAllPresets
+})
+
+
+/* 预设导入模块的段外依赖注入 */
+setPresetIoHooks({
+  call: call,
+  get_userPresets: () => userPresets
+})

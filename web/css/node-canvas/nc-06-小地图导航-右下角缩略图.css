@@ -1,0 +1,249 @@
+/* ════════════════════════════════════════════════════════════
+   小地图导航（右下角缩略图）
+   ════════════════════════════════════════════════════════════ */
+.nc-minimap {
+  position: absolute;
+  right: 12px;
+  bottom: 40px;
+  z-index: 50;
+  width: 160px;
+  height: 110px;
+  background: rgba(30, 30, 34, 0.72);
+  backdrop-filter: var(--blur);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    opacity 0.2s var(--ease),
+    transform 0.2s var(--ease);
+}
+
+.nc-minimap:hover {
+  border-color: var(--primary);
+}
+.nc-minimap .nc-mm-label {
+  position: absolute;
+  top: 4px;
+  left: 7px;
+  z-index: 3;
+  font-size: 9px;
+  color: var(--text-dim);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  pointer-events: none;
+  font-weight: 600;
+}
+.nc-minimap canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.nc-minimap .nc-mm-vp {
+  position: absolute;
+  border: 1.5px solid var(--primary);
+  border-radius: 1px;
+  background: rgba(124, 189, 86, 0.12);
+  pointer-events: none;
+  z-index: 2;
+  box-shadow: 0 0 6px rgba(124, 189, 86, 0.4);
+}
+.nc-minimap .nc-mm-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: var(--text-dim);
+  pointer-events: none;
+}
+
+/* ════════════════════════════════════════════════════════════
+   拖拽对齐辅助线
+   ════════════════════════════════════════════════════════════ */
+.nc-align-guide {
+  position: absolute;
+  z-index: 40;
+  pointer-events: none;
+  background: var(--accent);
+  opacity: 0.7;
+  box-shadow: 0 0 4px var(--accent);
+}
+.nc-align-guide.v {
+  width: 1px;
+  transform: translateX(-0.5px);
+}
+.nc-align-guide.h {
+  height: 1px;
+  transform: translateY(-0.5px);
+}
+
+/* ════════════════════════════════════════════════════════════
+   触摸 / 移动端适配
+   ════════════════════════════════════════════════════════════ */
+@media (pointer: coarse) {
+  .port {
+    width: 16px;
+    height: 16px;
+  }
+  .port.in {
+    left: -8px;
+  }
+  .port.out {
+    right: -8px;
+  }
+  .port-row {
+    height: 26px;
+  }
+  .node-head {
+    height: 34px;
+  }
+  .edges .edge-hit {
+    stroke-width: 26;
+  }
+  .node-head .x {
+    opacity: 0.55;
+  }
+  .node-head .collapse {
+    width: 20px;
+    height: 20px;
+    font-size: 12px;
+  }
+  .ctx-menu {
+    min-width: 210px;
+  }
+  .ctx-menu .item {
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+  .ctx-menu .search {
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+  .nc-toolbar .tbtn {
+    height: 30px;
+    padding: 0 10px;
+    font-size: 12px;
+  }
+  .nc-toolbar .zoom-pill {
+    height: 30px;
+  }
+  .nc-toolbar .zoom-pill button {
+    width: 24px;
+    height: 24px;
+    font-size: 15px;
+  }
+  .w-num input[type='range']::-webkit-slider-thumb {
+    width: 16px;
+    height: 20px;
+  }
+  .w-num input[type='range']::-moz-range-thumb {
+    width: 16px;
+    height: 20px;
+  }
+  .w-color input[type='color'] {
+    width: 36px;
+    height: 28px;
+  }
+  .w-text {
+    height: 28px;
+    font-size: 13px;
+  }
+  .w-select {
+    height: 28px;
+    font-size: 13px;
+  }
+  .nc-minimap {
+    width: 130px;
+    height: 90px;
+  }
+}
+
+@media (max-width: 768px) {
+  .node {
+    width: 170px;
+  }
+  .nc-toolbar {
+    gap: 3px;
+    flex-wrap: wrap;
+  }
+  .nc-toolbar .tbtn {
+    height: 26px;
+    padding: 0 7px;
+    font-size: 10px;
+  }
+  .nc-toolbar .tbtn .sc {
+    display: none;
+  }
+  .pv-numviz .scale {
+    display: none;
+  }
+  .pv-numviz .bar {
+    height: 10px;
+  }
+  .statusbar {
+    font-size: 10px;
+    gap: 8px;
+    padding: 0 6px;
+  }
+  .ctx-menu {
+    min-width: 220px;
+    max-height: 50vh;
+    font-size: 13px;
+  }
+  .import-dlg {
+    width: 94vw;
+    max-height: 88vh;
+  }
+  .import-grid {
+    grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
+  }
+
+  .pb-filter {
+    width: 96px;
+  }
+  .pb-filter:focus {
+    width: 118px;
+  }
+  .pb-crumb {
+    max-width: 90px;
+  }
+  .pb-folders {
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  }
+  .pb-tex-grid {
+    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  }
+
+  .port-label {
+    max-width: 90px;
+    font-size: 10px;
+  }
+  .node-head .title {
+    font-size: 11px;
+  }
+  .nc-minimap {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .node {
+    width: 150px;
+  }
+  .nc-toolbar .tbtn {
+    padding: 0 5px;
+    font-size: 9px;
+  }
+  .panel-head {
+    height: auto;
+    flex-wrap: wrap;
+    padding: 3px 5px;
+  }
+  .statusbar .seg:not(:first-child) {
+    display: none;
+  }
+}

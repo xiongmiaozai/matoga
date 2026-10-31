@@ -1,0 +1,182 @@
+/* ── 快速选包下拉 ── */
+.pack-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px;
+}
+.pack-btn .pack-caret {
+  opacity: 0.65;
+  transition:
+    transform 0.2s var(--ease),
+    opacity 0.2s var(--ease);
+}
+.pack-btn.active .pack-caret {
+  transform: rotate(180deg);
+  opacity: 1;
+}
+.pack-menu {
+  position: fixed;
+  z-index: 300;
+  display: none;
+  flex-direction: column;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-3);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px;
+}
+.pack-menu-group {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 7px 10px 4px;
+  letter-spacing: 0.3px;
+}
+.pack-menu-group:not(:first-child) {
+  margin-top: 4px;
+  border-top: 1px solid var(--border-soft);
+  padding-top: 8px;
+}
+.pack-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+.pack-menu-item:hover:not(:disabled) {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+.pack-menu-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.pack-menu-item .pack-menu-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.pack-menu-item .pack-menu-meta {
+  flex: none;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.pack-menu-empty {
+  padding: 10px 10px 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.pack-menu-foot {
+  padding: 7px 10px 4px;
+  margin-top: 4px;
+  border-top: 1px solid var(--border-soft);
+  font-size: 10px;
+  color: var(--text-muted);
+  opacity: 0.8;
+}
+
+.panel-card {
+  padding: 10px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.panel-card-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+.opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.opt:hover {
+  color: var(--text);
+}
+.opt input {
+  cursor: pointer;
+  accent-color: var(--primary);
+}
+.action-row {
+  display: flex;
+  gap: 6px;
+}
+.action-row .btn {
+  flex: 1;
+}
+
+/* ── 按钮 ── */
+.btn {
+  border: 1px solid var(--border);
+  background: var(--panel-bg);
+  color: var(--text);
+  padding: 8px 14px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.18s var(--ease);
+  white-space: nowrap;
+  font-weight: 500;
+}
+.btn:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.btn-sm {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+.btn-primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
+  color: #fff;
+}
+.btn-accent {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.btn-accent:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  color: #fff;
+}
+.btn-ghost {
+  background: transparent;
+}
+.btn-danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+.btn-danger:hover:not(:disabled) {
+  filter: brightness(1.08);
+}

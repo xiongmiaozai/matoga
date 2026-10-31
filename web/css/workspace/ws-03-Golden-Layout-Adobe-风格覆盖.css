@@ -1,0 +1,235 @@
+/* ===== Golden-Layout Adobe 风格覆盖 ===== */
+
+/* 根 */
+.lm_root {
+  font-size: var(--fs-base);
+}
+
+/* 面板内容容器 — 让迁移进来的面板可滚动 */
+.lm_content {
+  background: var(--panel-bg);
+  overflow: auto;
+}
+.lm_content > * {
+  width: 100%;
+  height: 100%;
+}
+
+/* 标签组标题栏 — Adobe 风格窄条 */
+.lm_stack > .lm_header {
+  height: 28px;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--border);
+  padding: 0 2px 0 6px;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  box-shadow: none;
+}
+.lm_stack.lm_stack > .lm_header {
+  box-shadow: none;
+}
+
+/* 标签页 */
+.lm_tab {
+  height: 24px;
+  line-height: 24px;
+  padding: 0 8px;
+  margin: 2px 1px 0;
+  background: transparent;
+  border: none !important;
+  border-radius: 4px 4px 0 0;
+  color: var(--text-muted);
+  font-size: var(--fs-base);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 160px;
+}
+.lm_tab:hover {
+  color: var(--text);
+  background: var(--row-hover);
+}
+.lm_tab.lm_active {
+  color: var(--text);
+  background: var(--panel-bg);
+  font-weight: 500;
+}
+.lm_tab .lm_title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 130px;
+}
+.lm_tab .lm_close_tab {
+  width: 20px;
+  height: 20px;
+  margin-left: 4px;
+  opacity: 0.7;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  color: var(--text);
+  background-image: none !important;
+  transition:
+    opacity 0.12s ease,
+    background 0.12s ease,
+    color 0.12s ease;
+}
+.lm_tab .lm_close_tab::before {
+  content: '×';
+  line-height: 1;
+}
+.lm_tab:hover .lm_close_tab {
+  opacity: 1;
+}
+.lm_tab.lm_active .lm_close_tab {
+  opacity: 1;
+}
+.lm_tab .lm_close_tab:hover {
+  opacity: 1;
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+/* 标签组工具按钮（最大化等） */
+.lm_stack > .lm_header > .lm_stack_controls {
+  margin-left: auto;
+  display: flex;
+  gap: 2px;
+}
+.lm_stack > .lm_header > .lm_stack_controls .lm_stack_button {
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.lm_stack > .lm_header > .lm_stack_controls .lm_stack_button:hover {
+  color: var(--text);
+  background: var(--row-hover);
+}
+
+/* 分割条 — Adobe 风格，整个区域可拖拽 + 悬停高亮 + 拖拽光标 */
+.lm_splitter {
+  z-index: 5 !important;
+  position: relative;
+  opacity: 1 !important;
+  transition: background 0.15s ease;
+}
+.lm_splitter.lm_vertical {
+  width: 10px !important;
+  cursor: ns-resize !important;
+  background: var(--panel-3) !important;
+}
+.lm_splitter.lm_horizontal {
+  height: 10px !important;
+  cursor: ew-resize !important;
+  background: var(--panel-3) !important;
+}
+.lm_splitter .lm_drag_handle {
+  background: transparent !important;
+  z-index: 10;
+  cursor: inherit !important;
+}
+.lm_splitter::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 2px;
+  transition: background 0.15s ease;
+  pointer-events: none;
+}
+.lm_splitter.lm_vertical::before {
+  width: 18px;
+  height: 2px;
+}
+.lm_splitter.lm_horizontal::before {
+  width: 2px;
+  height: 18px;
+}
+.lm_splitter:hover::before,
+.lm_splitter.lm_dragging::before {
+  background: #fff;
+}
+.lm_splitter:hover {
+  background: var(--primary) !important;
+}
+.lm_splitter.lm_dragging {
+  background: var(--primary) !important;
+}
+
+/* 停靠指示器 — Adobe 风格蓝色高亮 */
+.lm_drop_target_indicator {
+  background: var(--primary) !important;
+  opacity: 0.15;
+  border: 2px solid var(--primary);
+  border-radius: 4px;
+  z-index: 1000;
+  transition: opacity 0.1s;
+}
+.lm_drop_preview {
+  background: var(--primary);
+  opacity: 0.25;
+  border-radius: 4px;
+}
+
+/* 拖拽代理（拖动中的面板预览） */
+.lm_drag_proxy {
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: var(--shadow-3);
+  opacity: 0.9;
+  z-index: 2000;
+}
+.lm_drag_proxy .lm_header {
+  background: var(--panel-2);
+}
+
+/* 浮动面板（popout）阴影 */
+.lm_content:has(.panel.floating) {
+  box-shadow: var(--shadow-3);
+}
+
+/* 最大化面板 */
+.lm_maximised {
+  z-index: 100;
+}
+
+/* 行列容器 */
+.lm_row > .lm_item,
+.lm_column > .lm_item {
+  float: none;
+}
+.lm_row {
+  display: flex;
+  flex-direction: row;
+}
+.lm_column {
+  display: flex;
+  flex-direction: column;
+}
+.lm_row > .lm_splitter {
+  flex: 0 0 10px;
+}
+.lm_column > .lm_splitter {
+  flex: 0 0 10px;
+}
+.lm_row > .lm_item {
+  flex: 1 1 auto;
+}
+.lm_column > .lm_item {
+  flex: 1 1 auto;
+}

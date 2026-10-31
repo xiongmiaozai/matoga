@@ -12,7 +12,7 @@
     "start": "node server/index.js",
     "web": "node server/index.js",
     "web:lan": "node server/index.js --lan",
-    "test": "node --test \"test/unit/**/*.test.js\"",
+    "test": "node scripts/run-unit-tests.mjs",
     "test:smoke": "node test/smoke/run.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

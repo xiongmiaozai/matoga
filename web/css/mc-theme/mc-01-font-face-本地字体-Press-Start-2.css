@@ -1,0 +1,236 @@
+/* ═══════════════════════════════════════════════
+   @font-face — 本地字体（Press Start 2P + Inter）
+   ═══════════════════════════════════════════════ */
+@font-face {
+  font-family: 'Press Start 2P';
+  src: url('/assets/fonts/press-start-2p.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('/assets/fonts/inter-400.woff2') format('woff2');
+  font-weight: 400 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('/assets/fonts/inter-600.woff2') format('woff2');
+  font-weight: 600 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ═══════════════════════════════════════════════
+   MC PALETTE — Override all CSS variables
+   ═══════════════════════════════════════════════ */
+:root {
+  --bg: #1a1a1e;
+  --panel-bg: #2a2a2e;
+  --panel-2: #333338;
+  --panel-3: #3a3a40;
+  --border: #4a4a52;
+  --border-soft: #3a3a40;
+  --text: #e8e8e8;
+  --text-muted: #9a9a9a;
+  --text-dim: #6a6a6a;
+  --primary: #7cbd56;
+  --primary-hover: #8fd468;
+  --primary-soft: #2a3a22;
+  --accent: #5bcefa;
+  --accent-hover: #7ddfff;
+  --accent-soft: #1a2a3a;
+  --danger: #c63a3a;
+  --danger-soft: #3a1a1a;
+  --warn: #f5a623;
+  --warn-soft: #3a2e14;
+  --partial: #f5cd4d;
+  --partial-soft: #3a3214;
+  --extra: #c084fc;
+  --extra-soft: #2a1a3a;
+  --tag-left-bg: #2a3a22;
+  --tag-left-fg: #7cbd56;
+  --tag-right-bg: #3a2e14;
+  --tag-right-fg: #f5a623;
+  --row-hover: #383840;
+  --zebra: #2e2e34;
+  --selected: #2a3a22;
+  --checker: #3a3a3a;
+  --checker-2: #2e2e2e;
+  --shadow-1: 0 2px 0 0 rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 4px 0 0 rgba(0, 0, 0, 0.5);
+  --shadow-3: 0 6px 0 0 rgba(0, 0, 0, 0.6);
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
+  --ease: steps(2);
+  --mc-grass: #7cbd56;
+  --mc-grass-dark: #5a9a3e;
+  --mc-stone: #828282;
+  --mc-stone-dark: #6a6a6a;
+  --mc-dirt: #8b6f47;
+  --mc-dirt-dark: #6b5437;
+  --mc-diamond: #5bcefa;
+  --mc-diamond-dark: #4ab0d8;
+  --mc-dark: #1a1a1e;
+  --mc-darker: #121214;
+  --mc-border-light: rgba(255, 255, 255, 0.15);
+  --mc-border-dark: rgba(0, 0, 0, 0.5);
+}
+
+:root[data-theme='dark'] {
+  --bg: #1a1a1e;
+  --panel-bg: #2a2a2e;
+  --panel-2: #333338;
+  --panel-3: #3a3a40;
+  --border: #4a4a52;
+  --border-soft: #3a3a40;
+  --text: #e8e8e8;
+  --text-muted: #9a9a9a;
+  --text-dim: #6a6a6a;
+  --primary: #7cbd56;
+  --primary-hover: #8fd468;
+  --primary-soft: #2a3a22;
+  --accent: #5bcefa;
+  --accent-hover: #7ddfff;
+  --accent-soft: #1a2a3a;
+  --danger: #c63a3a;
+  --danger-soft: #3a1a1a;
+  --warn: #f5a623;
+  --warn-soft: #3a2e14;
+  --partial: #f5cd4d;
+  --partial-soft: #3a3214;
+  --extra: #c084fc;
+  --extra-soft: #2a1a3a;
+  --tag-left-bg: #2a3a22;
+  --tag-left-fg: #7cbd56;
+  --tag-right-bg: #3a2e14;
+  --tag-right-fg: #f5a623;
+  --row-hover: #383840;
+  --zebra: #2e2e34;
+  --selected: #2a3a22;
+  --checker: #3a3a3a;
+  --checker-2: #2e2e2e;
+}
+
+/* ═══════════════════════════════════════════════
+   GLOBAL — Stone texture background + fonts
+   ═══════════════════════════════════════════════ */
+body {
+  font-family:
+    'Inter',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  background-color: var(--mc-dark);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16'><rect width='16' height='16' fill='%231e1e22'/><rect x='0' y='0' width='8' height='8' fill='%23242428'/><rect x='8' y='8' width='8' height='8' fill='%23242428'/><rect x='4' y='4' width='4' height='4' fill='%231a1a1e'/><rect x='12' y='0' width='4' height='4' fill='%231a1a1e'/><rect x='0' y='12' width='4' height='4' fill='%231a1a1e'/><rect x='10' y='2' width='2' height='2' fill='%232a2a2e'/><rect x='2' y='10' width='2' height='2' fill='%232a2a2e'/></svg>");
+  background-size: 16px 16px;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Pixelated rendering for all images */
+img,
+canvas,
+.pv-cell img,
+.preview-img,
+.thumb {
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: crisp-edges;
+}
+/* HDR 预览图是真实环境照片，应平滑显示而非像素化 */
+.hdri-preset-thumb {
+  image-rendering: auto;
+}
+
+/* ═══════════════════════════════════════════════
+   TYPOGRAPHY — Pixel font for titles
+   ═══════════════════════════════════════════════ */
+.title h1,
+.settings-title,
+.panel-title,
+.panel-card-title,
+.center-title,
+.chart-card-title,
+.detail-title {
+  font-family: 'Press Start 2P', 'Courier New', monospace;
+  letter-spacing: 0.5px;
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
+}
+
+.title h1 {
+  font-size: 14px;
+}
+.settings-title {
+  font-size: 13px;
+}
+.panel-title {
+  font-size: 11px;
+}
+.panel-card-title {
+  font-size: 11px;
+}
+.center-title {
+  font-size: 12px;
+}
+.chart-card-title {
+  font-size: 12px;
+}
+.detail-title {
+  font-size: 12px;
+}
+
+.ver {
+  font-family: 'Press Start 2P', 'Courier New', monospace;
+  font-size: 9px;
+  padding: 2px 6px;
+  background: var(--mc-dirt);
+  color: #fff;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.4);
+  border: 2px solid #000;
+  box-shadow: inset 1px 1px 0 0 var(--mc-border-light);
+}
+
+/* ═══════════════════════════════════════════════
+   HEADER — MC toolbar bar
+   ═══════════════════════════════════════════════ */
+.app-header {
+  background: var(--mc-darker);
+  border-bottom: 3px solid #000;
+  box-shadow:
+    0 3px 0 0 rgba(0, 0, 0, 0.3),
+    inset 0 -2px 0 0 rgba(0, 0, 0, 0.4);
+  padding: 0 16px;
+  height: 52px;
+}
+
+.ico-logo {
+  color: var(--mc-grass);
+}
+
+.header-search {
+  background: var(--mc-darker);
+  border: 2px solid #000;
+  box-shadow:
+    inset 2px 2px 0 0 rgba(0, 0, 0, 0.5),
+    inset -1px -1px 0 0 var(--mc-border-light);
+}
+.header-search:focus-within {
+  border-color: var(--mc-grass);
+  box-shadow:
+    inset 2px 2px 0 0 rgba(0, 0, 0, 0.5),
+    inset -1px -1px 0 0 var(--mc-border-light),
+    0 0 0 2px var(--mc-grass);
+}
+
+#searchInput {
+  font-family: 'Inter', sans-serif;
+}
