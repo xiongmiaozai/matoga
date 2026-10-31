@@ -14,7 +14,7 @@ import {
   leftBtn,
   rightBtn,
   onlyMissingChk,
-  summaryEl,
+
   resultBody,
   leftPathEl,
   rightPathEl
@@ -74,6 +74,7 @@ import {
 } from './mc-model-viewer.js'
 import { t, onLocaleChange } from './i18n.js'
 import { loadZhNames, zhOfTexPath, zhOfTexName } from './zh-names.js'
+import { filterByResultSearch } from './result-search.js'
 loadZhNames().catch(() => {})
 
 function zhOfKey(key) {
@@ -87,6 +88,49 @@ function zhOfKey(key) {
   return zhOfTexName(base)
 }
 
+const _searchFieldCache = new Map()
+function applyResultSearch(arr) {
+  return filterByResultSearch(arr, state.resultSearchTerm, _searchFieldCache)
+}
+
+function bindResultSearch() {
+  const input = $('resultSearch')
+  if (!input) return
+  if (input.value !== (state.resultSearchTerm || '')) input.value = state.resultSearchTerm || ''
+  const clearBtn = $('resultSearchClear')
+  if (clearBtn) clearBtn.classList.toggle('is-hidden', !input.value)
+  if (input.dataset.bound) return
+  input.dataset.bound = '1'
+  let timer
+  input.addEventListener('input', () => {
+    clearTimeout(timer)
+    timer = setTimeout(() => {
+      state.resultSearchTerm = input.value
+      state.renderLimit = 200
+      saveOptions()
+      renderResult()
+    }, 180)
+  })
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && input.value) {
+      input.value = ''
+      state.resultSearchTerm = ''
+      state.renderLimit = 200
+      saveOptions()
+      renderResult()
+    }
+  })
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      input.value = ''
+      state.resultSearchTerm = ''
+      state.renderLimit = 200
+      saveOptions()
+      renderResult()
+    })
+  }
+}
+
 const _rowMap = new Map()
 let _filteredCache = null
 let _renderedCount = 0
@@ -94,34 +138,6 @@ let _lastBaseSet = []
 let _modelMetaLoading = false
 
 /* 懒加载模型元数据（ns/format/texRefs/animated），供贴图数/动画分组维度使用 */
-async function ensureModelMeta() {
-  if (state.modelMeta || _modelMetaLoading) return
-  _modelMetaLoading = true
-  try {
-    const res = await fetch('/api/asset/model?meta=1')
-    const data = await res.json()
-    if (data && data.ok && data.data && Array.isArray(data.data.packs)) {
-      const map = new Map()
-      for (const pack of data.data.packs) {
-        for (const g of pack.groups || []) {
-          for (const f of g.files || []) {
-            map.set(f.path, {
-              ns: f.ns,
-              format: f.format,
-              texRefs: f.texRefs,
-              texBucket: f.texBucket,
-              animated: f.animated
-            })
-          }
-        }
-      }
-      state.modelMeta = map
-    }
-  } catch {
-  } finally {
-    _modelMetaLoading = false
-  }
-}
 
 function _showMoreHandler() {
   state.renderLimit += 200
@@ -349,99 +365,6 @@ function modelTexRoleThumbs(grp, role) {
   return `<div class="model-tex-thumbs${!rReal && lEntry ? ' model-tex-role-fallback' : ''}">${thumbL}${thumbR}</div>`
 }
 
-async function loadModelCardTexs(card, g) {
-  const le = g.left && g.left.file,
-    re = g.right && g.right.file
-  const leftList =
-    le && isModelEntry(le)
-      ? await resolveModelTexList({ fileRoot: state.leftPath, rel: le.name }).catch(() => null)
-      : null
-  const hasRightModel = re && isModelEntry(re)
-  let rightList = hasRightModel
-    ? await resolveModelTexList({ fileRoot: state.rightPath, rel: re.name }).catch(() => null)
-    : null
-
-  if (!card.isConnected) return
-  const groupMap = new Map()
-  for (const grp of state.result) groupMap.set(grp.key, grp)
-  const texMap = new Map()
-  for (const tx of leftList || []) {
-    const ap = textureAssetPath(tx.name)
-    if (!ap) continue
-    if (!texMap.has(ap)) texMap.set(ap, { name: tx.name, leftUrl: tx.url, rightUrl: null })
-    else texMap.get(ap).leftUrl = tx.url
-  }
-  for (const tx of rightList || []) {
-    const ap = textureAssetPath(tx.name)
-    if (!ap) continue
-    if (!texMap.has(ap)) texMap.set(ap, { name: tx.name, leftUrl: null, rightUrl: tx.url })
-    else texMap.get(ap).rightUrl = tx.url
-  }
-  const texsEl = card.querySelector('.model-card-texs')
-  if (!texsEl) return
-  if (texMap.size === 0) {
-    texsEl.innerHTML = `<span class="model-texs-none">${t('render.modelTexNone')}</span>`
-    return
-  }
-  const frag = document.createDocumentFragment()
-  for (const [ap, info] of texMap) {
-    const dot = ap && ap.lastIndexOf('.')
-    const key = dot >= 0 ? ap.slice(0, dot) : ap
-    const grp = groupMap.get(key)
-    const kind = grp ? grp.kind : 'miss'
-    const texEl = document.createElement('div')
-    const rMain = grp && grp.right && grp.right.main
-    let rightUrl = rMain ? fileUrl(rMain.fullPath) : info.rightUrl
-    let texFallback = !rMain && !!info.rightUrl
-    texEl.className = 'model-tex-item row-' + kind + (texFallback ? ' model-tex-fallback' : '')
-    const thumbL = info.leftUrl
-      ? `<img class="thumb thumb-left" src="${escAttr(info.leftUrl)}" alt="" />`
-      : '<span class="thumb-ph thumb-left-ph">L</span>'
-    const thumbR = rightUrl
-      ? `<img class="thumb thumb-right" src="${escAttr(rightUrl)}" alt="" />`
-      : '<span class="thumb-ph thumb-right-ph">R</span>'
-    const texName = (info.name || ap).replace(/^minecraft:/, '')
-    let matHtml = ''
-    if (grp) {
-      const nHtml = modelTexRoleThumbs(grp, 'normal')
-      const sHtml = modelTexRoleThumbs(grp, 'specular')
-      if (nHtml || sHtml) {
-        matHtml = '<div class="model-tex-mat">'
-        if (nHtml) matHtml += `<div class="model-tex-role"><span class="role-tag role-normal">N</span>${nHtml}</div>`
-        if (sHtml) matHtml += `<div class="model-tex-role"><span class="role-tag role-specular">S</span>${sHtml}</div>`
-        matHtml += '</div>'
-      }
-    }
-    texEl.innerHTML = `<div class="model-tex-thumbs">${thumbL}${thumbR}</div>${matHtml}<span class="model-tex-name" title="${escAttr(ap || info.name)}">${escHtml(texName)}</span>`
-    texEl.title = `${texName} · ${KIND_TEXT[kind] || kind}`
-    if (grp)
-      texEl.addEventListener('click', e => {
-        e.stopPropagation()
-        state.selected = g
-        const cards = document.querySelectorAll('.model-card.selected')
-        cards.forEach(c => {
-          if (c._group !== g) c.classList.remove('selected')
-        })
-        const cardEl = texEl.closest('.model-card')
-        if (cardEl) cardEl.classList.add('selected')
-        const texsHost = texEl.parentElement
-        if (texsHost)
-          texsHost.querySelectorAll('.model-tex-item.tex-active').forEach(el => el.classList.remove('tex-active'))
-        texEl.classList.add('tex-active')
-        loadModelTexEffectPreview(g, info.leftUrl, rightUrl)
-      })
-    frag.appendChild(texEl)
-  }
-  texsEl.innerHTML = ''
-  texsEl.appendChild(frag)
-  texsEl.querySelectorAll('img[src]').forEach(img => {
-    img.addEventListener('click', e => {
-      e.stopPropagation()
-      openPreview(img.src, img.dataset.name || '')
-    })
-  })
-}
-
 
 export function renderModelTypeResult() {
   const body = $('modelGridBody')
@@ -455,14 +378,23 @@ export function renderModelTypeResult() {
   else if (kindFilter !== 'all') models = models.filter(g => g.kind === kindFilter)
   models = models.filter(g => !state.hiddenKeys.has(g.key))
   models = applyCategoryFilter(models)
+  models = applyResultSearch(models)
   sortResult(models)
   if (models.length === 0) {
-    const msg =
-      !state.leftPath || !state.rightPath
-        ? t('render.dragHint')
-        : result.length === 0
-          ? t('render.bothEmpty')
-          : t('render.noModel')
+    let msg
+    if (!state.leftPath || !state.rightPath) msg = t('render.dragHint')
+    else if (result.length === 0) msg = t('render.bothEmpty')
+    else if (state.resultSearchTerm && state.resultSearchTerm.trim()) {
+      const baseModels = applyResultSearch(
+        applyCategoryFilter(
+          result
+            .filter(g => g.isModel)
+            .filter(g => !onlyMissingChk.checked || g.kind !== 'have')
+            .filter(g => !state.hiddenKeys.has(g.key))
+        )
+      )
+      msg = baseModels.length ? t('categoryFilter.noMatch', { q: state.resultSearchTerm.trim() }) : t('render.noModel')
+    } else msg = t('render.noModel')
     body.innerHTML = `<div class="model-grid-empty">${msg}</div>`
     return
   }
@@ -494,7 +426,8 @@ export function renderModelTypeResult() {
       : groupBy === 'kind'
         ? (_groupDir === 1
             ? ['have', 'diff', 'partial', 'miss', 'extra']
-            : ['extra', 'miss', 'partial', 'diff', 'have']).filter(k => catMap.has(k))
+            : ['extra', 'miss', 'partial', 'diff', 'have']
+          ).filter(k => catMap.has(k))
         : [...catMap.keys()].sort((a, b) => a.localeCompare(b, 'zh') * _groupDir)
   const frag = document.createDocumentFragment()
   const limit = state.renderLimit
@@ -513,86 +446,21 @@ export function renderModelTypeResult() {
   }
   const grid = state.modelViewMode !== 'list'
 
-  const groupDims = [
-    ['type', 'render.groupByType'],
-    ['kind', 'render.groupByKind'],
-    ['name', 'render.groupByName'],
-    ['prefix', 'render.groupByPrefix'],
-    ['ns', 'render.groupByNs'],
-    ['format', 'render.groupByFormat'],
-    ['tex', 'render.groupByTex'],
-    ['anim', 'render.groupByAnim']
-  ]
-  if (state.modelGroupRules && state.modelGroupRules.length) groupDims.push(['custom', 'render.groupByCustom'])
-  const groupOpts = groupDims
-    .map(([val, key]) => `<option value="${val}"${groupBy === val ? ' selected' : ''}>${t(key)}</option>`)
-    .join('')
+
   const toolbar = document.createElement('div')
   toolbar.className = 'mc-toolbar'
   toolbar.innerHTML =
     `<div class="mc-view-seg">` +
     `<button class="mc-view-btn${grid ? ' on' : ''}" data-mc-view="grid">${t('render.viewModelGrid')}</button>` +
     `<button class="mc-view-btn${!grid ? ' on' : ''}" data-mc-view="list">${t('render.viewModelList')}</button>` +
-    `</div>` +
-    `<div class="mc-group-sel"><span class="mc-group-lab">${t('render.groupByLabel')}</span><select class="mc-group-dd" data-mc-group>${groupOpts}</select><button class="mc-sort-dir mc-group-dir" data-mc-group-dir title="${t('render.groupDir')}">${state.modelGroupDir === 'asc' ? '↑' : '↓'}</button></div>` +
-    `<div class="mc-sort-sel"><span class="mc-group-lab">${t('render.sortByLabel')}</span><select class="mc-sort-dd" data-mc-sort-key>` +
-    `<option value="name"${state.sortKey === 'name' ? ' selected' : ''}>${t('render.sortByName')}</option>` +
-    `<option value="size"${state.sortKey === 'size' ? ' selected' : ''}>${t('render.sortBySize')}</option>` +
-    `<option value="mtime"${state.sortKey === 'mtime' ? ' selected' : ''}>${t('render.sortByTime')}</option>` +
-    `<option value="status"${state.sortKey === 'status' ? ' selected' : ''}>${t('render.sortByStatus')}</option>` +
-    `</select><button class="mc-sort-dir" data-mc-sort-dir title="${t('render.sortDir')}">${state.sortDir === 'asc' ? '↑' : '↓'}</button></div>` +
-    `<div class="mc-filter-sel"><span class="mc-group-lab">${t('render.filterLabel')}</span><select class="mc-filter-dd" data-mc-filter>` +
-    `<option value="all"${(state.modelKindFilter || 'all') === 'all' ? ' selected' : ''}>${t('render.filterAll')}</option>` +
-    `<option value="diff"${state.modelKindFilter === 'diff' ? ' selected' : ''}>${t('render.filterDiff')}</option>` +
-    `<option value="miss"${state.modelKindFilter === 'miss' ? ' selected' : ''}>${t('render.filterMiss')}</option>` +
-    `<option value="extra"${state.modelKindFilter === 'extra' ? ' selected' : ''}>${t('render.filterExtra')}</option>` +
-    `<option value="partial"${state.modelKindFilter === 'partial' ? ' selected' : ''}>${t('render.filterPartial')}</option>` +
-    `</select></div>`
+    `</div>`
   toolbar.querySelectorAll('[data-mc-view]').forEach(b =>
     b.addEventListener('click', () => {
       state.modelViewMode = b.dataset.mcView
       renderModelTypeResult()
     })
   )
-  const groupDd = toolbar.querySelector('[data-mc-group]')
-  if (groupDd)
-    groupDd.addEventListener('change', async () => {
-      state.modelGroupBy = groupDd.value
-      state.renderLimit = 200
-      saveOptions()
-      if (groupDd.value === 'tex' || groupDd.value === 'anim') await ensureModelMeta()
-      renderModelTypeResult()
-    })
-  const groupDirBtn = toolbar.querySelector('[data-mc-group-dir]')
-  if (groupDirBtn)
-    groupDirBtn.addEventListener('click', () => {
-      state.modelGroupDir = state.modelGroupDir === 'asc' ? 'desc' : 'asc'
-      groupDirBtn.textContent = state.modelGroupDir === 'asc' ? '↑' : '↓'
-      saveOptions()
-      renderModelTypeResult()
-    })
-  const sortKeyDd = toolbar.querySelector('[data-mc-sort-key]')
-  if (sortKeyDd)
-    sortKeyDd.addEventListener('change', () => {
-      state.sortKey = sortKeyDd.value
-      saveOptions()
-      renderModelTypeResult()
-    })
-  const sortDirBtn = toolbar.querySelector('[data-mc-sort-dir]')
-  if (sortDirBtn)
-    sortDirBtn.addEventListener('click', () => {
-      state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc'
-      sortDirBtn.textContent = state.sortDir === 'asc' ? '↑' : '↓'
-      saveOptions()
-      renderModelTypeResult()
-    })
-  const filterDd = toolbar.querySelector('[data-mc-filter]')
-  if (filterDd)
-    filterDd.addEventListener('change', () => {
-      state.modelKindFilter = filterDd.value
-      saveOptions()
-      renderModelTypeResult()
-    })
+
   frag.appendChild(toolbar)
   for (const cat of catOrder) {
     const items = catMap.get(cat)
@@ -1121,6 +989,7 @@ function renderCategoryBar(baseSet) {
   const bar = $('categoryBar')
   if (!bar) return
   const f = state.categoryFilter || { type: 'all', content: 'all', status: 'all', folder: 'all', tag: 'all' }
+  bindResultSearch()
   const total = _lastBaseSet.length
   if (total === 0) {
     bar.innerHTML = ''
@@ -1244,47 +1113,21 @@ export function renderResult() {
   filtered = filtered.filter(g => !state.hiddenKeys.has(g.key))
   renderCategoryBar(filtered)
   filtered = applyCategoryFilter(filtered)
+  filtered = applyResultSearch(filtered)
   sortResult(filtered)
 
-  const counts = state.counts || {
-    have: 0,
-    diff: 0,
-    partial: 0,
-    miss: 0,
-    extra: 0,
-    leftTex: 0,
-    rightTex: 0,
-    rightMatch: 0,
-    pbrExtra: 0,
-    leftModel: 0,
-    rightModel: 0,
-    modelMatch: 0
-  }
-  const total = state.result.length
-
-  summaryEl.innerHTML =
-    total === 0
-      ? ''
-      : `
-    <span class="s-item">${t('render.leftItem')} <span class="s-num">${state.leftEntries.length}</span></span>
-    <span class="s-item">${t('render.rightItem')} <span class="s-num">${state.rightEntries.length}</span></span>
-
-    <span class="s-item s-have">✓ <span class="s-num">${counts.have}</span></span>
-    <span class="s-item s-diff">≈ <span class="s-num">${counts.diff}</span></span>
-    <span class="s-item s-partial">◐ <span class="s-num">${counts.partial}</span></span>
-    <span class="s-item s-miss">✗ <span class="s-num">${counts.miss}</span></span>
-    <span class="s-item">＋ <span class="s-num">${counts.extra}</span></span>
-  `
 
   if (filtered.length === 0) {
-    const msg =
-      !state.leftPath || !state.rightPath
-        ? t('render.dragHint')
-        : result.length === 0
-          ? t('render.bothEmpty')
-          : onlyDiff
-            ? t('render.allConsistent')
-            : t('render.noData')
+    let msg
+    if (!state.leftPath || !state.rightPath) msg = t('render.dragHint')
+    else if (result.length === 0) msg = t('render.bothEmpty')
+    else if (state.resultSearchTerm && state.resultSearchTerm.trim()) {
+      const baseFiltered = applyCategoryFilter(
+        (onlyDiff ? result.filter(g => g.kind !== 'have') : result).filter(g => !state.hiddenKeys.has(g.key))
+      )
+      msg = baseFiltered.length ? t('categoryFilter.noMatch', { q: state.resultSearchTerm.trim() }) : t('render.noData')
+    } else if (onlyDiff) msg = t('render.allConsistent')
+    else msg = t('render.noData')
     resultBody.innerHTML = `<tr class="empty-row"><td colspan="8">${msg}</td></tr>`
     return
   }
@@ -1779,7 +1622,6 @@ async function loadModelTexEffectPreview(g, leftTexUrl, rightTexUrl) {
   } catch {}
 }
 
-
 export function renderSidebar() {
   const g = state.selected
   const panel = $('previewPanel')
@@ -1910,20 +1752,14 @@ export function updateSortIndicators() {
   document.querySelectorAll('.result-table th[data-key]').forEach(th => {
     th.classList.remove('asc', 'desc')
     if (th.dataset.key === state.sortKey) {
-      th.classList.add(state.sortDir)
-      th.setAttribute('aria-sort', state.sortDir === 'asc' ? 'ascending' : 'descending')
-    } else {
-      th.setAttribute('aria-sort', 'none')
+      th.classList.add(state.sortDir === 'asc' ? 'asc' : 'desc')
     }
   })
 }
 
 export function initViewTabs() {
-
-  document.addEventListener('keydown', e => {
-    if ((e.metaKey || e.ctrlKey) && e.key === '2') {
-      document.dispatchEvent(new CustomEvent('workspace:focus-panel', { detail: { id: 'modelCategory' } }))
-      e.preventDefault()
-    }
+  document.querySelectorAll('input[name="viewMode"]').forEach(r => {
+    r.checked = r.value === state.viewMode
   })
 }
+
