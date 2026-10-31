@@ -55,3 +55,6 @@ mc-packs/
 official-packs/
 hdri-presets/
 .codeartsdoer/
+
+# Go 后端构建产物（由 scripts/build-go.sh 生成，不入库）
+dist-go/
