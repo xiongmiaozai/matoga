@@ -6,19 +6,19 @@
 
 import * as THREE from 'three'
 import { fileUrl, isImageFile } from './utils.js'
-import { HDRLoader } from './hdr-loader.js'
-import { loadEnvTexture, extFromUrl } from './hdr-env-loader.js'
-import { Sky } from './sky.js'
 import { t as _t } from './i18n.js'
 import { attachTextureAnimOnly, unloadTextureAnim } from './mc-model-viewer.js'
 import { computeTangents } from './m3d/geometry.js'
 import { LIGHT_PRESETS } from './m3d/presets.js'
-import { rotateTextureData, detectFormat, reconstructNormal, applySourceSide, setHooks as setGeoUtilsHooks } from './m3d/geo-utils.js'
+import { detectFormat, reconstructNormal, applySourceSide, setHooks as setGeoUtilsHooks } from './m3d/geo-utils.js'
 import { parseIncludes, makeMaterial, setHooks as setMaterialHooks } from './m3d/material.js'
 import { setupControls, disposeAllMaterialTextures, disposeMaterial3D, setHooks as setHooks } from './m3d/controls.js'
 import { extractChannel, extractRoughness, extractMetalness, extractEmissive } from './m3d/channel-extract.js'
 import { createLabel, applyOpacityMode, applyHeightFilter, applyTextureFilter, setHooks as setMaterialFiltersHooks } from './m3d/material-filters.js'
 import { imgW, imgH, extractHeight, extractHeightFromNormal } from './m3d/height-extract.js'
+import { createEnvTexture, cloneLightConfig, rebuildLights, applyLightPreset, applyCustomLightConfig, updateSkySunPosition, bakeSkyEnvironment, scheduleSkyBake, applyProceduralSky, applyHDREnvMode, ensureRotatedTexture, setEnvMode, setLightPreset, setEnvIntensity, loadHDREnv, clearHDREnv, getCurrentLightPreset, getCurrentEnvMode, setEnvModeExport, setHdrRotation, setHdrUsage, setSkyTurbidity, setSkyRayleigh, setSkyMieCoefficient, setSkyMieDirectionalG, setSkySunElevation, setSkySunAzimuth, setSkyTint, setHooks as setEnvironmentLightingHooks } from './m3d/env-light.js'
+/* 门面 re-export（§2.3） */
+export { createEnvTexture, cloneLightConfig, rebuildLights, applyLightPreset, applyCustomLightConfig, updateSkySunPosition, bakeSkyEnvironment, scheduleSkyBake, applyProceduralSky, applyHDREnvMode, ensureRotatedTexture, setEnvMode, setLightPreset, setEnvIntensity, loadHDREnv, clearHDREnv, getCurrentLightPreset, getCurrentEnvMode, setEnvModeExport, setHdrRotation, setHdrUsage, setSkyTurbidity, setSkyRayleigh, setSkyMieCoefficient, setSkyMieDirectionalG, setSkySunElevation, setSkySunAzimuth, setSkyTint } from './m3d/env-light.js'
 /* 门面 re-export（§2.3） */
 export { imgW, imgH, extractHeight, extractHeightFromNormal } from './m3d/height-extract.js'
 /* 门面 re-export（§2.3） */
@@ -184,308 +184,7 @@ const geometries = {
   capsule: () => withTangents(scaleUV(new THREE.CapsuleGeometry(0.6, 1.0, 16, 32), 2.5, 1.25))
 }
 
-function createEnvTexture(presetKey) {
-  const preset = LIGHT_PRESETS[presetKey] || LIGHT_PRESETS.studio
-  const env = preset.env
-  const w = 512,
-    h = 256
-  const canvas = document.createElement('canvas')
-  canvas.width = w
-  canvas.height = h
-  const ctx = canvas.getContext('2d', { willReadFrequently: true })
-  const grad = ctx.createLinearGradient(0, 0, 0, h)
-  grad.addColorStop(0, env.colors[0])
-  grad.addColorStop(0.5, env.colors[1])
-  grad.addColorStop(1, env.colors[2])
-  ctx.fillStyle = grad
-  ctx.fillRect(0, 0, w, h)
-  const bandY = h * 0.22,
-    bandH = h * 0.18
-  for (let i = 0; i < 4; i++) {
-    const cx = w * (0.125 + i * 0.25),
-      halfW = w * 0.05
-    const lg = ctx.createLinearGradient(cx - halfW, 0, cx + halfW, 0)
-    lg.addColorStop(0, 'rgba(255,255,255,0)')
-    lg.addColorStop(0.5, 'rgba(255,255,255,0.55)')
-    lg.addColorStop(1, 'rgba(255,255,255,0)')
-    ctx.fillStyle = lg
-    ctx.fillRect(cx - halfW, bandY, halfW * 2, bandH)
-  }
-  const bandY2 = h * 0.72,
-    bandH2 = h * 0.1
-  for (let i = 0; i < 3; i++) {
-    const cx = w * (0.17 + i * 0.33),
-      halfW = w * 0.04
-    const lg = ctx.createLinearGradient(cx - halfW, 0, cx + halfW, 0)
-    lg.addColorStop(0, 'rgba(255,255,255,0)')
-    lg.addColorStop(0.5, 'rgba(255,255,255,0.25)')
-    lg.addColorStop(1, 'rgba(255,255,255,0)')
-    ctx.fillStyle = lg
-    ctx.fillRect(cx - halfW, bandY2, halfW * 2, bandH2)
-  }
-  if (env.light) {
-    const sx = w / 256,
-      sy = h / 256
-    const lx = env.light.x * sx,
-      ly = env.light.y * sy,
-      lr = env.light.r * sx
-    const rg = ctx.createRadialGradient(lx, ly, 0, lx, ly, lr)
-    rg.addColorStop(0, env.light.color)
-    rg.addColorStop(0.6, env.light.color)
-    rg.addColorStop(1, 'rgba(0,0,0,0)')
-    ctx.fillStyle = rg
-    ctx.fillRect(0, 0, w, h)
-  }
-  const tex = new THREE.CanvasTexture(canvas)
-  tex.mapping = THREE.EquirectangularReflectionMapping
-  tex.colorSpace = THREE.SRGBColorSpace
-  return tex
-}
-
-function cloneLightConfig(config) {
-  return {
-    ambient: { color: config.ambient.color, intensity: config.ambient.intensity },
-    lights: config.lights.map(l => ({ color: l.color, intensity: l.intensity, pos: [l.pos[0], l.pos[1], l.pos[2]] })),
-    bg: config.bg
-  }
-}
-
-function rebuildLights(config) {
-  if (!lightGroup) return
-  while (lightGroup.children.length) lightGroup.remove(lightGroup.children[0])
-  const ambient = new THREE.AmbientLight(config.ambient.color, config.ambient.intensity)
-  lightGroup.add(ambient)
-  for (let i = 0; i < config.lights.length; i++) {
-    const l = config.lights[i]
-    const dir = new THREE.DirectionalLight(l.color, l.intensity)
-    dir.position.set(l.pos[0], l.pos[1], l.pos[2])
-    dir.castShadow = i === 0
-    dir.shadow.mapSize.set(512, 512)
-    dir.shadow.camera.left = -3
-    dir.shadow.camera.right = 3
-    dir.shadow.camera.top = 3
-    dir.shadow.camera.bottom = -3
-    dir.shadow.camera.near = 0.1
-    dir.shadow.camera.far = 15
-    lightGroup.add(dir)
-  }
-}
-
 let customLightConfig = null
-
-function applyLightPreset(presetKey) {
-  if (!initialized || !LIGHT_PRESETS[presetKey]) return
-  currentLightPreset = presetKey
-  const preset = LIGHT_PRESETS[presetKey]
-  customLightConfig = cloneLightConfig(preset)
-  rebuildLights(preset)
-  if (currentEnvMode === 'custom') {
-    if (envTexture) envTexture.dispose()
-    envTexture = createEnvTexture(presetKey)
-    if (pmremTexture) pmremTexture.dispose()
-    pmremTexture = pmrem.fromEquirectangular(envTexture)
-    scene.environment = pmremTexture.texture
-    scene.background = new THREE.Color(preset.bg)
-  }
-  if (scene) scene.environmentIntensity = envIntensity
-  for (const m of [meshLeft, meshRight]) {
-    if (m) m.material.envMapIntensity = envIntensity
-  }
-}
-
-function applyCustomLightConfig(config) {
-  if (!initialized || !config || !config.ambient || !Array.isArray(config.lights)) return
-  customLightConfig = cloneLightConfig(config)
-  rebuildLights(customLightConfig)
-  if (currentEnvMode === 'custom') {
-    scene.background = new THREE.Color(customLightConfig.bg)
-  }
-  if (scene) scene.environmentIntensity = envIntensity
-  for (const m of [meshLeft, meshRight]) {
-    if (m) m.material.envMapIntensity = envIntensity
-  }
-}
-
-function updateSkySunPosition() {
-  if (!skyMesh) return
-  const u = skyMesh.material.uniforms
-  const elevation = (skySunElevation * Math.PI) / 180
-  const azimuth = (skySunAzimuth * Math.PI) / 180
-  const phi = Math.PI / 2 - elevation
-  const sun = new THREE.Vector3()
-  sun.setFromSphericalCoords(1, phi, azimuth)
-  u.sunPosition.value.copy(sun)
-  u.turbidity.value = skyTurbidity
-  u.rayleigh.value = skyRayleigh
-  u.mieCoefficient.value = skyMieCoefficient
-  u.mieDirectionalG.value = skyMieDirectionalG
-
-  _skyTint.setHex(skyTintHex)
-  u.skyTint.value.set(_skyTint.r, _skyTint.g, _skyTint.b)
-  if (skySunLight) {
-    skySunLight.position.copy(sun).multiplyScalar(10)
-    const dayFactor = Math.max(0, Math.sin(elevation))
-    skySunLight.intensity = 2.5 * dayFactor
-  }
-}
-
-function bakeSkyEnvironment() {
-  if (!skyMesh || !pmrem) return
-  const u = skyMesh.material.uniforms
-  const prevSunDisc = u.showSunDisc.value
-  u.showSunDisc.value = 0
-  const skyScene = new THREE.Scene()
-  scene.remove(skyMesh)
-  skyScene.add(skyMesh)
-  if (skyEnvTexture) skyEnvTexture.dispose()
-  skyEnvTexture = pmrem.fromScene(skyScene)
-  scene.environment = skyEnvTexture.texture
-  skyScene.remove(skyMesh)
-  scene.add(skyMesh)
-  u.showSunDisc.value = prevSunDisc
-  if (scene) scene.environmentIntensity = envIntensity
-  for (const m of [meshLeft, meshRight]) {
-    if (m) m.material.envMapIntensity = envIntensity
-  }
-}
-
-function scheduleSkyBake() {
-  clearTimeout(skyBakeTimer)
-  skyBakeTimer = setTimeout(() => {
-    skyBakeTimer = null
-    if (initialized && currentEnvMode === 'sky') bakeSkyEnvironment()
-  }, 120)
-}
-
-function applyProceduralSky() {
-  if (!initialized) return
-  if (hdrTexture) {
-    hdrTexture.dispose()
-    hdrTexture = null
-  }
-  if (envTexture) {
-    envTexture.dispose()
-    envTexture = null
-  }
-  if (pmremTexture) {
-    pmremTexture.dispose()
-    pmremTexture = null
-  }
-  if (lightGroup) {
-    while (lightGroup.children.length) lightGroup.remove(lightGroup.children[0])
-  }
-  const ambient = new THREE.AmbientLight(0xffffff, 0.15)
-  lightGroup.add(ambient)
-  if (!skySunLight) {
-    skySunLight = new THREE.DirectionalLight(0xffffff, 2.5)
-    skySunLight.castShadow = true
-    skySunLight.shadow.mapSize.set(1024, 1024)
-    skySunLight.shadow.camera.left = -3
-    skySunLight.shadow.camera.right = 3
-    skySunLight.shadow.camera.top = 3
-    skySunLight.shadow.camera.bottom = -3
-    skySunLight.shadow.camera.near = 0.1
-    skySunLight.shadow.camera.far = 50
-  }
-  lightGroup.add(skySunLight)
-  if (!skyMesh) {
-    skyMesh = new Sky()
-    skyMesh.scale.setScalar(10000)
-    scene.add(skyMesh)
-  }
-  updateSkySunPosition()
-  scene.background = null
-  bakeSkyEnvironment()
-}
-
-function applyHDREnvMode() {
-  if (!initialized) return
-  if (skyMesh) {
-    scene.remove(skyMesh)
-    skyMesh = null
-  }
-  if (skyEnvTexture) {
-    skyEnvTexture.dispose()
-    skyEnvTexture = null
-  }
-  if (skySunLight) {
-    lightGroup.remove(skySunLight)
-    skySunLight = null
-  }
-  if (envTexture) {
-    envTexture.dispose()
-    envTexture = null
-  }
-  if (pmremTexture) {
-    pmremTexture.dispose()
-    pmremTexture = null
-  }
-  if (lightGroup) {
-    while (lightGroup.children.length) lightGroup.remove(lightGroup.children[0])
-  }
-  const ambient = new THREE.AmbientLight(0xffffff, 0.1)
-  lightGroup.add(ambient)
-  if (hdrTextureOriginal) {
-    const rad = (hdrRotation * Math.PI) / 180
-    hdrTexture = hdrTextureOriginal
-    if (hdrUsage === 'env' || hdrUsage === 'both') {
-      scene.environment = hdrTextureOriginal
-      scene.environmentRotation.set(0, rad, 0)
-    } else {
-      scene.environment = null
-      scene.environmentRotation.set(0, 0, 0)
-    }
-    if (hdrUsage === 'bg' || hdrUsage === 'both') {
-      ensureRotatedTexture()
-      scene.background = hdrTextureRotated || hdrTextureOriginal
-    } else {
-      scene.background = new THREE.Color(0x1a1a2e)
-    }
-  } else {
-    hdrTexture = null
-    scene.environment = null
-    scene.environmentRotation.set(0, 0, 0)
-    scene.background = new THREE.Color(0x1a1a2e)
-  }
-  if (scene) scene.environmentIntensity = envIntensity
-  for (const m of [meshLeft, meshRight]) {
-    if (m) m.material.envMapIntensity = envIntensity
-  }
-}
-
-function ensureRotatedTexture() {
-  if (hdrTextureRotated) {
-    hdrTextureRotated.dispose()
-    hdrTextureRotated = null
-  }
-  if (hdrTextureOriginal && hdrRotation % 360) {
-    hdrTextureRotated = rotateTextureData(hdrTextureOriginal, hdrRotation)
-  }
-}
-
-function setEnvMode(mode) {
-  if (!initialized || !['custom', 'sky', 'hdri'].includes(mode)) return
-  currentEnvMode = mode
-  if (mode === 'sky') {
-    applyProceduralSky()
-  } else if (mode === 'hdri') {
-    applyHDREnvMode()
-  } else {
-    if (skyMesh) {
-      scene.remove(skyMesh)
-      skyMesh = null
-    }
-    if (skyEnvTexture) {
-      skyEnvTexture.dispose()
-      skyEnvTexture = null
-    }
-    if (skySunLight) {
-      lightGroup.remove(skySunLight)
-      skySunLight = null
-    }
-    applyLightPreset(currentLightPreset)
-  }
-}
 
 function applyChannelViewToMaterial(material) {
   const baseMap = material.userData.baseMap
@@ -990,25 +689,12 @@ export function setParallaxShadow(val) {
     }
   }
 }
-export function setLightPreset(presetKey) {
-  applyLightPreset(presetKey)
-  if (currentEnvMode !== 'custom') setEnvMode('custom')
-}
 export function getCustomLightConfig() {
   return customLightConfig ? cloneLightConfig(customLightConfig) : null
 }
 export function applyCustomLightConfigExport(config) {
   if (currentEnvMode !== 'custom') setEnvMode('custom')
   applyCustomLightConfig(config)
-}
-export function setEnvIntensity(val) {
-  envIntensity = val
-  if (initialized) {
-    if (scene) scene.environmentIntensity = val
-    for (const m of [meshLeft, meshRight]) {
-      if (m) m.material.envMapIntensity = val
-    }
-  }
 }
 export function setExposure(val) {
   if (initialized && renderer) renderer.toneMappingExposure = val
@@ -1137,143 +823,6 @@ export function toggleFullscreen() {
   setTimeout(handleResize, 50)
   setTimeout(handleResize, 120)
 }
-export async function loadHDREnv(filePath) {
-  if (!initialized || !filePath) return
-  window.dispatchEvent(new CustomEvent('material3d:hdrLoading', { detail: { url: filePath } }))
-  try {
-    const tex = await loadEnvTexture(filePath, extFromUrl(filePath))
-    tex.mapping = THREE.EquirectangularReflectionMapping
-    if (hdrTextureOriginal) {
-      hdrTextureOriginal.dispose()
-      hdrTextureOriginal = null
-    }
-    if (hdrTextureRotated) {
-      hdrTextureRotated.dispose()
-      hdrTextureRotated = null
-    }
-
-    if (envTexture) {
-      envTexture.dispose()
-      envTexture = null
-    }
-    hdrTextureOriginal = tex
-    hdrTexture = tex
-    hdrInfo = {
-      width: tex.image.width || 0,
-      height: tex.image.height || 0,
-      format: tex._srcFormat || 'HDR (RGBE)',
-      size: tex.image.data ? tex.image.data.byteLength : 0
-    }
-
-    currentEnvMode = 'hdri'
-    applyHDREnvMode()
-    window.dispatchEvent(new CustomEvent('material3d:hdrLoaded', { detail: hdrInfo }))
-  } catch (e) {
-    window.dispatchEvent(new CustomEvent('material3d:hdrLoadFailed', { detail: { message: e.message } }))
-  }
-}
-export function clearHDREnv() {
-  if (hdrTextureOriginal) {
-    hdrTextureOriginal.dispose()
-    hdrTextureOriginal = null
-  }
-  if (hdrTextureRotated) {
-    hdrTextureRotated.dispose()
-    hdrTextureRotated = null
-  }
-
-  hdrTexture = null
-  hdrInfo = null
-  if (scene) scene.environmentRotation.set(0, 0, 0)
-  if (currentEnvMode === 'hdri') setEnvMode('custom')
-  else applyHDREnvMode()
-}
-export function getCurrentLightPreset() {
-  return currentLightPreset
-}
-export function getCurrentEnvMode() {
-  return currentEnvMode
-}
-export function setEnvModeExport(mode) {
-  setEnvMode(mode)
-}
-export function setHdrRotation(val) {
-  hdrRotation = val
-  if (!initialized || currentEnvMode !== 'hdri') return
-  if (hdrUsage === 'env' || hdrUsage === 'both') {
-    scene.environmentRotation.set(0, (hdrRotation * Math.PI) / 180, 0)
-  }
-  if (hdrUsage === 'bg' || hdrUsage === 'both') {
-    if (hdrRotateTimer) clearTimeout(hdrRotateTimer)
-    hdrRotateTimer = setTimeout(() => {
-      hdrRotateTimer = null
-      if (currentEnvMode === 'hdri' && (hdrUsage === 'bg' || hdrUsage === 'both')) {
-        ensureRotatedTexture()
-        scene.background = hdrTextureRotated || hdrTextureOriginal
-      }
-    }, 80)
-  }
-}
-
-export function setHdrUsage(mode) {
-  if (!['both', 'env', 'bg'].includes(mode)) return
-  hdrUsage = mode
-  if (initialized && currentEnvMode === 'hdri') applyHDREnvMode()
-}
-
-export function setSkyTurbidity(val) {
-  skyTurbidity = val
-  if (initialized && currentEnvMode === 'sky') {
-    updateSkySunPosition()
-    scheduleSkyBake()
-  }
-}
-export function setSkyRayleigh(val) {
-  skyRayleigh = val
-  if (initialized && currentEnvMode === 'sky') {
-    updateSkySunPosition()
-    scheduleSkyBake()
-  }
-}
-export function setSkyMieCoefficient(val) {
-  skyMieCoefficient = val
-  if (initialized && currentEnvMode === 'sky') {
-    updateSkySunPosition()
-    scheduleSkyBake()
-  }
-}
-export function setSkyMieDirectionalG(val) {
-  skyMieDirectionalG = val
-  if (initialized && currentEnvMode === 'sky') {
-    updateSkySunPosition()
-    scheduleSkyBake()
-  }
-}
-export function setSkySunElevation(val) {
-  skySunElevation = val
-  if (initialized && currentEnvMode === 'sky') {
-    updateSkySunPosition()
-    scheduleSkyBake()
-  }
-}
-export function setSkySunAzimuth(val) {
-  skySunAzimuth = val
-  if (initialized && currentEnvMode === 'sky') {
-    updateSkySunPosition()
-    scheduleSkyBake()
-  }
-}
-
-export function setSkyTint(hex) {
-  const n = parseInt(hex.slice(1), 16)
-  if (Number.isNaN(n)) return
-  skyTintHex = n
-  if (initialized && currentEnvMode === 'sky') {
-    updateSkySunPosition()
-    scheduleSkyBake()
-  }
-}
-
 function disposeTexture(tex) {
   if (tex && tex.dispose) {
     unloadTextureAnim(tex)
@@ -2101,4 +1650,63 @@ setMaterialFiltersHooks({
   get_mipmapsEnabled: () => mipmapsEnabled,
   get_textureFilter: () => textureFilter,
   set_textureFilter: v => { textureFilter = v }
+})
+
+/* EnvironmentLighting 依赖注入 */
+setEnvironmentLightingHooks({
+  get_lightGroup: () => lightGroup,
+  get_initialized: () => initialized,
+  get_pmrem: () => pmrem,
+  get_scene: () => scene,
+  get_meshLeft: () => meshLeft,
+  get_meshRight: () => meshRight,
+  get__skyTint: () => _skyTint,
+  get_currentLightPreset: () => currentLightPreset,
+  set_currentLightPreset: v => { currentLightPreset = v },
+  get_customLightConfig: () => customLightConfig,
+  set_customLightConfig: v => { customLightConfig = v },
+  get_currentEnvMode: () => currentEnvMode,
+  set_currentEnvMode: v => { currentEnvMode = v },
+  get_envTexture: () => envTexture,
+  set_envTexture: v => { envTexture = v },
+  get_pmremTexture: () => pmremTexture,
+  set_pmremTexture: v => { pmremTexture = v },
+  get_envIntensity: () => envIntensity,
+  set_envIntensity: v => { envIntensity = v },
+  get_skyMesh: () => skyMesh,
+  set_skyMesh: v => { skyMesh = v },
+  get_skySunElevation: () => skySunElevation,
+  set_skySunElevation: v => { skySunElevation = v },
+  get_skySunAzimuth: () => skySunAzimuth,
+  set_skySunAzimuth: v => { skySunAzimuth = v },
+  get_skyTurbidity: () => skyTurbidity,
+  set_skyTurbidity: v => { skyTurbidity = v },
+  get_skyRayleigh: () => skyRayleigh,
+  set_skyRayleigh: v => { skyRayleigh = v },
+  get_skyMieCoefficient: () => skyMieCoefficient,
+  set_skyMieCoefficient: v => { skyMieCoefficient = v },
+  get_skyMieDirectionalG: () => skyMieDirectionalG,
+  set_skyMieDirectionalG: v => { skyMieDirectionalG = v },
+  get_skyTintHex: () => skyTintHex,
+  set_skyTintHex: v => { skyTintHex = v },
+  get_skySunLight: () => skySunLight,
+  set_skySunLight: v => { skySunLight = v },
+  get_skyEnvTexture: () => skyEnvTexture,
+  set_skyEnvTexture: v => { skyEnvTexture = v },
+  get_skyBakeTimer: () => skyBakeTimer,
+  set_skyBakeTimer: v => { skyBakeTimer = v },
+  get_hdrTexture: () => hdrTexture,
+  set_hdrTexture: v => { hdrTexture = v },
+  get_hdrTextureOriginal: () => hdrTextureOriginal,
+  set_hdrTextureOriginal: v => { hdrTextureOriginal = v },
+  get_hdrRotation: () => hdrRotation,
+  set_hdrRotation: v => { hdrRotation = v },
+  get_hdrUsage: () => hdrUsage,
+  set_hdrUsage: v => { hdrUsage = v },
+  get_hdrTextureRotated: () => hdrTextureRotated,
+  set_hdrTextureRotated: v => { hdrTextureRotated = v },
+  get_hdrInfo: () => hdrInfo,
+  set_hdrInfo: v => { hdrInfo = v },
+  get_hdrRotateTimer: () => hdrRotateTimer,
+  set_hdrRotateTimer: v => { hdrRotateTimer = v }
 })
