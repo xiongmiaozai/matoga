@@ -59,7 +59,7 @@ export function buildTexGroups(entries) {
   return groups
 }
 
-function texUrl(fullPath) {
+export function texUrl(fullPath) {
   return `/api/file/raw?path=${encodeURIComponent(fullPath)}`
 }
 

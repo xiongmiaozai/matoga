@@ -78,7 +78,7 @@ import {
 } from './node-canvas/widgets.js'
 import { NODE_DEFS, setTexHooks } from './node-canvas/node-defs.js'
 import { syncToPreview, _renderPreviewVal, updatePreview, setStateHooks } from './node-canvas/preview-sync.js'
-import { openImportDlg, buildTexGroups, applyImportFilter, updateImportInfo, doImport, setImportHooks } from './node-canvas/import-dialog.js'
+import { openImportDlg, buildTexGroups, applyImportFilter, updateImportInfo, doImport, texUrl, setImportHooks } from './node-canvas/import-dialog.js'
 
 /* 门面 re-export：拆出的函数若原本对测试/外部可见，必须继续从本文件导出，
    否则 import 路径契约被破坏（test/unit/preview2drows.test.js 即依赖此导出）。 */

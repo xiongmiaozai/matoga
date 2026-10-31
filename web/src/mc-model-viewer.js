@@ -31,10 +31,14 @@ import {
 } from './material3d.js'
 import { t as _t } from './i18n.js'
 import { fileUrl, apiUrl, joinPath } from './url-utils.js'
+import { defaultFaceUv, resolveItemDefRefs, MAX_ITEM_DEF_DEPTH } from './mcv/geometry.js'
+
+/* 门面 re-export：这两个函数原为本地导出，搬到 mcv/geometry.js 后仍须从本模块
+   对外可见，否则外部 import 拿到 undefined（曾导致 5 个单测失败）。 */
+export { defaultFaceUv, resolveItemDefRefs } from './mcv/geometry.js'
 
 const MAX_PARENT_DEPTH = 8
 const MAX_ELEMENTS = 4096
-const MAX_ITEM_DEF_DEPTH = 12
 const MAX_ITEM_DEF_REFS = 16
 /* 跨模型共享材质：userData.shared 标记（material3d dispose 时跳过，避免重复 dispose 后渲染失效） */
 const HIDDEN_MAT = new THREE.MeshBasicMaterial({ visible: false })
@@ -506,51 +510,6 @@ export async function resolveMcModel(api, packName, rel, depth = 0, fileRoot) {
      composite      → 收集 models 数组全部引用（多模型合并渲染）
      special        → base 引用（盾/旗等内置实体渲染之外的基础形状）
    未知类型忽略；tints（染色）不影响几何，跳过 */
-export function resolveItemDefRefs(node, out = [], depth = 0) {
-  if (!node || typeof node !== 'object' || depth > MAX_ITEM_DEF_DEPTH) return out
-  const type = typeof node.type === 'string' ? node.type.replace(/^[^:]*:/, '') : ''
-  switch (type) {
-    case 'model':
-      if (typeof node.model === 'string' && node.model) {
-        out.push({
-          model: node.model,
-          transformation: node.transformation || null,
-          tints: Array.isArray(node.tints) ? node.tints : null
-        })
-      }
-      break
-    case 'condition':
-      resolveItemDefRefs(node.on_false, out, depth + 1)
-      break
-    case 'select':
-    case 'range_dispatch':
-      resolveItemDefRefs(node.fallback, out, depth + 1)
-      break
-    case 'composite':
-      for (const m of Array.isArray(node.models) ? node.models : []) {
-        resolveItemDefRefs(m, out, depth + 1)
-      }
-      break
-    case 'special':
-      /* shulker_box 内嵌渲染器：构造虚拟 cube 使用实体贴图（entity/shulker/<texture>），
-         替换 base（base 仅含 particle 纯色贴图，非真实外观） */
-      if (node.model && typeof node.model === 'object') {
-        const innerType = typeof node.model.type === 'string' ? node.model.type.replace(/^[^:]*:/, '') : ''
-        if (innerType === 'shulker_box' && typeof node.model.texture === 'string' && node.model.texture) {
-          out.push({ shulkerBox: node.model.texture, transformation: node.transformation || null })
-          break
-        }
-      }
-      if (typeof node.base === 'string' && node.base) {
-        out.push({ model: node.base, transformation: node.transformation || null })
-      }
-      break
-    default:
-      break
-  }
-  return out
-}
-
 /* item 定义路径判定（assets/<ns>/items/*.json，与 models/ 路径区分） */
 export function isItemDefPath(rel) {
   return typeof rel === 'string' && /^assets\/[^/]+\/items\/[^/]+\.json$/.test(rel)
@@ -809,45 +768,6 @@ const FACE_ROT_ORDER = {
    例：蛋糕主体 [1,0,1]→[15,8,15]：up→[1,1,15,15]（cake_top 中央 14×14），
    side→u 1-15 / v 8-16（cake_side 下半），而非整张 16×16 拉伸。
    uvScale≠16（bbmodel resolution）时按比例换算 */
-export function defaultFaceUv(key, from, to, uvScale = 16) {
-  if (!Array.isArray(from) || !Array.isArray(to)) return null
-  const fx = +from[0],
-    fy = +from[1],
-    fz = +from[2]
-  const tx = +to[0],
-    ty = +to[1],
-    tz = +to[2]
-  if (![fx, fy, fz, tx, ty, tz].every(Number.isFinite)) return null
-  let uv
-  switch (key) {
-    case 'up':
-      uv = [fx, fz, tx, tz]
-      break
-    case 'down':
-      uv = [fx, 16 - tz, tx, 16 - fz]
-      break
-    case 'north':
-      uv = [16 - tx, 16 - ty, 16 - fx, 16 - fy]
-      break
-    case 'south':
-      uv = [fx, 16 - ty, tx, 16 - fy]
-      break
-    case 'east':
-      uv = [16 - tz, 16 - ty, 16 - fz, 16 - fy]
-      break
-    case 'west':
-      uv = [fz, 16 - ty, tz, 16 - fy]
-      break
-    default:
-      return null
-  }
-  if (uvScale && uvScale !== 16) {
-    const s = uvScale / 16
-    uv = uv.map(v => v * s)
-  }
-  return uv
-}
-
 /* BoxGeometry 每面 4 顶点 UV（左上/右上/左下/右下）按 MC 像素坐标重映射（uvScale=16 或 bbmodel resolution）
    无 uv 的 face 用 vanilla 默认 UV（按元素尺寸），防止整张贴图拉伸 */
 function applyFaceUvs(geo, faces, uvScale, from, to) {
