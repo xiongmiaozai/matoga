@@ -9,8 +9,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self'"
+      content="default-src 'self'; object-src 'none'; base-uri 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ws: wss:; font-src 'self'"
     />
     <script type="importmap">
       { "imports": { "three": "/vendor/three/three.module.js", "golden-layout": "/vendor/golden-layout/index.js" } }
@@ -75,8 +79,7 @@
     <!-- MC 边角装饰 — 独立 SVG, CC0 (github.com/minecraft-svg-icons) -->
     <img src="assets/svg/corner-tl.svg" alt="" class="mc-corner tl" />
     <img src="assets/svg/corner-tr.svg" alt="" class="mc-corner tr" />
-    <img src="assets/svg/corner-bl.svg" alt="" class="mc-corner bl" />
-    <img src="assets/svg/corner-br.svg" alt="" class="mc-corner br" />
+
     <svg xmlns="http://www.w3.org/2000/svg" style="display: none" aria-hidden="true">
       <symbol
         id="i-logo"

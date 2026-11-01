@@ -24,15 +24,25 @@
 
 ### 新增
 
--
+- `normalGen` 节点：高度图→法线贴图转换，支持 central / sobel / scharr / farid 四种梯度算子，附单元测试（`test/unit/nodegen.test.js` + `test/unit/nodegen-algo.test.js`，后者覆盖平坦/渐变/strength=0/四算子合法/smooth/幂等/回退 8 项算法管线测试）
+- Blender 节点体系参考文档：`docs/blender-nodes-reference.md`（人类可读）+ `docs/blender-nodes.json`（机读，shader 137 / geo 201 / comp 109 节点）
 
 ### 变更
 
--
+- `texture.js` 纹理颜色/Alpha 缓存由无界 `Map` 改为 LRU 淘汰（上限 64，批量删 16），避免长会话内存增长
+- `texture.js` 法线生成算法管线抽为纯函数 `_normalGenFromHeight`（不依赖 canvas/Image），便于单测
+- `normalGen` 缓存键对 strength / smooth 量化到两位小数，消除浮点抖动导致的缓存失效
+- Go `nodeproject.go` 并发锁由 `sync.Mutex` 升级为 `sync.RWMutex`，List / Load 路径加 RLock
+- Go `nodeproject.go` pending 导入补 `source` 字段，file 类型记录 `t.Path`
+- Electron `openExternal` 增加协议白名单（仅允许 http/https）
+- `web/index.html` CSP 收紧：新增 `object-src 'none'; base-uri 'self'`
+- `eslint.config.js` ignores 排除 `android/**` 副本，lint 错误数从 2081 降至 0
 
 ### 修复
 
--
+- 修复 `texture.js` 纹理缓存无上限导致长会话内存泄漏
+- 修复 `texture.js` 多处 `clear()` 全量清空引起缓存抖动
+- 修复 `normalGen` 缓存键浮点精度问题导致相同参数重复计算
 
 ---
 

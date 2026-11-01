@@ -131,6 +131,7 @@ export default [
       'dist/**',
       'dist-electron/**',
       'data/**',
+      'android/**',
       '.codeartsdoer/**',
       '.arts/**',
       '*.min.js',

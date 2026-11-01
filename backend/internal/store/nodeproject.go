@@ -125,7 +125,7 @@ type NodeProjectSaveTexture struct {
 type NodeProjectStore struct {
 	dir string
 	log *slog.Logger
-	mu  sync.Mutex
+	mu  sync.RWMutex
 }
 
 // NewNodeProjectStore 创建存储，dataDir 为 <DataRoot>/data。
@@ -279,6 +279,8 @@ func graphCounts(graph any) (nodes, edges int) {
 
 // List 返回全部工程，按 updatedAt 倒序。
 func (s *NodeProjectStore) List() ([]NodeProjectMeta, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if err := os.MkdirAll(s.dir, 0o755); err != nil {
 		return nil, err
 	}
@@ -357,8 +359,9 @@ func (s *NodeProjectStore) Save(in NodeProjectSaveInput) (string, error) {
 
 	// 组装贴图：内嵌的直接解码，路径的读入内存（避免删目录后源文件消失）。
 	type pending struct {
-		name string
-		buf  []byte
+		name   string
+		buf    []byte
+		source string
 	}
 	var pendings []pending
 	for _, t := range in.Textures {
@@ -367,7 +370,7 @@ func (s *NodeProjectStore) Save(in NodeProjectSaveInput) (string, error) {
 		}
 		if t.Data != "" {
 			if _, buf := decodeDataURL(t.Data, NodeProjectMaxTexture); buf != nil {
-				pendings = append(pendings, pending{name: t.Name, buf: buf})
+				pendings = append(pendings, pending{name: t.Name, buf: buf, source: "embedded"})
 			}
 			continue
 		}
@@ -377,7 +380,7 @@ func (s *NodeProjectStore) Save(in NodeProjectSaveInput) (string, error) {
 				s.warn("read texture failed: " + err.Error())
 				continue
 			}
-			pendings = append(pendings, pending{name: t.Name, buf: buf})
+			pendings = append(pendings, pending{name: t.Name, buf: buf, source: t.Path})
 		}
 	}
 
@@ -400,7 +403,7 @@ func (s *NodeProjectStore) Save(in NodeProjectSaveInput) (string, error) {
 		if name == "" {
 			name = file
 		}
-		texMeta = append(texMeta, nodeProjectTexMeta{File: file, Name: name, Source: "embedded"})
+		texMeta = append(texMeta, nodeProjectTexMeta{File: file, Name: name, Source: p.source})
 	}
 
 	if in.Thumbnail != "" {
@@ -431,6 +434,8 @@ func (s *NodeProjectStore) Save(in NodeProjectSaveInput) (string, error) {
 
 // Load 读取一个工程。
 func (s *NodeProjectStore) Load(id string) (*NodeProject, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if !nodeProjectIDRe.MatchString(id) || !s.Exists(id) {
 		return nil, httpx.Errorf(httpx.CodeNotFound, "project not found")
 	}

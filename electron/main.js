@@ -301,6 +301,10 @@ async function createWindow(port) {
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith(`http://127.0.0.1:${port}`)) return { action: 'allow' }
+    try {
+      const u = new URL(url)
+      if (!['http:', 'https:'].includes(u.protocol)) return { action: 'deny' }
+    } catch { return { action: 'deny' } }
     shell.openExternal(url)
     return { action: 'deny' }
   })

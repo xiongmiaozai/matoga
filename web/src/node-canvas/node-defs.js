@@ -11,7 +11,7 @@
 
 import { _psNode } from './ps-blend.js'
 import { _noiseValue, _noisePvCache, _NOISE_TEX_SIZE, _noisePreviewUrl, _paletteRGB } from './noise.js'
-import { _texAvgColor, _texAlpha, _rgbaIn, _rgbaMerge, _rgbaSplit, _rgbAlphaSplit } from './texture.js'
+import { _texAvgColor, _texAlpha, _rgbaIn, _rgbaMerge, _rgbaSplit, _rgbAlphaSplit, _normalGen } from './texture.js'
 import { num, clamp, _texUrl, col, _smoothstep, _lerp } from './math.js'
 import {
   numWidget,
@@ -34,7 +34,8 @@ import {
   mandelWidget,
   paletteWidget,
   gradientWidget,
-  warpWidget
+  warpWidget,
+  normalGenWidget
 } from './widgets.js'
 
 /* 主文件注入：state 与 evaluate 属于主文件状态机 */
@@ -279,6 +280,27 @@ export const NODE_DEFS = {
       const tex = i.tex || null
       const strength = clamp(num(i.strength), 0, 2)
       return { normal: tex ? { src: tex, strength } : null }
+    }
+  },
+  normalGen: {
+    title: '法线生成 (高度→法线)',
+    group: '材质',
+    subgroup: '采样',
+    color: 'var(--type-texture)',
+    inputs: [
+      { n: 'tex', t: 'texture' },
+      { n: 'strength', t: 'number' }
+    ],
+    outputs: [{ n: 'normal', t: 'texture' }],
+    widget: n => normalGenWidget(n),
+    eval: (i, n) => {
+      const url = _texUrl(i.tex)
+      const strength = clamp(num(i.strength ?? n.props.strength), 0, 4)
+      const algo = n.props.algo || 'sobel'
+      const smooth = clamp(+(n.props.smooth ?? 0), 0, 4)
+      const outUrl = url ? _normalGen(url, algo, strength, smooth) : null
+      n._normalUrl = outUrl || null
+      return { normal: outUrl ? { src: outUrl, strength } : null }
     }
   },
   rgbaMerge: {

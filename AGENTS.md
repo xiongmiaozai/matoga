@@ -8,7 +8,7 @@
 ## 📌 项目概览
 
 - **名称**：matoga — 材质贴图对比工具
-- **版本**：3.1.1
+- **版本**：3.4.0
 - **架构**：Node.js + Express 5（后端） + 原生 ES Modules（前端，无构建） + Electron（桌面壳）
 - **端口**：默认 127.0.0.1:5273
 - **测试**：`npm test`（unit） / `npm run test:smoke`（smoke）
@@ -102,7 +102,7 @@ docs(readme): 补充环境变量说明
 bash scripts/build-mac.sh
 ```
 
-产物：`dist-electron/matoga-3.2.0-arm64.dmg`（含 Applications 拖拽快捷方式）
+产物：`dist-electron/matoga-3.4.0-arm64.dmg`（含 Applications 拖拽快捷方式）
 
 ### 构建流程（分步）
 
@@ -150,7 +150,7 @@ rm -rf ~/Library/Caches/electron/electron-v3* ~/Library/Caches/electron/electron
 bash scripts/build-win.sh
 ```
 
-产物：`dist-electron/matoga Setup 3.2.0.exe`（x64 NSIS 安装包，~187MB）
+产物：`dist-electron/matoga Setup 3.4.0.exe`（x64 NSIS 安装包，~187MB）
 
 ### 流程
 

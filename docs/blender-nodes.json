@@ -1,0 +1,91 @@
+{
+  "source": "projects.blender.org/blender/blender-manual@main",
+  "fetched_at": "2026-11-01",
+  "modules": {
+    "shader_nodes": {
+      "input": {
+        "constant": ["boolean", "color", "integer", "menu", "string", "value", "vector"],
+        "scene_geometry": ["ao", "attribute", "bevel", "camera_data", "fresnel", "geometry", "hair_info", "layer_weight", "light_evaluation", "light_info", "light_path", "object_info", "particle_info", "point_info", "raycast", "scene_time", "shadow_raycast", "tangent", "texture_coordinate", "uv_map", "vertex_color", "volume_info", "wireframe"]
+      },
+      "output": ["aov", "material", "light", "world", "enable_output", "warning"],
+      "shader": ["add", "mix", "background", "diffuse", "emission", "glass", "glossy", "refraction", "translucent", "transparent", "toon", "sss", "holdout", "principled", "hair_principled", "volume_principled", "hair", "sheen", "metallic", "specular_bsdf", "ray_portal", "light_accumulation", "volume_absorption", "volume_scatter", "volume_coefficients"],
+      "displacement": ["bump", "displacement", "normal_map", "vector_displacement"],
+      "texture": ["brick", "checker", "environment", "gabor", "gradient", "ies", "image", "magic", "noise", "sky", "voronoi", "wave", "white_noise"],
+      "color": ["blackbody", "bright_contrast", "color_ramp", "gamma", "hue_saturation", "invert_color", "light_falloff", "mix", "rgb_curves", "wavelength", "combine_color", "separate_color", "rgb_to_bw", "shader_to_rgb"],
+      "utilities": {
+        "math": ["boolean_math", "clamp", "float_curve", "map_range", "integer_math", "math", "mix"],
+        "text": ["format_string", "match_string", "replace_string", "reverse_string", "set_string_case", "slice_string", "trim_string", "find_in_string", "string_length", "string_to_value", "value_to_string", "special_characters"],
+        "vector": ["combine_xyz", "separate_xyz", "get_vector_component", "mix_vector", "mapping", "normal", "curves", "radial_tiling", "vector_math", "vector_rotate", "transform", "combine_cylindrical", "combine_spherical", "separate_cylindrical", "separate_spherical"],
+        "bundle": ["combine_bundle", "join_bundle", "separate_bundle"],
+        "closure": ["closure", "evaluate_closure"],
+        "control_flow": ["repeat", "index_switch", "menu_switch", "switch", "implicit_conversion"],
+        "extension": ["script"]
+      }
+    },
+    "geometry_nodes": {
+      "input": {
+        "constant": ["boolean", "collection", "color", "font", "image", "integer", "material", "menu", "object", "rotation", "string", "value", "vector"],
+        "scene": ["3d_cursor", "active_camera", "bone_info", "camera_info", "collection_children", "collection_info", "image_info", "is_viewport", "mouse_position", "object_info", "scene_time", "self_object", "viewport_transform"]
+      },
+      "output": ["enable_output", "warning", "viewer"],
+      "attribute": ["attribute_statistic", "domain_size", "get_attribute_names", "blur_attribute", "capture_attribute", "remove_named_attribute", "rename_attribute", "store_named_attribute", "transfer_attributes"],
+      "geometry": {
+        "read": ["id", "input_index", "named_attribute", "normal", "position", "radius", "active_element", "selection", "get_geometry_bundle"],
+        "sample": ["geometry_principal_components", "geometry_proximity", "index_of_nearest", "raycast", "sample_index", "sample_nearest"],
+        "write": ["set_geometry_bundle", "set_geometry_name", "set_id", "set_position", "set_selection"],
+        "operations": ["bake", "bounding_box", "convex_hull", "delete_geometry", "duplicate_elements", "merge_by_distance", "merge_points", "split_to_instances", "sort_elements", "transform_geometry", "get_geometry_components", "separate_components", "separate_geometry", "displace_geometry", "smooth_geometry"],
+        "other": ["geometry_to_instance", "join_geometry", "geometry_input", "selection"]
+      },
+      "curve": {
+        "operations": ["curve_to_mesh", "curve_to_points", "curves_to_grease_pencil", "deform_curves_on_surface", "fill_curve", "fillet_curve", "interpolate_curves", "resample_curve", "reverse_curve", "subdivide_curve", "trim_curve"],
+        "primitives": ["arc", "bezier_segment", "curve_circle", "curve_line", "curve_spiral", "quadratic_bezier", "quadrilateral", "star"],
+        "other": ["construct_curves"]
+      },
+      "mesh": {
+        "operations": ["dual_mesh", "edge_paths_to_curves", "edge_paths_to_selection", "extrude_mesh", "flip_faces", "mesh_bevel", "mesh_boolean", "mesh_to_curve", "mesh_to_density_grid", "mesh_to_points", "mesh_to_sdf_grid", "mesh_to_volume", "scale_elements", "split_edges", "subdivide_mesh", "subdivision_surface", "triangulate"],
+        "primitives": ["cone", "cube", "cylinder", "grid", "icosphere", "mesh_circle", "mesh_line", "uv_sphere"],
+        "topology": ["corners_of_edge", "corners_of_face", "corners_of_vertex", "edges_of_corner", "edges_of_vertex", "face_of_corner", "offset_corner_in_face", "vertex_of_corner"]
+      },
+      "point": ["distribute_points_in_volume", "distribute_points_in_grid", "distribute_points_on_faces", "points", "points_to_curves", "points_to_sdf_grid", "points_to_vertices", "points_to_volume", "rasterize_points", "set_point_radius", "set_point_cloud_type"],
+      "instances": ["instance_on_points", "instance_on_elements", "instances_to_points", "realize_instances", "rotate_instances", "scale_instances", "translate_instances", "set_instance_transform", "instance_bounds", "instance_reference", "instance_transform", "instance_rotation", "instance_scale", "randomize_transforms"],
+      "simulation": ["simulation_zone", "xpbd_solver", "cloth_dynamics", "collider", "custom_effector", "custom_force", "hair_dynamics", "set_effector"],
+      "generate": ["array", "curve_to_tube", "scatter_on_surface"],
+      "normals": ["smooth_by_angle"],
+      "color": ["blackbody", "color_ramp", "gamma", "mix_rgb", "rgb_curves", "combine_color", "separate_color"],
+      "texture": ["brick", "checker", "gabor", "gradient", "image", "magic", "musgrave", "noise", "voronoi", "wave", "white_noise"],
+      "utilities": {
+        "data_types": ["bundle", "closure", "field", "list", "matrix", "rotation", "sound"],
+        "zones": ["for_each_geometry_zone", "repeat_zone", "simulation_zone"],
+        "control_flow": ["index_switch", "menu_switch", "switch", "implicit_conversion"],
+        "other": ["random_value", "random_rotation"]
+      }
+    },
+    "compositing": {
+      "input": ["constant", "blank_image", "bokeh_image", "group_input", "image", "image_info", "image_coordinates", "import_text", "mask", "movie_clip", "sequencer_strip_info", "string_to_image", "scene"],
+      "output": ["enable_output", "group_output", "viewer", "warning", "file_output"],
+      "color": ["adjust", "alpha_convert", "alpha_over", "set_alpha", "combine_color", "separate_color", "depth_combine", "mix_color", "blackbody", "color_ramp", "convert_colorspace", "convert_to_display", "invert_color", "rgb_to_bw"],
+      "creative": ["kuwahara", "pixelate", "posterize", "sepia", "split_toning", "tune_image", "unsharp_mask"],
+      "filter": ["blur", "anti_aliasing", "convolve", "denoise", "despeckle", "dilate_erode", "inpaint", "mask_to_sdf", "filter", "glare"],
+      "keying": ["channel_key", "chroma_key", "color_key", "color_spill", "difference_key", "distance_key", "keying", "keying_screen", "luminance_key"],
+      "mask": ["cryptomatte", "cryptomatte_legacy", "box_mask", "ellipse_mask", "double_edge_mask", "id_mask"],
+      "tracking": ["plane_track_deform", "stabilize_2d", "track_position"],
+      "texture": ["brick", "checker", "gabor", "gradient", "magic", "noise", "voronoi", "wave", "white_noise"],
+      "transform": ["rotate", "scale", "transform", "translate", "corner_pin", "crop", "displace", "flip", "map_uv", "lens_distortion", "movie_distortion"],
+      "utilities": ["math", "text", "vector", "bundle", "matrix", "rotation", "implicit_conversion", "levels", "normalize", "random_value", "index_switch", "menu_switch", "switch", "switch_stereo_view", "split", "relative_to_pixel", "retime"],
+      "camera_lens_effects": ["bloom", "chromatic_aberration", "film_grain", "sensor_noise", "vignette"]
+    }
+  },
+  "trends": [
+    "字符串一等公民（Text 节点族跨三模块）",
+    "Bundle 统一容器",
+    "闭包作为数据（closure/evaluate_closure）",
+    "循环与状态（repeat/simulation/for_each zone）",
+    "物理入节点图（xpbd/cloth/hair dynamics）",
+    "体积/SDF 管线（mesh/points/mask → sdf_grid）",
+    "交互式工具（mouse_position/3d_cursor/viewport_transform）",
+    "矩阵/旋转/列表一等类型",
+    "合成器风格化（Creative + Camera & Lens Effects）",
+    "色彩管理显式化（convert_colorspace/convert_to_display）",
+    "弃用归档（geo deprecated/）"
+  ]
+}

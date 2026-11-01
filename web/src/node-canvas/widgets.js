@@ -479,3 +479,32 @@ export function warpWidget(node) {
   box.appendChild(_labeledRow('增益', numWidget(node, 'gain', 0.4, 0.95, 0.05)))
   return box
 }
+export function normalGenWidget(node) {
+  if (node.props.algo === undefined) node.props.algo = 'sobel'
+  if (node.props.strength === undefined) node.props.strength = 1.0
+  if (node.props.smooth === undefined) node.props.smooth = 0
+  const box = document.createElement('div')
+  box.className = 'w-multi'
+  const hint = document.createElement('div')
+  hint.style.cssText = 'font-size:10px;color:var(--text-dim);margin-bottom:4px;line-height:1.4;'
+  hint.textContent = '从高度图（灰度/彩色取亮度）生成切线空间法线贴图；输出可接法线输出节点'
+  box.appendChild(hint)
+  box.appendChild(_labeledRow('算法', selectWidget(node, 'algo', ['central', 'sobel', 'scharr', 'farid'])))
+  box.appendChild(_labeledRow('强度', numWidget(node, 'strength', 0, 4, 0.05)))
+  box.appendChild(_labeledRow('平滑', numWidget(node, 'smooth', 0, 4, 0.5)))
+  const actions = document.createElement('div')
+  actions.className = 'w-tex'
+  actions.style.marginTop = '4px'
+  const info = document.createElement('div'); info.className = 'info'
+  const btn = document.createElement('div'); btn.className = 'btn'; btn.textContent = '保存 PNG'
+  info.appendChild(btn); actions.appendChild(info)
+  box.appendChild(actions)
+  btn.addEventListener('click', () => {
+    const url = node._normalUrl
+    if (!url) { toast('法线尚未生成（等待高度图输入或异步计算）'); return }
+    const a = document.createElement('a')
+    a.href = url; a.download = 'matoga-normal.png'
+    a.click()
+  })
+  return box
+}
