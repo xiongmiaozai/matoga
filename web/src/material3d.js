@@ -16,6 +16,7 @@ import { setupControls, disposeAllMaterialTextures, disposeMaterial3D, setHooks 
 import { extractChannel, extractRoughness, extractMetalness, extractEmissive } from './m3d/channel-extract.js'
 import { createLabel, applyOpacityMode, applyHeightFilter, applyTextureFilter, setHooks as setMaterialFiltersHooks } from './m3d/material-filters.js'
 import { imgW, imgH, extractHeight, extractHeightFromNormal } from './m3d/height-extract.js'
+import { normalizeHeightChannels } from './m3d/height-channels.js'
 import { createEnvTexture, cloneLightConfig, rebuildLights, applyLightPreset, applyCustomLightConfig, updateSkySunPosition, bakeSkyEnvironment, scheduleSkyBake, applyProceduralSky, applyHDREnvMode, ensureRotatedTexture, setEnvMode, setLightPreset, setEnvIntensity, loadHDREnv, clearHDREnv, getCurrentLightPreset, getCurrentEnvMode, setEnvModeExport, setHdrRotation, setHdrUsage, setSkyTurbidity, setSkyRayleigh, setSkyMieCoefficient, setSkyMieDirectionalG, setSkySunElevation, setSkySunAzimuth, setSkyTint, setHooks as setEnvironmentLightingHooks } from './m3d/env-light.js'
 /* 门面 re-export（§2.3） */
 export { createEnvTexture, cloneLightConfig, rebuildLights, applyLightPreset, applyCustomLightConfig, updateSkySunPosition, bakeSkyEnvironment, scheduleSkyBake, applyProceduralSky, applyHDREnvMode, ensureRotatedTexture, setEnvMode, setLightPreset, setEnvIntensity, loadHDREnv, clearHDREnv, getCurrentLightPreset, getCurrentEnvMode, setEnvModeExport, setHdrRotation, setHdrUsage, setSkyTurbidity, setSkyRayleigh, setSkyMieCoefficient, setSkyMieDirectionalG, setSkySunElevation, setSkySunAzimuth, setSkyTint } from './m3d/env-light.js'
@@ -159,6 +160,8 @@ let lastFrameTime = 0
 const _flyForward = new THREE.Vector3()
 const _flyRight = new THREE.Vector3()
 const _flyMove = new THREE.Vector3()
+
+export { normalizeHeightChannels } from './m3d/height-channels.js'
 
 function scaleUV(geometry, su, sv) {
   const uv = geometry.attributes.uv
@@ -909,6 +912,7 @@ function applyTexturesToMesh(mesh, group, side) {
           .then(r => (r.ok ? r.json() : null))
           .catch(() => null)
       ).then(anim => {
+        if (material.userData.loadVer !== myVer) return
         if (anim) {
           tex.wrapS = tex.wrapT = THREE.RepeatWrapping
           tex.needsUpdate = true
@@ -1036,14 +1040,9 @@ function applyTexturesToMesh(mesh, group, side) {
       canvas.height = hImg.naturalHeight
       const ctx = canvas.getContext('2d', { willReadFrequently: true })
       ctx.drawImage(hImg, 0, 0)
-      const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data
-      for (let i = 0; i < data.length; i += 4) {
-        const v = data[i]
-        data[i + 1] = v
-        data[i + 2] = v
-        data[i + 3] = 255
-      }
-      ctx.putImageData(ctx.getImageData(0, 0, canvas.width, canvas.height), 0, 0)
+      const data = ctx.getImageData(0, 0, canvas.width, canvas.height)
+      normalizeHeightChannels(data)
+      ctx.putImageData(data, 0, 0)
       const hTex = new THREE.CanvasTexture(canvas)
       hTex.colorSpace = THREE.NoColorSpace
       hTex.wrapS = hTex.wrapT = THREE.RepeatWrapping
@@ -1466,14 +1465,9 @@ export function applyPbrMapsToModelMaterial(mat, normalUrl, specUrl, force, heig
         canvas.height = img.naturalHeight
         const ctx = canvas.getContext('2d', { willReadFrequently: true })
         ctx.drawImage(img, 0, 0)
-        const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data
-        for (let i = 0; i < data.length; i += 4) {
-          const v = data[i]
-          data[i + 1] = v
-          data[i + 2] = v
-          data[i + 3] = 255
-        }
-        ctx.putImageData(ctx.getImageData(0, 0, canvas.width, canvas.height), 0, 0)
+        const data = ctx.getImageData(0, 0, canvas.width, canvas.height)
+        normalizeHeightChannels(data)
+        ctx.putImageData(data, 0, 0)
         const hTex = new THREE.CanvasTexture(canvas)
         hTex.colorSpace = THREE.NoColorSpace
         hTex.wrapS = hTex.wrapT = THREE.RepeatWrapping
@@ -1499,6 +1493,7 @@ export function applyPbrMapsToModelMaterial(mat, normalUrl, specUrl, force, heig
       img.src = heightUrl
     }
   }
+  markShaderMatsDirty()
 }
 export function applyNodePBR(p) {
   if (!initialized || !p) return

@@ -427,6 +427,16 @@ export function setEnvMode(mode) {
       _get_lightGroup().remove(_get_skySunLight())
       _set_skySunLight(null)
     }
+    if (_get_hdrTextureOriginal()) {
+      _get_hdrTextureOriginal().dispose()
+      _set_hdrTextureOriginal(null)
+    }
+    if (_get_hdrTextureRotated()) {
+      _get_hdrTextureRotated().dispose()
+      _set_hdrTextureRotated(null)
+    }
+    _set_hdrTexture(null)
+    if (_get_scene()) _get_scene().environmentRotation.set(0, 0, 0)
     applyLightPreset(_get_currentLightPreset())
   }
 }
@@ -496,7 +506,7 @@ export function clearHDREnv() {
   _set_hdrInfo(null)
   if (_get_scene()) _get_scene().environmentRotation.set(0, 0, 0)
   if (_get_currentEnvMode() === 'hdri') setEnvMode('custom')
-  else applyHDREnvMode()
+
 }
 
 export function getCurrentLightPreset() {
