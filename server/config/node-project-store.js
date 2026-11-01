@@ -19,7 +19,7 @@ const { logger } = require('../middleware/logger')
 const { DATA_ROOT } = require('../paths')
 const { AppError } = require('../lib/errors')
 const { atomicWrite, atomicWriteAsync } = require('./atomic-write')
-const { readJsonMtu } = require('./json-cache')
+const { readJsonMtu, invalidate } = require('./json-cache')
 const configStore = require('./config-store')
 
 const DEFAULT_DIR = path.join(DATA_ROOT, 'data', 'node-projects')
@@ -267,6 +267,8 @@ async function save({ id, name, graph, thumbnail, textures }) {
       textures: texMeta
     }
     await atomicWriteAsync(projectFile(finalId), JSON.stringify(doc, null, 2))
+    invalidate(projectFile(finalId))
+    _listCache = null
     return finalId
   }
 
@@ -326,6 +328,8 @@ function remove(id) {
   const dir = projectDir(id)
   const run = async () => {
     await fs.promises.rm(dir, { recursive: true, force: true })
+    invalidate(projectFile(id))
+    _listCache = null
   }
   writeQueue = writeQueue.then(run, run)
   return writeQueue
@@ -346,6 +350,8 @@ function rename(id, name) {
     raw.meta.name = cleanName
     raw.meta.updatedAt = Date.now()
     await atomicWriteAsync(file, JSON.stringify(raw, null, 2))
+    invalidate(file)
+    _listCache = null
   }
   writeQueue = writeQueue.then(run, run)
   return writeQueue.then(() => ({ id, name: cleanName }))
