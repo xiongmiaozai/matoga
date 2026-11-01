@@ -8,7 +8,7 @@ const fs = require('fs')
 const path = require('path')
 const { logger } = require('../middleware/logger')
 const { atomicWriteJson, atomicWriteJsonAsync } = require('./atomic-write')
-const { readJsonMtu } = require('./json-cache')
+const { readJsonMtu, invalidate } = require('./json-cache')
 const { DATA_ROOT } = require('../paths')
 
 const DATA_DIR = path.join(DATA_ROOT, 'data')
@@ -56,18 +56,24 @@ function readIndex() {
 
 function writeIndexAtomic(idx) {
   atomicWriteJson(INDEX_FILE, idx)
+  invalidate(INDEX_FILE)
 }
 
 function writePresetFileAtomic(filename, payload) {
-  atomicWriteJson(path.join(DIR, filename), payload)
+  const full = path.join(DIR, filename)
+  atomicWriteJson(full, payload)
+  invalidate(full)
 }
 
 async function writeIndexAtomicAsync(idx) {
   await atomicWriteJsonAsync(INDEX_FILE, idx)
+  invalidate(INDEX_FILE)
 }
 
 async function writePresetFileAtomicAsync(filename, payload) {
-  await atomicWriteJsonAsync(path.join(DIR, filename), payload)
+  const full = path.join(DIR, filename)
+  await atomicWriteJsonAsync(full, payload)
+  invalidate(full)
 }
 
 function readPresetFile(filename) {

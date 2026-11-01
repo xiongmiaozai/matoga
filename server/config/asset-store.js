@@ -14,7 +14,7 @@ const crypto = require('crypto')
 const { logger } = require('../middleware/logger')
 const { DATA_ROOT } = require('../paths')
 const { atomicWriteJson, atomicWriteJsonAsync } = require('./atomic-write')
-const { readJsonMtu } = require('./json-cache')
+const { readJsonMtu, invalidate } = require('./json-cache')
 
 const DATA_DIR = path.join(DATA_ROOT, 'data')
 const DIR = path.join(DATA_DIR, 'asset-library')
@@ -135,7 +135,7 @@ function getByType(type) {
 function setFavorites(items) {
   const clean = sanitizeList(items, MAX_FAV)
   writeQueue = writeQueue.then(async () => {
-    try { await atomicWriteJsonAsync(FAV_FILE, { favorites: clean }) }
+    try { await atomicWriteJsonAsync(FAV_FILE, { favorites: clean }); invalidate(FAV_FILE) }
     catch (e) { logger.error('asset', 'setFavorites failed: ' + e.message) }
   })
   return writeQueue
@@ -144,7 +144,7 @@ function setFavorites(items) {
 function setRecent(items) {
   const clean = sanitizeList(items, MAX_RECENT)
   writeQueue = writeQueue.then(async () => {
-    try { await atomicWriteJsonAsync(RECENT_FILE, { recent: clean }) }
+    try { await atomicWriteJsonAsync(RECENT_FILE, { recent: clean }); invalidate(RECENT_FILE) }
     catch (e) { logger.error('asset', 'setRecent failed: ' + e.message) }
   })
   return writeQueue
