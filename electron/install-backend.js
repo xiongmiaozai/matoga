@@ -196,6 +196,18 @@ async function downloadBackend(opts = {}) {
         }
       })
 
+      // 下载已完成，接下来是「安装」：写入 bin 目录并赋予可执行权限。
+      onProgress({
+        phase: 'install',
+        source: src.label,
+        received: result.bytes,
+        total: result.bytes,
+        percent: 100,
+        speed: 0,
+        threads,
+        text: `正在安装后端到 ${dest}`
+      })
+
       if (process.platform !== 'win32') {
         try {
           fs.chmodSync(dest, 0o755)
@@ -210,7 +222,7 @@ async function downloadBackend(opts = {}) {
         percent: 100,
         speed: 0,
         threads,
-        text: `下载完成（${src.label}，${formatBytes(result.bytes)}，${result.threads} 线程）`
+        text: `安装完成（${src.label}，${formatBytes(result.bytes)}，${result.threads} 线程）`
       })
       return dest
     } catch (err) {

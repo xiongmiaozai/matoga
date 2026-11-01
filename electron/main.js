@@ -129,6 +129,10 @@ async function ensureGoBackend() {
           })
         } else if (phase === 'retry') {
           push({ kind: 'log', text: evt.text, level: 'warn' })
+        } else if (phase === 'install') {
+          push({ kind: 'phase', title: '正在安装后端', indeterminate: true })
+          push({ kind: 'progress', received: evt.received || 0, total: evt.total || 0, percent: 100, speed: 0, threads: evt.threads, text: evt.text })
+          push({ kind: 'log', text: evt.text })
         } else if (phase === 'done') {
           push({ kind: 'phase', title: '下载完成', state: 'done' })
           push({
