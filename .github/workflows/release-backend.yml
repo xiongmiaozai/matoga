@@ -1,0 +1,70 @@
+name: release-backend
+
+# 构建 Go 后端二进制并发布为 Release 资产，供 Electron 首次启动时按需下载。
+# 打 v* 标签时上传到 GitHub Release；手动触发（workflow_dispatch）时改为上传
+# 为构建 artifact（便于本地验证，不污染 Release）。
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            goos: windows
+            goarch: amd64
+            ext: .exe
+            asset: matoga-backend-windows-x64.exe
+          - os: macos-latest
+            goos: darwin
+            goarch: arm64
+            ext: ''
+            asset: matoga-backend-macos-arm64
+          - os: macos-latest
+            goos: darwin
+            goarch: amd64
+            ext: ''
+            asset: matoga-backend-macos-x64
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            ext: ''
+            asset: matoga-backend-linux-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.x'
+          cache-dependency-path: backend/go.sum
+
+      # 与 scripts/build-go.sh 同参：CGO 关、-trimpath、-s -w 瘦身。
+      - name: Build backend
+        working-directory: backend
+        env:
+          CGO_ENABLED: '0'
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: go build -trimpath -ldflags "-s -w" -o "../dist-go/${{ matrix.asset }}" ./cmd/matoga
+
+      - name: Upload release asset
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist-go/${{ matrix.asset }}
+
+      - name: Upload artifact (manual dispatch)
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: matoga-backend-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist-go/${{ matrix.asset }}
