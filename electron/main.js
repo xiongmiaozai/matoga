@@ -7,10 +7,12 @@
  * server 在独立 Node 进程中运行，通过 stdout 通知实际监听端口，关闭时发 SIGTERM。
  */
 
-const { app, BrowserWindow, shell, screen } = require('electron')
+const { app, BrowserWindow, shell, screen, dialog } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const { spawn } = require('child_process')
+const { promptDependencySetup, openManualInstallGuide } = require('./dependency-setup')
+const { downloadBackend } = require('./install-backend')
 
 
 let mainWindow = null
@@ -43,8 +45,9 @@ async function seedBuiltinData(srcRoot, dataRoot) {
  *
  * 候选顺序（先打包态、后开发态）：
  *   1. <resources>/matoga-backend(.exe)          打包后由 extraResources 放置
- *   2. <projectRoot>/backend/matoga-backend(.exe) 本地构建产物
- *   3. <projectRoot>/dist-go/matoga-backend(.exe) 构建脚本默认输出目录
+ *   2. <userData>/bin/matoga-backend(.exe)      自动安装下载的落盘位置
+ *   3. <projectRoot>/backend/matoga-backend(.exe) 本地构建产物
+ *   4. <projectRoot>/dist-go/matoga-backend(.exe) 构建脚本默认输出目录
  *
  * 返回存在的第一个路径；都不存在返回 null（调用方回退到 Node 服务）。
  */
@@ -52,6 +55,7 @@ function resolveGoBackend() {
   const exe = process.platform === 'win32' ? 'matoga-backend.exe' : 'matoga-backend'
   const roots = []
   if (app.isPackaged) roots.push(process.resourcesPath)
+  roots.push(path.join(app.getPath('userData'), 'bin'))
   roots.push(path.join(__dirname, '..', 'backend'))
   roots.push(path.join(__dirname, '..', 'dist-go'))
   for (const r of roots) {
@@ -64,15 +68,63 @@ function resolveGoBackend() {
 }
 
 /**
+ * 确保 Go 后端可用：找不到时按场景处理。
+ *
+ * - 打包态：弹「依赖安装」窗让用户选择；自动安装勾选协议后从 Release 下载，
+ *   下载成功返回二进制路径；失败弹错误后退出。用户取消也退出（无 Node 回退）。
+ * - 开发态：不弹窗，返回 null，调用方回退到 Node 服务。
+ *
+ * @returns {Promise<string | null>} 后端二进制路径；null 表示回退 Node。
+ */
+async function ensureGoBackend() {
+  const existing = resolveGoBackend()
+  if (existing) return existing
+
+  if (!app.isPackaged) return null
+
+  const choice = await promptDependencySetup(null)
+  if (choice === 'manual') {
+    openManualInstallGuide()
+    return null // 用户自装后本次退出；下次启动会重新检测。
+  }
+  if (choice === 'quit') {
+    return null
+  }
+
+  // 自动安装：从 Release 下载，带进度提示。
+  let lastPct = -1
+  try {
+    const bin = await downloadBackend((received, total) => {
+      if (total) {
+        const pct = Math.floor((received / total) * 100)
+        if (pct >= lastPct + 10) {
+          lastPct = pct
+          console.log(`[main] 下载后端进度: ${pct}%`)
+        }
+      }
+    })
+    console.log('[main] 后端下载完成:', bin)
+    return bin
+  } catch (e) {
+    console.error('[main] 后端下载失败:', e.message)
+    dialog.showErrorBox(
+      '后端下载失败',
+      `自动下载后端失败：${e.message}\n\n你可重新启动后选择「自行安装」，或手动下载二进制放到应用数据目录的 bin/ 下。`
+    )
+    return null
+  }
+}
+
+/**
  * 启动后端服务。
  *
- * 优先使用 Go 二进制；不存在或启动失败时回退到 Node 服务 —— 回退是为了让
- * 开发机与增量发布不必每台都先构建 Go 二进制，避免「打不开」的硬失败。
+ * 打包态下先 ensureGoBackend()：找不到 Go 会弹窗引导安装（不再静默回退 Node）。
+ * 开发态下找不到 Go 则回退 Node 服务，避免开发机每台都要先构建二进制。
  *
  * 两种后端都按同一协议报告就绪：stdout 输出 `MATOGA_LISTENING:<port>`。
  */
-function startServer() {
-  const goBin = resolveGoBackend()
+async function startServer() {
+  const goBin = await ensureGoBackend()
   if (goBin) {
     console.log('[main] 启动 Go 后端:', goBin)
     return startWithError(goBin, ['-port', String(PREFERRED_PORT)], {
@@ -82,6 +134,10 @@ function startServer() {
       console.error('[main] Go 后端启动失败，回退到 Node:', e.message)
       return startNodeServer()
     })
+  }
+  if (app.isPackaged) {
+    // 打包态下用户未完成安装：不再回退 Node，直接退出，下次启动重新引导。
+    throw new Error('后端未安装')
   }
   console.log('[main] 未找到 Go 后端，使用 Node 服务')
   return startNodeServer()
