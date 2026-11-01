@@ -7,12 +7,13 @@
  * server 在独立 Node 进程中运行，通过 stdout 通知实际监听端口，关闭时发 SIGTERM。
  */
 
-const { app, BrowserWindow, shell, screen, dialog } = require('electron')
+const { app, BrowserWindow, shell, screen } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const { spawn } = require('child_process')
 const { promptDependencySetup, openManualInstallGuide } = require('./dependency-setup')
-const { downloadBackend } = require('./install-backend')
+const { downloadBackend, MANUAL_INSTALL_REQUIRED } = require('./install-backend')
+const { createProgressWindow, openManualDownloadPage } = require('./install-progress')
 
 
 let mainWindow = null
@@ -82,35 +83,86 @@ async function ensureGoBackend() {
 
   if (!app.isPackaged) return null
 
-  const choice = await promptDependencySetup(null)
-  if (choice === 'manual') {
+  const { action, threads } = (await promptDependencySetup(null)) || { action: 'quit', threads: 0 }
+  if (action === 'manual') {
     openManualInstallGuide()
     return null // 用户自装后本次退出；下次启动会重新检测。
   }
-  if (choice === 'quit') {
+  if (action !== 'auto') {
     return null
   }
 
-  // 自动安装：从 Release 下载，带进度提示。
-  let lastPct = -1
+  // 自动安装：多节点测速 + 多线程分段下载，全程有进度窗。
+  const progress = createProgressWindow(null)
+  let cancelled = false
+  progress.onCancel(() => {
+    cancelled = true
+    progress.push({ kind: 'log', text: '已取消，退出应用。', level: 'warn' })
+    setTimeout(() => app.quit(), 150)
+  })
+  progress.onManual(() => openManualDownloadPage())
+
+  const push = evt => progress.push(evt)
+
   try {
-    const bin = await downloadBackend((received, total) => {
-      if (total) {
-        const pct = Math.floor((received / total) * 100)
-        if (pct >= lastPct + 10) {
-          lastPct = pct
-          console.log(`[main] 下载后端进度: ${pct}%`)
+    const bin = await downloadBackend({
+      threads,
+      onProgress: evt => {
+        if (cancelled) return
+        const phase = evt.phase
+        if (phase === 'probe') {
+          push({ kind: 'phase', title: '正在测速下载节点', indeterminate: false })
+          if (evt.speed != null) {
+            push({ kind: 'log', text: evt.text })
+          }
+        } else if (phase === 'download') {
+          push({ kind: 'phase', title: '正在下载后端二进制', indeterminate: false })
+          push({
+            kind: 'progress',
+            source: evt.source,
+            received: evt.received || 0,
+            total: evt.total || 0,
+            percent: evt.percent || 0,
+            speed: evt.speed || 0,
+            threads: evt.threads,
+            text: evt.text
+          })
+        } else if (phase === 'retry') {
+          push({ kind: 'log', text: evt.text, level: 'warn' })
+        } else if (phase === 'done') {
+          push({ kind: 'phase', title: '下载完成', state: 'done' })
+          push({
+            kind: 'progress',
+            source: evt.source,
+            received: evt.received || 0,
+            total: evt.total || evt.received || 0,
+            percent: 100,
+            speed: 0,
+            threads: evt.threads,
+            text: evt.text
+          })
+          push({ kind: 'log', text: evt.text, level: 'ok' })
         }
       }
     })
     console.log('[main] 后端下载完成:', bin)
+    push({ kind: 'phase', title: '安装完成，正在启动', state: 'done', indeterminate: false })
+    push({ kind: 'log', text: '后端已安装到 ' + bin, level: 'ok' })
+    push({ kind: 'finish', ok: true })
+    setTimeout(() => progress.close(), 500)
     return bin
   } catch (e) {
-    console.error('[main] 后端下载失败:', e.message)
-    dialog.showErrorBox(
-      '后端下载失败',
-      `自动下载后端失败：${e.message}\n\n你可重新启动后选择「自行安装」，或手动下载二进制放到应用数据目录的 bin/ 下。`
-    )
+    const manual = e && e.code === MANUAL_INSTALL_REQUIRED
+    console.error('[main] 后端下载失败:', e && e.message)
+    push({ kind: 'phase', title: manual ? '全部下载节点失败' : '下载失败', state: 'error' })
+    push({
+      kind: 'log',
+      text: manual
+        ? '所有下载节点都失败了，请点「手动下载」前往 Release 页面自行下载后端二进制。'
+        : `下载失败：${e && e.message}`,
+      level: 'warn'
+    })
+    push({ kind: 'finish', ok: false })
     return null
   }
 }

@@ -28,7 +28,30 @@ const THIRD_PARTY_NOTICE = `matoga 后端为 Go 编写的本地服务，以下�
 matoga 自身采用 MIT License，版权归 芝世 (xiongmiaozai) 所有，
 来源：https://github.com/xiongmiaozai/matoga`
 
+// 下载地址披露段。所有加速节点都只是对官方 GitHub Release 地址的转发，
+// 返回的是同一个官方预编译二进制，内容与官方地址完全一致。
+function buildAddressNotice(urls) {
+  const list = (urls || []).map((u, i) => `${i + 1}. ${u}`).join('\n')
+  return `
+
+━━━ 下载地址说明 ━━━
+
+自动安装会访问下列地址下载 matoga 后端二进制（按实测速度从快到慢依次尝试，
+某个地址失败会自动回退到下一个，最后回退到 GitHub 官方地址）：
+
+${list || '（未获取到下载地址）'}
+
+其中除 GitHub 官方地址外的条目均为第三方 GitHub 加速代理，它们只是对官方
+Release 地址的转发，返回的二进制与官方地址完全相同，不会改写内容。所有下载
+均使用 HTTPS，文件写入本机用户数据目录，不修改系统目录。`
+}
+
+// 完整协议正文（含真实下载地址清单）。
+function buildNotice(urls) {
+  return THIRD_PARTY_NOTICE + buildAddressNotice(urls)
+}
+
 // 勾选框旁边的短句。
 const AGREEMENT_LABEL = '我已阅读并同意上述第三方依赖的下载与开源许可条款'
 
-module.exports = { THIRD_PARTY_NOTICE, AGREEMENT_LABEL }
+module.exports = { THIRD_PARTY_NOTICE, AGREEMENT_LABEL, buildAddressNotice, buildNotice }
